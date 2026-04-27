@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Sistema de Horarios</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background-color: #f4f7f6; color: #333; }
+        
+        /* Pestañas */
+        .tabs { display: flex; gap: 4px; margin-bottom: 0; }
+        .tab-btn { 
+            padding: 12px 24px; cursor: pointer; border: none; background: #dfe4ea; 
+            border-radius: 8px 8px 0 0; font-weight: bold; color: #57606f; transition: 0.2s;
+        }
+        .tab-btn.active { background: #007bff; color: white; }
+
+        .contenedor-busqueda { 
+            background: white; padding: 20px; border-radius: 0 10px 10px 10px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; 
+        }
+        .seccion-busqueda { display: none; }
+        .seccion-busqueda.active { display: block; }
+
+        select { padding: 10px; width: 100%; max-width: 400px; border: 1px solid #ced4da; border-radius: 5px; }
+
+        /* Calendario Visual */
+        .calendario-grid {
+            display: grid;
+            grid-template-columns: 80px repeat(5, 1fr);
+            gap: 1px; background-color: #ced4da;
+            border: 1px solid #adb5bd; border-radius: 8px; overflow: hidden;
+        }
+        .cabecera-dia { background: #2f3542; color: white; padding: 10px; text-align: center; font-weight: bold; font-size: 14px; }
+        .celda { background: white; min-height: 90px; display: flex; gap: 1px; }
+        .hora-eje { background: #f1f2f6; font-weight: bold; display: flex; align-items: center; justify-content: center; border-right: 1px solid #ced4da; }
+
+        /* Estilo de la Materia (como tu foto) */
+        .materia-bloque {
+            flex: 1; display: grid; grid-template-columns: 35px 1fr;
+            border: 1px solid #e1e4e8; background: #ffffff;
+        }
+        .aula-box { 
+            background: #f1f2f6; color: #2f3542; font-weight: bold; 
+            display: flex; align-items: center; justify-content: center; 
+            font-size: 11px; border-right: 1px solid #ced4da;
+        }
+        .info-box { padding: 6px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+        .materia-nombre { font-weight: bold; color: #007bff; font-size: 12px; line-height: 1.2; margin-bottom: 2px; }
+        .profe-nombre { font-size: 10px; color: #747d8c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* Tabla detallada original */
+        .tabla-scroll { overflow-x: auto; margin-top: 20px; }
+        table { width: 100%; border-collapse: collapse; background: white; font-size: 13px; }
+        th, td { border: 1px solid #dee2e6; padding: 10px; text-align: left; }
+        th { background: #2f3542; color: white; }
+        
+    </style>
+</head>
+<body>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="cambiarTab(event, 'tab-profesor')">Profesor</button>
+        <button class="tab-btn" onclick="cambiarTab(event, 'tab-aula')">Aula</button>
+        <button class="tab-btn" onclick="cambiarTab(event, 'tab-curso')">Curso</button>
+    </div>
+
+    <div class="contenedor-busqueda">
+        <div id="tab-profesor" class="seccion-busqueda active">
+            <label>Seleccione Profesor:</label><br>
+            <select onchange="buscarEnServidor('profesor', this.value)">
+                <option value="">-- Lista de Profesores --</option>
+                {% for p in datos.profesor %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+            </select>
+        </div>
+
+        <div id="tab-aula" class="seccion-busqueda">
+            <label>Seleccione Aula:</label><br>
+            <select onchange="buscarEnServidor('aula', this.value)">
+                <option value="">-- Lista de Aulas --</option>
+                {% for a in datos.aula %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+            </select>
+        </div>
+
+        <div id="tab-curso" class="seccion-busqueda">
+            <label>Seleccione Curso:</label><br>
+            <select onchange="buscarEnServidor('curso', this.value)">
+                <option value="">-- Lista de Cursos --</option>
+                {% for c in datos.curso %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <div id="contenedor-calendario"></div>
+    <div class="tabla-scroll" id="contenedor-lista"></div>
+
+    <script>
+        function cambiarTab(evt, idTab) {
+            var i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("seccion-busqueda");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            tablinks = document.getElementsByClassName("tab-btn");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            document.getElementById(idTab).style.display = "block";
+            evt.currentTarget.className += " active";
+            
+            // Limpiar resultados al cambiar
+            document.getElementById('contenedor-calendario').innerHTML = "";
+            document.getElementById('contenedor-lista').innerHTML = "";
+        }
+
+        function buscarEnServidor(modo, valor) {
+            if (!valor) return;
+            fetch(`/api/${modo}/${valor}`)
+                .then(res => res.json())
+                .then(filas => {
+                    generarCalendario(filas);
+                    generarTablaDetallada(filas);
+                })
+                .catch(err => console.error("Error al obtener datos:", err));
+        }
+
+        function generarCalendario(filas) {
+            const contenedor = document.getElementById('contenedor-calendario');
+            const dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+            
+            let horasSet = new Set();
+            filas.forEach(f => { if(f[12]) horasSet.add(f[12]) });
+            let horasOrdenadas = Array.from(horasSet).sort();
+
+            if (horasOrdenadas.length === 0) {
+                contenedor.innerHTML = "<p>No hay horarios registrados para esta selección.</p>";
+                return;
+            }
+
+            let html = '<div class="calendario-grid">';
+            html += '<div class="cabecera-dia">HORA</div>';
+            dias.forEach(d => html += `<div class="cabecera-dia">${d.toUpperCase()}</div>`);
+
+            horasOrdenadas.forEach(hora => {
+                html += `<div class="celda hora-eje">${hora}</div>`;
+                dias.forEach(dia => {
+                    const clases = filas.filter(f => f[11] === dia && f[12] === hora);
+                    html += '<div class="celda">';
+                    clases.forEach(clase => {
+                        html += `
+                            <div class="materia-bloque">
+                                <div class="aula-box">${clase[9] || '-'}</div>
+                                <div class="info-box">
+                                    <div class="materia-nombre">${clase[3]}</div>
+                                    <div class="profe-nombre">${clase[5] || ''}</div>
+                                </div>
+                            </div>`;
+                    });
+                    html += '</div>';
+                });
+            });
+            html += '</div>';
+            contenedor.innerHTML = html;
+        }
+
+        function generarTablaDetallada(filas) {
+            const contenedor = document.getElementById('contenedor-lista');
+            if (filas.length === 0) return;
+
+            let html = `<h3>Detalle de Clases</h3><table>
+                <thead>
+                    <tr><th>Día</th><th>Inicio</th><th>Fin</th><th>Materia</th><th>Profesor</th><th>Aula</th><th>Grupo</th></tr>
+                </thead><tbody>`;
+            filas.forEach(f => {
+                html += `<tr>
+                    <td>${f[11]}</td><td>${f[12]}</td><td>${f[13]}</td>
+                    <td><b>${f[3]}</b></td><td>${f[5]}</td><td>${f[9]}</td><td>${f[14] || '-'}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            contenedor.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
