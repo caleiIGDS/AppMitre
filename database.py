@@ -8,9 +8,9 @@ def conectar():
 def crear_tablas():
     con = conectar()
     cur = con.cursor()
-    cur.execute('DROP TABLE IF EXISTS horarios')
+    cur.execute('DROP TABLE IF EXISTS clases')
     cur.execute('''
-        CREATE TABLE horarios (
+        CREATE TABLE clases (
             curso TEXT, division TEXT, especialidad TEXT,
             materia TEXT, tipo_materia TEXT,
             profesor TEXT, dni TEXT, telefono TEXT, email TEXT,
@@ -39,7 +39,7 @@ def cargar_csv(archivo_csv):
                 row.get('aula', ''), row.get('tipo_aula', ''),
                 row.get('dia', ''), row.get('hora_inicio', ''), row.get('hora_fin', ''), row.get('grupo', '')
             )
-            cur.execute('INSERT INTO horarios VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', datos)
+            cur.execute('INSERT INTO clases VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', datos)
             
     con.commit()
     con.close()
