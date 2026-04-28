@@ -117,13 +117,13 @@
             fetch(`/api/${modo}/${valor}`)
                 .then(res => res.json())
                 .then(filas => {
-                    generarCalendario(filas);
+                    generarCalendario(filas, modo);
                     generarTablaDetallada(filas);
                 })
                 .catch(err => console.error("Error al obtener datos:", err));
         }
 
-        function generarCalendario(filas) {
+        function generarCalendario(filas, modo) {
             const contenedor = document.getElementById('contenedor-calendario');
             const dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
             
@@ -148,10 +148,20 @@
                     clases.forEach(clase => {
                         html += `
                             <div class="materia-bloque">
-                                <div class="aula-box">${clase[9] || '-'}</div>
+                                 ${
+                                    modo === 'aula'
+                                        ? `<div class="aula-box">${clase[0]}° ${clase[1]}</div>`
+                                        : `<div class="aula-box">${clase[9] || '-'}</div>`
+                                 }
+                                
                                 <div class="info-box">
                                     <div class="materia-nombre">${clase[3]}</div>
-                                    <div class="profe-nombre">${clase[5] || ''}</div>
+                                    ${
+                                        modo === 'profesor'
+                                        ? `<div class="curso-nombre">Curso: ${clase[0]}° ${clase[1]}</div>`
+                                        : `<div class="profe-nombre">${clase[5] || ''}</div>`
+                                    }
+
                                 </div>
                             </div>`;
                     });
