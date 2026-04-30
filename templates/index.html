@@ -5,6 +5,16 @@
     <title>Sistema de Horarios</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
+        .split {
+            display: flex;
+            width: 100%;
+        }
+
+
+        .left, .right {
+            width: 50%;
+        }
+
         :root {
             --primary: #007bff;
             --secondary: #0056b3; /* Darker blue */
@@ -182,6 +192,7 @@
         }
 
         .celda {
+            position: relative;
             background: var(--white);
             min-height: 120px;
             display: flex;
@@ -429,13 +440,13 @@
 
     <div class="container">
         <div class="tabs">
-            <button class="tab-btn active" onclick="cambiarTab(event, 'tab-profesor')">Profesor</button>
+            <button class="tab-btn" onclick="cambiarTab(event, 'tab-profesor')">Profesor</button>
             <button class="tab-btn" onclick="cambiarTab(event, 'tab-aula')">Aula</button>
-            <button class="tab-btn" onclick="cambiarTab(event, 'tab-curso')">Curso</button>
+            <button class="tab-btn active" onclick="cambiarTab(event, 'tab-curso')">Curso</button>
         </div>
 
         <div class="contenedor-busqueda">
-            <div id="tab-profesor" class="seccion-busqueda active">
+            <div id="tab-profesor" class="seccion-busqueda">
                 <label>Seleccione Profesor:</label><br>
                 <select onchange="buscarEnServidor('profesor', this.value)">
                     <option value="">-- Lista de Profesores --</option>
@@ -451,7 +462,7 @@
                 </select>
             </div>
 
-            <div id="tab-curso" class="seccion-busqueda">
+            <div id="tab-curso" class="seccion-busqueda active">
                 <label>Seleccione Curso:</label><br>
                 <select onchange="buscarEnServidor('curso', this.value)">
                     <option value="">-- Lista de Cursos --</option>
@@ -517,7 +528,9 @@
                 dias.forEach(dia => {
                     const clases = filas.filter(f => f[11] === dia && f[12] === hora);
                     html += '<div class="celda">';
-                    clases.forEach(clase => {
+                    clases
+                        .filter(clase => modo =='curso' || modo=='profesor' || clase[14] !== 'A' && clase[14] !== 'B')
+                        .forEach(clase => {
                         html += `
                             <div class="materia-bloque">
                                  ${
@@ -537,6 +550,60 @@
                                 </div>
                             </div>`;
                     });
+                    const clasesA = clases.filter(c => c[14] === 'A');
+                    const clasesB = clases.filter(c => c[14] === 'B');
+
+                  if (modo !== 'aula' && modo !== 'profesor' && (clasesA.length || clasesB.length)) {
+                        html += `<div class="split">`;
+
+                        html += `<div class="left">`;
+                        clasesA.forEach(clase => {
+                            html += `
+                            <div class="materia-bloque">
+                                 ${
+                                    modo === 'aula'
+                                        ? `<div class="aula-box">${clase[0]}° ${clase[1]}</div>`
+                                        : `<div class="aula-box">Aula: ${clase[9] || '-'}</div>`
+                                 }
+                                
+                                <div class="info-box">
+                                    <div class="materia-nombre">${clase[3]}</div>
+                                    ${
+                                        modo === 'profesor'
+                                        ? `<div class="curso-nombre">Curso: ${clase[0]}° ${clase[1]}</div>`
+                                        : `<div class="profe-nombre">${clase[5] || ''}</div>`
+                                    }
+
+                                </div>
+                            </div>`;
+                        });
+                        html += `</div>`;
+
+                        html += `<div class="right">`;
+                        clasesB.forEach(clase => {
+                            html += `
+                            <div class="materia-bloque">
+                                 ${
+                                    modo === 'aula'
+                                        ? `<div class="aula-box">${clase[0]}° ${clase[1]}</div>`
+                                        : `<div class="aula-box">Aula: ${clase[9] || '-'}</div>`
+                                 }
+                                
+                                <div class="info-box">
+                                    <div class="materia-nombre">${clase[3]}</div>
+                                    ${
+                                        modo === 'profesor'
+                                        ? `<div class="curso-nombre">Curso: ${clase[0]}° ${clase[1]}</div>`
+                                        : `<div class="profe-nombre">${clase[5] || ''}</div>`
+                                    }
+
+                                </div>
+                            </div>`;
+                        });
+                        html += `</div>`;
+
+                        html += `</div>`;
+                    }
                     html += '</div>';
                 });
             });
