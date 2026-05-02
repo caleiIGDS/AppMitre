@@ -5,124 +5,96 @@
     <title>Sistema de Horarios</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        .split {
-            display: flex;
-            width: 100%;
-        }
-
-
-        .left, .right {
-            width: 50%;
-        }
-
         :root {
-            --primary: #007bff;
-            --secondary: #0056b3; /* Darker blue */
-            --tertiary: #e0f2f7; /* Light blue background */
+            --primary: #4285f4; /* Google Blue */
+            --secondary: #1967d2;
+            --tertiary: #f8f9fa;
             --white: #ffffff;
-            --light-gray: #f4f7f6;
-            --dark-gray: #333;
-            --shadow: 0 5px 15px rgba(0,0,0,0.1);
-            --border-radius: 10px;
+            --light-gray: #dadce0;
+            --dark-gray: #3c4043;
+            --shadow: 0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
+            --border-radius: 8px;
+            --grid-line: #e8eaed;
         }
 
         body {
-            font-family: 'Poppins', sans-serif;
+            font-family: 'Poppins', 'Roboto', Arial, sans-serif;
             margin: 0;
-            background-color: var(--tertiary);
+            background-color: var(--white);
             color: var(--dark-gray);
-            line-height: 1.6;
-            scroll-behavior: smooth;
+            line-height: 1.5;
         }
 
         header {
             background-color: var(--white);
-            padding: 15px 0;
-            text-align: center;
-            box-shadow: var(--shadow);
-            border-bottom: 3px solid var(--primary);
+            padding: 10px 0;
+            border-bottom: 1px solid var(--light-gray);
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
 
         .header-content {
             display: flex;
             align-items: center;
-            justify-content: center;
-            gap: 20px;
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
-            padding: 0 20px;
+            padding: 0 24px;
         }
 
         .logo {
-            height: 70px;
-            width: auto;
-            border-radius: 50%;
-            border: 3px solid var(--primary);
-            box-shadow: 0 0 10px rgba(0, 123, 255, 0.5);
+            height: 40px;
+            margin-right: 15px;
         }
 
         h1 {
             margin: 0;
-            font-size: 2.5em;
-            font-weight: 700;
-            color: var(--secondary);
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+            font-size: 22px;
+            font-weight: 400;
+            color: #5f6368;
         }
 
         .panoramic-image {
-            width: 100%;
-            height: 280px;
-            object-fit: cover;
-            margin-bottom: 30px;
-            box-shadow: var(--shadow);
-            filter: brightness(0.8);
+            display: none; /* Ocultamos para un look más "app" tipo calendar */
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 20px auto;
-            padding: 0 20px;
+            padding: 0 24px;
         }
 
         /* Tabs */
         .tabs {
             display: flex;
-            gap: 8px;
-            margin-bottom: 0;
+            gap: 12px;
+            margin-bottom: 20px;
         }
 
         .tab-btn {
-            padding: 14px 28px;
+            padding: 8px 24px;
             cursor: pointer;
-            border: none;
-            background: var(--light-gray);
-            border-radius: var(--border-radius) var(--border-radius) 0 0;
-            font-weight: 600;
-            color: var(--secondary);
-            transition: all 0.3s ease;
-            font-size: 1.05em;
-            box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
+            border: 1px solid var(--light-gray);
+            background: var(--white);
+            border-radius: 20px;
+            font-weight: 500;
+            color: #5f6368;
+            transition: all 0.2s;
+            font-size: 14px;
         }
 
         .tab-btn:hover {
-            background: #d0e7f7;
-            color: var(--primary);
+            background: #f1f3f4;
         }
 
         .tab-btn.active {
-            background: var(--primary);
-            color: var(--white);
-            box-shadow: 0 -4px 8px rgba(0,0,0,0.15);
-            transform: translateY(-2px);
+            background: #e8f0fe;
+            color: var(--secondary);
+            border-color: transparent;
         }
 
         .contenedor-busqueda {
-            background: var(--white);
-            padding: 30px;
-            border-radius: 0 var(--border-radius) var(--border-radius) var(--border-radius);
-            box-shadow: var(--shadow);
-            margin-bottom: 30px;
-            border-top: 4px solid var(--primary);
+            margin-bottom: 24px;
         }
 
         .seccion-busqueda {
@@ -133,297 +105,187 @@
             display: block;
         }
 
-        label {
-            display: block;
-            margin-bottom: 10px;
-            font-weight: 600;
-            color: var(--secondary);
-            font-size: 1.1em;
-        }
-
         select {
-            padding: 12px 15px;
+            padding: 10px 16px;
             width: 100%;
-            max-width: 450px;
-            border: 1px solid #a8d6f5;
-            border-radius: 8px;
-            background-color: var(--light-gray);
-            font-size: 1em;
-            box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.08);
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-            background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23007bff%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13.2-5.4H18.4c-6.5%200-13.2%202.6-17.6%207.6-4.4%205-4.4%2013.2%200%2018.2l128.6%20127.9c4.4%205%2011.1%207.6%2017.6%207.6s13.2-2.6%2017.6-7.6L287%2087.9c4.4-5%204.4-13.2%200-18.5z%22%2F%3E%3C%2Fsvg%3E');
-            background-repeat: no-repeat;
-            background-position: right 15px center;
-            background-size: 14px auto;
-            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+            max-width: 400px;
+            border: 1px solid var(--light-gray);
+            border-radius: 4px;
+            font-size: 14px;
+            color: var(--dark-gray);
+            outline: none;
         }
 
         select:focus {
             border-color: var(--primary);
-            box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(0, 123, 255, 0.25);
-            outline: none;
+            box-shadow: 0 0 0 2px rgba(66,133,244,0.1);
         }
 
         /* Calendario Visual */
+        #contenedor-calendario {
+            margin-top: 10px;
+            border: 1px solid var(--light-gray);
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--white);
+        }
+
         .calendario-grid {
             display: grid;
-            grid-template-columns: 100px repeat(5, 1fr);
-            gap: 2px;
-            background-color: #a8d6f5;
-            border: 1px solid var(--primary);
-            border-radius: var(--border-radius);
-            overflow: hidden;
-            box-shadow: var(--shadow);
+            grid-template-columns: 60px repeat(5, 1fr);
+            position: relative;
+        }
+
+        .columna-horas {
+            border-right: 1px solid var(--grid-line);
+            background: var(--white);
+        }
+
+        .hora-label {
+            position: absolute;
+            right: 8px;
+            font-size: 10px;
+            color: #70757a;
+            transform: translateY(-50%);
+        }
+
+        .columna-dia {
+            position: relative;
+            border-right: 1px solid var(--grid-line);
+        }
+
+        .columna-dia:last-child {
+            border-right: none;
         }
 
         .cabecera-dia {
-            background: var(--primary);
-            color: var(--white);
-            padding: 15px 10px;
-            text-align: center;
-            font-weight: 600;
-            font-size: 1em;
-            border-right: 1px solid rgba(255, 255, 255, 0.3);
-        }
-        .cabecera-dia:last-child {
-            border-right: none;
-        }
-
-        .celda {
-            position: relative;
-            background: var(--white);
-            min-height: 120px;
+            height: 50px;
             display: flex;
             flex-direction: column;
-            gap: 3px;
-            padding: 3px;
-            box-sizing: border-box;
-            border-right: 1px solid #e0f2f7;
-            border-bottom: 1px solid #e0f2f7;
-        }
-        .celda:last-child {
-            border-right: none;
-        }
-        .calendario-grid > div:nth-last-child(-n+5) {
-            border-bottom: none;
-        }
-
-        .hora-eje {
-            background: #e9f5fd;
-            font-weight: 600;
-            display: flex;
             align-items: center;
             justify-content: center;
-            border-right: 1px solid #a8d6f5;
-            color: var(--secondary);
-            font-size: 1.0em;
+            border-bottom: 1px solid var(--grid-line);
+            position: sticky;
+            top: 0;
+            background: var(--white);
+            z-index: 10;
+        }
+
+        .dia-nombre {
+            font-size: 11px;
+            font-weight: 500;
+            color: #70757a;
+            text-transform: uppercase;
+        }
+
+        .grid-line-horizontal {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background-color: var(--grid-line);
+            z-index: 1;
         }
 
         /* Materia Block */
         .materia-bloque {
-            flex: 1;
-            display: grid;
-            grid-template-columns: 45px 1fr;
-            border: 1px solid #b3d9ff;
-            background: #ffffff;
-            border-radius: 6px;
+            position: absolute;
+            left: 4px;
+            right: 4px;
+            background-color: var(--primary);
+            color: white;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 11px;
             overflow: hidden;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
-            margin: 2px;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            z-index: 5;
+            transition: filter 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.2);
         }
 
         .materia-bloque:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
-        }
-
-        .aula-box {
-            background: var(--primary);
-            color: var(--white);
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 13px;
-            border-right: 1px solid var(--secondary);
-            text-shadow: 0 1px 1px rgba(0,0,0,0.1);
-            padding: 5px;
-        }
-
-        .info-box {
-            padding: 8px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            overflow: hidden;
-            background-color: #e9f5fd;
+            filter: brightness(0.9);
+            box-shadow: var(--shadow);
+            z-index: 20;
         }
 
         .materia-nombre {
             font-weight: 600;
-            color: var(--secondary);
-            font-size: 1em;
-            line-height: 1.3;
-            margin-bottom: 2px;
-        }
-
-        .profe-nombre {
-            font-size: 0.85em;
-            color: #57606f;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
-        /* Detailed Table */
-        .tabla-scroll {
-            overflow-x: auto;
-            margin-top: 40px;
-            background: var(--white);
-            border-radius: var(--border-radius);
-            padding: 25px;
-            box-shadow: var(--shadow);
+        .materia-detalles {
+            font-size: 10px;
+            opacity: 0.9;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        h3 {
+        /* Tooltip */
+        .calendar-tooltip {
+            position: fixed;
+            background: var(--white);
+            color: var(--dark-gray);
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 8px 10px 1px rgba(0,0,0,0.14), 0 3px 14px 2px rgba(0,0,0,0.12), 0 5px 5px -3px rgba(0,0,0,0.2);
+            z-index: 1000;
+            pointer-events: none;
+            display: none;
+            width: 200px;
+            font-size: 13px;
+            border: 1px solid var(--light-gray);
+        }
+
+        .tooltip-header {
+            font-weight: 600;
             color: var(--primary);
-            font-size: 1.8em;
-            margin-top: 0;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #e0f2f7;
-            padding-bottom: 10px;
+            margin-bottom: 4px;
+        }
+
+        /* Para los grupos A y B */
+        .split-A { width: calc(50% - 6px) !important; left: 4px !important; }
+        .split-B { width: calc(50% - 6px) !important; left: calc(50% + 2px) !important; }
+
+        /* Tabla detallada */
+        .tabla-scroll {
+            margin-top: 40px;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.95em;
-        }
-
-        th, td {
-            border: 1px solid #e0f2f7;
-            padding: 14px 18px;
-            text-align: left;
+            font-size: 13px;
         }
 
         th {
-            background: var(--secondary);
-            color: var(--white);
-            font-weight: 600;
-            position: sticky;
-            top: 0;
-            white-space: nowrap;
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid var(--light-gray);
+            color: #5f6368;
+            font-weight: 500;
         }
 
-        tr:nth-child(even) {
-            background-color: #f8fcfd;
+        td {
+            padding: 12px;
+            border-bottom: 1px solid var(--grid-line);
         }
 
         tr:hover {
-            background-color: #eef7fc;
-            cursor: pointer;
+            background-color: #f8f9fa;
         }
 
-        /* Responsive adjustments */
         @media (max-width: 768px) {
-            .header-content {
-                flex-direction: column;
-                gap: 10px;
-            }
-
-            h1 {
-                font-size: 2em;
-            }
-
-            .panoramic-image {
-                height: 180px;
-                margin-bottom: 20px;
-            }
-
-            .tabs {
-                flex-direction: column;
-            }
-
-            .tab-btn {
-                border-radius: var(--border-radius);
-                width: 100%;
-            }
-
-            .contenedor-busqueda {
-                border-radius: var(--border-radius);
-            }
-
             .calendario-grid {
-                grid-template-columns: 80px repeat(auto-fit, minmax(100px, 1fr));
+                grid-template-columns: 50px repeat(5, 120px);
+                overflow-x: auto;
             }
-
-            th, td {
-                padding: 10px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            h1 {
-                font-size: 1.5em;
-            }
-
-            .logo {
-                height: 50px;
-            }
-
-            .panoramic-image {
-                height: 150px;
-            }
-
-            .container {
-                padding: 0 10px;
-            }
-
-            .tab-btn {
-                font-size: 0.9em;
-                padding: 12px 15px;
-            }
-
-            select {
-                font-size: 0.9em;
-                padding: 10px;
-            }
-
-            .calendario-grid {
-                grid-template-columns: 60px repeat(auto-fit, minmax(80px, 1fr));
-            }
-
-            .cabecera-dia {
-                font-size: 0.8em;
-                padding: 10px 5px;
-            }
-
-            .hora-eje {
-                font-size: 0.9em;
-            }
-
-            .materia-nombre {
-                font-size: 0.9em;
-            }
-
-            .profe-nombre {
-                font-size: 0.75em;
-            }
-
-            .aula-box {
-                font-size: 0.8em;
-            }
-
-            .tabla-scroll {
-                padding: 15px;
-            }
-
-            th, td {
-                font-size: 0.8em;
-                padding: 8px 10px;
+            #contenedor-calendario {
+                overflow-x: auto;
             }
         }
     </style>
@@ -475,6 +337,8 @@
         <div class="tabla-scroll" id="contenedor-lista"></div>
     </div>
 
+    <div id="calendar-tooltip" class="calendar-tooltip"></div>
+
 
     <script>
         function cambiarTab(evt, idTab) {
@@ -506,109 +370,96 @@
                 .catch(err => console.error("Error al obtener datos:", err));
         }
 
-        function generarCalendario(filas, modo) {
-            const contenedor = document.getElementById('contenedor-calendario');
-            const dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
-            
-            let horasSet = new Set();
-            filas.forEach(f => { if(f[12]) horasSet.add(f[12]) });
-            let horasOrdenadas = Array.from(horasSet).sort();
+       function generarCalendario(filas, modo) {
+    const contenedor = document.getElementById('contenedor-calendario');
+    const dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+    const horas = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+    
+    const HORA_MIN = 7 * 60; // 07:00 en minutos
+    const HORA_MAX = 23 * 60; // 23:00 en minutos
+    const ALTURA_HORA = 60;   // 60px por hora (1px por minuto)
+    const ALTURA_TOTAL = (HORA_MAX - HORA_MIN); 
 
-            if (horasOrdenadas.length === 0) {
-                contenedor.innerHTML = "<p>No hay horarios registrados para esta selección.</p>";
-                return;
+    const getPosicionY = (horaStr) => {
+        if (!horaStr) return 0;
+        const [h, m] = horaStr.split(':').map(Number);
+        const minutos = h * 60 + m;
+        return minutos - HORA_MIN;
+    };
+
+    let html = '<div class="calendario-grid">';
+
+    // --- COLUMNA DE HORAS ---
+    html += `<div class="columna-horas" style="height:${ALTURA_TOTAL}px; position:relative;">`;
+    horas.forEach(h => {
+        const top = (h * 60) - HORA_MIN;
+        html += `<div class="hora-label" style="top:${top}px;">${h}:00</div>`;
+    });
+    html += '</div>';
+
+    // --- COLUMNAS DE DÍAS ---
+    dias.forEach(dia => {
+        html += `<div class="columna-dia" style="height:${ALTURA_TOTAL}px;">
+                    <div class="cabecera-dia">
+                        <div class="dia-nombre">${dia}</div>
+                    </div>`;
+        
+        // Dibujar líneas de cuadrícula
+        horas.forEach(h => {
+            const top = (h * 60) - HORA_MIN;
+            html += `<div class="grid-line-horizontal" style="top:${top}px;"></div>`;
+        });
+
+        // Filtrar y dibujar clases
+        const clasesDelDia = filas.filter(f => f[11] === dia);
+        clasesDelDia.forEach(clase => {
+            const inicio = clase[12];
+            const fin = clase[13]; // Cambiado de 14 a 13 según tu DB
+            const grupo = clase[14] || '';
+
+            const top = getPosicionY(inicio);
+            const bottom = getPosicionY(fin);
+            const alto = Math.max(bottom - top, 20); // Mínimo 20px
+
+            let splitClass = "";
+            if (modo !== 'aula' && modo !== 'profesor') {
+                if (grupo === 'A') splitClass = "split-A";
+                if (grupo === 'B') splitClass = "split-B";
             }
 
-            let html = '<div class="calendario-grid">';
-            html += '<div class="cabecera-dia">HORA</div>';
-            dias.forEach(d => html += `<div class="cabecera-dia">${d.toUpperCase()}</div>`);
+            html += `
+                <div class="materia-bloque ${splitClass}" 
+                     style="top: ${top}px; height: ${alto}px;"
+                     onmouseover="showTooltip(event, '${clase[3]}', '${clase[5]}', '${clase[9]}', '${inicio} - ${fin}', '${clase[0]} ${clase[1]}')"
+                     onmouseout="hideTooltip()">
+                    <div class="materia-nombre">${clase[3]}</div>
+                    <div class="materia-detalles">${modo === 'aula' ? `${clase[0]} ${clase[1]}` : (clase[9] || '-')}</div>
+                </div>`;
+        });
 
-            horasOrdenadas.forEach(hora => {
-                html += `<div class="celda hora-eje">${hora}</div>`;
-                dias.forEach(dia => {
-                    const clases = filas.filter(f => f[11] === dia && f[12] === hora);
-                    html += '<div class="celda">';
-                    clases
-                        .filter(clase => modo =='curso' || modo=='profesor' || clase[14] !== 'A' && clase[14] !== 'B')
-                        .forEach(clase => {
-                        html += `
-                            <div class="materia-bloque">
-                                 ${
-                                    modo === 'aula'
-                                        ? `<div class="aula-box">${clase[0]}° ${clase[1]}</div>`
-                                        : `<div class="aula-box">Aula: ${clase[9] || '-'}</div>`
-                                 }
-                                
-                                <div class="info-box">
-                                    <div class="materia-nombre">${clase[3]}</div>
-                                    ${
-                                        modo === 'profesor'
-                                        ? `<div class="curso-nombre">Curso: ${clase[0]}° ${clase[1]}</div>`
-                                        : `<div class="profe-nombre">${clase[5] || ''}</div>`
-                                    }
+        html += '</div>';
+    });
 
-                                </div>
-                            </div>`;
-                    });
-                    const clasesA = clases.filter(c => c[14] === 'A');
-                    const clasesB = clases.filter(c => c[14] === 'B');
+    html += '</div>';
+    contenedor.innerHTML = html;
+}
 
-                  if (modo !== 'aula' && modo !== 'profesor' && (clasesA.length || clasesB.length)) {
-                        html += `<div class="split">`;
+        function showTooltip(e, materia, profe, aula, hora, curso) {
+            const tooltip = document.getElementById('calendar-tooltip');
+            tooltip.innerHTML = `
+                <div class="tooltip-header">${materia}</div>
+                <div><b>Prof:</b> ${profe}</div>
+                <div><b>Aula:</b> ${aula}</div>
+                <div><b>Curso:</b> ${curso}</div>
+                <div><b>Horario:</b> ${hora}</div>
+            `;
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX + 15) + 'px';
+            tooltip.style.top = (e.clientY + 15) + 'px';
+        }
 
-                        html += `<div class="left">`;
-                        clasesA.forEach(clase => {
-                            html += `
-                            <div class="materia-bloque">
-                                 ${
-                                    modo === 'aula'
-                                        ? `<div class="aula-box">${clase[0]}° ${clase[1]}</div>`
-                                        : `<div class="aula-box">Aula: ${clase[9] || '-'}</div>`
-                                 }
-                                
-                                <div class="info-box">
-                                    <div class="materia-nombre">${clase[3]}</div>
-                                    ${
-                                        modo === 'profesor'
-                                        ? `<div class="curso-nombre">Curso: ${clase[0]}° ${clase[1]}</div>`
-                                        : `<div class="profe-nombre">${clase[5] || ''}</div>`
-                                    }
-
-                                </div>
-                            </div>`;
-                        });
-                        html += `</div>`;
-
-                        html += `<div class="right">`;
-                        clasesB.forEach(clase => {
-                            html += `
-                            <div class="materia-bloque">
-                                 ${
-                                    modo === 'aula'
-                                        ? `<div class="aula-box">${clase[0]}° ${clase[1]}</div>`
-                                        : `<div class="aula-box">Aula: ${clase[9] || '-'}</div>`
-                                 }
-                                
-                                <div class="info-box">
-                                    <div class="materia-nombre">${clase[3]}</div>
-                                    ${
-                                        modo === 'profesor'
-                                        ? `<div class="curso-nombre">Curso: ${clase[0]}° ${clase[1]}</div>`
-                                        : `<div class="profe-nombre">${clase[5] || ''}</div>`
-                                    }
-
-                                </div>
-                            </div>`;
-                        });
-                        html += `</div>`;
-
-                        html += `</div>`;
-                    }
-                    html += '</div>';
-                });
-            });
-            html += '</div>';
-            contenedor.innerHTML = html;
+        function hideTooltip() {
+            document.getElementById('calendar-tooltip').style.display = 'none';
         }
 
         function generarTablaDetallada(filas) {
