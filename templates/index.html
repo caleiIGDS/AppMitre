@@ -159,6 +159,8 @@
                     <div class="info-card overlap">
                         <div class="info-label">Materia</div>
                         <div class="info-valor">${c[3]}</div>
+                        <div class="info-label">Profesor</div>
+                        <div class="info-valor">${c[5]}</div>
                         <div class="info-label">Curso</div>
                         <div class="info-valor">${c[0]} ${c[1]}</div>
                         <div class="info-label">Aula</div>
@@ -275,12 +277,46 @@
                         }
                         const todosTienenGrupo = cluster.every(c => c[14] && c[14].trim() !== "");
                         if (cluster.length > 1 && !todosTienenGrupo) {
-                            const top = getPosicionY(cluster[0][12]);
-                            const latestEndClase = cluster.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
-                            const bottom = getPosicionY(latestEndClase[13]);
-                            const alto = Math.max(bottom - top, 30);
-                            const jsonDetalles = encodeURIComponent(JSON.stringify(cluster));
-                            html += `<div class="bloque-superposicion" style="top: ${top}px; height: ${alto}px;" onclick="verDetalleSuperposicion('${jsonDetalles}')">⚠️ Superposición (${cluster.length})</div>`;
+                            console.log("Cluster with superposition detected:", cluster);
+                            console.log("Value of cluster[0][15]:", cluster[0][15]);
+                            // Check for superposition split condition (clase[15] == 1)
+                            if (cluster[0][15] == 1) { 
+                                console.log("Executing split superposition logic (clase[15] == 1)");
+                                const numClases = cluster.length;
+                                cluster.forEach((clase, idxInCluster) => {
+                                    const inicio = clase[12];
+                                    const fin = clase[13];
+                                    const top = getPosicionY(inicio) + 2;
+                                    const bottom = getPosicionY(fin) - 2;
+                                    const alto = Math.max(bottom - top, 20);
+                                    const anchoPct = 100 / numClases;
+                                    const leftPct = anchoPct * idxInCluster;
+                                    const styleExtra = `width: calc(${anchoPct}% - 6px); left: calc(${leftPct}% + 4px);`;
+                                    const jsonClase = encodeURIComponent(JSON.stringify(clase));
+                                    html += `
+                                        <div class="materia-bloque" 
+                                             style="top: ${top}px; height: ${alto}px; ${styleExtra}" 
+                                             onclick="mostrarInfoClase('${jsonClase}')"
+                                             onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]} ${clase[1]}')" 
+                                             onmouseout="hideTooltip()">
+                                            <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]} ${clase[1]}` : (clase[9] || '?')}</div>
+                                            <div class="materia-contenido">
+                                                <div class="materia-nombre">${clase[3]}</div>
+                                                <div class="materia-detalles">
+                                                    ${modo === 'aula' ? (clase[5] || '-') : (modo === 'profesor' ? `${clase[0]} ${clase[1]}` : (clase[5] || '-'))}
+                                                </div>
+                                            </div>
+                                        </div>`;
+                                });
+                            } else { // Original logic for F[15] != 1 or not present
+                                console.log("Executing single superposition block logic (clase[15] != 1)");
+                                const top = getPosicionY(cluster[0][12]);
+                                const latestEndClase = cluster.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
+                                const bottom = getPosicionY(latestEndClase[13]);
+                                const alto = Math.max(bottom - top, 30);
+                                const jsonDetalles = encodeURIComponent(JSON.stringify(cluster));
+                                html += `<div class="bloque-superposicion" style="top: ${top}px; height: ${alto}px;" onclick="verDetalleSuperposicion('${jsonDetalles}')">⚠️ Superposición (${cluster.length})</div>`;
+                            }
                             clusterIdx.forEach(idx => procesados.add(idx));
                         } else {
                             const numClases = cluster.length;

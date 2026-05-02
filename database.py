@@ -17,7 +17,8 @@ def crear_tablas():
             materia TEXT, tipo_materia TEXT,
             profesor TEXT, dni TEXT, telefono TEXT, email TEXT,
             aula TEXT, tipo_aula TEXT,
-            dia TEXT, hora_inicio TEXT, hora_fin TEXT, grupo TEXT
+            dia TEXT, hora_inicio TEXT, hora_fin TEXT, grupo TEXT,
+            superposicion INTEGER DEFAULT 0
         )
     ''')
     con.commit()
@@ -90,14 +91,17 @@ def cargar_csv(archivo_csv):
             aula = limpiar_aula(row.get('aula', ''))
             inicio, fin = corregir_horarios(row.get('hora_inicio', ''), row.get('hora_fin', ''))
             
+            superposicion_raw = row.get('superposicion', '0')
+            superposicion_val = int(superposicion_raw) if superposicion_raw.strip() != '' else 0 # Handle empty string for 'superposicion'
             datos = (
                 row.get('curso', ''), row.get('division', ''), row.get('especialidad', ''),
                 eliminar_acentos(row.get('materia', '')).upper().strip(), row.get('tipo_materia', ''),
                 profesor, row.get('dni', ''), row.get('telefono', ''), row.get('email', ''),
                 aula, row.get('tipo_aula', ''),
-                row.get('dia', ''), inicio, fin, row.get('grupo', '')
+                row.get('dia', ''), inicio, fin, row.get('grupo', ''),
+                superposicion_val # Add the new column value
             )
-            cur.execute('INSERT INTO clases VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', datos)
+            cur.execute('INSERT INTO clases VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', datos) # Updated to 16 placeholders
             
     con.commit()
     con.close()
