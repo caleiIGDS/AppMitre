@@ -270,8 +270,9 @@ input.search-input:focus {
 }
 
 .aula-indicador.sin-numero {
-    line-height: 0.7;
-    writing-mode: vertical-rl;
+    line-height: 1.2;
+    letter-spacing: -8px;
+    writing-mode: vertical-lr;
     text-orientation: upright;
 }
 
