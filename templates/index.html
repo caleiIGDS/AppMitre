@@ -136,9 +136,33 @@
             position: relative;
         }
 
+        .cabecera-vacia {
+            height: 50px;
+            background: var(--white);
+            border-bottom: 1px solid var(--grid-line);
+            border-right: 1px solid var(--grid-line);
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+
+        .cabecera-dia {
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid var(--grid-line);
+            border-right: 1px solid var(--grid-line);
+            position: sticky;
+            top: 0;
+            background: var(--white);
+            z-index: 20;
+        }
+
         .columna-horas {
             border-right: 1px solid var(--grid-line);
             background: var(--white);
+            position: relative;
         }
 
         .hora-label {
@@ -156,19 +180,6 @@
 
         .columna-dia:last-child {
             border-right: none;
-        }
-
-        .cabecera-dia {
-            height: 50px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            border-bottom: 1px solid var(--grid-line);
-            position: sticky;
-            top: 0;
-            background: var(--white);
-            z-index: 10;
         }
 
         .dia-nombre {
@@ -195,19 +206,42 @@
             background-color: var(--primary);
             color: white;
             border-radius: 4px;
-            padding: 4px 8px;
             font-size: 11px;
             overflow: hidden;
             z-index: 5;
             transition: filter 0.2s, box-shadow 0.2s;
             cursor: pointer;
             border: 1px solid rgba(255,255,255,0.2);
+            display: flex; /* Para el layout del aula-box */
+            align-items: stretch;
         }
 
         .materia-bloque:hover {
             filter: brightness(0.9);
             box-shadow: var(--shadow);
             z-index: 20;
+        }
+
+        .aula-indicador {
+            background-color: rgba(0,0,0,0.15);
+            width: 40px;
+            min-width: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 12px;
+            border-right: 1px solid rgba(255,255,255,0.1);
+            text-align: center;
+        }
+
+        .materia-contenido {
+            padding: 4px 8px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            overflow: hidden;
         }
 
         .materia-nombre {
@@ -225,6 +259,27 @@
             text-overflow: ellipsis;
         }
 
+        /* Superposición */
+        .bloque-superposicion {
+            position: absolute;
+            left: 4px;
+            right: 4px;
+            background-color: #d93025; /* Rojo Google */
+            color: white;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 12px;
+            z-index: 15;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+        }
+        .bloque-superposicion:hover {
+            filter: brightness(1.1);
+        }
+
         /* Tooltip */
         .calendar-tooltip {
             position: fixed;
@@ -236,7 +291,7 @@
             z-index: 1000;
             pointer-events: none;
             display: none;
-            width: 200px;
+            width: 220px;
             font-size: 13px;
             border: 1px solid var(--light-gray);
         }
@@ -245,7 +300,10 @@
             font-weight: 600;
             color: var(--primary);
             margin-bottom: 4px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 4px;
         }
+        .tooltip-item { margin-bottom: 2px; }
 
         /* Para los grupos A y B */
         .split-A { width: calc(50% - 6px) !important; left: 4px !important; }
@@ -373,70 +431,114 @@
        function generarCalendario(filas, modo) {
     const contenedor = document.getElementById('contenedor-calendario');
     const dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
-    const horas = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+    const horariosFijos = ["07:40", "09:40", "10:00", "12:00", "13:30", "15:30", "15:50", "17:50", "18:00", "20:00", "20:10", "22:10"];
     
-    const HORA_MIN = 7 * 60; // 07:00 en minutos
-    const HORA_MAX = 23 * 60; // 23:00 en minutos
-    const ALTURA_HORA = 60;   // 60px por hora (1px por minuto)
-    const ALTURA_TOTAL = (HORA_MAX - HORA_MIN); 
+    const HORA_MIN = 7 * 60 + 30; // 07:30
+    const HORA_MAX = 22 * 60 + 30; // 22:30
+    const ALTURA_TOTAL = 1100;    
 
     const getPosicionY = (horaStr) => {
         if (!horaStr) return 0;
         const [h, m] = horaStr.split(':').map(Number);
         const minutos = h * 60 + m;
-        return minutos - HORA_MIN;
+        const porcentaje = (minutos - HORA_MIN) / (HORA_MAX - HORA_MIN);
+        return porcentaje * ALTURA_TOTAL;
+    };
+
+    const timeToMin = (t) => {
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
     };
 
     let html = '<div class="calendario-grid">';
 
-    // --- COLUMNA DE HORAS ---
+    // --- FILA 1: CABECERAS ---
+    html += '<div class="cabecera-vacia"></div>';
+    dias.forEach(dia => {
+        html += `<div class="cabecera-dia">
+                    <div class="dia-nombre">${dia}</div>
+                </div>`;
+    });
+
+    // --- FILA 2: CONTENIDO (HORAS Y DÍAS) ---
+    // Columna de Horas
     html += `<div class="columna-horas" style="height:${ALTURA_TOTAL}px; position:relative;">`;
-    horas.forEach(h => {
-        const top = (h * 60) - HORA_MIN;
-        html += `<div class="hora-label" style="top:${top}px;">${h}:00</div>`;
+    horariosFijos.forEach(hora => {
+        const top = getPosicionY(hora);
+        html += `<div class="hora-label" style="top:${top}px;">${hora}</div>`;
     });
     html += '</div>';
 
-    // --- COLUMNAS DE DÍAS ---
+    // Columnas de Días
     dias.forEach(dia => {
-        html += `<div class="columna-dia" style="height:${ALTURA_TOTAL}px;">
-                    <div class="cabecera-dia">
-                        <div class="dia-nombre">${dia}</div>
-                    </div>`;
+        html += `<div class="columna-dia" style="height:${ALTURA_TOTAL}px;">`;
         
-        // Dibujar líneas de cuadrícula
-        horas.forEach(h => {
-            const top = (h * 60) - HORA_MIN;
+        // Líneas de cuadrícula para horarios fijos
+        horariosFijos.forEach(hora => {
+            const top = getPosicionY(hora);
             html += `<div class="grid-line-horizontal" style="top:${top}px;"></div>`;
         });
 
-        // Filtrar y dibujar clases
-        const clasesDelDia = filas.filter(f => f[11] === dia);
-        clasesDelDia.forEach(clase => {
-            const inicio = clase[12];
-            const fin = clase[13]; // Cambiado de 14 a 13 según tu DB
-            const grupo = clase[14] || '';
-
-            const top = getPosicionY(inicio);
-            const bottom = getPosicionY(fin);
-            const alto = Math.max(bottom - top, 20); // Mínimo 20px
-
-            let splitClass = "";
-            if (modo !== 'aula' && modo !== 'profesor') {
-                if (grupo === 'A') splitClass = "split-A";
-                if (grupo === 'B') splitClass = "split-B";
+        const clasesDelDia = filas.filter(f => f[11] === dia).sort((a,b) => timeToMin(a[12]) - timeToMin(b[12]));
+        
+        // Detectar superposiciones
+        let procesados = new Set();
+        
+        for (let i = 0; i < clasesDelDia.length; i++) {
+            if (procesados.has(i)) continue;
+            
+            let cluster = [clasesDelDia[i]];
+            let clusterIdx = [i];
+            let maxFin = timeToMin(clasesDelDia[i][13]);
+            
+            for (let j = i + 1; j < clasesDelDia.length; j++) {
+                let inicioJ = timeToMin(clasesDelDia[j][12]);
+                if (inicioJ < maxFin) {
+                    cluster.push(clasesDelDia[j]);
+                    clusterIdx.push(j);
+                    maxFin = Math.max(maxFin, timeToMin(clasesDelDia[j][13]));
+                } else {
+                    break;
+                }
             }
+            
+            const esSplitAB = cluster.length === 2 && 
+                              cluster.some(c => c[14] === 'A') && 
+                              cluster.some(c => c[14] === 'B') &&
+                              cluster[0][12] === cluster[1][12];
 
-            html += `
-                <div class="materia-bloque ${splitClass}" 
-                     style="top: ${top}px; height: ${alto}px;"
-                     onmouseover="showTooltip(event, '${clase[3]}', '${clase[5]}', '${clase[9]}', '${inicio} - ${fin}', '${clase[0]} ${clase[1]}')"
-                     onmouseout="hideTooltip()">
-                    <div class="materia-nombre">${clase[3]}</div>
-                    <div class="materia-detalles">${modo === 'aula' ? `${clase[0]} ${clase[1]}` : (clase[9] || '-')}</div>
-                </div>`;
-        });
-
+            if (cluster.length > 1 && !esSplitAB) {
+                const top = getPosicionY(cluster[0][12]);
+                const bottom = getPosicionY(cluster.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max)[13]);
+                const alto = Math.max(bottom - top, 30);
+                const jsonDetalles = encodeURIComponent(JSON.stringify(cluster));
+                html += `<div class="bloque-superposicion" style="top: ${top}px; height: ${alto}px;" onclick="verDetalleSuperposicion('${jsonDetalles}')">⚠️ Superposición (${cluster.length})</div>`;
+                clusterIdx.forEach(idx => procesados.add(idx));
+            } else {
+                cluster.forEach(clase => {
+                    const inicio = clase[12];
+                    const fin = clase[13];
+                    const grupo = clase[14] || '';
+                    const top = getPosicionY(inicio);
+                    const bottom = getPosicionY(fin);
+                    const alto = Math.max(bottom - top, 20);
+                    let splitClass = "";
+                    if (modo !== 'aula' && modo !== 'profesor') {
+                        if (grupo === 'A') splitClass = "split-A";
+                        if (grupo === 'B') splitClass = "split-B";
+                    }
+                    html += `
+                        <div class="materia-bloque ${splitClass}" style="top: ${top}px; height: ${alto}px;" onmouseover="showTooltip(event, '${clase[3]}', '${clase[5]}', '${clase[9]}', '${inicio} - ${fin}', '${clase[0]} ${clase[1]}')" onmouseout="hideTooltip()">
+                            <div class="aula-indicador">${clase[9] || '?'}</div>
+                            <div class="materia-contenido">
+                                <div class="materia-nombre">${clase[3]}</div>
+                                <div class="materia-detalles">${modo === 'aula' ? `${clase[0]} ${clase[1]}` : (clase[5] || '-')}</div>
+                            </div>
+                        </div>`;
+                });
+                clusterIdx.forEach(idx => procesados.add(idx));
+            }
+        }
         html += '</div>';
     });
 
@@ -444,14 +546,23 @@
     contenedor.innerHTML = html;
 }
 
+        function verDetalleSuperposicion(json) {
+            const clases = JSON.parse(decodeURIComponent(json));
+            let msg = "Clases superpuestas:\n\n";
+            clases.forEach(c => {
+                msg += `• ${c[3]} (${c[12]}-${c[13]})\n  Prof: ${c[5]} | Aula: ${c[9]} | Curso: ${c[0]} ${c[1]}\n\n`;
+            });
+            alert(msg);
+        }
+
         function showTooltip(e, materia, profe, aula, hora, curso) {
             const tooltip = document.getElementById('calendar-tooltip');
             tooltip.innerHTML = `
                 <div class="tooltip-header">${materia}</div>
-                <div><b>Prof:</b> ${profe}</div>
-                <div><b>Aula:</b> ${aula}</div>
-                <div><b>Curso:</b> ${curso}</div>
-                <div><b>Horario:</b> ${hora}</div>
+                <div class="tooltip-item"><b>Curso:</b> ${curso}</div>
+                <div class="tooltip-item"><b>Prof:</b> ${profe}</div>
+                <div class="tooltip-item"><b>Aula:</b> ${aula}</div>
+                <div class="tooltip-item"><b>Horario:</b> ${hora}</div>
             `;
             tooltip.style.display = 'block';
             tooltip.style.left = (e.clientX + 15) + 'px';
