@@ -54,10 +54,6 @@
             color: #5f6368;
         }
 
-        .panoramic-image {
-            display: none; /* Ocultamos para un look más "app" tipo calendar */
-        }
-
         .container {
             max-width: 1400px;
             margin: 20px auto;
@@ -105,20 +101,63 @@
             display: block;
         }
 
-        select {
-            padding: 10px 16px;
-            width: 100%;
-            max-width: 400px;
-            border: 1px solid var(--light-gray);
-            border-radius: 4px;
-            font-size: 14px;
-            color: var(--dark-gray);
-            outline: none;
+        .search-container {
+            position: relative;
+            max-width: 450px;
         }
 
-        select:focus {
+        input.search-input {
+            padding: 12px 16px;
+            width: 100%;
+            border: 1px solid var(--light-gray);
+            border-radius: 6px;
+            font-size: 15px;
+            color: var(--dark-gray);
+            outline: none;
+            box-sizing: border-box;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            transition: border-color 0.2s;
+        }
+
+        input.search-input:focus {
             border-color: var(--primary);
-            box-shadow: 0 0 0 2px rgba(66,133,244,0.1);
+            box-shadow: 0 0 0 3px rgba(66,133,244,0.1);
+        }
+
+        /* Dropdown Personalizado */
+        .custom-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid var(--light-gray);
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            margin-top: 2px;
+        }
+
+        .dropdown-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--dark-gray);
+            border-bottom: 1px solid #f8f9fa;
+            transition: background 0.2s;
+        }
+
+        .dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-item:hover {
+            background-color: #f1f3f4;
+            color: var(--primary);
         }
 
         /* Calendario Visual */
@@ -201,7 +240,7 @@
         /* Materia Block */
         .materia-bloque {
             position: absolute;
-            left: 4px;
+            left: 4px;   
             right: 4px;
             background-color: var(--primary);
             color: white;
@@ -212,7 +251,7 @@
             transition: filter 0.2s, box-shadow 0.2s;
             cursor: pointer;
             border: 1px solid rgba(255,255,255,0.2);
-            display: flex; /* Para el layout del aula-box */
+            display: flex; 
             align-items: stretch;
         }
 
@@ -264,7 +303,7 @@
             position: absolute;
             left: 4px;
             right: 4px;
-            background-color: #d93025; /* Rojo Google */
+            background-color: #d93025;
             color: white;
             border-radius: 4px;
             display: flex;
@@ -278,6 +317,78 @@
         }
         .bloque-superposicion:hover {
             filter: brightness(1.1);
+        }
+
+        /* Modal de Detalles */
+        .modal-detalles {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(2px);
+        }
+
+        .modal-contenido {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 24px 38px 3px rgba(0,0,0,0.14);
+            position: relative;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 16px;
+            border-bottom: 2px solid var(--tertiary);
+            padding-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-cerrar-modal {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #5f6368;
+        }
+
+        .info-card {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .info-card.overlap {
+            border-left-color: #d93025;
+        }
+
+        .info-label {
+            font-size: 11px;
+            color: #70757a;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .info-valor {
+            font-size: 15px;
+            color: var(--dark-gray);
+            margin-bottom: 4px;
         }
 
         /* Tooltip */
@@ -309,45 +420,17 @@
         .split-A { width: calc(50% - 6px) !important; left: 4px !important; }
         .split-B { width: calc(50% - 6px) !important; left: calc(50% + 2px) !important; }
 
-        /* Tabla detallada */
-        .tabla-scroll {
-            margin-top: 40px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-
-        th {
-            text-align: left;
-            padding: 12px;
-            border-bottom: 1px solid var(--light-gray);
-            color: #5f6368;
-            font-weight: 500;
-        }
-
-        td {
-            padding: 12px;
-            border-bottom: 1px solid var(--grid-line);
-        }
-
-        tr:hover {
-            background-color: #f8f9fa;
-        }
+        .tabla-scroll { margin-top: 40px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 12px; border-bottom: 1px solid var(--light-gray); color: #5f6368; font-weight: 500; }
+        td { padding: 12px; border-bottom: 1px solid var(--grid-line); }
+        tr:hover { background-color: #f8f9fa; }
 
         @media (max-width: 768px) {
-            .calendario-grid {
-                grid-template-columns: 50px repeat(5, 120px);
-                overflow-x: auto;
-            }
-            #contenedor-calendario {
-                overflow-x: auto;
-            }
+            .calendario-grid { grid-template-columns: 50px repeat(5, 120px); overflow-x: auto; }
+            #contenedor-calendario { overflow-x: auto; }
         }
     </style>
-
 </head>
 <body>
     <header>
@@ -356,7 +439,6 @@
             <h1>Sistema de Horarios</h1>
         </div>
     </header>
-    <img src="{{ url_for('static', filename='images/mitrepanoramica.jpg') }}" alt="Foto Escuela" class="panoramic-image">
 
     <div class="container">
         <div class="tabs">
@@ -367,27 +449,27 @@
 
         <div class="contenedor-busqueda">
             <div id="tab-profesor" class="seccion-busqueda">
-                <label>Seleccione Profesor:</label><br>
-                <select onchange="buscarEnServidor('profesor', this.value)">
-                    <option value="">-- Lista de Profesores --</option>
-                    {% for p in datos.profesor %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
-                </select>
+                <label>Buscar Profesor:</label>
+                <div class="search-container">
+                    <input type="text" class="search-input" placeholder="Escribe para buscar profesor..." oninput="filtrarOpciones(this, 'profesor')" onfocus="filtrarOpciones(this, 'profesor')">
+                    <div id="dropdown-profesor" class="custom-dropdown"></div>
+                </div>
             </div>
 
             <div id="tab-aula" class="seccion-busqueda">
-                <label>Seleccione Aula:</label><br>
-                <select onchange="buscarEnServidor('aula', this.value)">
-                    <option value="">-- Lista de Aulas --</option>
-                    {% for a in datos.aula %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
-                </select>
+                <label>Buscar Aula:</label>
+                <div class="search-container">
+                    <input type="text" class="search-input" placeholder="Escribe para buscar aula..." oninput="filtrarOpciones(this, 'aula')" onfocus="filtrarOpciones(this, 'aula')">
+                    <div id="dropdown-aula" class="custom-dropdown"></div>
+                </div>
             </div>
 
             <div id="tab-curso" class="seccion-busqueda active">
-                <label>Seleccione Curso:</label><br>
-                <select onchange="buscarEnServidor('curso', this.value)">
-                    <option value="">-- Lista de Cursos --</option>
-                    {% for c in datos.curso %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
-                </select>
+                <label>Buscar Curso:</label>
+                <div class="search-container">
+                    <input type="text" class="search-input" placeholder="Escribe para buscar curso..." oninput="filtrarOpciones(this, 'curso')" onfocus="filtrarOpciones(this, 'curso')">
+                    <div id="dropdown-curso" class="custom-dropdown"></div>
+                </div>
             </div>
         </div>
 
@@ -395,24 +477,142 @@
         <div class="tabla-scroll" id="contenedor-lista"></div>
     </div>
 
+    <div id="modal-detalles" class="modal-detalles">
+        <div class="modal-contenido">
+            <div class="modal-header">
+                <span id="modal-titulo">Detalles</span>
+                <button class="btn-cerrar-modal" onclick="cerrarModal()">&times;</button>
+            </div>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
     <div id="calendar-tooltip" class="calendar-tooltip"></div>
 
-
     <script>
+        // Datos precargados desde el servidor
+        const rawData = {
+            profesor: [{% for p in datos.profesor %}"{{ p }}",{% endfor %}],
+            aula: [{% for a in datos.aula %}"{{ a }}",{% endfor %}],
+            curso: [{% for c in datos.curso %}"{{ c }}",{% endfor %}]
+        };
+
+        function normalize(text) {
+            return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "");
+        }
+
+        function filtrarOpciones(input, modo) {
+            const query = input.value;
+            const normalizedQuery = normalize(query);
+            const dropdown = document.getElementById(`dropdown-${modo}`);
+            
+            let matches = [];
+            if (query.length === 0) {
+                matches = rawData[modo];
+            } else {
+                // 1. Filtrar los que incluyen la consulta
+                const allMatches = rawData[modo].filter(item => normalize(item).includes(normalizedQuery));
+                
+                // 2. Ordenar con prioridad: los que EMPIEZAN con la consulta van arriba
+                matches = allMatches.sort((a, b) => {
+                    const normA = normalize(a);
+                    const normB = normalize(b);
+                    const startsA = normA.startsWith(normalizedQuery);
+                    const startsB = normB.startsWith(normalizedQuery);
+                    
+                    if (startsA && !startsB) return -1;
+                    if (!startsA && startsB) return 1;
+                    return a.localeCompare(b); // Alfabético normal si ambos cumplen la misma condición
+                });
+            }
+
+            if (matches.length > 0) {
+                dropdown.innerHTML = matches.map(item => `<div class="dropdown-item" onclick="seleccionarOpcion('${item.replace(/'/g, "\\'")}', '${modo}')">${item}</div>`).join('');
+                dropdown.style.display = 'block';
+            } else {
+                dropdown.style.display = 'none';
+            }
+        }
+
+        function seleccionarOpcion(valor, modo) {
+            const input = document.querySelector(`#tab-${modo} .search-input`);
+            input.value = valor;
+            document.getElementById(`dropdown-${modo}`).style.display = 'none';
+            buscarEnServidor(modo, valor);
+        }
+
+        // Cerrar dropdowns al clickear fuera
+        document.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('search-input')) {
+                document.querySelectorAll('.custom-dropdown').forEach(d => d.style.display = 'none');
+            }
+        });
+
+        function abrirModal(titulo, html) {
+            document.getElementById('modal-titulo').innerText = titulo;
+            document.getElementById('modal-body').innerHTML = html;
+            document.getElementById('modal-detalles').style.display = 'flex';
+        }
+
+        function cerrarModal() {
+            document.getElementById('modal-detalles').style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('modal-detalles');
+            if (event.target == modal) cerrarModal();
+        }
+
+        function mostrarInfoClase(json) {
+            const c = JSON.parse(decodeURIComponent(json));
+            const html = `
+                <div class="info-card">
+                    <div class="info-label">Materia</div>
+                    <div class="info-valor">${c[3]}</div>
+                    <div class="info-label">Profesor</div>
+                    <div class="info-valor">${c[5]}</div>
+                    <div class="info-label">Curso</div>
+                    <div class="info-valor">${c[0]} ${c[1]}</div>
+                    <div class="info-label">Aula</div>
+                    <div class="info-valor">${c[9] || '-'}</div>
+                    <div class="info-label">Horario</div>
+                    <div class="info-valor">${c[12]} - ${c[13]} (${c[11]})</div>
+                </div>
+            `;
+            abrirModal('Información de la Clase', html);
+        }
+
+        function verDetalleSuperposicion(json) {
+            const clases = JSON.parse(decodeURIComponent(json));
+            let html = '<p style="margin-bottom:15px; color:#5f6368;">Se han detectado las siguientes clases en el mismo horario:</p>';
+            clases.forEach(c => {
+                html += `
+                    <div class="info-card overlap">
+                        <div class="info-label">Materia</div>
+                        <div class="info-valor">${c[3]}</div>
+                        <div class="info-label">Curso</div>
+                        <div class="info-valor">${c[0]} ${c[1]}</div>
+                        <div class="info-label">Aula</div>
+                        <div class="info-valor">${c[9] || '-'}</div>
+                        <div class="info-label">Horario</div>
+                        <div class="info-valor">${c[12]} - ${c[13]}</div>
+                    </div>
+                `;
+            });
+            abrirModal('⚠️ Superposición Detectada', html);
+        }
+
         function cambiarTab(evt, idTab) {
             var i, tabcontent, tablinks;
             tabcontent = document.getElementsByClassName("seccion-busqueda");
-            for (i = 0; i < tabcontent.length; i++) {
-                tabcontent[i].style.display = "none";
-            }
+            for (i = 0; i < tabcontent.length; i++) tabcontent[i].style.display = "none";
             tablinks = document.getElementsByClassName("tab-btn");
-            for (i = 0; i < tablinks.length; i++) {
-                tablinks[i].className = tablinks[i].className.replace(" active", "");
-            }
+            for (i = 0; i < tablinks.length; i++) tablinks[i].className = tablinks[i].className.replace(" active", "");
             document.getElementById(idTab).style.display = "block";
             evt.currentTarget.className += " active";
             
-            // Limpiar resultados al cambiar
+            document.querySelectorAll('.search-input').forEach(input => input.value = "");
+            document.querySelectorAll('.custom-dropdown').forEach(d => d.style.display = 'none');
             document.getElementById('contenedor-calendario').innerHTML = "";
             document.getElementById('contenedor-lista').innerHTML = "";
         }
@@ -425,134 +625,131 @@
                     generarCalendario(filas, modo);
                     generarTablaDetallada(filas);
                 })
-                .catch(err => console.error("Error al obtener datos:", err));
+                .catch(err => console.error("Error API:", err));
         }
 
-       function generarCalendario(filas, modo) {
-    const contenedor = document.getElementById('contenedor-calendario');
-    const dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
-    const horariosFijos = ["07:40", "09:40", "10:00", "12:00", "13:30", "15:30", "15:50", "17:50", "18:00", "20:00", "20:10", "22:10"];
-    
-    const HORA_MIN = 7 * 60 + 30; // 07:30
-    const HORA_MAX = 22 * 60 + 30; // 22:30
-    const ALTURA_TOTAL = 1100;    
+        function generarCalendario(filas, modo) {
+            const contenedor = document.getElementById('contenedor-calendario');
+            const timeToMin = (t) => {
+                if (!t || typeof t !== 'string' || !t.includes(':')) return 0;
+                const [h, m] = t.split(':').map(Number);
+                return h * 60 + m;
+            };
 
-    const getPosicionY = (horaStr) => {
-        if (!horaStr) return 0;
-        const [h, m] = horaStr.split(':').map(Number);
-        const minutos = h * 60 + m;
-        const porcentaje = (minutos - HORA_MIN) / (HORA_MAX - HORA_MIN);
-        return porcentaje * ALTURA_TOTAL;
-    };
-
-    const timeToMin = (t) => {
-        const [h, m] = t.split(':').map(Number);
-        return h * 60 + m;
-    };
-
-    let html = '<div class="calendario-grid">';
-
-    // --- FILA 1: CABECERAS ---
-    html += '<div class="cabecera-vacia"></div>';
-    dias.forEach(dia => {
-        html += `<div class="cabecera-dia">
-                    <div class="dia-nombre">${dia}</div>
-                </div>`;
-    });
-
-    // --- FILA 2: CONTENIDO (HORAS Y DÍAS) ---
-    // Columna de Horas
-    html += `<div class="columna-horas" style="height:${ALTURA_TOTAL}px; position:relative;">`;
-    horariosFijos.forEach(hora => {
-        const top = getPosicionY(hora);
-        html += `<div class="hora-label" style="top:${top}px;">${hora}</div>`;
-    });
-    html += '</div>';
-
-    // Columnas de Días
-    dias.forEach(dia => {
-        html += `<div class="columna-dia" style="height:${ALTURA_TOTAL}px;">`;
-        
-        // Líneas de cuadrícula para horarios fijos
-        horariosFijos.forEach(hora => {
-            const top = getPosicionY(hora);
-            html += `<div class="grid-line-horizontal" style="top:${top}px;"></div>`;
-        });
-
-        const clasesDelDia = filas.filter(f => f[11] === dia).sort((a,b) => timeToMin(a[12]) - timeToMin(b[12]));
-        
-        // Detectar superposiciones
-        let procesados = new Set();
-        
-        for (let i = 0; i < clasesDelDia.length; i++) {
-            if (procesados.has(i)) continue;
-            
-            let cluster = [clasesDelDia[i]];
-            let clusterIdx = [i];
-            let maxFin = timeToMin(clasesDelDia[i][13]);
-            
-            for (let j = i + 1; j < clasesDelDia.length; j++) {
-                let inicioJ = timeToMin(clasesDelDia[j][12]);
-                if (inicioJ < maxFin) {
-                    cluster.push(clasesDelDia[j]);
-                    clusterIdx.push(j);
-                    maxFin = Math.max(maxFin, timeToMin(clasesDelDia[j][13]));
-                } else {
-                    break;
+            try {
+                if (!filas || filas.length === 0) {
+                    contenedor.innerHTML = "<div style='padding:20px; text-align:center; color:#70757a;'>No hay clases para mostrar.</div>";
+                    return;
                 }
-            }
-            
-            const esSplitAB = cluster.length === 2 && 
-                              cluster.some(c => c[14] === 'A') && 
-                              cluster.some(c => c[14] === 'B') &&
-                              cluster[0][12] === cluster[1][12];
 
-            if (cluster.length > 1 && !esSplitAB) {
-                const top = getPosicionY(cluster[0][12]);
-                const bottom = getPosicionY(cluster.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max)[13]);
-                const alto = Math.max(bottom - top, 30);
-                const jsonDetalles = encodeURIComponent(JSON.stringify(cluster));
-                html += `<div class="bloque-superposicion" style="top: ${top}px; height: ${alto}px;" onclick="verDetalleSuperposicion('${jsonDetalles}')">⚠️ Superposición (${cluster.length})</div>`;
-                clusterIdx.forEach(idx => procesados.add(idx));
-            } else {
-                cluster.forEach(clase => {
-                    const inicio = clase[12];
-                    const fin = clase[13];
-                    const grupo = clase[14] || '';
-                    const top = getPosicionY(inicio);
-                    const bottom = getPosicionY(fin);
-                    const alto = Math.max(bottom - top, 20);
-                    let splitClass = "";
-                    if (modo !== 'aula' && modo !== 'profesor') {
-                        if (grupo === 'A') splitClass = "split-A";
-                        if (grupo === 'B') splitClass = "split-B";
-                    }
-                    html += `
-                        <div class="materia-bloque ${splitClass}" style="top: ${top}px; height: ${alto}px;" onmouseover="showTooltip(event, '${clase[3]}', '${clase[5]}', '${clase[9]}', '${inicio} - ${fin}', '${clase[0]} ${clase[1]}')" onmouseout="hideTooltip()">
-                            <div class="aula-indicador">${clase[9] || '?'}</div>
-                            <div class="materia-contenido">
-                                <div class="materia-nombre">${clase[3]}</div>
-                                <div class="materia-detalles">${modo === 'aula' ? `${clase[0]} ${clase[1]}` : (clase[5] || '-')}</div>
-                            </div>
-                        </div>`;
+                const dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+                let tiempos = new Set();
+                filas.forEach(f => {
+                    if (f[12]) tiempos.add(f[12]);
+                    if (f[13]) tiempos.add(f[13]);
                 });
-                clusterIdx.forEach(idx => procesados.add(idx));
+                
+                if (tiempos.size === 0) {
+                    contenedor.innerHTML = "<div style='padding:20px; text-align:center; color:#70757a;'>Los datos no contienen horarios válidos.</div>";
+                    return;
+                }
+
+                const horariosDinamicos = Array.from(tiempos).sort((a, b) => timeToMin(a) - timeToMin(b));
+                const minMins = timeToMin(horariosDinamicos[0]) - 30; 
+                const maxMins = timeToMin(horariosDinamicos[horariosDinamicos.length - 1]) + 30;
+                const HORA_MIN = Math.max(0, minMins);
+                const HORA_MAX = Math.min(1440, maxMins);
+                const duracionTotal = HORA_MAX - HORA_MIN;
+                const ALTURA_TOTAL = Math.max(duracionTotal * 1.05, 450); 
+
+                const getPosicionY = (horaStr) => {
+                    if (!horaStr) return 0;
+                    const minutos = timeToMin(horaStr);
+                    const porcentaje = (minutos - HORA_MIN) / (HORA_MAX - HORA_MIN);
+                    return porcentaje * ALTURA_TOTAL;
+                };
+
+                let html = '<div class="calendario-grid">';
+                html += '<div class="cabecera-vacia"></div>';
+                dias.forEach(dia => {
+                    html += `<div class="cabecera-dia"><div class="dia-nombre">${dia}</div></div>`;
+                });
+
+                html += `<div class="columna-horas" style="height:${ALTURA_TOTAL}px; position:relative;">`;
+                horariosDinamicos.forEach(hora => {
+                    const top = getPosicionY(hora);
+                    html += `<div class="hora-label" style="top:${top}px;">${hora}</div>`;
+                });
+                html += '</div>';
+
+                dias.forEach(dia => {
+                    html += `<div class="columna-dia" style="height:${ALTURA_TOTAL}px;">`;
+                    horariosDinamicos.forEach(hora => {
+                        const top = getPosicionY(hora);
+                        html += `<div class="grid-line-horizontal" style="top:${top}px;"></div>`;
+                    });
+
+                    const clasesDelDia = filas.filter(f => f[11] === dia).sort((a,b) => timeToMin(a[12]) - timeToMin(b[12]));
+                    let procesados = new Set();
+                    for (let i = 0; i < clasesDelDia.length; i++) {
+                        if (procesados.has(i)) continue;
+                        let cluster = [clasesDelDia[i]];
+                        let clusterIdx = [i];
+                        let maxFin = timeToMin(clasesDelDia[i][13]);
+                        for (let j = i + 1; j < clasesDelDia.length; j++) {
+                            let inicioJ = timeToMin(clasesDelDia[j][12]);
+                            if (inicioJ < maxFin) {
+                                cluster.push(clasesDelDia[j]);
+                                clusterIdx.push(j);
+                                maxFin = Math.max(maxFin, timeToMin(clasesDelDia[j][13]));
+                            } else { break; }
+                        }
+                        const esSplitAB = cluster.length === 2 && cluster.some(c => c[14] === 'A') && cluster.some(c => c[14] === 'B') && cluster[0][12] === cluster[1][12];
+                        if (cluster.length > 1 && !esSplitAB) {
+                            const top = getPosicionY(cluster[0][12]);
+                            const latestEndClase = cluster.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
+                            const bottom = getPosicionY(latestEndClase[13]);
+                            const alto = Math.max(bottom - top, 30);
+                            const jsonDetalles = encodeURIComponent(JSON.stringify(cluster));
+                            html += `<div class="bloque-superposicion" style="top: ${top}px; height: ${alto}px;" onclick="verDetalleSuperposicion('${jsonDetalles}')">⚠️ Superposición (${cluster.length})</div>`;
+                            clusterIdx.forEach(idx => procesados.add(idx));
+                        } else {
+                            cluster.forEach(clase => {
+                                const inicio = clase[12];
+                                const fin = clase[13];
+                                const grupo = clase[14] || '';
+                                const top = getPosicionY(inicio) + 2;
+                                const bottom = getPosicionY(fin) - 2;
+                                const alto = Math.max(bottom - top, 20);
+                                let splitClass = "";
+                                if (modo !== 'aula' && modo !== 'profesor') {
+                                    if (grupo === 'A') splitClass = "split-A";
+                                    if (grupo === 'B') splitClass = "split-B";
+                                }
+                                const jsonClase = encodeURIComponent(JSON.stringify(clase));
+                                html += `
+                                    <div class="materia-bloque ${splitClass}" 
+                                         style="top: ${top}px; height: ${alto}px;" 
+                                         onclick="mostrarInfoClase('${jsonClase}')"
+                                         onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]} ${clase[1]}')" 
+                                         onmouseout="hideTooltip()">
+                                        <div class="aula-indicador">${clase[9] || '?'}</div>
+                                        <div class="materia-contenido">
+                                            <div class="materia-nombre">${clase[3]}</div>
+                                            <div class="materia-detalles">${(modo === 'profesor' || modo === 'aula') ? `${clase[0]} ${clase[1]}` : (clase[5] || '-')}</div>
+                                        </div>
+                                    </div>`;
+                            });
+                            clusterIdx.forEach(idx => procesados.add(idx));
+                        }
+                    }
+                    html += '</div>';
+                });
+                html += '</div>';
+                contenedor.innerHTML = html;
+            } catch (err) {
+                console.error("Error crítico:", err);
             }
-        }
-        html += '</div>';
-    });
-
-    html += '</div>';
-    contenedor.innerHTML = html;
-}
-
-        function verDetalleSuperposicion(json) {
-            const clases = JSON.parse(decodeURIComponent(json));
-            let msg = "Clases superpuestas:\n\n";
-            clases.forEach(c => {
-                msg += `• ${c[3]} (${c[12]}-${c[13]})\n  Prof: ${c[5]} | Aula: ${c[9]} | Curso: ${c[0]} ${c[1]}\n\n`;
-            });
-            alert(msg);
         }
 
         function showTooltip(e, materia, profe, aula, hora, curso) {
@@ -576,7 +773,6 @@
         function generarTablaDetallada(filas) {
             const contenedor = document.getElementById('contenedor-lista');
             if (filas.length === 0) return;
-
             let html = `<h3>Detalle de Clases</h3><table>
                 <thead>
                     <tr><th>Día</th><th>Inicio</th><th>Fin</th><th>Materia</th><th>Profesor</th><th>Aula</th><th>Grupo</th></tr>

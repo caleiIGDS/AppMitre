@@ -1,6 +1,8 @@
 import sqlite3
 import csv
 import os
+import re
+import unicodedata
 
 def conectar():
     return sqlite3.connect('escuela.db')
@@ -21,23 +23,79 @@ def crear_tablas():
     con.commit()
     con.close()
 
+def eliminar_acentos(texto):
+    if not texto: return ""
+    return "".join(c for c in unicodedata.normalize('NFD', texto)
+                  if unicodedata.category(c) != 'Mn')
+
+def limpiar_profesor(nombre):
+    if not nombre: return ""
+    # Eliminar acentos, pasar a mayúsculas, quitar comas
+    n = eliminar_acentos(nombre).upper().replace(',', ' ')
+    # Quitar puntos (ej: J.PABLO -> J PABLO)
+    n = n.replace('.', ' ')
+    # Normalizar espacios
+    n = re.sub(r'\s+', ' ', n).strip()
+    
+    # Mapeos manuales para casos muy obvios que el algoritmo no pesca
+    mapeos = {
+        "CASALE SERVIN BETTINA": "CASALE SERVINI BETTINA",
+        "CASALLE SERVINI BETINA": "CASALE SERVINI BETINA",
+        "CASALE CERVINI": "CASALE SERVINI BETINA",
+        "CASALE CERVINI BETINA": "CASALE SERVINI BETINA",
+        "CASALLE SERVINI": "CASALE SERVINI BETINA",
+        "ALONSO EVELYN": "ALONSO EVELIN",
+        "PEREYRA JESSICA": "PEREYRA JESICA",
+        "RODRIGUEZ VIRGINA": "RODRIGUEZ VIRGINIA",
+        "ZULAICA EMILSE": "ZULAICA EMILCE",
+        "SCHNEIDER ERICA": "SCHNEIDER ERIKA"
+    }
+    return mapeos.get(n, n)
+
+def limpiar_aula(aula):
+    if not aula: return ""
+    # Si tiene números, nos quedamos solo con los números (ej: "B 2" -> "2")
+    numeros = re.findall(r'\d+', aula)
+    if numeros:
+        return "".join(numeros)
+    # Si no tiene números, mantenemos el nombre limpio (ej: "PATIO")
+    return eliminar_acentos(aula).upper().strip()
+
+def corregir_horarios(inicio, fin):
+    horarios_comunes = ["07:40", "09:40", "10:00", "12:00", "13:30", "15:30", "15:50", "17:50", "18:00", "20:00", "20:10", "22:10"]
+    if inicio == fin:
+        try:
+            idx = horarios_comunes.index(inicio)
+            if idx + 1 < len(horarios_comunes):
+                return inicio, horarios_comunes[idx+1]
+        except ValueError:
+            pass
+        try:
+            h, m = map(int, inicio.split(':'))
+            h_fin = (h + 2) % 24
+            return inicio, f"{h_fin:02d}:{m:02d}"
+        except:
+            return inicio, fin
+    return inicio, fin
+
 def cargar_csv(archivo_csv):
     if not os.path.exists(archivo_csv): return
     con = conectar()
     cur = con.cursor()
     
     with open(archivo_csv, 'r', encoding='utf-8') as f:
-        # DictReader es la clave: lee por nombre de cabecera, no por posicion
         reader = csv.DictReader(f)
         for row in reader:
-            # row.get('columna', '') intenta buscar el dato. Si no existe, pone vacío.
-            # Esto evita que la app explote si borras una columna o le cambias el nombre.
+            profesor = limpiar_profesor(row.get('profesor', ''))
+            aula = limpiar_aula(row.get('aula', ''))
+            inicio, fin = corregir_horarios(row.get('hora_inicio', ''), row.get('hora_fin', ''))
+            
             datos = (
                 row.get('curso', ''), row.get('division', ''), row.get('especialidad', ''),
-                row.get('materia', ''), row.get('tipo_materia', ''),
-                row.get('profesor', ''), row.get('dni', ''), row.get('telefono', ''), row.get('email', ''),
-                row.get('aula', ''), row.get('tipo_aula', ''),
-                row.get('dia', ''), row.get('hora_inicio', ''), row.get('hora_fin', ''), row.get('grupo', '')
+                eliminar_acentos(row.get('materia', '')).upper().strip(), row.get('tipo_materia', ''),
+                profesor, row.get('dni', ''), row.get('telefono', ''), row.get('email', ''),
+                aula, row.get('tipo_aula', ''),
+                row.get('dia', ''), inicio, fin, row.get('grupo', '')
             )
             cur.execute('INSERT INTO clases VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', datos)
             
