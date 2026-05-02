@@ -48,4 +48,4 @@ if __name__ == '__main__':
     # Esto garantiza que si cambias el CSV, la web se actualiza al arrancar
     database.crear_tablas()
     database.cargar_csv('datos.csv')
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
