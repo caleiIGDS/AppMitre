@@ -51,6 +51,7 @@ h1 {
     max-width: 1400px;
     margin: 20px auto;
     padding: 0 24px;
+    /* Removed position: relative as search-title-display is no longer absolute */
 }
 
 /* Tabs */
@@ -84,6 +85,20 @@ h1 {
 
 .contenedor-busqueda {
     margin-bottom: 24px;
+}
+
+.search-title-display {
+    font-size: 1.5em; /* Make it bigger */
+    font-weight: 600;
+    color: var(--primary);
+    margin-top: 15px; /* Add some space above the calendar */
+    margin-bottom: 10px; /* Add some space below the search */
+    text-align: center; /* Center the text if it's not full width */
+    line-height: 1.3; /* Allow more space between lines if it wraps */
+    /* Removed absolute positioning and overflow restrictions */
+    position: static; /* or remove this property */
+    width: 100%; /* Occupy full available width */
+    max-width: none; /* Allow it to expand */
 }
 
 .seccion-busqueda {

@@ -46,6 +46,7 @@
                 </div>
             </div>
         </div>
+        <div id="search-title-display" class="search-title-display"></div>
 
         <div id="contenedor-calendario"></div>
         <div class="tabla-scroll" id="contenedor-lista"></div>
@@ -134,6 +135,10 @@
 
         function mostrarInfoClase(json) {
             const c = JSON.parse(decodeURIComponent(json));
+            let cursoDisplay = `${c[0]} ${c[1]}`;
+            if (c[14] && c[14].trim() !== '') { // Check if group exists and is not empty
+                cursoDisplay += ` (Grupo: ${c[14]})`;
+            }
             const html = `
                 <div class="info-card">
                     <div class="info-label">Materia</div>
@@ -141,7 +146,7 @@
                     <div class="info-label">Profesor</div>
                     <div class="info-valor">${c[5]}</div>
                     <div class="info-label">Curso</div>
-                    <div class="info-valor">${c[0]} ${c[1]}</div>
+                    <div class="info-valor">${cursoDisplay}</div>
                     <div class="info-label">Aula</div>
                     <div class="info-valor">${c[9] || '-'}</div>
                     <div class="info-label">Horario</div>
@@ -186,10 +191,31 @@
             document.querySelectorAll('.custom-dropdown').forEach(d => d.style.display = 'none');
             document.getElementById('contenedor-calendario').innerHTML = "";
             document.getElementById('contenedor-lista').innerHTML = "";
+            
+            // Clear the dynamic title when tab changes
+            const titleDisplay = document.getElementById('search-title-display');
+            if (titleDisplay) titleDisplay.textContent = "";
         }
 
         function buscarEnServidor(modo, valor) {
-            if (!valor) return;
+            const titleDisplay = document.getElementById('search-title-display');
+            if (!valor) {
+                if (titleDisplay) titleDisplay.textContent = ""; // Clear title if no value
+                return;
+            }
+            // Update the title here
+            if (titleDisplay) {
+                let titleText = "";
+                if (modo === 'profesor') {
+                    titleText = `Calendario semanal de Prof: ${valor}`;
+                } else if (modo === 'aula') {
+                    titleText = `Calendario semanal de Aula: ${valor}`;
+                } else if (modo === 'curso') {
+                    titleText = `Calendario semanal de Curso: ${valor}`;
+                }
+                titleDisplay.textContent = titleText;
+            }
+
             fetch(`/api/${modo}/${valor}`)
                 .then(res => res.json())
                 .then(filas => {
@@ -330,7 +356,11 @@
                                 const leftPct = anchoPct * idxInCluster;
                                 const styleExtra = numClases > 1 
                                     ? `width: calc(${anchoPct}% - 6px); left: calc(${leftPct}% + 4px);`
-                                    : `left: 4px; right: 4px;`;
+                                    : (clase[14] && clase[14].trim().toUpperCase() === 'A' 
+                                        ? `width: calc(50% - 6px); left: 4px;` 
+                                        : (clase[14] && clase[14].trim().toUpperCase() === 'B' 
+                                            ? `width: calc(50% - 6px); right: 4px;` 
+                                            : `left: 4px; right: 4px;`));
                                 const jsonClase = encodeURIComponent(JSON.stringify(clase));
                                 html += `
                                     <div class="materia-bloque" 
