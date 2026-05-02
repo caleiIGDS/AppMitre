@@ -302,7 +302,7 @@
                                          onclick="mostrarInfoClase('${jsonClase}')"
                                          onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]} ${clase[1]}')" 
                                          onmouseout="hideTooltip()">
-                                        <div class="aula-indicador${!(/\d/g.test(clase[9])) ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]} ${clase[1]}` : (clase[9] || '?')}</div>
+                                        <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]} ${clase[1]}` : (clase[9] || '?')}</div>
                                         <div class="materia-contenido">
                                             <div class="materia-nombre">${clase[3]}</div>
                                             <div class="materia-detalles">
