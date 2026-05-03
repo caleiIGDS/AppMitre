@@ -47,6 +47,7 @@
             </div>
         </div>
         <div id="search-title-display" class="search-title-display"></div>
+        <button id="export-pdf-btn" style="display: none;" onclick="exportarAPDF()">Exportar a PDF</button>
 
         <div id="contenedor-calendario"></div>
         <div class="tabla-scroll" id="contenedor-lista"></div>
@@ -66,10 +67,10 @@
 
     <script>
         // Datos precargados desde el servidor
-        const rawData = {
-            profesor: [{% for p in datos.profesor %}{{ p | tojson | safe }},{% endfor %}],
-            aula: [{% for a in datos.aula %}{{ a | tojson | safe }},{% endfor %}],
-            curso: [{% for c in datos.curso %}{{ c | tojson | safe }},{% endfor %}]
+        const rawData = {{ datos | tojson | safe }};
+        let currentSearch = {
+            modo: null,
+            valor: null
         };
 
         function normalize(text) {
@@ -195,14 +196,19 @@
             // Clear the dynamic title when tab changes
             const titleDisplay = document.getElementById('search-title-display');
             if (titleDisplay) titleDisplay.textContent = "";
+            document.getElementById('export-pdf-btn').style.display = 'none';
         }
 
         function buscarEnServidor(modo, valor) {
             const titleDisplay = document.getElementById('search-title-display');
+            const exportBtn = document.getElementById('export-pdf-btn');
             if (!valor) {
                 if (titleDisplay) titleDisplay.textContent = ""; // Clear title if no value
+                exportBtn.style.display = 'none';
                 return;
             }
+            currentSearch.modo = modo;
+            currentSearch.valor = valor;
             // Update the title here
             if (titleDisplay) {
                 let titleText = "";
@@ -214,6 +220,7 @@
                     titleText = `Calendario semanal de Curso: ${valor}`;
                 }
                 titleDisplay.textContent = titleText;
+                exportBtn.style.display = 'inline-block';
             }
 
             fetch(`/api/${modo}/${valor}`)
@@ -422,6 +429,12 @@
             });
             html += '</tbody></table>';
             contenedor.innerHTML = html;
+        }
+
+        function exportarAPDF() {
+            if (currentSearch.modo && currentSearch.valor) {
+                window.open(`/export/pdf/${currentSearch.modo}/${currentSearch.valor}`, '_blank');
+            }
         }
     </script>
 </body>
