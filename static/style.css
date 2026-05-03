@@ -29,50 +29,40 @@ header {
 
 .header-content {
     display: flex;
-    align-items: center;
-    max-width: 1400px;
+    flex-wrap: wrap; /* Allow items to wrap */
+    justify-content: center; /* Center items when wrapped */
+    max-width: 100%; /* Full width on smaller screens */
     margin: 0 auto;
-    padding: 0 24px;
+    padding: 10px 15px; /* Reduced padding for mobile */
+    text-align: center;
 }
 
 .logo {
-    height: 40px;
-    margin-right: 15px;
+    margin-right: 0;
+    margin-bottom: 10px; /* Space between logo and title when wrapped */
 }
 
 h1 {
-    margin: 0;
-    font-size: 22px;
-    font-weight: 400;
-    color: #5f6368;
+    font-size: 20px; /* Slightly smaller font for mobile header */
+    width: 100%; /* Ensure title takes full width when wrapped */
 }
 
 .container {
-    max-width: 1400px;
-    margin: 20px auto;
-    padding: 0 24px;
-    /* Removed position: relative as search-title-display is no longer absolute */
+    max-width: 100%; /* Full width for container on smaller screens */
+    margin: 10px auto; /* Reduced margin for mobile */
+    padding: 0 15px; /* Reduced padding for mobile */
 }
 
-/* Tabs */
 .tabs {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 20px;
+    flex-wrap: wrap; /* Allow tabs to wrap if they exceed container width */
+    justify-content: center; /* Center tabs when wrapped */
+    gap: 8px; /* Slightly smaller gap between tabs */
 }
 
 .tab-btn {
-    padding: 8px 24px;
-    cursor: pointer;
-    border: 1px solid var(--light-gray);
-    background: var(--white);
-    border-radius: 20px;
-    font-weight: 500;
-    color: #5f6368;
-    transition: all 0.2s;
-    font-size: 14px;
+    padding: 8px 15px; /* Adjusted padding for smaller tabs */
+    font-size: 13px; /* Smaller font size for tabs */
 }
-
 .tab-btn:hover {
     background: #f1f3f4;
 }
@@ -455,6 +445,150 @@ td { padding: 12px; border-bottom: 1px solid var(--grid-line); }
 tr:hover { background-color: #f8f9fa; }
 
 @media (max-width: 768px) {
-    .calendario-grid { grid-template-columns: 50px repeat(5, 120px); overflow-x: auto; }
-    #contenedor-calendario { overflow-x: auto; }
+    .contenedor-busqueda {
+        margin-bottom: 15px;
+    }
+
+    .search-container {
+        max-width: 100%; /* Make search container full width */
+    }
+
+    input.search-input {
+        font-size: 14px;
+        padding: 10px 12px;
+    }
+
+    .dropdown-item {
+        font-size: 13px;
+        padding: 8px 12px;
+    }
+
+    .search-title-display {
+        font-size: 1.2em; /* Adjust font size for title display */
+        margin-top: 10px;
+        margin-bottom: 8px;
+    }
+
+    /* Calendar adjustments */
+    .calendario-grid {
+        grid-template-columns: 40px repeat(5, 100px); /* Smaller fixed width for days */
+        overflow-x: auto;
+    }
+    #contenedor-calendario {
+        overflow-x: auto;
+        border-radius: 4px;
+    }
+
+    .cabecera-vacia, .cabecera-dia {
+        height: 40px; /* Smaller header height */
+    }
+
+    .dia-nombre {
+        font-size: 10px; /* Smaller day name font */
+    }
+
+    .hora-label {
+        font-size: 9px; /* Smaller hour label font */
+    }
+
+    .materia-bloque {
+        left: 2px;
+        right: 2px;
+        font-size: 10px; /* Smaller font for blocks */
+    }
+
+    .aula-indicador {
+        width: 30px; /* Smaller aula indicator */
+        min-width: 30px;
+        max-width: 30px;
+        font-size: 12px;
+    }
+
+    .materia-contenido {
+        padding: 2px 4px; /* Reduced padding */
+    }
+
+    .materia-nombre {
+        font-size: 10px;
+        line-height: 1;
+    }
+
+    .materia-detalles {
+        font-size: 9px;
+        line-height: 1;
+    }
+
+    .bloque-superposicion {
+        left: 2px;
+        right: 2px;
+        font-size: 10px;
+    }
+
+    .modal-contenido {
+        padding: 15px; /* Reduced modal padding */
+        width: 95%; /* Wider modal on small screens */
+    }
+
+    .modal-header {
+        font-size: 18px;
+        margin-bottom: 10px;
+    }
+
+    .btn-cerrar-modal {
+        font-size: 20px;
+    }
+
+    .info-card {
+        padding: 10px;
+        margin-bottom: 8px;
+    }
+
+    .info-label {
+        font-size: 10px;
+    }
+
+    .info-valor {
+        font-size: 14px;
+    }
+
+    .calendar-tooltip {
+        width: 180px; /* Smaller tooltip */
+        font-size: 12px;
+        padding: 10px;
+    }
+
+    table {
+        font-size: 12px;
+    }
+    th, td {
+        padding: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .calendario-grid {
+        grid-template-columns: 30px repeat(5, 80px); /* Even smaller fixed width for very small screens */
+    }
+
+    .cabecera-vacia, .cabecera-dia {
+        height: 35px;
+    }
+
+    .aula-indicador {
+        width: 25px;
+        min-width: 25px;
+        max-width: 25px;
+        font-size: 10px;
+    }
+
+    .materia-nombre, .materia-detalles, .materia-bloque {
+        font-size: 9px;
+    }
+    .bloque-superposicion {
+        font-size: 9px;
+    }
+
+    h1 {
+        font-size: 18px;
+    }
 }
