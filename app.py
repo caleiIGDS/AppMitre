@@ -90,7 +90,7 @@ def export_pdf(tipo, valor):
     pdf.chapter_title(f'Horario para {tipo}: {valor}')
     pdf.chapter_body(filas)
     
-    response = make_response(pdf.output(dest='S'))
+    response = make_response(pdf.output(dest='B'))
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = f'inline; filename={tipo}_{valor}.pdf'
     return response
