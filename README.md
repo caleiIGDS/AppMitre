@@ -1,6 +1,6 @@
 # Sistema de Horarios - Escuela Técnica Emilio Mitre
 
-Aplicación web interactiva para la gestión y visualización de horarios escolares.
+Aplicación web interactiva para la gestión y visualización de horarios escolares de la EMILIO MITRE.
 
 ## Propósito
 Este sistema permite consultar de manera dinámica:
