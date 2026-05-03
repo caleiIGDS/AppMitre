@@ -1,0 +1,4 @@
+*.db
+datos.csv
+/pycache/
+*.pyc
