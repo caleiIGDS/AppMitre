@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, make_response
+from flask import Flask, render_template, jsonify, Response
 import database
 import sqlite3
 from fpdf import FPDF
@@ -90,10 +90,9 @@ def export_pdf(tipo, valor):
     pdf.chapter_title(f'Horario para {tipo}: {valor}')
     pdf.chapter_body(filas)
     
-    response = make_response(pdf.output(dest='B'))
-    response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = f'inline; filename={tipo}_{valor}.pdf'
-    return response
+    return Response(pdf.output(dest='S').encode('latin-1'),
+                    mimetype='application/pdf',
+                    headers={'Content-Disposition': f'inline; filename={tipo}_{valor}.pdf'})
 
 if __name__ == '__main__':
     # Esto garantiza que si cambias el CSV, la web se actualiza al arrancar
