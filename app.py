@@ -90,7 +90,7 @@ def export_pdf(tipo, valor):
     pdf.chapter_title(f'Horario para {tipo}: {valor}')
     pdf.chapter_body(filas)
     
-    return Response(pdf.output(dest='S').encode('latin-1'),
+    return Response(pdf.output(dest='S'),
                     mimetype='application/pdf',
                     headers={'Content-Disposition': f'inline; filename={tipo}_{valor}.pdf'})
 
