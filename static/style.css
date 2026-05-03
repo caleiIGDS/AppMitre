@@ -454,6 +454,189 @@ th { text-align: left; padding: 12px; border-bottom: 1px solid var(--light-gray)
 td { padding: 12px; border-bottom: 1px solid var(--grid-line); }
 tr:hover { background-color: #f8f9fa; }
 
+/* Dashboard En Vivo - Estilo Light */
+.dashboard-header-light {
+    background: var(--tertiary);
+    padding: 20px;
+    border-radius: var(--border-radius);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid var(--light-gray);
+    margin-bottom: 20px;
+}
+
+.dashboard-controls-light {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+}
+
+.clock-display-light {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--primary);
+    min-width: 130px;
+}
+
+.manual-controls-group {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding-left: 20px;
+    border-left: 2px solid var(--light-gray);
+}
+
+.manual-inputs {
+    display: flex;
+    gap: 8px;
+}
+
+.date-input-light, .time-input-light {
+    padding: 6px 10px;
+    border: 1px solid var(--light-gray);
+    border-radius: 4px;
+    font-family: inherit;
+    color: var(--dark-gray);
+    outline: none;
+}
+
+.date-input-light:focus, .time-input-light:focus {
+    border-color: var(--primary);
+}
+
+.dashboard-status-light {
+    font-size: 16px;
+    font-weight: 500;
+    color: #5f6368;
+    text-transform: uppercase;
+}
+
+#contenedor-dashboard {
+    margin-top: 10px;
+}
+
+.dashboard-grid-light {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+}
+
+.dashboard-column-light {
+    background: var(--white);
+    border: 1px solid var(--light-gray);
+    border-radius: var(--border-radius);
+    padding: 15px;
+    box-shadow: var(--shadow);
+}
+
+.dashboard-column-light h2 {
+    font-size: 14px;
+    text-transform: uppercase;
+    margin-top: 0;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--tertiary);
+    text-align: center;
+    font-weight: 600;
+}
+
+.dashboard-column-light.finished h2 { color: #d93025; border-bottom-color: #fce8e6; }
+.dashboard-column-light.in-progress h2 { color: #1e8e3e; border-bottom-color: #e6f4ea; }
+.dashboard-column-light.upcoming h2 { color: #1a73e8; border-bottom-color: #e8f0fe; }
+
+.class-list-light {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.class-item-light {
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--light-gray);
+    background: var(--tertiary);
+    display: grid;
+    grid-template-columns: 65px 1fr 45px;
+    align-items: center;
+    transition: transform 0.2s;
+}
+
+.class-item-light:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+.class-time-light {
+    font-weight: 600;
+    color: var(--dark-gray);
+    font-size: 13px;
+}
+
+.class-info-light {
+    padding: 0 10px;
+    overflow: hidden;
+}
+
+.class-materia-light {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--dark-gray);
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.class-meta-light {
+    font-size: 12px;
+    color: #70757a;
+    display: block;
+}
+
+.class-room-light {
+    text-align: right;
+    font-weight: 700;
+    color: var(--primary);
+    font-size: 14px;
+}
+
+/* Switch Toggle Light */
+.switch-light {
+    position: relative;
+    display: inline-block;
+    width: 34px;
+    height: 18px;
+}
+
+.switch-light input { opacity: 0; width: 0; height: 0; }
+
+.slider-light {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: var(--light-gray);
+    transition: .4s;
+}
+
+.slider-light:before {
+    position: absolute;
+    content: "";
+    height: 12px; width: 12px;
+    left: 3px; bottom: 3px;
+    background-color: white;
+    transition: .4s;
+}
+
+input:checked + .slider-light { background-color: var(--primary); }
+input:checked + .slider-light:before { transform: translateX(16px); }
+.slider-light.round { border-radius: 20px; }
+.slider-light.round:before { border-radius: 50%; }
+
+@media (max-width: 1000px) {
+    .dashboard-grid-light { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 768px) {
     .calendario-grid { grid-template-columns: 50px repeat(5, 120px); overflow-x: auto; }
     #contenedor-calendario { overflow-x: auto; }

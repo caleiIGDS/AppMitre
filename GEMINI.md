@@ -56,12 +56,15 @@ This script reads `datos.csv` and outputs `horarios_actualizados.csv` with assig
 
 ### Backend
 -   **Database Schema:** The `clases` table stores all schedule information. New columns should be added to both `crear_tablas` and `cargar_csv` in `database.py`.
--   **API Endpoints:** `/api/<tipo>/<valor>` returns JSON data for the frontend calendar.
+-   **API Endpoints:** 
+    -   `/api/<tipo>/<valor>`: returns JSON data for the frontend calendar.
+    -   `/api/dashboard`: returns all classes for the real-time "En Vivo" dashboard.
 -   **PDF Export:** Located in `app.py`, use the `FPDF` class to customize the exported schedule's layout and style.
 
 ### Frontend
 -   **Separation of Concerns:** JavaScript logic is separated from HTML templates. Logic resides in `static/js/script.js`, while `index.html` only contains a minimal initialization script to pass data via `window.APP_DATA`.
 -   **Dynamic Calendar:** The calendar in `index.html` is generated on the fly via JavaScript in `script.js`. It calculates overlaps and positions blocks based on start/end times.
+-   **En Vivo Dashboard:** An airport-style board that shows classes currently in progress, finished, and upcoming. It includes a "Simulated Time" feature for testing or planning.
 -   **Styling:** Follow the CSS variables defined in `:root` in `style.css` to maintain visual consistency (Google/Material-inspired aesthetic).
 -   **Modals:** Used for displaying detailed class information and handling overlaps.
 

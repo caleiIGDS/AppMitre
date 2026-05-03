@@ -457,6 +457,19 @@ def export_pdf(tipo, valor):
     print(f"Total Export PDF (fpdf2): {time.time() - start_time:.4f}s")
     return send_file(output, mimetype='application/pdf', as_attachment=False, download_name=f"{tipo}_{valor}.pdf")
 
+@app.route('/api/dashboard')
+def api_dashboard():
+    try:
+        con = database.conectar()
+        cur = con.cursor()
+        cur.execute("SELECT * FROM clases")
+        filas = [list(row) for row in cur.fetchall()]
+        con.close()
+        return jsonify(filas)
+    except Exception as e:
+        print(f"Error en dashboard: {e}")
+        return jsonify([])
+
 if __name__ == '__main__':
     # Esto garantiza que si cambias el CSV, la web se actualiza al arrancar
     database.crear_tablas()

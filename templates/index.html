@@ -19,6 +19,7 @@
             <button class="tab-btn" onclick="cambiarTab(event, 'tab-profesor')">Profesor</button>
             <button class="tab-btn" onclick="cambiarTab(event, 'tab-aula')">Aula</button>
             <button class="tab-btn active" onclick="cambiarTab(event, 'tab-curso')">Curso</button>
+            <button class="tab-btn" onclick="cambiarTab(event, 'tab-envivo')">En Vivo ✈️</button>
         </div>
 
         <div class="contenedor-busqueda">
@@ -45,10 +46,31 @@
                     <div id="dropdown-curso" class="custom-dropdown"></div>
                 </div>
             </div>
+
+            <div id="tab-envivo" class="seccion-busqueda">
+                <div class="dashboard-header-light">
+                    <div class="dashboard-controls-light">
+                        <div class="clock-display-light" id="dashboard-clock">00:00:00</div>
+                        <div class="manual-controls-group">
+                            <label class="switch-light">
+                                <input type="checkbox" id="manual-clock-toggle" onchange="toggleManualClock()">
+                                <span class="slider-light round"></span>
+                            </label>
+                            <span class="control-label">Modo Manual</span>
+                            <div class="manual-inputs">
+                                <input type="date" id="manual-date-input" class="date-input-light" oninput="setManualTime()">
+                                <input type="time" id="manual-clock-input" class="time-input-light" oninput="setManualTime()">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="dashboard-status-light">Estado de Clases Actuales</div>
+                </div>
+            </div>
         </div>
         <div id="search-title-display" class="search-title-display"></div>
         <button id="export-pdf-btn" style="display: none;" onclick="exportarAPDF()">Exportar a PDF</button>
 
+        <div id="contenedor-dashboard" style="display: none;"></div>
         <div id="contenedor-calendario"></div>
         <div class="tabla-scroll" id="contenedor-lista"></div>
     </div>
@@ -67,7 +89,7 @@
 
     <script>
         window.APP_DATA = {
-            rawData: {{ datos | tojson | safe }}
+            rawData: {{ datos | tojson | safe }},
         };
     </script>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>

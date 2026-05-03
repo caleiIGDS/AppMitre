@@ -117,18 +117,173 @@ function cambiarTab(evt, idTab) {
     for (i = 0; i < tabcontent.length; i++) tabcontent[i].style.display = "none";
     tablinks = document.getElementsByClassName("tab-btn");
     for (i = 0; i < tablinks.length; i++) tablinks[i].className = tablinks[i].className.replace(" active", "");
+    
     document.getElementById(idTab).style.display = "block";
     evt.currentTarget.className += " active";
     
+    // Reset views
     document.querySelectorAll('.search-input').forEach(input => input.value = "");
     document.querySelectorAll('.custom-dropdown').forEach(d => d.style.display = 'none');
     document.getElementById('contenedor-calendario').innerHTML = "";
     document.getElementById('contenedor-lista').innerHTML = "";
+    document.getElementById('contenedor-dashboard').style.display = 'none';
+    document.getElementById('contenedor-calendario').style.display = 'block';
+    
+    if (idTab === 'tab-envivo') {
+        document.getElementById('contenedor-calendario').style.display = 'none';
+        document.getElementById('contenedor-dashboard').style.display = 'block';
+        iniciarDashboard();
+    }
     
     // Clear the dynamic title when tab changes
     const titleDisplay = document.getElementById('search-title-display');
     if (titleDisplay) titleDisplay.textContent = "";
     document.getElementById('export-pdf-btn').style.display = 'none';
+}
+
+let dashboardInterval = null;
+let isManualClock = false;
+let manualTime = null;
+let manualDate = null;
+
+function toggleManualClock() {
+    isManualClock = document.getElementById('manual-clock-toggle').checked;
+    if (!isManualClock) {
+        manualTime = null;
+        manualDate = null;
+        actualizarReloj();
+    } else {
+        // Initialize manual inputs with current time/date
+        const now = new Date();
+        document.getElementById('manual-clock-input').value = now.toTimeString().slice(0, 5);
+        document.getElementById('manual-date-input').value = now.toISOString().split('T')[0];
+        manualTime = document.getElementById('manual-clock-input').value;
+        manualDate = document.getElementById('manual-date-input').value;
+    }
+    cargarDatosDashboard();
+}
+
+function setManualTime() {
+    if (isManualClock) {
+        manualTime = document.getElementById('manual-clock-input').value;
+        manualDate = document.getElementById('manual-date-input').value;
+        actualizarReloj();
+        cargarDatosDashboard();
+    }
+}
+
+function iniciarDashboard() {
+    actualizarReloj();
+    if (dashboardInterval) clearInterval(dashboardInterval);
+    dashboardInterval = setInterval(() => {
+        actualizarReloj();
+        if (document.getElementById('tab-envivo').style.display === 'block' && !isManualClock) {
+            cargarDatosDashboard();
+        }
+    }, 1000);
+    cargarDatosDashboard();
+}
+
+function actualizarReloj() {
+    const clock = document.getElementById('dashboard-clock');
+    if (clock) {
+        if (isManualClock && manualTime) {
+            clock.textContent = manualTime + ":00";
+        } else {
+            const now = new Date();
+            clock.textContent = now.toLocaleTimeString('es-AR', { hour12: false });
+        }
+    }
+}
+
+function cargarDatosDashboard() {
+    fetch('/api/dashboard')
+        .then(res => res.json())
+        .then(filas => renderizarDashboard(filas))
+        .catch(err => console.error("Error Dashboard:", err));
+}
+
+function renderizarDashboard(filas) {
+    const contenedor = document.getElementById('contenedor-dashboard');
+    const now = new Date();
+    
+    // Obtenemos el día actual (Lunes a Viernes)
+    const dayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+    
+    let currentDay;
+    let currentTime;
+
+    if (isManualClock && manualDate && manualTime) {
+        const [year, month, day] = manualDate.split('-').map(Number);
+        const d = new Date(year, month - 1, day);
+        currentDay = dayNames[d.getDay()];
+        
+        const [h, m] = manualTime.split(':').map(Number);
+        currentTime = h * 60 + m;
+    } else {
+        currentDay = dayNames[now.getDay()];
+        currentTime = now.getHours() * 60 + now.getMinutes();
+    }
+
+    const timeToMin = (t) => {
+        if (!t) return 0;
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+    };
+
+    const inProgress = [];
+    const upcoming = [];
+    const finished = [];
+
+    filas.forEach(f => {
+        if (f[11] !== currentDay) return;
+        
+        const start = timeToMin(f[12]);
+        const end = timeToMin(f[13]);
+
+        if (currentTime >= start && currentTime <= end) {
+            inProgress.push(f);
+        } else if (currentTime < start) {
+            upcoming.push(f);
+        } else if (currentTime > end) {
+            finished.push(f);
+        }
+    });
+
+    inProgress.sort((a, b) => timeToMin(a[12]) - timeToMin(b[12]));
+    upcoming.sort((a, b) => timeToMin(a[12]) - timeToMin(b[12]));
+    finished.sort((a, b) => timeToMin(b[13]) - timeToMin(a[13]));
+
+    const renderList = (list) => {
+        if (list.length === 0) return '<div style="text-align:center; padding:20px; color:#5f6368;">SIN ACTIVIDAD</div>';
+        return list.map(f => `
+            <div class="class-item-light">
+                <div class="class-time-light">${f[12]}</div>
+                <div class="class-info-light">
+                    <span class="class-materia-light">${f[3]}</span>
+                    <span class="class-meta-light">${f[0]}° ${f[1]} | ${f[5]}</span>
+                </div>
+                <div class="class-room-light">${f[9] || '-'}</div>
+            </div>
+        `).join('');
+    };
+
+    contenedor.innerHTML = `
+        <div class="dashboard-grid-light">
+            <div class="dashboard-column-light finished">
+                <h2>Terminadas</h2>
+                <div class="class-list-light">${renderList(finished.slice(0, 15))}</div>
+            </div>
+            <div class="dashboard-column-light in-progress">
+                <h2>En Curso</h2>
+                <div class="class-list-light">${renderList(inProgress)}</div>
+            </div>
+            <div class="dashboard-column-light upcoming">
+                <h2>Próximas</h2>
+                <div class="class-list-light">${renderList(upcoming.slice(0, 15))}</div>
+            </div>
+        </div>
+    `;
 }
 
 function buscarEnServidor(modo, valor) {
