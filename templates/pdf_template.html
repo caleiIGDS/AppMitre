@@ -4,57 +4,289 @@
     <meta charset="UTF-8">
     <title>Horario PDF</title>
     <style>
+        :root {
+            --primary: #1a73e8;
+            --secondary: #4285f4;
+            --tertiary: #e8f0fe;
+            --white: #ffffff;
+            --light-gray: #f1f3f4;
+            --dark-gray: #3c4043;
+            --grid-line: #e0e0e0;
+            --shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+        }
         body {
-            font-family: 'Arial', sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 0;
             color: #333;
-            -webkit-print-color-adjust: exact;
+        }
+        @page {
+            size: A4 landscape;
+            margin: 1cm;
         }
         h1 {
             text-align: center;
-            color: #000;
-            margin-bottom: 20px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-            font-size: 10pt;
-        }
-        th, td {
-            border: 1px solid #000;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #eee;
-            font-weight: bold;
+            color: var(--primary);
+            margin: 0 0 10px 0;
+            font-size: 24pt;
         }
         .header-info {
             text-align: center;
-            margin-bottom: 10px;
+            margin-bottom: 20px;
         }
-        .footer {
-            position: fixed;
-            bottom: 20px;
+        .header-info h2 {
+            margin: 0;
+            color: var(--dark-gray);
+            font-size: 18pt;
+        }
+
+        /* Estilos del Calendario */
+        .calendario-wrapper {
+            border: 1px solid var(--grid-line);
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--white);
+            position: relative;
+        }
+
+        .calendario-grid {
+            display: table;
             width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+            position: relative;
+        }
+
+        .cabecera-fila {
+            display: table-row;
+            background-color: var(--white);
+        }
+
+        .cabecera-vacia {
+            display: table-cell;
+            width: 60px;
+            height: 40px;
+            border-bottom: 1px solid var(--grid-line);
+            border-right: 1px solid var(--grid-line);
+        }
+
+        .cabecera-dia {
+            display: table-cell;
+            height: 40px;
+            text-align: center;
+            vertical-align: middle;
+            border-bottom: 1px solid var(--grid-line);
+            border-right: 1px solid var(--grid-line);
+            font-weight: bold;
+            font-size: 11pt;
+            color: #70757a;
+            text-transform: uppercase;
+        }
+
+        .cuerpo-calendario {
+            position: relative;
+            display: block;
+            width: 100%;
+        }
+
+        .columna-horas {
+            position: absolute;
+            left: 0;
+            width: 60px;
+            border-right: 1px solid var(--grid-line);
+        }
+
+        .hora-label {
+            position: absolute;
+            right: 8px;
+            font-size: 8pt;
+            color: #70757a;
+            transform: translateY(-50%);
+        }
+
+        .dia-columnas-container {
+            margin-left: 60px;
+            position: relative;
+            display: flex;
+        }
+
+        .columna-dia {
+            flex: 1;
+            position: relative;
+            border-right: 1px solid var(--grid-line);
+        }
+
+        .grid-line-horizontal {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background-color: var(--grid-line);
+        }
+
+        /* Materia Block */
+        .materia-bloque {
+            position: absolute;
+            background-color: var(--primary);
+            color: white;
+            border-radius: 4px;
+            font-size: 9pt;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.2);
+            display: flex; 
+            align-items: stretch;
+            box-sizing: border-box;
+        }
+
+        .aula-indicador {
+            background-color: rgba(0,0,0,0.15);
+            width: 30px;
+            min-width: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 11pt;
+            border-right: 1px solid rgba(255,255,255,0.1);
+            text-align: center;
+            padding: 2px;
+            box-sizing: border-box;
+        }
+
+        .materia-contenido {
+            padding: 2px 5px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .materia-nombre {
+            font-weight: 600;
+            line-height: 1;
+            margin-bottom: 1px;
+        }
+
+        .materia-detalles {
+            font-size: 7.5pt;
+            opacity: 0.9;
+            line-height: 1;
+        }
+
+        .bloque-superposicion {
+            position: absolute;
+            left: 4px;
+            right: 4px;
+            background-color: #d93025;
+            color: white;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 10pt;
+        }
+
+        .footer {
+            margin-top: 20px;
             text-align: center;
             font-size: 8pt;
             color: #666;
         }
-        @page {
-            size: A4 landscape;
-            margin: 1.5cm;
+
+        .page-break {
+            page-break-before: always;
+        }
+
+        table.detalle {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 9pt;
+        }
+        table.detalle th, table.detalle td {
+            border: 1px solid #ddd;
+            padding: 6px;
+            text-align: left;
+        }
+        table.detalle th {
+            background-color: #f8f9fa;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
-    <h1>Horario</h1>
+    <h1>Horario Semanal</h1>
     <div class="header-info">
         <h2>{{ tipo.capitalize() }}: {{ valor }}</h2>
     </div>
-    <table>
+
+    {% if cal %}
+    <div class="calendario-wrapper">
+        <div class="calendario-grid">
+            <div class="cabecera-fila">
+                <div class="cabecera-vacia"></div>
+                {% for dia in cal.dias %}
+                <div class="cabecera-dia">{{ dia }}</div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div class="cuerpo-calendario" style="height: {{ cal.altura_total }}px;">
+            <div class="columna-horas" style="height: {{ cal.altura_total }}px;">
+                {% for hora, top in cal.posiciones_h.items() %}
+                <div class="hora-label" style="top: {{ top }}px;">{{ hora }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="dia-columnas-container" style="height: {{ cal.altura_total }}px;">
+                {% for dia in cal.dias %}
+                <div class="columna-dia">
+                    {% for hora, top in cal.posiciones_h.items() %}
+                    <div class="grid-line-horizontal" style="top: {{ top }}px;"></div>
+                    {% endfor %}
+
+                    {% for bloque in cal.bloques_por_dia[dia] %}
+                        {% if bloque.tipo == 'materia' %}
+                        <div class="materia-bloque" 
+                             style="top: {{ bloque.top }}px; height: {{ bloque.alto }}px; width: calc({{ bloque.ancho }}% - 4px); left: calc({{ bloque.left }}% + 2px);">
+                            <div class="aula-indicador">
+                                {{ (bloque.clase[0] ~ ' ' ~ bloque.clase[1]) if tipo == 'aula' else (bloque.clase[9] or '?') }}
+                            </div>
+                            <div class="materia-contenido">
+                                <div class="materia-nombre">{{ bloque.clase[3] }}</div>
+                                <div class="materia-detalles">
+                                    {% if tipo == 'aula' %}
+                                        {{ bloque.clase[5] }}
+                                    {% elif tipo == 'profesor' %}
+                                        {{ bloque.clase[0] }} {{ bloque.clase[1] }}
+                                    {% else %}
+                                        {{ bloque.clase[5] }}
+                                    {% endif %}
+                                    ({{ bloque.clase[12] }}-{{ bloque.clase[13] }})
+                                </div>
+                            </div>
+                        </div>
+                        {% elif bloque.tipo == 'superposicion' %}
+                        <div class="bloque-superposicion" style="top: {{ bloque.top }}px; height: {{ bloque.alto }}px;">
+                            ⚠️ Superp. ({{ bloque.cantidad }})
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <p style="text-align: center;">No hay datos de calendario disponibles.</p>
+    {% endif %}
+
+    <div class="page-break"></div>
+
+    <h3>Detalle de Clases</h3>
+    <table class="detalle">
         <thead>
             <tr>
                 <th>Día</th>
@@ -63,6 +295,7 @@
                 <th>Materia</th>
                 <th>Profesor</th>
                 <th>Aula</th>
+                <th>Curso</th>
                 <th>Grupo</th>
             </tr>
         </thead>
@@ -72,9 +305,10 @@
                 <td>{{ fila[11] }}</td>
                 <td>{{ fila[12] }}</td>
                 <td>{{ fila[13] }}</td>
-                <td>{{ fila[3] }}</td>
+                <td><b>{{ fila[3] }}</b></td>
                 <td>{{ fila[5] }}</td>
                 <td>{{ fila[9] }}</td>
+                <td>{{ fila[0] }} {{ fila[1] }}</td>
                 <td>{{ fila[14] or '-' }}</td>
             </tr>
             {% endfor %}
@@ -82,7 +316,7 @@
     </table>
 
     <div class="footer">
-        Generado por Sistema de Horarios - Página <span class="page-number"></span> de <span class="total-pages"></span>
+        Generado por Sistema de Horarios - AppMitre
     </div>
 </body>
 </html>
