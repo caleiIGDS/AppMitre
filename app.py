@@ -227,9 +227,9 @@ def export_pdf(tipo, valor):
                     pdf.set_text_color(0, 0, 0)
                     contiene_letras = any(c.isalpha() for c in ind_txt)
                     if tipo != 'aula' and contiene_letras and (len(ind_txt) > 4 or h > ind_w * 2):
-                        pdf.set_font('Arial', 'B', 5)
+                        pdf.set_font('Arial', 'B', 6) # Aumentado de 5 a 6
                         # Dibujar letra por letra verticalmente
-                        char_h = 2.5
+                        char_h = 3.0 # Aumentado de 2.5 para fuente más grande
                         # Truncar si el texto es muy largo para la altura h
                         max_chars = int((h - 2) / char_h)
                         display_txt = ind_txt[:max_chars]
@@ -239,20 +239,20 @@ def export_pdf(tipo, valor):
                             pdf.set_xy(x, max(y, start_y + (i * char_h)))
                             pdf.cell(ind_w, char_h, char, 0, 0, 'C')
                     else:
-                        pdf.set_font('Arial', 'B', 6)
+                        # Para números o textos cortos, mantener horizontal
+                        pdf.set_font('Arial', 'B', 8) # Aumentado de 6 a 8
                         pdf.set_xy(x, y)
                         pdf.cell(ind_w, h, ind_txt, 0, 0, 'C')
-                    
                     # Contenido Materia Centrado
-                    txt_x = x + ind_w + 0.5
-                    materia_w = w - ind_w - 1
+                    txt_x = x + ind_w + 0.3
+                    materia_w = w - ind_w - 0.6
                     
                     if materia_w > 2:
                         # Ajuste de tamaño de fuente agrandado (si no es división angosta)
                         is_narrow = materia_w < 15
                         font_size_mat = 8.5 if not is_narrow else 6.5
-                        font_size_det = 7.5 if not is_narrow else 5.5
-                        line_h = 3.5 if not is_narrow else 2.6
+                        font_size_det = 7.5 if not is_narrow else 5.2
+                        line_h = 3.5 if not is_narrow else 2.4
                         
                         pdf.set_font('Arial', 'B', font_size_mat)
                         materia_txt = clase[3] # Eliminada función wrap_with_hyphen
@@ -260,7 +260,7 @@ def export_pdf(tipo, valor):
                         
                         pdf.set_font('Arial', '', font_size_det)
                         # Prof: en lugar de P:
-                        det_raw = f"Prof: {clase[5]}" if tipo != 'profesor' else f"C: {curso_num}° {div_display}"
+                        det_raw = f"Prof: {clase[5]}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
                         lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
                         
                         # Altura total estimada
@@ -268,15 +268,19 @@ def export_pdf(tipo, valor):
                         show_det = False
                         show_time = False
                         
+                        # Prioridad: 1. Materia, 2. Profesor, 3. Horario
                         if (actual_lines + len(lines_det)) * line_h <= h - 1:
-                            actual_lines += len(lines_det)
                             show_det = True
-                            
-                        if (actual_lines + 1) * line_h <= h - 1:
-                            actual_lines += 1
-                            show_time = True
-                            
-                        total_content_h = actual_lines * line_h
+                            # Solo intentamos mostrar el tiempo si ya cupo el profesor
+                            if (actual_lines + len(lines_det) + 1) * line_h <= h - 1:
+                                show_time = True
+                        
+                        # Calcular altura total para centrado basada en lo que realmente mostraremos
+                        final_total_lines = actual_lines
+                        if show_det: final_total_lines += len(lines_det)
+                        if show_time: final_total_lines += 1
+                        
+                        total_content_h = final_total_lines * line_h
                         y_start = max(y + 0.5, y + (h - total_content_h) / 2)
                         
                         pdf.set_xy(txt_x, y_start)

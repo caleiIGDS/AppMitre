@@ -5,14 +5,14 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 1,A,,Ingles,Común,"FAILLA, Mariana",,,,21,,,Martes,08:40,09:40,
 1,A,,Construccion de Ciudadania,Común,"CORDOBA, Ezequiel",,,,21,,,Martes,10:00,12:00,
 1,A,,Practicas del Lenguaje,Común,"YAMUNI, Marisa",,,,11,,,Martes,12:30,14:30,
-1,A,,Sistemas Tecnologicos,Común,"AYZA, Diego",,,,113,,,Miércoles,07:40,09:40,B
+1,A,,Sistemas Tecnologicos,Común,"AYZA, Diego",,,,113,,,Miércoles,07:40,09:40,A
 1,A,,Lenguaje Tecnologico,Común,"LUNA, Daniela",,,,113,,,Miércoles,07:40,09:40,A
 1,A,,Matematica,Común,MOREIRA Victor,,,,21,,,Miércoles,10:00,12:00,
 1,A,,Ciencias Sociales,Común,"LEDESMA, Enrique",,,,21,,,Miércoles,12:30,14:30,
 1,A,,Procedimientos Tecnicos,Común,"MASSIMINO, Cristina",,,,11,,,Jueves,07:40,09:40,A
-1,A,,Procedimientos Tecnicos,Común,"MARROCCO, Roque",,,,11,,,Jueves,07:40,09:40,B
-1,A,,Lenguaje Tecnologico,Común,"IBAÑEZ, Patricio",,,,1,,,Jueves,10:00,12:00,
-1,A,,Sistemas Tecnologicos,Común,"MORMILE_ MARTINEZ ARCE, Joaquin",,,,114,,,Jueves,10:00,12:00,
+1,A,,Procedimientos Tecnicos,Común,"MARROCCO, Roque",,,,11,,,Jueves,07:40,09:40,A
+1,A,,Lenguaje Tecnologico,Común,"IBAÑEZ, Patricio",,,,1,,,Jueves,10:00,12:00,A
+1,A,,Sistemas Tecnologicos,Común,"MORMILE_ MARTINEZ ARCE, Joaquin",,,,114,,,Jueves,10:00,12:00,A
 1,A,,Ciencias Naturales,Común,VAZQUEZ ROJAS,,,,21,,,Viernes,07:40,09:40,
 1,A,,Ciencias Sociales,Común,"LEDESMA, Enrique",,,,21,,,Viernes,07:40,09:40,
 1,A,,Educacion Artistica,Común,"LAPORTA, Miguel",,,,21,,,Viernes,10:00,12:00,
@@ -25,16 +25,16 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 1,B,,Practicas del Lenguaje,Común,"YAMUNI, Marisa",,,,22,,,Martes,10:00,12:00,
 1,B,,Construccion de Ciudadania,Común,"JALIL _ BRITEZ, Paola",,,,21,,,Martes,12:30,14:30,
 1,B,,Ciencias Sociales,Común,"PARISI, Andrea",,,,22,,,Miércoles,07:40,09:40,
-1,B,,Lenguaje Tecnologico,Común,"IBAÑEZ, Patricio",,,,1,,,Miércoles,10:00,12:00,
-1,B,,Sistemas Tecnologicos,Común,"CORONEL, Carlos",,,,2,,,Miércoles,10:00,12:00,
+1,B,,Lenguaje Tecnologico,Común,"IBAÑEZ, Patricio",,,,1,,,Miércoles,10:00,12:00,A
+1,B,,Sistemas Tecnologicos,Común,"CORONEL, Carlos",,,,2,,,Miércoles,10:00,12:00,A
 1,B,,Ciencias Naturales,Común,"PONTNAU, Lucia",,,,22,,,Miércoles,12:30,14:30,
 1,B,,Ingles,Común,BARBOZA Mara,,,,22,,,Jueves,07:40,09:40,
-1,B,,Sistemas Tecnologicos,Común,"NAPAN, Julio",,,,2,,,Jueves,10:00,12:00,
-1,B,,Lenguaje Tecnologico,Común,CHARO Fabian,,,,6,,,Jueves,10:00,12:00,
+1,B,,Sistemas Tecnologicos,Común,"NAPAN, Julio",,,,2,,,Jueves,10:00,12:00,A
+1,B,,Lenguaje Tecnologico,Común,CHARO Fabian,,,,6,,,Jueves,10:00,12:00,A
 1,B,,Ciencias Sociales,Común,"PARISI, Andrea",,,,27,,,Jueves,12:30,14:30,
 1,B,,Matematica,Común,"FUENTES, Victoria",,,,22,,,Viernes,07:40,09:40,
-1,B,,Procedimientos Tecnicos,Común,BRONNIMAN RUBEN,,,,11,,,Viernes,10:00,12:00,
-1,B,,Procedimientos Tecnicos,Común,"GERULA, Hector",,,,11,,,Viernes,10:00,12:00,
+1,B,,Procedimientos Tecnicos,Común,BRONNIMAN RUBEN,,,,11,,,Viernes,10:00,12:00,A
+1,B,,Procedimientos Tecnicos,Común,"GERULA, Hector",,,,11,,,Viernes,10:00,12:00,A
 1,B,,Educacion Artistica,Común,"ALVAREZ, Andrea",,,,22,,,Viernes,12:30,14:30,
 1,B,,Educacion Artistica,Común,"DONAIRE, Nancy",,,,22,,,Viernes,12:30,14:30,
 1,C,,Ciencias Naturales,Común,"CAÑAMAS, Miriam",,,,23,,,Lunes,08:40,09:40,
@@ -42,29 +42,29 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 1,C,,Ciencias Sociales,Común,"GESSI, Martin",,,,23,,,Lunes,12:30,14:30,
 1,C,,Matematica,Común,"VILLANI, Liliana",,,,23,,,Martes,07:40,09:40,
 1,C,,Practicas del Lenguaje,Común,"SALAS, Maria Eugenia",,,,23,,,Martes,10:00,12:00,
-1,C,,Lenguaje Tecnologico,Común,"TOLARO, Mabel",,,,6,,,Martes,12:30,14:30,
-1,C,,Sistemas Tecnologicos,Común,"CHARO, Fabian",,,,B 2,,,Martes,12:30,14:30,
+1,C,,Lenguaje Tecnologico,Común,"TOLARO, Mabel",,,,6,,,Martes,12:30,14:30,A
+1,C,,Sistemas Tecnologicos,Común,"CHARO, Fabian",,,,B 2,,,Martes,12:30,14:30,A
 1,C,,Matematica,Común,"VILLANI, Liliana",,,,23,,,Miércoles,07:40,09:40,
 1,C,,Ciencias Naturales,Común,"CAÑAMAS, Miriam",,,,23,,,Miércoles,10:00,12:00,
 1,C,,Practicas del Lenguaje,Común,"SALAS, Maria Eugenia",,,,23,,,Miércoles,12:30,14:30,
-1,C,,Sistemas Tecnologicos,Común,"AYZA, Diego",,,,2,,,Jueves,07:40,09:40,
-1,C,,Lenguaje Tecnologico,Común,"IBAÑEZ, Patricio",,,,1,,,Jueves,07:40,09:40,
+1,C,,Sistemas Tecnologicos,Común,"AYZA, Diego",,,,2,,,Jueves,07:40,09:40,A
+1,C,,Lenguaje Tecnologico,Común,"IBAÑEZ, Patricio",,,,1,,,Jueves,07:40,09:40,A
 1,C,,Construccion Ciudadana,Común,"CORDOBA, Ezequiel",,,,23,,,Jueves,07:40,09:40,
-1,C,,Procedimientos Tecnicos,Común,"RIOS, Anibal",,,,11,,,Jueves,10:00,12:00,
-1,C,,Procedimientos Tecnicos,Común,"MARROCCO, Roque",,,,15,,,Jueves,10:00,12:00,
+1,C,,Procedimientos Tecnicos,Común,"RIOS, Anibal",,,,11,,,Jueves,10:00,12:00,A
+1,C,,Procedimientos Tecnicos,Común,"MARROCCO, Roque",,,,15,,,Jueves,10:00,12:00,A
 1,C,,Educacion Fisica,Común,EXPOSITO Jordana,,,,PATIO,,,Jueves,12:30,14:30,
 1,C,,Ingles,Común,"SUSI, Ivana",,,,202,,,Viernes,10:00,12:00,
 1,C,,Ciencias Sociales,Común,"GESSI, Martin",,,,23,,,Viernes,12:30,14:30,
 1,D,,Educacion Artistica,Común,"ABATTE, Liliana",,,,24,,,Lunes,07:40,09:40,
 1,D,,Ciencias Naturales,Común,"CALIO, Andrea",,,,24,,,Lunes,10:00,12:00,
-1,D,,Sistemas Tecnologicos,Común,TORRA ARIEL,,,,2,,,Lunes,12:30,14:30,
-1,D,,Lenguaje Tecnologico,Común,"GARCIA, Lucas",,,,1,,,Lunes,12:30,14:30,
+1,D,,Sistemas Tecnologicos,Común,TORRA ARIEL,,,,2,,,Lunes,12:30,14:30,A
+1,D,,Lenguaje Tecnologico,Común,"GARCIA, Lucas",,,,1,,,Lunes,12:30,14:30,A
 1,D,,Practicas del Lenguaje,Común,"YAMUNI, Marisa",,,,24,,,Martes,07:40,09:40,
 1,D,,Ingles,Común,"BARBOZA, Mara",,,,24,,,Martes,10:00,12:00,
 1,D,,Construccion Ciudadana,Común,SAINZ NORMA,,,,27,,,Martes,12:30,14:30,
-1,D,,Lenguaje Tecnologico,Común,"IBAÑEZ, Patricio",,,,1,,,Miércoles,07:40,09:40,
-1,D,,Sistemas Tecnologicos,Común,COLOMBRE MORMILE FERNANDO,,,,2,,,Miércoles,07:40,09:40,
-1,D,,Procedimientos Tecnicos,Común,"ABELARIA, Mario",,,,11,,,Miércoles,10:00,12:00,
+1,D,,Lenguaje Tecnologico,Común,"IBAÑEZ, Patricio",,,,1,,,Miércoles,07:40,09:40,A
+1,D,,Sistemas Tecnologicos,Común,COLOMBRE MORMILE FERNANDO,,,,2,,,Miércoles,07:40,09:40,A
+1,D,,Procedimientos Tecnicos,Común,"ABELARIA, Mario",,,,11,,,Miércoles,10:00,12:00,A
 1,D,,Ciencias Sociales,Común,"GESSI, Martin",,,,1,,,Miércoles,12:30,14:30,
 1,D,,Practicas del Lenguaje,Común,"YAMUNI, Marisa",,,,24,,,Jueves,07:40,09:40,
 1,D,,Matematica,Común,"VILLANI, Liliana",,,,24,,,Jueves,10:00,12:00,
@@ -79,16 +79,16 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 1,E,,Ingles,Común,"TOSORONI, Natalia",,,,23,,,Martes,12:30,14:30,
 1,E,,Practicas del Lenguaje,Común,"YAMUNI, Marisa",,,,23,,,Martes,14:50,16:50,
 1,E,,Matematica,Común,"CRISTOFANO, Adrian",,,,22,,,Miércoles,10:00,12:00,
-1,E,,Sistemas Tecnologicos,Común,YANNACE Jorge,,,,2,,,Miércoles,12:30,14:30,
-1,E,,Sistemas Tecnologicos,Común,"MULE, Mario",,,,B 3,,,Miércoles,12:30,14:30,
+1,E,,Sistemas Tecnologicos,Común,YANNACE Jorge,,,,2,,,Miércoles,12:30,14:30,A
+1,E,,Sistemas Tecnologicos,Común,"MULE, Mario",,,,B 3,,,Miércoles,12:30,14:30,A
 1,E,,Ciencias Sociales,Común,"LOUGE, Nahuel",,,,23,,,Miércoles,14:50,15:50,
 1,E,,Matematica,Común,"CRISTOFANO, Adrian",,,,22,,,Jueves,10:00,12:00,
 1,E,,Construccion de Ciudadania,Común,"SORIA, Rafael",,,,22,,,Jueves,12:30,14:30,
-1,E,,Lenguaje Tecnologico,Común,"GARCIA, Lucas",,,,1,,,Jueves,14:50,16:50,
-1,E,,Lenguaje Tecnologico,Común,"TOLARO, Mabel",,,,6,,,Jueves,14:50,16:50,
+1,E,,Lenguaje Tecnologico,Común,"GARCIA, Lucas",,,,1,,,Jueves,14:50,16:50,A
+1,E,,Lenguaje Tecnologico,Común,"TOLARO, Mabel",,,,6,,,Jueves,14:50,16:50,A
 1,E,,Ciencias Naturales,Común,"CRUZ, Marcela",,,,22,,,Viernes,11:00,12:00,
-1,E,,Procedimientos Tecnicos,Común,"MAZZEI, Gustavo",,,,11,,,Viernes,12:30,14:30,
-1,E,,Procedimientos Tecnicos,Común,"CORONEL, Carlos",,,,11,,,Viernes,12:30,14:30,
+1,E,,Procedimientos Tecnicos,Común,"MAZZEI, Gustavo",,,,11,,,Viernes,12:30,14:30,A
+1,E,,Procedimientos Tecnicos,Común,"CORONEL, Carlos",,,,11,,,Viernes,12:30,14:30,A
 1,E,,Educacion Fisica,Común,"ORDANZA CAMACHO, Carlos (s)",,,,PATIO,,,Viernes,14:50,16:50,
 1,F,,Matematica,Común,"MARINELLI, Jimena",,,,305,,,Lunes,10:00,12:00,
 1,F,,Practicas del Lenguaje,Común,AGUIRRE,,,,22,,,Lunes,12:30,14:30,
@@ -97,26 +97,26 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 1,F,,Ciencias Sociales (Geo),Común,"AQUINO, Carina",,,,22,,,Martes,12:30,14:30,
 1,F,,Educacion Fisica,Común,"EXPOSITO, Jordana",,,,22,,,Martes,14:50,16:50,
 1,F,,Matematica,Común,"MARINELLI, Jimena",,,,24,,,Miércoles,10:00,12:00,
-1,F,,Sistemas Tecnologicos,Común,"RODAS, Briana",,,,3,,,Miércoles,12:30,14:30,
-1,F,,Lenguaje Tecnologico,Común,PALAVECINO,,,,6,,,Miércoles,12:30,14:30,
-1,F,,Lenguaje Tecnologico,Común,"GARCIA, Lucas",,,,1,,,Miércoles,14:50,16:50,
-1,F,,Sistemas Tecnologicos,Común,"MULE, Mario",,,,2,,,Miércoles,14:50,16:50,
+1,F,,Sistemas Tecnologicos,Común,"RODAS, Briana",,,,3,,,Miércoles,12:30,14:30,A
+1,F,,Lenguaje Tecnologico,Común,PALAVECINO,,,,6,,,Miércoles,12:30,14:30,A
+1,F,,Lenguaje Tecnologico,Común,"GARCIA, Lucas",,,,1,,,Miércoles,14:50,16:50,A
+1,F,,Sistemas Tecnologicos,Común,"MULE, Mario",,,,2,,,Miércoles,14:50,16:50,A
 1,F,,Educacion Artistica,Común,"BRAVO, Maria",,,,21,,,Jueves,10:00,12:00,
-1,F,,Ciencias Sociales (His),Común,"AQUINO Carina",,,,23,,,Jueves,12:30,14:30,
-1,F,,Procedimientos Tecnicos,Común,"PETRATE, Matias",,,,11,,,Jueves,14:50,16:50,
-1,F,,Procedimientos Tecnicos,Común,"CHARO, Fabian",,,,11,,,Jueves,14:50,16:50,
+1,F,,Ciencias Sociales (His),Común,AQUINO Carina,,,,23,,,Jueves,12:30,14:30,
+1,F,,Procedimientos Tecnicos,Común,"PETRATE, Matias",,,,11,,,Jueves,14:50,16:50,A
+1,F,,Procedimientos Tecnicos,Común,"CHARO, Fabian",,,,11,,,Jueves,14:50,16:50,A
 1,F,,Ciencias Naturales,Común,"PALOMBARANI, Mirta",,,,203,,,Viernes,11:00,12:00,
 1,F,,Practicas del Lenguaje,Común,"AGUIRRE, Soledad",,,,203,,,Viernes,12:30,14:30,
 1,F,,Construccion Ciudadania,Común,"BRITEZ, Paola",,,,203,,,Viernes,14:50,16:50,
 1,G,,Educacion Artistica,Común,"GIOSA, Graciela",,,,203,,,Lunes,10:00,12:00,
-1,G,,Sistemas Tecnologicos,Común,"MULE, Mario",,,,3,,,Lunes,12:30,14:30,
-1,G,,Lenguaje Tecnologico,Común,"TOLARO, Mabel",,,,6,,,Lunes,12:30,14:30,
-1,G,,Procedimientos Tecnicos,Común,"LOAIZA, Walter",,,,11,,,Lunes,14:50,16:50,
-1,G,,Procedimientos Tecnicos,Común,"PETRATE, Matias",,,,11,,,Lunes,14:50,16:50,
+1,G,,Sistemas Tecnologicos,Común,"MULE, Mario",,,,3,,,Lunes,12:30,14:30,A
+1,G,,Lenguaje Tecnologico,Común,"TOLARO, Mabel",,,,6,,,Lunes,12:30,14:30,A
+1,G,,Procedimientos Tecnicos,Común,"LOAIZA, Walter",,,,11,,,Lunes,14:50,16:50,A
+1,G,,Procedimientos Tecnicos,Común,"PETRATE, Matias",,,,11,,,Lunes,14:50,16:50,A
 1,G,,Educacion Fisica,Común,"BONIFASI, Laura",,,,PATIO,,,Martes,10:00,12:00,
 1,G,,Matematica,Común,"CORONEL, Maria Teresa",,,,24,,,Martes,12:30,14:30,
-1,G,,Lenguaje Tecnologico,Común,"TOLARO, Mabel",,,,6,,,Martes,14:50,16:50,
-1,G,,Sistemas Tecnologicos,Común,"CHARO, Fabian",,,,2,,,Martes,14:50,16:50,
+1,G,,Lenguaje Tecnologico,Común,"TOLARO, Mabel",,,,6,,,Martes,14:50,16:50,A
+1,G,,Sistemas Tecnologicos,Común,"CHARO, Fabian",,,,2,,,Martes,14:50,16:50,A
 1,G,,Construccion Ciudadania,Común,"CORDOBA, Ezequiel",,,,305,,,Miércoles,10:00,12:00,
 1,G,,Matematica,Común,"CORONEL, Maria Teresa",,,,24,,,Miércoles,12:30,14:30,
 1,G,,Ciencias Sociales,Común,"GESSI, Martin",,,,24,,,Miércoles,14:50,15:50,
@@ -125,10 +125,10 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 1,G,,Ingles,Común,"TOSORONI, Natalia",,,,1,,,Jueves,14:50,16:50,
 1,G,,Practicas del Lenguaje,Común,"PERETTA, Daniela",,,,32,,,Viernes,10:00,12:00,
 1,G,,Ciencias Naturales,Común,"GARCIA, Omar",,,,1,,,Viernes,12:30,14:30,
-1,H,,Sistemas Tecnologicos,Común,"LOPEZ, Yemina",,,,2,,,Lunes,10:00,12:00,
-1,H,,Lenguaje Tecnologico,Común,"TOLARO, Mabel",,,,1,,,Lunes,10:00,12:00,
-1,H,,Procedimientos Tecnicos,Común,"LEDESMA, Andrea",,,,11,,,Lunes,12:30,14:30,
-1,H,,Procedimientos Tecnicos,Común,"CORONEL, Carlos",,,,15,,,Lunes,12:30,14:30,
+1,H,,Sistemas Tecnologicos,Común,"LOPEZ, Yemina",,,,2,,,Lunes,10:00,12:00,A
+1,H,,Lenguaje Tecnologico,Común,"TOLARO, Mabel",,,,1,,,Lunes,10:00,12:00,A
+1,H,,Procedimientos Tecnicos,Común,"LEDESMA, Andrea",,,,11,,,Lunes,12:30,14:30,A
+1,H,,Procedimientos Tecnicos,Común,"CORONEL, Carlos",,,,15,,,Lunes,12:30,14:30,A
 1,H,,Ingles,Común,"DE LA PUENTE, Santiago",,,,23,,,Lunes,14:50,16:50,
 1,H,,Ciencias Naturales,Común,"PONTNAU, Lucia",,,,302,,,Martes,10:00,12:00,
 1,H,,Construccion de Ciudadania,Común,"BERNINI, Alberto",,,,12,,,Martes,12:30,14:30,
@@ -140,31 +140,31 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 1,H,,Ciencias Sociales,Común,"MURADAS, Gabriela",,,,307,,,Jueves,12:30,14:30,
 1,H,,Matematica,Común,"CORONEL, Maria Teresa",,,,307,,,Jueves,14:50,16:50,
 1,H,,Ciencias Sociales,Común,"MURADAS, Gabriela",,,,307,,,Viernes,11:00,12:00,
-1,H,,Lenguaje Tecnologico,Común,"LUNA, Daniela",,,,101,,,Viernes,12:30,14:30,
-1,H,,Sistemas Tecnologicos,Común,CERREIA CALVINO,,,,2,,,Viernes,12:30,14:30,
+1,H,,Lenguaje Tecnologico,Común,"LUNA, Daniela",,,,101,,,Viernes,12:30,14:30,A
+1,H,,Sistemas Tecnologicos,Común,CERREIA CALVINO,,,,2,,,Viernes,12:30,14:30,A
 1,H,,Practicas del Lenguaje,Común,"YAMUNI, Marisa",,,,25,,,Viernes,14:50,16:50,
 1,I,,Educacion Artistica,Común,"MORALES, Estefania",,,,25,,,Lunes,07:40,09:40,
 1,I,,Ciencias Sociales,Común,"PETRIZ, Carla",,,,25,,,Lunes,10:00,12:00,
 1,I,,Ciencias Naturales,Común,"ZULAICA, Emilse",,,,25,,,Lunes,12:30,13:30,
 1,I,,Practicas del Lenguaje,Común,"CASALE SERVIN, Bettina",,,,25,,,Martes,07:40,09:40,
 1,I,,Matematica,Común,"VILLANI, Liliana",,,,25,,,Martes,10:00,12:00,
-1,I,,Procedimientos Tecnicos,Común,GUALA,,,,11,,,Martes,12:30,14:30,
-1,I,,Procedimientos Tecnicos,Común,"MASSIMINO, Cristina",,,,11,,,Martes,12:30,14:30,
+1,I,,Procedimientos Tecnicos,Común,GUALA,,,,11,,,Martes,12:30,14:30,A
+1,I,,Procedimientos Tecnicos,Común,"MASSIMINO, Cristina",,,,11,,,Martes,12:30,14:30,A
 1,I,,Construccion de Ciudadania,Común,"VIZZOTTO, Gabriela",,,,25,,,Miércoles,07:40,09:40,
 1,I,,Ciencias Sociales,Común,"PETRIZ, Carla",,,,25,,,Miércoles,10:00,12:00,
-1,I,,Sistemas Tecnologicos,Común,"ABELAIDA, Mario",,,,202,,,Miércoles,12:30,14:30,
-1,I,,Lenguaje Tecnologico,Común,"GARCIA, Lucas",,,,1,,,Miércoles,12:30,14:30,
+1,I,,Sistemas Tecnologicos,Común,"ABELAIDA, Mario",,,,202,,,Miércoles,12:30,14:30,A
+1,I,,Lenguaje Tecnologico,Común,"GARCIA, Lucas",,,,1,,,Miércoles,12:30,14:30,A
 1,I,,Practicas del Lenguaje,Común,"CASALE SERVIN, Bettina",,,,25,,,Jueves,07:40,09:40,
 1,I,,Ingles,Común,"FAILLA, Mariana",,,,25,,,Jueves,10:00,12:00,
-1,I,,Lenguaje Tecnologico,Común,"TOLARO, Mabel",,,,1,,,Jueves,12:30,14:30,
-1,I,,Sistemas Tecnologicos,Común,SOLARI Sebastian,,,,202,,,Jueves,12:30,14:30,
+1,I,,Lenguaje Tecnologico,Común,"TOLARO, Mabel",,,,1,,,Jueves,12:30,14:30,A
+1,I,,Sistemas Tecnologicos,Común,SOLARI Sebastian,,,,202,,,Jueves,12:30,14:30,A
 1,I,,Matematica,Común,VILLANI Liliana,,,,25,,,Viernes,07:40,09:40,
 1,I,,Ciencias Naturales,Común,"ZULAICA, Emilse",,,,25,,,Viernes,10:00,12:00,
 1,I,,Educacion Fisica,Común,"BORGIA, Elena _ SORDINI, Emiliano (s)",,,,PATIO,,,Viernes,12:30,14:30,
 1,J,,Practicas del Lenguaje,Común,"SOBRECASA, Sonia",,,,26,,,Lunes,07:40,09:40,
 1,J,,Construccion de Ciudadania,Común,"BRITEZ, Paola",,,,26,,,Lunes,10:00,12:00,
-1,J,,Procedimientos Tecnicos,Común,"MARROCCO, Roque",,,,11,,,Lunes,12:30,14:30,
-1,J,,Procedimientos Tecnicos,Común,"BOLAÑEZ, Jorge _ VALENTINO Gustavo",,,,11,,,Lunes,12:30,14:30,
+1,J,,Procedimientos Tecnicos,Común,"MARROCCO, Roque",,,,11,,,Lunes,12:30,14:30,A
+1,J,,Procedimientos Tecnicos,Común,"BOLAÑEZ, Jorge _ VALENTINO Gustavo",,,,11,,,Lunes,12:30,14:30,A
 1,J,,Ciencias Sociales,Común,"LEGUIZAMON, Milva",,,,26,,,Martes,08:40,09:40,
 1,J,,Educacion Artistica,Común,"GIOSA, Graciela",,,,26,,,Martes,10:00,12:00,
 1,J,,Matematica,Común,"ORELLANA, Clara",,,,1,,,Martes,12:30,14:30,
@@ -173,18 +173,18 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 1,J,,Educacion Fisica,Común,"CRUZ, Claudio",,,,PATIO,,,Miércoles,12:30,14:30,
 1,J,,Ciencias Naturales,Común,"ZULAICA, Emilse",,,,26,,,Jueves,07:40,09:40,
 1,J,,Ingles,Común,"BARBOZA, Mara",,,,26,,,Jueves,10:00,12:00,
-1,J,,Sistemas Tecnologicos,Común,"BOLAÑEZ, Jorge _ ACOSTA, Maria",,,,2,,,Jueves,12:30,14:30,
-1,J,,Sistemas Tecnologicos,Común,"MORMILE, Gustavo",,,,B 3,,,Jueves,12:30,14:30,
+1,J,,Sistemas Tecnologicos,Común,"BOLAÑEZ, Jorge _ ACOSTA, Maria",,,,2,,,Jueves,12:30,14:30,A
+1,J,,Sistemas Tecnologicos,Común,"MORMILE, Gustavo",,,,B 3,,,Jueves,12:30,14:30,A
 1,J,,Ciencias Naturales,Común,"ZULAICA, Emilse",,,,26,,,Viernes,08:40,09:40,
 1,J,,Matematica,Común,"ORELLANA, Clara",,,,26,,,Viernes,10:00,12:00,
-1,J,,Lenguaje Tecnologico,Común,TOLARO,,,,6,,,Viernes,12:30,14:30,
-1,J,,Lenguaje Tecnologico,Común,"GARCIA, Lucas",,,,1,,,Viernes,12:30,14:30,
-1,K,,Procedimientos Tecnicos,Común,POBHIUSKA Cecilia,,,,11,,,Lunes,10:00,12:00,
-1,K,,Procedimientos Tecnicos,Común,"YANNACE, Jorge",,,,11,,,Lunes,10:00,12:00,
+1,J,,Lenguaje Tecnologico,Común,TOLARO,,,,6,,,Viernes,12:30,14:30,A
+1,J,,Lenguaje Tecnologico,Común,"GARCIA, Lucas",,,,1,,,Viernes,12:30,14:30,A
+1,K,,Procedimientos Tecnicos,Común,POBHIUSKA Cecilia,,,,11,,,Lunes,10:00,12:00,A
+1,K,,Procedimientos Tecnicos,Común,"YANNACE, Jorge",,,,11,,,Lunes,10:00,12:00,A
 1,K,,Ciencias Sociales,Común,"AQUINO, Carina",,,,26,,,Lunes,12:30,14:30,
 1,K,,Ciencias Naturales,Común,"ZULAICA, Emilse",,,,26,,,Lunes,14:50,15:50,
-1,K,,Lenguaje Tecnologico,Común,TOLARO Mabel,,,,6,,,Martes,10:00,12:00,
-1,K,,Sistemas Tecnologicos,Común,"Ayza, Diego",,,,2,,,Martes,10:00,12:00,
+1,K,,Lenguaje Tecnologico,Común,TOLARO Mabel,,,,6,,,Martes,10:00,12:00,A
+1,K,,Sistemas Tecnologicos,Común,"Ayza, Diego",,,,2,,,Martes,10:00,12:00,A
 1,K,,Educacion Artistica,Común,"ROJAS, Monica",,,,26,,,Martes,12:30,14:30,
 1,K,,Practicas del Lenguaje,Común,"BOHNE, Maria",,,,26,,,Martes,14:50,16:50,
 1,K,,Matematica,Común,"VILLANI, Liliana",,,,306,,,Miércoles,10:00,12:00,
@@ -193,41 +193,41 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 1,K,,Ciencias Naturales,Común,"ZULAICA, Emilce",,,,306,,,Jueves,10:00,12:00,
 1,K,,Matematica,Común,"VILLANI, Liliana",,,,26,,,Jueves,12:30,14:30,
 1,K,,Practicas del Lenguaje,Común,"BOHNE, Maria",,,,26,,,Jueves,14:50,16:50,
-1,K,,Sistemas Tecnologicos,Común,"MULE, Mario",,,,2,,,Viernes,10:00,12:00,
-1,K,,Lenguaje Tecnologico,Común,"GARCIA, Lucas",,,,1,,,Viernes,10:00,12:00,
+1,K,,Sistemas Tecnologicos,Común,"MULE, Mario",,,,2,,,Viernes,10:00,12:00,A
+1,K,,Lenguaje Tecnologico,Común,"GARCIA, Lucas",,,,1,,,Viernes,10:00,12:00,A
 1,K,,Ciencias Sociales,Común,"AQUINO, Carina",,,,26,,,Viernes,12:30,14:30,
 1,K,,Construccion de Ciudadania,Común,"SELVA, Maria",,,,26,,,Viernes,14:50,16:50,
 2,A,,MATEMATICA,Común,"MAMANI, Mirta",,,,16,Teórica,,Lunes,07:40,09:40,
 2,A,,INGLES,Común,"FAILLA, Mariana",,,,16,Teórica,,Lunes,10:00,12:00,
 2,A,,CIENCIAS SOCIALES (HISTORIA),Común,"STOPPINI, Andrea",,,,16,Teórica,,Lunes,12:00,13:00,
-2,A,,PROCEDIMIENTOS TECNICOS,Común,"CARBAJAL, Alvaro",,,,7,Teórica,,Lunes,13:30,15:30,
-2,A,,PROCEDIMIENTOS TECNICOS,Común,"CARBAJAL, ALVARO",,,,7,Teórica,,Lunes,15:50,17:50,
+2,A,,PROCEDIMIENTOS TECNICOS,Común,"CARBAJAL, Alvaro",,,,7,Teórica,,Lunes,13:30,15:30,A
+2,A,,PROCEDIMIENTOS TECNICOS,Común,"CARBAJAL, ALVARO",,,,7,Teórica,,Lunes,15:50,17:50,A
 2,A,,CIENCIAS SOCIALES (GEOGRAFIA),Común,"SAINZ, Norma",,,,16,Teórica,,Martes,07:40,09:40,
 2,A,,EDUCACION ARTISTICA,Común,"ABATTE, Liliana",,,,16,Teórica,,Martes,10:00,12:00,
 2,A,,CIENCIAS NATURALES (BIOLOGIA),Común,"CAÑAMAS, Miriam",,,,16,Teórica,,Miércoles,07:40,09:40,
-2,A,,PRACTICAS DEL LENGUAJE,Práctica,,,,,201,Teórica,,Miércoles,10:00,12:00,
+2,A,,PRACTICAS DEL LENGUAJE,Práctica,empty,,,,201,Teórica,,Miércoles,10:00,12:00,
 2,A,,CIENCIAS SOCIALES (HISTORIA),Común,"STOPPINI, Andrea",,,,16,Teórica,,Miércoles,12:00,13:00,
-2,A,,SISTEMAS TECNOLOGICOS,Común,"CUBITO, Osvaldo",,,,7,Teórica,,Miércoles,13:30,14:30,
-2,A,,LENGUAJE TECNOLOGICOS,Común,"CERREIA, Calvino",,,,7,Teórica,,Miércoles,13:30,14:30,
-2,A,,LENGUAJE TECNOLOGICO,Común,"BETANCORT, Diego",,,,7,Teórica,,Miércoles,15:50,17:50,
-2,A,,SISTEMAS TECNOLOGICOS,Común,"AYZA, Diego",,,,7,Teórica,,Miércoles,15:50,17:50,
+2,A,,SISTEMAS TECNOLOGICOS,Común,"CUBITO, Osvaldo",,,,7,Teórica,,Miércoles,13:30,14:30,A
+2,A,,LENGUAJE TECNOLOGICOS,Común,"CERREIA, Calvino",,,,7,Teórica,,Miércoles,13:30,14:30,A
+2,A,,LENGUAJE TECNOLOGICO,Común,"BETANCORT, Diego",,,,7,Teórica,,Miércoles,15:50,17:50,A
+2,A,,SISTEMAS TECNOLOGICOS,Común,"AYZA, Diego",,,,7,Teórica,,Miércoles,15:50,17:50,A
 2,A,,CIENCIAS NATURALES (FISICOQUIMICA),Común,"HERRIZUELO, Lorena",,,,16,Teórica,,Jueves,07:40,09:40,
 2,A,,PRACTICAS DEL LENGUAJE,Práctica,,,,,BI,Teórica,,Jueves,10:00,12:00,
 2,A,,MATEMATICA,Común,"MAMANI, Mirta",,,,16,Teórica,,Viernes,07:40,09:40,
-2,A,,CONSTRUCCION DE CIUDADANIA,Común,"SAYAGO CASTRONUOVO",,,,16,Teórica,,Viernes,10:00,12:00,
+2,A,,CONSTRUCCION DE CIUDADANIA,Común,SAYAGO CASTRONUOVO,,,,16,Teórica,,Viernes,10:00,12:00,
 2,B,,CIENCIAS SOCIALES (HISTORIA),Común,"STOPPINI, Andrea",,,,12,Teórica,,Lunes,07:40,09:40,
 2,B,,PRACTICAS DEL LENGUAJE,Práctica,"SALAS, Maria Eugenia",,,,12,Teórica,,Lunes,10:00,12:00,
 2,B,,CONSTRUCC. DE CIUDADANIA,Común,"CAÑAMAS, Miriam",,,,12,Teórica,,Lunes,12:30,12:30,
-2,B,,LENGUAJE TECNOLOGICO,Común,"FITTIPALDI, Claudio",,,,5,Teórica,,Lunes,13:30,14:30,
-2,B,,SISTEMAS TECNOLOGICOS,Común,"LOTO, David",,,,113,Teórica,,Lunes,15:50,17:50,
+2,B,,LENGUAJE TECNOLOGICO,Común,"FITTIPALDI, Claudio",,,,5,Teórica,,Lunes,13:30,14:30,A
+2,B,,SISTEMAS TECNOLOGICOS,Común,"LOTO, David",,,,113,Teórica,,Lunes,15:50,17:50,A
 2,B,,CIENCIAS NATURALES (FISICOQUIMICA),Común,"CRISTOFANO, Adrian",,,,12,Teórica,,Martes,07:40,09:40,
 2,B,,MATEMATICA,Común,"ORELLANA, Clara",,,,12,Teórica,,Martes,10:00,12:00,
-2,B,,EDUCACION FISICA,Común,,,,,PROGRESO,Teórica,1,Martes,12:30,12:30,
+2,B,,EDUCACION FISICA,Común,,,,,PROGRESO,Teórica,1.0,Martes,12:30,12:30,
 2,B,,EDUCACION ARTISTICA,Común,"RODRIGUEZ, Elizabeth",,,,12,Teórica,,Miércoles,07:40,09:40,
 2,B,,CIENCIAS NATURALES (BIOLOGIA),Común,"ZULAICA, Emilse",,,,12,Teórica,,Miércoles,10:00,12:00,
 2,B,,CONSTRUCC. DE CIUDADANIA,Común,"CAÑAMAS, Miriam",,,,12,Teórica,,Miércoles,12:30,13:30,
-2,B,,PROCEDIMIENTOS TECNICOS,Común,"MARROCO, Roque",,,,7,Teórica,,Miércoles,13:30,15:30,
-2,B,,PROCEDIMIENTOS TECNICOS,Común,"MARROCO, Roque",,,,7,Teórica,,Miércoles,15:50,17:50,
+2,B,,PROCEDIMIENTOS TECNICOS,Común,"MARROCO, Roque",,,,7,Teórica,,Miércoles,13:30,15:30,A
+2,B,,PROCEDIMIENTOS TECNICOS,Común,"MARROCO, Roque",,,,7,Teórica,,Miércoles,15:50,17:50,A
 2,B,,CIENCIAS SOCIALES (GEOGRAFIA),Común,,,,,12,Teórica,,Jueves,07:40,09:40,
 2,B,,MATEMATICA,Común,"ORELLANA, Clara",,,,12,Teórica,,Jueves,10:00,12:00,
 2,B,,PRACTICAS DEL LENGUAJE,Práctica,"SALAS, Maria Eugenia",,,,12,Teórica,,Viernes,07:40,09:40,
@@ -237,159 +237,159 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 2,C,,MATEMATICA,Común,"MOREIRA, Victor",,,,13,Teórica,,Martes,07:40,09:40,
 2,C,,CONSTRUCCION DE CIUDADANIA,Común,"VIZZOTTO, Gabriela",,,,13,Teórica,,Martes,10:00,12:00,
 2,C,,CIENCIAS NATURALES (FISICOQUIMICA),Común,"CRISTOFANO, Adrian",,,,13,Teórica,,Martes,12:00,13:00,
-2,C,,LENGUAJE TECNOLOGICO,Común,"MAZZEI, Gustavo",,,,1,Teórica,,Martes,13:30,15:30,
-2,C,,SISTEMAS TECNOLOGICOS,Común,"RANALLO, Gustavo",,,,1,Teórica,,Martes,13:30,15:30,
-2,C,,SISTEMAS TECNOLOGICOS,Común,"RODRIGUEZ CAVIEDES, Gustavo",,,,112,Teórica,,Martes,15:50,17:50,
-2,C,,LENGUAJE TECNOLOGICO,Común,"MAZZEI, Gustavo",,,,112,Teórica,,Martes,15:50,17:50,
+2,C,,LENGUAJE TECNOLOGICO,Común,"MAZZEI, Gustavo",,,,1,Teórica,,Martes,13:30,15:30,A
+2,C,,SISTEMAS TECNOLOGICOS,Común,"RANALLO, Gustavo",,,,1,Teórica,,Martes,13:30,15:30,A
+2,C,,SISTEMAS TECNOLOGICOS,Común,"RODRIGUEZ CAVIEDES, Gustavo",,,,112,Teórica,,Martes,15:50,17:50,A
+2,C,,LENGUAJE TECNOLOGICO,Común,"MAZZEI, Gustavo",,,,112,Teórica,,Martes,15:50,17:50,A
 2,C,,MATEMATICA,Común,"MOREIRA, Victor",,,,13,Teórica,,Miércoles,07:40,09:40,
-2,C,,CIENCIAS SOCIALES (GEOGRAFIA),Común,,,,,13,Teórica,,Miércoles,10:00,12:00,
+2,C,,CIENCIAS SOCIALES (GEOGRAFIA),Común,"GESSI, Martin",,,,13,Teórica,,Miércoles,10:00,12:00,
 2,C,,PRACTICAS DEL LENGUAJE,Práctica,"BASUALDO, Ivana",,,,13,Teórica,,Jueves,07:40,09:40,
 2,C,,CIENCIAS SOCIALES (HISTORIA),Común,"AQUINO, Carina",,,,13,Teórica,,Jueves,10:00,12:00,
 2,C,,CIENCIAS NATURALES (FISICOQUIMICA),Común,"CRISTOFANO, Adrian",,,,13,Teórica,,Jueves,12:00,13:00,
-2,C,,PROCEDIMIENTOS TECNICOS,Común,"RIOS, Adrian",,,,9,Teórica,,Jueves,13:30,14:30,
-2,C,,PROCEDIMIENTOS TECNICOS,Común,"RIOS, Adrian",,,,9,Teórica,,Jueves,15:50,17:50,
+2,C,,PROCEDIMIENTOS TECNICOS,Común,"RIOS, Adrian",,,,9,Teórica,,Jueves,13:30,14:30,A
+2,C,,PROCEDIMIENTOS TECNICOS,Común,"RIOS, Adrian",,,,9,Teórica,,Jueves,15:50,17:50,A
 2,C,,INGLES,Común,"MONTES _ COLOMBRES, Alberto",,,,13,Teórica,,Viernes,07:40,09:40,
 2,C,,CIENCIAS NATURALES (BIOLOGIA),Común,"PONTNAU, Lucía",,,,13,Teórica,,Viernes,10:00,12:00,
 2,D,,CIENCIAS SOCIALES (HISTORIA),Común,"AQUINO, Carina",,,,14,Teórica,,Lunes,07:40,09:40,
 2,D,,CIENCIAS NATURALES (BIOLOGIA),Común,"PONTNAU, Lucía",,,,14,Teórica,,Lunes,10:00,12:00,
-2,D,,"EDUCACIÓN FÍSICA EXPOSITO, Jordan12:40 14:40",Común,,,,,PROGRESO,Teórica,1,Lunes,12:40,14:40,
+2,D,,"EDUCACIÓN FÍSICA EXPOSITO, Jordan12:40 14:40",Común,,,,,PROGRESO,Teórica,1.0,Lunes,12:40,14:40,
 2,D,,CONSTRUCCION DE CIUDADANIA,Común,"CORDOBA, Ezequiel",,,,14,Teórica,,Martes,07:40,09:40,
 2,D,,INGLES,Común,"FAILLA, Mariana",,,,14,Teórica,,Martes,10:00,12:00,
 2,D,,PRACTICAS DEL LENGUAJE,Práctica,"BASUALDO, Ivana",,,,14,Teórica,,Martes,12:00,13:00,
-2,D,,PROCEDIMIENTOS TECNICOS,Común,"RIOS, Adrian",,,,10,Teórica,,Martes,13:30,15:30,
+2,D,,PROCEDIMIENTOS TECNICOS,Común,"RIOS, Adrian",,,,10,Teórica,,Martes,13:30,15:30,A
 2,D,,CIENCIAS SOCIALES (GEOGRAFIA),Común,"MONTAÑA LACUNZA, Florencia",,,,14,Teórica,,Miércoles,07:40,09:40,
 2,D,,EDUCACION ARTISTICA,Común,"ALONSO, Roxana",,,,14,Teórica,,Miércoles,10:00,12:00,
 2,D,,CIENCIAS NATURALES (FISICOQUIMICA),Común,VAZQUEZ ROJAS,,,,14,Teórica,,Jueves,07:40,09:40,
 2,D,,MATEMATICA,Común,"MOREIRA, Victor",,,,14,Teórica,,Jueves,10:00,12:00,
 2,D,,PRACTICAS DEL LENGUAJE,Práctica,"BASUALDO, Ivana",,,,14,Teórica,,Jueves,12:00,13:00,
-2,D,,LENGUAJE TECNOLOGICO,Común,SCHLUZAR Fernando_ ROMERO Lucas,,,,1,Teórica,,Jueves,13:30,15:30,
+2,D,,LENGUAJE TECNOLOGICO,Común,SCHLUZAR Fernando_ ROMERO Lucas,,,,1,Teórica,,Jueves,13:30,15:30,A
 2,D,,MATEMATICA,Común,"MOREIRA, Victor_ KRISTOF, Miriam",,,,14,Teórica,,Viernes,07:40,09:40,
 2,D,,PRACTICAS DEL LENGUAJE,Práctica,"BASUALDO, Ivana",,,,14,Teórica,,Viernes,10:00,12:00,
-2,E,,PROCEDIMIENTOS TECNICOS,Común,"MARROCO, Roque",,,,9,Teórica,,Lunes,07:40,09:40,
-2,E,,PROCEDIMIENTOS TECNICOS,Común,MARROCO,,,,9,Teórica,,Lunes,10:00,12:00,
+2,E,,PROCEDIMIENTOS TECNICOS,Común,"MARROCO, Roque",,,,9,Teórica,,Lunes,07:40,09:40,A
+2,E,,PROCEDIMIENTOS TECNICOS,Común,MARROCO,,,,9,Teórica,,Lunes,10:00,12:00,A
 2,E,,CONSTRUCC. DE CIUDADANIA,Común,"PAZ, Veronica",,,,21,Teórica,,Lunes,12:00,13:00,
 2,E,,INGLES,Común,"BARBOZA, Mara",,,,13,Teórica,,Lunes,13:30,15:30,
 2,E,,PRACTICAS DEL LENGUAJE,Práctica,,,,,13,Teórica,,Lunes,15:50,17:50,
 2,E,,CIENCIAS SOCIALES (HISTORIA),Común,"STOPPINI, Andrea",,,,13,Teórica,,Martes,13:30,15:30,
 2,E,,MATEMATICA,Común,"ECHEVERRIA, María",,,,13,Teórica,,Martes,15:50,17:50,
-2,E,,SISTEMAS TECNOLOGICOS,Común,,,,,114,Teórica,,Miércoles,07:40,09:40,
-2,E,,LENGUAJE TECNOLOGICO,Común,PALAVECINOCarlos,,,,1,Teórica,,Miércoles,10:00,12:00,
+2,E,,SISTEMAS TECNOLOGICOS,Común,,,,,114,Teórica,,Miércoles,07:40,09:40,A
+2,E,,LENGUAJE TECNOLOGICO,Común,PALAVECINOCarlos,,,,1,Teórica,,Miércoles,10:00,12:00,A
 2,E,,CONSTRUCC. DE CIUDADANIA,Común,"PAZ, Veronica",,,,13,Teórica,,Miércoles,12:00,13:00,
 2,E,,PRACTICAS DEL LENGUAJE,Práctica,,,,,13,Teórica,,Miércoles,13:30,15:30,
 2,E,,CIENCIAS SOCIALES (GEOGRAFIA),Común,"DE DOMINGO, Sandra_ GESSI MARTIN",,,,13,Teórica,,Miércoles,15:50,17:50,
 2,E,,CIENCIAS NATURALES (BIOLOGIA),Común,"PONTNAU, Lucía",,,,13,Teórica,,Jueves,13:30,15:30,
 2,E,,MATEMATICA,Común,"ECHEVERRIA, María",,,,13,Teórica,,Jueves,15:50,17:50,
-2,E,,EDUCACION FISICA,Común,"PEREZ, Juan",,,,PROGRESO,Teórica,1,Viernes,07:40,09:40,
+2,E,,EDUCACION FISICA,Común,"PEREZ, Juan",,,,PROGRESO,Teórica,1.0,Viernes,07:40,09:40,
 2,E,,EDUCACION ARTISTICA,Común,"MORALES, Estefania",,,,13,Teórica,,Viernes,13:30,15:30,
 2,E,,CIENCIAS NATURALES (FISICOQUIMICA),Común,"SCHAMBACH SOLARI, Carla B _ MESA, Betiana RODRIGUEZ, Virginia",,,,13,Teórica,,Viernes,15:50,17:50,
-2,F,,SISTEMAS TECNOLOGICOS,Común,"LOPEZ, Emmanuel _ MINICUCCI",,,,112,Teórica,,Lunes,07:40,09:40,
-2,F,,LENGUAJE TECNOLOGICO,Común,MULE,,,,1,Teórica,,Lunes,10:00,12:00,
+2,F,,SISTEMAS TECNOLOGICOS,Común,"LOPEZ, Emmanuel _ MINICUCCI",,,,112,Teórica,,Lunes,07:40,09:40,A
+2,F,,LENGUAJE TECNOLOGICO,Común,MULE,,,,1,Teórica,,Lunes,10:00,12:00,A
 2,F,,MATEMATICA,Común,"MAMANI, Mirta",,,,27,Teórica,,Lunes,12:00,13:00,
 2,F,,CIENCIAS NATURALES (FISICOQUIMICA),Común,"MOINE, Horacio",,,,14,Teórica,,Lunes,13:30,15:30,
 2,F,,PRACTICAS DEL LENGUAJE,Práctica,"BOHNE, Maria",,,,14,Teórica,,Lunes,15:50,17:50,
 2,F,,MATEMATICA,Común,"MAMANI, Mirta",,,,14,Teórica,,Martes,13:30,15:30,
 2,F,,CIENCIAS SOCIALES (GEOGRAFIA),Común,"BOBRYKOWICZ, Romina_ PARRA, Eduardo",,,,14,Teórica,,Martes,15:50,17:50,
-2,F,,PROCEDIMIENTOS TECNICOS,Común,"MARROCO, Roque",,,,11,Teórica,,Miércoles,07:40,09:40,
-2,F,,PROCEDIMIENTOS TECNICOS,Común,"MARROCO, Roque",,,,11,Teórica,,Miércoles,10:00,09:40,
+2,F,,PROCEDIMIENTOS TECNICOS,Común,"MARROCO, Roque",,,,11,Teórica,,Miércoles,07:40,09:40,A
+2,F,,PROCEDIMIENTOS TECNICOS,Común,"MARROCO, Roque",,,,11,Teórica,,Miércoles,10:00,09:40,A
 2,F,,MATEMATICA,Común,"MAMANI, Mirta",,,,27,Teórica,,Miércoles,12:00,13:00,
 2,F,,CIENCIAS NATURALES (BIOLOGIA),Común,"CRUZ, Marcela",,,,14,Teórica,,Miércoles,13:30,15:30,
 2,F,,INGLES,Común,"GARTISANI, Lorena",,,,14,Teórica,,Miércoles,15:50,17:50,
-2,F,,EDUCACION FISICA 09:40 11:40,Común,"MONICO, Vanesa",,,,PROGRESO,Teórica,1,Jueves,10:00,12:00,
+2,F,,EDUCACION FISICA 09:40 11:40,Común,"MONICO, Vanesa",,,,PROGRESO,Teórica,1.0,Jueves,10:00,12:00,
 2,F,,CIENCIAS SOCIALES (HISTORIA),Común,"ARPIREZ, Florencia",,,,14,Teórica,,Jueves,13:30,15:30,
 2,F,,CONSTRUCCION DE CIUDADANIA,Común,"QUISPE, Liliana_ JACOB, Adrian",,,,14,Teórica,,Jueves,15:50,17:50,
 2,F,,PRACTICAS DEL LENGUAJE,Práctica,"BOHNE, Maria",,,,14,Teórica,,Viernes,13:30,15:30,
 2,F,,EDUCACION ARTISTICA,Común,"MORALES, Estefania",,,,14,Teórica,,Viernes,15:50,17:50,
 2,G,,MATEMATICA,Común,"ECHEVERRIA, Maria",,,,15,Teórica,,Lunes,13:30,15:30,
 2,G,,INGLES,Común,"BARBOZA, Mara",,,,15,Teórica,,Lunes,15:50,17:50,
-2,G,,SISTEMAS TECNOLOGICOS,Común,CARMONA mario,,,,114,Teórica,,Martes,07:40,09:40,
-2,G,,LENGUAJE TECNOLOGICO,Común,"GUITERREZ, Nadia _ GERULA, Hector",,,,1,Teórica,,Martes,10:00,12:00,
+2,G,,SISTEMAS TECNOLOGICOS,Común,CARMONA mario,,,,114,Teórica,,Martes,07:40,09:40,A
+2,G,,LENGUAJE TECNOLOGICO,Común,"GUITERREZ, Nadia _ GERULA, Hector",,,,1,Teórica,,Martes,10:00,12:00,A
 2,G,,CIENCIAS NATURALES (FISICOQUIMICA),Común,"VAZQUEZ ROJAS, Estela",,,,15,Teórica,,Martes,13:30,15:30,
 2,G,,PRACTICAS DEL LENGUAJE,Práctica,"ROMERO, Samanta _ PERETTA Daniela",,,,15,Teórica,,Martes,15:50,17:50,
-2,G,,EDUCACION FISICA,Común,"CRUZ, Claudio",,,,PROGRESO,Teórica,1,Miércoles,07:40,09:40,
+2,G,,EDUCACION FISICA,Común,"CRUZ, Claudio",,,,PROGRESO,Teórica,1.0,Miércoles,07:40,09:40,
 2,G,,CIENCIAS SOCIALES (GEOGRAFIA),Común,"VAZQUEZ, Natalia _ LEGUIZAMON, Milva",,,,15,Teórica,,Miércoles,13:30,15:30,
 2,G,,CONSTRUCCION DE CIUDADANIA,Común,"LEGUIZAMON, Milva",,,,15,Teórica,,Miércoles,15:50,17:50,
-2,G,,PROCEDIMIENTOS TECNICOS,Común,"CARMONA, Mario",,,,9,Teórica,,Jueves,07:40,09:40,
-2,G,,PROCEDIMIENTOS TECNICOS,Común,"CARMONA, Mario",,,,16,Teórica,,Jueves,10:00,12:00,
+2,G,,PROCEDIMIENTOS TECNICOS,Común,"CARMONA, Mario",,,,9,Teórica,,Jueves,07:40,09:40,A
+2,G,,PROCEDIMIENTOS TECNICOS,Común,"CARMONA, Mario",,,,16,Teórica,,Jueves,10:00,12:00,A
 2,G,,MATEMATICA,Común,"ECHEVERRIA, Maria",,,,15,Teórica,,Jueves,13:30,15:30,
 2,G,,CIENCIAS SOCIALES (HISTORIA),Común,"ORTEGA, Silvina",,,,15,Teórica,,Jueves,15:50,17:50,
 2,G,,EDUCACION ARTISTICA,Común,"ROJAS, Monica",,,,15,Teórica,,Viernes,13:30,15:30,
 2,G,,PRACTICAS DEL LENGUAJE,Práctica,"ROMERO, Samanta _ PERETTA Daniela",,,,15,Teórica,,Viernes,15:50,17:50,
 2,H,,CIENCIAS NATURALES (BIOLOGIA),Común,"PONTNAU, Lucia",,,,16,Teórica,,Lunes,13:30,15:30,
 2,H,,MATEMATICA,Común,"MOREIRA, Victor",,,,16,Teórica,,Lunes,15:50,17:50,
-2,H,,PROCEDIMIENTOS TECNICOS,Común,BAREIRO C,,,,10,Teórica,,Martes,07:40,09:40,
-2,H,,PROCEDIMIENTOS TECNICOS,Común,BAREIRO C,,,,10,Teórica,,Martes,10:00,12:00,
+2,H,,PROCEDIMIENTOS TECNICOS,Común,BAREIRO C,,,,10,Teórica,,Martes,07:40,09:40,A
+2,H,,PROCEDIMIENTOS TECNICOS,Común,BAREIRO C,,,,10,Teórica,,Martes,10:00,12:00,A
 2,H,,INGLES,Común,"DE LA PUENTE, Santiago_ BRENER",,,,16,Teórica,,Martes,13:30,15:30,
 2,H,,CIENCIAS NATURALES (FISICOQUIMICA),Común,"VAZQUEZ ROJAS, Estela",,,,16,Teórica,,Martes,15:50,17:50,
 2,H,,PRACTICAS DEL LENGUAJE,Práctica,CABEZAS CORUJO _ANTUÑA ELIANA,,,,16,Teórica,,Miércoles,13:30,15:30,
 2,H,,CIENCIAS SOCIALES (GEOGRAFIA),Común,"VAZQUEZ, Natalia _ SAINZ, Norma Beatriz (S)",,,,16,Teórica,,Miércoles,15:50,17:50,
-2,H,,LENGUAJE TECNOLOGICO,Común,"DE BELLIS, Silvina",,,,16,Teórica,,Jueves,07:40,09:40,
-2,H,,SISTEMAS TECNOLOGIC,Común,LOPEZ Emnnuel _POZZO LEONARDO,,,,16,Teórica,,Jueves,07:40,09:40,
-2,H,,SISTEMAS TECNOLOGICOS,Común,"BAUTISTA, Fermin",,,,113,Teórica,,Jueves,10:00,12:00,
-2,H,,LENGUAJES TECNOLOGIC,Común,PALAVECINO carlos,,,,113,Teórica,,Jueves,10:00,12:00,
+2,H,,LENGUAJE TECNOLOGICO,Común,"DE BELLIS, Silvina",,,,16,Teórica,,Jueves,07:40,09:40,A
+2,H,,SISTEMAS TECNOLOGIC,Común,LOPEZ Emnnuel _POZZO LEONARDO,,,,16,Teórica,,Jueves,07:40,09:40,A
+2,H,,SISTEMAS TECNOLOGICOS,Común,"BAUTISTA, Fermin",,,,113,Teórica,,Jueves,10:00,12:00,A
+2,H,,LENGUAJES TECNOLOGIC,Común,PALAVECINO carlos,,,,113,Teórica,,Jueves,10:00,12:00,A
 2,H,,PRACTICAS DEL LENGUAJE,Práctica,CABEZAS CORUJO _ANTUÑA ELIANA,,,,16,Teórica,,Jueves,13:30,15:30,
 2,H,,CIENCIAS SOCIALES (HISTORIA),Común,"HEINRECH, Marcela _ ARPIREZ, Florencia",,,,16,Teórica,,Jueves,15:50,17:50,
-2,H,,EDUCACION FISICA,Común,"BORGIA, Julia",,,,PROGRESO,Teórica,1,Viernes,07:40,09:40,
+2,H,,EDUCACION FISICA,Común,"BORGIA, Julia",,,,PROGRESO,Teórica,1.0,Viernes,07:40,09:40,
 2,H,,EDUCACION ARTISTICA,Común,"ABATTE, Liliana",,,,16,Teórica,,Viernes,13:30,15:30,
 2,H,,MATEMATICA,Común,"MOREIRA, Victor",,,,16,Teórica,,Viernes,15:50,17:50,
 2,I,,PRACTICAS DEL LENGUAJE,Práctica,"BASUALDO, Ivana",,,,15,Teórica,,Lunes,07:40,09:40,
 2,I,,MATEMATICA,Común,"SAAVEDRA, Jorge",,,,15,Teórica,,Lunes,10:00,12:00,
 2,I,,CIENCIAS SOCIALES (GEOGRAFIA),Común,,,,,15,Teórica,,Lunes,12:00,13:00,
-2,I,,LENGUAJE TECNOLOGICO,Común,"MASSIMINO, Leonardo _ LUNA DANIELA",,,,16,Teórica,,Lunes,13:30,13:00,
-2,I,,SISTEMAS TECNOLOGICO,Común,"ABELAIRA, Mario David",,,,16,Teórica,,Lunes,13:30,13:00,
-2,I,,SISTEMAS TECNOLOGICOS,Común,"MASSIMINO, Leonardo _ ZAGAGLIA Geraldine",,,,112,Teórica,,Lunes,15:50,17:50,
-2,I,,LENGUAJE TECNOLOGICO,Común,"ROBLES, Jorge",,,,112,Teórica,,Lunes,15:50,17:50,
+2,I,,LENGUAJE TECNOLOGICO,Común,"MASSIMINO, Leonardo _ LUNA DANIELA",,,,16,Teórica,,Lunes,13:30,13:00,A
+2,I,,SISTEMAS TECNOLOGICO,Común,"ABELAIRA, Mario David",,,,16,Teórica,,Lunes,13:30,13:00,A
+2,I,,SISTEMAS TECNOLOGICOS,Común,"MASSIMINO, Leonardo _ ZAGAGLIA Geraldine",,,,112,Teórica,,Lunes,15:50,17:50,A
+2,I,,LENGUAJE TECNOLOGICO,Común,"ROBLES, Jorge",,,,112,Teórica,,Lunes,15:50,17:50,A
 2,I,,CIENCIAS NATURALES (FISICOQUIMICA),Común,"MARTINEZ, Arce",,,,15,Teórica,,Martes,07:40,08:10,
 2,I,,CIENCIAS SOCIALES (HISTORIA),Común,"CANOSA, Jesica",,,,15,Teórica,,Martes,10:00,12:00,
-2,I,,EDUCACION FISICA,Común,"GOMEZ, Hernan 13:00 15:00",,,,PROGRESO,Teórica,1,Martes,13:30,15:30,
-2,I,,CONSTRUCCION DE CIUDADANIA,Común,"CASTRO ELISA",,,,15,Teórica,,Miércoles,07:40,09:40,
+2,I,,EDUCACION FISICA,Común,"GOMEZ, Hernan 13:00 15:00",,,,PROGRESO,Teórica,1.0,Martes,13:30,15:30,
+2,I,,CONSTRUCCION DE CIUDADANIA,Común,CASTRO ELISA,,,,15,Teórica,,Miércoles,07:40,09:40,
 2,I,,PRACTICAS DEL LENGUAJE,Práctica,"BASUALDO, Ivana",,,,15,Teórica,,Miércoles,10:00,12:00,
 2,I,,CIENCIAS NATURALES (BIOLOGIA),Común,"LATORRE, Yamila",,,,15,Teórica,,Jueves,07:40,09:40,
 2,I,,MATEMATICA,Común,"SAAVEDRA, Jorge",,,,15,Teórica,,Jueves,10:00,12:00,
 2,I,,EDUCACION ARTISTICA,Común,"LAPORTA, Miguel",,,,15,Teórica,,Viernes,07:40,09:40,
 2,I,,INGLES,Común,DE LA PUENTE,,,,15,Teórica,,Viernes,10:00,12:00,
 2,I,,CIENCIAS SOCIALES (GEOGRAFIA),Común,,,,,15,Teórica,,Viernes,12:00,13:00,
-2,I,,PROCEDIMIENTOS TECNICOS,Común,"MULE, Mario_",,,,11,Teórica,,Viernes,13:30,15:30,
-2,I,,PROCEDIMIENTOS TECNICOS,Común,"MULE, Mario_",,,,11,Teórica,,Viernes,15:50,17:50,
+2,I,,PROCEDIMIENTOS TECNICOS,Común,"MULE, Mario_",,,,11,Teórica,,Viernes,13:30,15:30,A
+2,I,,PROCEDIMIENTOS TECNICOS,Común,"MULE, Mario_",,,,11,Teórica,,Viernes,15:50,17:50,A
 2,J,,CIENCIAS NATURALES (BIOLOGIA),Común,"PONTNAU, Lucia",,,,27,Teórica,,Lunes,07:40,09:40,
 2,J,,CIENCIAS NATURALES (FISICOQUIMICA),Común,"CATTARUZZI, Tatiana",,,,27,Teórica,,Lunes,10:00,12:00,
-2,J,,EDUCACION FISICA,Común,"CAMP, Federico 14:30 16:30",,,,PROGRESO,Teórica,1,Lunes,13:30,15:30,
+2,J,,EDUCACION FISICA,Común,"CAMP, Federico 14:30 16:30",,,,PROGRESO,Teórica,1.0,Lunes,13:30,15:30,
 2,J,,PRACTICAS DEL LENGUAJE,Práctica,"SALAS, María Eugenia",,,,27,Teórica,,Martes,07:40,09:40,
 2,J,,CIENCIAS SOCIALES (HISTORIA),Común,"MURADAS, Mariela",,,,27,Teórica,,Martes,10:00,12:00,
 2,J,,EDUCACION ARTISTICA,Común,"ROJAS, Monica",,,,27,Teórica,,Miércoles,07:40,09:40,
 2,J,,CIENCIAS SOCIALES (GEOGRAFIA),Común,"SALVATIERRA, Liliana",,,,27,Teórica,,Miércoles,10:00,12:00,
-2,J,,PROCEDIMIENTOS TECNICOS,Común,"POZO, Daniel",,,,10,Teórica,,Miércoles,13:30,15:30,
-2,J,,PROCEDIMIENTOS TECNICOS,Común,"POZO, Daniel",,,,10,Teórica,,Miércoles,15:50,17:50,
+2,J,,PROCEDIMIENTOS TECNICOS,Común,"POZO, Daniel",,,,10,Teórica,,Miércoles,13:30,15:30,A
+2,J,,PROCEDIMIENTOS TECNICOS,Común,"POZO, Daniel",,,,10,Teórica,,Miércoles,15:50,17:50,A
 2,J,,MATEMATICA,Común,"MARINELLI, Jimena",,,,27,Teórica,,Jueves,07:40,09:40,
 2,J,,COSTRUCCION DE CIUDADANIA,Común,"CORBALAN, Dario",,,,27,Teórica,,Jueves,10:00,12:00,
 2,J,,MATEMATICA,Común,"MARINELLI, Jimena",,,,203,Teórica,,Viernes,07:40,09:40,
 2,J,,PRACTICAS DEL LENGUAJE,Práctica,"SALAS, María Eugenia",,,,203,Teórica,,Viernes,10:00,12:00,
-2,J,,LENGUAJE TECNOLOG.,Común,"BARBALACE, Horacio",,,,16,Teórica,,Viernes,14:30,16:30,
-2,J,,SISTEMAS TECNOLOGICOS,Común,"RIOS, Adrian",,,,16,Teórica,,Viernes,14:30,16:30,
-2,J,,SISTEMAS TECNOLOGICOS,Común,"AYZA, Diego",,,,113,Teórica,,Viernes,15:50,17:50,
-2,J,,LENGUAJE TECNOLOG.,Común,"BARBALACE, Horacio",,,,113,Teórica,,Viernes,15:50,17:50,
+2,J,,LENGUAJE TECNOLOG.,Común,"BARBALACE, Horacio",,,,16,Teórica,,Viernes,14:30,16:30,A
+2,J,,SISTEMAS TECNOLOGICOS,Común,"RIOS, Adrian",,,,16,Teórica,,Viernes,14:30,16:30,A
+2,J,,SISTEMAS TECNOLOGICOS,Común,"AYZA, Diego",,,,113,Teórica,,Viernes,15:50,17:50,A
+2,J,,LENGUAJE TECNOLOG.,Común,"BARBALACE, Horacio",,,,113,Teórica,,Viernes,15:50,17:50,A
 3,A,,CONSTRUCCION DE CIUDADANIA,Común,"VIZZOTTO, Gabriela",,,,305,Teórica,,Lunes,07:40,09:40,
 3,A,,FISICOQUIMICA,Común,"CRISTOFANO, Adrián",,,,305,Teórica,,Lunes,10:00,12:00,
-3,A,,EDUCACION FISICA,Común,"ALVAREZ, Andrea",,,,PROGRESO,Teórica,1,Lunes,12:30,13:30,
+3,A,,EDUCACION FISICA,Común,"ALVAREZ, Andrea",,,,PROGRESO,Teórica,1.0,Lunes,12:30,13:30,
 3,A,,PRACTICAS DEL LENGUAJE,Práctica,,,,,305,Teórica,,Martes,07:40,09:40,
 3,A,,MATEMATICA,Común,"MOREIRA, Victor",,,,305,Teórica,,Martes,10:00,12:00,
-3,A,,SISTEMAS TECNOLOGICOS,Común,"ROBLES, Jorge (S)",,,,13,Teórica,,Martes,12:30,13:30,
-3,A,,LENGUAJE TECNOLOGICO,Común,RODRIGUEZ CAVIEDES,,,,13,Teórica,,Martes,12:30,13:30,
-3,A,,SISTEMAS TECNOLOGICOS,Común,"ROBLES, Jorge (S)",,,,13,Teórica,,Martes,15:50,17:50,
-3,A,,PROCEDIMIENTOS TECNICOS,Común,"HELBERT MATIAS",,,,13,Teórica,,Martes,15:50,17:50,
+3,A,,SISTEMAS TECNOLOGICOS,Común,"ROBLES, Jorge (S)",,,,13,Teórica,,Martes,12:30,13:30,A
+3,A,,LENGUAJE TECNOLOGICO,Común,RODRIGUEZ CAVIEDES,,,,13,Teórica,,Martes,12:30,13:30,A
+3,A,,SISTEMAS TECNOLOGICOS,Común,"ROBLES, Jorge (S)",,,,13,Teórica,,Martes,15:50,17:50,A
+3,A,,PROCEDIMIENTOS TECNICOS,Común,HELBERT MATIAS,,,,13,Teórica,,Martes,15:50,17:50,A
 3,A,,HISTORIA,Común,"AQUINO, Carina",,,,305,Teórica,,Miércoles,07:40,09:40,
 3,A,,EDUCACION ARTISTICA,Común,"ROJAS, Monica",,,,305,Teórica,,Miércoles,10:00,12:00,
 3,A,,INGLES,Común,"FAILLA, Mariana",,,,302,Teórica,,Jueves,07:40,09:40,
 3,A,,GEOGRAFIA,Común,,,,,302,Teórica,,Jueves,10:00,12:00,
-3,A,,LENGUAJE TECNOLOGICO,Común,"PALAVECINO, Carlos",,,,102,Teórica,,Jueves,12:30,13:30,
-3,A,,SISTEMAS TECNOLOGICOS,Común,"MASSIMINO, Cristina",,,,102,Teórica,,Jueves,12:30,13:30,
-3,A,,PROCEDIMIENTOS TECNICOS,Común,MEDRANO Jorge,,,,110,Teórica,,Jueves,15:50,17:50,
-3,A,,SISTEMAS TECNOLOGICOS,Común,"MASSIMINO, Cristina",,,,110,Teórica,,Jueves,15:50,17:50,
+3,A,,LENGUAJE TECNOLOGICO,Común,"PALAVECINO, Carlos",,,,102,Teórica,,Jueves,12:30,13:30,A
+3,A,,SISTEMAS TECNOLOGICOS,Común,"MASSIMINO, Cristina",,,,102,Teórica,,Jueves,12:30,13:30,A
+3,A,,PROCEDIMIENTOS TECNICOS,Común,MEDRANO Jorge,,,,110,Teórica,,Jueves,15:50,17:50,A
+3,A,,SISTEMAS TECNOLOGICOS,Común,"MASSIMINO, Cristina",,,,110,Teórica,,Jueves,15:50,17:50,A
 3,A,,PRACTICAS DEL LENGUAJE,Práctica,PERETA DANIELA,,,,302,Teórica,,Viernes,07:40,09:40,
 3,A,,MATEMATICA,Común,"MOREIRA, Victor",,,,302,Teórica,,Viernes,10:00,12:00,
 3,A,,BIOLOGIA,Común,"CAÑAMAS, Miriam",,,,202,Teórica,,Viernes,12:30,14:30,
 3,B,,FISICOQUIMICA,Común,"CRISTOFANO, Adrian",,,,302,Teórica,,Lunes,07:40,09:40,
 3,B,,INGLES,Común,"ANER, Santiago",,,,302,Teórica,,Lunes,10:00,12:00,
-3,B,,EDUCACION FISICA,Común,"CAMP, Federico 12:30 14:30",,,,PROGRESO,Teórica,1,Lunes,13:30,15:30,
+3,B,,EDUCACION FISICA,Común,"CAMP, Federico 12:30 14:30",,,,PROGRESO,Teórica,1.0,Lunes,13:30,15:30,
 3,B,,PRACTICAS DEL LENGUAJE,Práctica,"AGUIRRE, Soledad",,,,302,Teórica,,Martes,07:40,09:40,
 3,B,,GEOGRAFIA,Común,,,,,302,Teórica,,Martes,10:00,12:00,
 3,B,,CONSTRUCCION DE CIUDADANIA,Común,"CORDOBA, Ezequiel",,,,302,Teórica,,Miércoles,07:40,09:40,
@@ -397,67 +397,67 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 3,B,,MATEMATICA,Común,"MARINELLI, Jimena",,,,203,Teórica,,Jueves,07:40,09:40,
 3,B,,PRACTICAS DEL LENGUAJE,Práctica,"AGUIRRE, Soledad",,,,203,Teórica,,Jueves,10:00,12:00,
 3,B,,HISTORIA,Común,"ARPIREZ, Florencia",,,,203,Teórica,,Jueves,12:00,13:00,
-3,B,,SISTEMAS TECNOLOGICOS,Común,MORENO JONHATA,,,,14,Teórica,,Jueves,13:30,15:30,
-3,B,,PROCEDIMIENTOS TECNICOS,Común,"MEDRANO, Jorge",,,,14,Teórica,,Jueves,13:30,15:30,
-3,B,,SISTEMAS TECNOLOGICOS,Común,MORENO JONHATA,,,,14,Teórica,,Jueves,15:50,17:50,
-3,B,,LENGUAJE TECNOLOGICO,Común,"PALAVECINO, Carlos",,,,14,Teórica,,Jueves,15:50,17:50,
+3,B,,SISTEMAS TECNOLOGICOS,Común,MORENO JONHATA,,,,14,Teórica,,Jueves,13:30,15:30,A
+3,B,,PROCEDIMIENTOS TECNICOS,Común,"MEDRANO, Jorge",,,,14,Teórica,,Jueves,13:30,15:30,A
+3,B,,SISTEMAS TECNOLOGICOS,Común,MORENO JONHATA,,,,14,Teórica,,Jueves,15:50,17:50,A
+3,B,,LENGUAJE TECNOLOGICO,Común,"PALAVECINO, Carlos",,,,14,Teórica,,Jueves,15:50,17:50,A
 3,B,,BIOLOGIA,Común,"CAÑAMAS, Miriam",,,,305,Teórica,,Viernes,07:40,09:40,
 3,B,,MATEMATICAS,Común,"CRISTOFANO, Adrian",,,,305,Teórica,,Viernes,10:00,12:00,
 3,B,,HISTORIA,Común,"ARPIREZ, Florencia",,,,305,Teórica,,Viernes,12:00,13:00,
-3,B,,PROCEDIMIENTOS TECNICOS,Común,"AYZA, Diego",,,,112,Teórica,,Viernes,13:30,15:30,
-3,B,,SISTEMAS TECNOLOGICOS,Común,RODRIGUEZ FERRARI,,,,112,Teórica,,Viernes,13:30,15:30,
-3,B,,LENGUAJE TECNOLOGICO,Común,"MAZZEI, Gustavo",,,,6,Teórica,,Viernes,15:50,17:50,
-3,B,,SISTEMAS TECNOLOGICOS,Común,RODRIGUEZ FERRARI,,,,6,Teórica,,Viernes,15:50,17:50,
-3,C,,CONSTRUCCION DE CIUDADANIA,Común,"BRITEZ Paola",,,,35,Teórica,,Lunes,15:50,17:50,
+3,B,,PROCEDIMIENTOS TECNICOS,Común,"AYZA, Diego",,,,112,Teórica,,Viernes,13:30,15:30,A
+3,B,,SISTEMAS TECNOLOGICOS,Común,RODRIGUEZ FERRARI,,,,112,Teórica,,Viernes,13:30,15:30,A
+3,B,,LENGUAJE TECNOLOGICO,Común,"MAZZEI, Gustavo",,,,6,Teórica,,Viernes,15:50,17:50,A
+3,B,,SISTEMAS TECNOLOGICOS,Común,RODRIGUEZ FERRARI,,,,6,Teórica,,Viernes,15:50,17:50,A
+3,C,,CONSTRUCCION DE CIUDADANIA,Común,BRITEZ Paola,,,,35,Teórica,,Lunes,15:50,17:50,
 3,C,,BIOLOGIA,Común,"CAÑAMAS, Miriam",,,,201,Teórica,,Martes,12:00,13:00,
 3,C,,PRACTICAS DEL LENGUAJE,Práctica,"PERETTA, Daniela",,,,35,Teórica,,Martes,13:30,15:30,
 3,C,,INGLES,Común,"MUÑOZ, Jorge",,,,35,Teórica,,Martes,15:50,17:50,
 3,C,,PROCED TECNOLOGICO,Común,"LOAIZA, Walter",,,,110,Teórica,,Miércoles,07:40,09:40,
-3,C,,SISTEMAS TECNOLOGICOS,Común,ROMERO CAMIÑA Lucas,,,,110,Teórica,,Miércoles,07:40,09:40,
-3,C,,LENGUAJE TECNOLOGICO,Común,"MELFI, Valeria",,,,6,Teórica,,Miércoles,10:00,12:00,
-3,C,,SISTEMAS TECNOLOGICOS,Común,ROMERO CAMIÑA Lucas,,,,6,Teórica,,Miércoles,10:00,12:00,
+3,C,,SISTEMAS TECNOLOGICOS,Común,ROMERO CAMIÑA Lucas,,,,110,Teórica,,Miércoles,07:40,09:40,A
+3,C,,LENGUAJE TECNOLOGICO,Común,"MELFI, Valeria",,,,6,Teórica,,Miércoles,10:00,12:00,A
+3,C,,SISTEMAS TECNOLOGICOS,Común,ROMERO CAMIÑA Lucas,,,,6,Teórica,,Miércoles,10:00,12:00,A
 3,C,,GEOGRAFIA,Común,"ANDRES, Brian",,,,35,Teórica,,Miércoles,13:30,15:30,
 3,C,,EDUCACION ARTISTICA,Común,"MORALES, Estefania",,,,35,Teórica,,Miércoles,15:50,17:50,
-3,C,,EDUCACION FISICA,Común,"EXPOSITO, Jordana",,,,PROGRESO,Teórica,1,Jueves,07:40,09:40,
+3,C,,EDUCACION FISICA,Común,"EXPOSITO, Jordana",,,,PROGRESO,Teórica,1.0,Jueves,07:40,09:40,
 3,C,,FISICOQUIMICA,Común,,,,,35,Teórica,,Jueves,15:50,17:50,
-3,C,,SISTEMAS TECNOLOGICOS,Común,"MESCHINI, Mario",,,,12,Teórica,,Viernes,07:40,09:40,
-3,C,,LENGUAJE TECNOLOGICO,Común,"PEREIRA, Valentin",,,,12,Teórica,,Viernes,07:40,09:40,
-3,C,,SISTEMAS TECNOLOGICOS,Común,"MESCHINI, Mario",,,,12,Teórica,,Viernes,10:00,12:00,
-3,C,,PROCEDIMIENTOS TECNICOS,Común,"BARBALACE, Pablo",,,,12,Teórica,,Viernes,10:00,12:00,
+3,C,,SISTEMAS TECNOLOGICOS,Común,"MESCHINI, Mario",,,,12,Teórica,,Viernes,07:40,09:40,A
+3,C,,LENGUAJE TECNOLOGICO,Común,"PEREIRA, Valentin",,,,12,Teórica,,Viernes,07:40,09:40,A
+3,C,,SISTEMAS TECNOLOGICOS,Común,"MESCHINI, Mario",,,,12,Teórica,,Viernes,10:00,12:00,A
+3,C,,PROCEDIMIENTOS TECNICOS,Común,"BARBALACE, Pablo",,,,12,Teórica,,Viernes,10:00,12:00,A
 3,C,,BIOLOGIA,Común,"CAÑAMAS, Miriam",,,,201,Teórica,,Viernes,12:00,13:30,
 3,C,,PRACTICAS DEL LENGUAJE,Práctica,"PERETTA, Daniela",,,,35,Teórica,,Viernes,13:30,15:30,
 3,C,,HISTORIA,Común,"ORTEGA, Silvina",,,,35,Teórica,,Viernes,15:50,17:50,
 3,D,,HISTORIA,Común,"ARPIREZ, Florencia",,,,36,Teórica,,Lunes,13:30,15:30,
-3,D,,CONSTRUCCION DE CIUDADANIA,Común,"SALCEDO MARIA",,,,36,Teórica,,Lunes,15:50,17:50,
-3,D,,SISTEMAS TECNOLOGICOS,Común,"MESCHINI, Mario",,,,13,Teórica,,Martes,07:40,09:40,
-3,D,,SISTEMAS TECNOLOGICOS,Común,"MESCHINI, Mario",,,,13,Teórica,,Martes,10:00,12:00,
+3,D,,CONSTRUCCION DE CIUDADANIA,Común,SALCEDO MARIA,,,,36,Teórica,,Lunes,15:50,17:50,
+3,D,,SISTEMAS TECNOLOGICOS,Común,"MESCHINI, Mario",,,,13,Teórica,,Martes,07:40,09:40,A
+3,D,,SISTEMAS TECNOLOGICOS,Común,"MESCHINI, Mario",,,,13,Teórica,,Martes,10:00,12:00,A
 3,D,,FISICOQUIMICA,Común,"HIERREZUELO, Maria",,,,31,Teórica,,Martes,12:00,13:00,
 3,D,,MATEMATICA,Común,"ECHEVERRIA, Maria Eugenia",,,,36,Teórica,,Martes,13:30,15:30,
 3,D,,PRACTICAS DEL LENGUAJE,Práctica,"CAMPOS, Lorena",,,,36,Teórica,,Martes,15:50,17:50,
 3,D,,MATEMATICA,Común,"ECHEVERRIA, Maria",,,,36,Teórica,,Miércoles,13:30,15:30,
 3,D,,BIOLOGIA,Común,"CAÑAMAS, Miriam",,,,36,Teórica,,Miércoles,15:50,17:50,
-3,D,,PROCEDIMIENTOS TECNICOS,Común,"MORMILE, Gustavo_ MARTINEZ ARCE, Joaquin",,,,114,Teórica,,Jueves,07:40,09:40,
-3,D,,LENGUAJE TECNOLOGICO,Común,"MACIEL, Jesica",,,,102,Teórica,,Jueves,10:00,12:00,
+3,D,,PROCEDIMIENTOS TECNICOS,Común,"MORMILE, Gustavo_ MARTINEZ ARCE, Joaquin",,,,114,Teórica,,Jueves,07:40,09:40,A
+3,D,,LENGUAJE TECNOLOGICO,Común,"MACIEL, Jesica",,,,102,Teórica,,Jueves,10:00,12:00,A
 3,D,,FISICOQUIMICA,Común,"HIERREZUELO, Maria",,,,35,Teórica,,Jueves,12:00,13:00,
 3,D,,PRACTICAS DEL LENGUAJE,Práctica,"CAMPOS, Lorena",,,,36,Teórica,,Jueves,13:30,15:30,
 3,D,,GEOGRAFIA,Común,"BOBRYCOWICZ _ GONZALES, Marina",,,,36,Teórica,,Jueves,15:50,17:50,
-3,D,,EDUCACION FISICA,Común,"BAREIRO, Pablo",,,,PROGRESO,Teórica,1,Viernes,07:40,09:40,
+3,D,,EDUCACION FISICA,Común,"BAREIRO, Pablo",,,,PROGRESO,Teórica,1.0,Viernes,07:40,09:40,
 3,D,,INGLES,Común,"BRENER, Marlene",,,,36,Teórica,,Viernes,13:30,15:30,
 3,D,,EDUCACION ARTISTICA,Común,"ABATTE, Liliana",,,,36,Teórica,,Viernes,15:50,17:50,
-3,E,,SISTEMAS TECNOLOGICOS,Común,"MASSIMINO, Cristina",,,,15,Teórica,,Lunes,07:40,09:40,
-3,E,,LENGUAJE TECNOLOGICO,Común,"MORENO, Jonathan",,,,15,Teórica,,Lunes,07:40,09:40,
-3,E,,SISTEMAS TECNOLOGICOS,Común,"MASSIMINO, Cristina",,,,15,Teórica,,Lunes,10:00,12:00,
-3,E,,PROCEDIMIENTOS TECNICOS,Común,AYZA,,,,15,Teórica,,Lunes,10:00,12:00,
+3,E,,SISTEMAS TECNOLOGICOS,Común,"MASSIMINO, Cristina",,,,15,Teórica,,Lunes,07:40,09:40,A
+3,E,,LENGUAJE TECNOLOGICO,Común,"MORENO, Jonathan",,,,15,Teórica,,Lunes,07:40,09:40,A
+3,E,,SISTEMAS TECNOLOGICOS,Común,"MASSIMINO, Cristina",,,,15,Teórica,,Lunes,10:00,12:00,A
+3,E,,PROCEDIMIENTOS TECNICOS,Común,AYZA,,,,15,Teórica,,Lunes,10:00,12:00,A
 3,E,,GEOGRAFIA,Común,"DE DOMINGO, Sandra",,,,36,Teórica,,Lunes,12:00,13:00,
 3,E,,HISTORIA,Común,"ORTEGA, Silvina",,,,37,Teórica,,Lunes,13:30,15:30,
 3,E,,EDUCACION ARTISTICA,Común,"ABATTE, Liliana",,,,37,Teórica,,Lunes,15:50,17:50,
-3,E,,EDUCACION FISICA,Común,"DOMINGUEZ, Andrea",,,,PROGRESO,Teórica,1,Martes,07:40,09:40,
+3,E,,EDUCACION FISICA,Común,"DOMINGUEZ, Andrea",,,,PROGRESO,Teórica,1.0,Martes,07:40,09:40,
 3,E,,PRACTICAS DEL LENGUAJE,Práctica,"FURLANI, Ebhe _ BANEGAS Laura",,,,37,Teórica,,Martes,13:30,15:30,
 3,E,,MATEMATICA,Común,"ECHEVERRIA, Maria",,,,37,Teórica,,Martes,15:50,17:50,
-3,E,,LENGUAJE TECNOLOGICO,Común,"LONERO, Ludmila",,,,1,Teórica,,Miércoles,07:40,09:40,
-3,E,,SISTEMAS TECNOLOGICOS,Común,"OLMOS, Alejandro",,,,1,Teórica,,Miércoles,07:40,09:40,
-3,E,,PROCEDIMIENTOS TECNICOS,Común,,,,,110,Teórica,,Miércoles,10:00,07:40,
-3,E,,SISTEMAS TECNOLOGICOS,Común,"OLMOS, Alejandro",,,,110,Teórica,,Miércoles,10:00,07:40,
+3,E,,LENGUAJE TECNOLOGICO,Común,"LONERO, Ludmila",,,,1,Teórica,,Miércoles,07:40,09:40,A
+3,E,,SISTEMAS TECNOLOGICOS,Común,"OLMOS, Alejandro",,,,1,Teórica,,Miércoles,07:40,09:40,A
+3,E,,PROCEDIMIENTOS TECNICOS,Común,,,,,110,Teórica,,Miércoles,10:00,07:40,A
+3,E,,SISTEMAS TECNOLOGICOS,Común,"OLMOS, Alejandro",,,,110,Teórica,,Miércoles,10:00,07:40,A
 3,E,,GEOGRAFIA,Común,"DE DOMINGO, Sandra",,,,37,Teórica,,Miércoles,12:00,13:00,
 3,E,,CONSTRUCCION DE CIUDADANIA,Común,"VIZZOTTO, Gabriela",,,,37,Teórica,,Miércoles,13:30,15:30,
 3,E,,MATEMATICA,Común,"ECHEVERRIA, Maria",,,,37,Teórica,,Miércoles,15:50,17:50,
@@ -468,23 +468,23 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 3,F,,HISTORIA,Común,"MURADAS, Mariela",,,,35,Teórica,,Lunes,07:40,09:40,
 3,F,,EDUCACION ARTISTICA,Común,"ALONSO, Roxana",,,,35,Teórica,,Lunes,10:00,12:00,
 3,F,,PRACTICAS DEL LENGUAJE,Práctica,"BASUALDO, Ivana",,,,35,Teórica,,Lunes,12:00,13:00,
-3,F,,LENGUAGE TECNOLOGICO,Común,"ROBLES, Jorge",,,,102,Teórica,,Lunes,13:30,14:30,
-3,F,,SISTEMAS TENCOLOGICOS,Común,"MASSIMINO, Cristina",,,,102,Teórica,,Lunes,13:30,14:30,
-3,F,,SISTEMAS TECNOLOGICOS,Común,"DIONICIO, Alejandro",,,,111,Teórica,,Lunes,15:50,17:50,
-3,F,,PROCEDIMIENTOS TECNICOS,Común,"MASSIMINO, Cristina",,,,111,Teórica,,Lunes,15:50,17:50,
+3,F,,LENGUAGE TECNOLOGICO,Común,"ROBLES, Jorge",,,,102,Teórica,,Lunes,13:30,14:30,A
+3,F,,SISTEMAS TENCOLOGICOS,Común,"MASSIMINO, Cristina",,,,102,Teórica,,Lunes,13:30,14:30,A
+3,F,,SISTEMAS TECNOLOGICOS,Común,"DIONICIO, Alejandro",,,,111,Teórica,,Lunes,15:50,17:50,A
+3,F,,PROCEDIMIENTOS TECNICOS,Común,"MASSIMINO, Cristina",,,,111,Teórica,,Lunes,15:50,17:50,A
 3,F,,MATEMATICA,Común,"MAMANI, Mirta",,,,35,Teórica,,Martes,07:40,09:40,
 3,F,,FISICOQUIMICA,Común,"CRISTOFANO, Adrian",,,,35,Teórica,,Martes,10:00,12:00,
-3,F,,EDUCACION FISICA,Común,,,,,PROGRESO,Teórica,1,Martes,12:30,13:30,
+3,F,,EDUCACION FISICA,Común,,,,,PROGRESO,Teórica,1.0,Martes,12:30,13:30,
 3,F,,INGLES,Común,"DE LA PUENTE, Santiago",,,,35,Teórica,,Miércoles,07:40,09:40,
 3,F,,GEOGRAFIA,Común,"LESCANO _ CORBALAN, Dario",,,,35,Teórica,,Miércoles,10:00,12:00,
 3,F,,PRACTICAS DEL LENGUAJE,Práctica,"BASUALDO, Ivana",,,,35,Teórica,,Miércoles,12:00,13:00,
-3,F,,PROCEDIMIENTOS TECNICOS,Común,"AYZA, Diego",,,,13,Teórica,,Miércoles,13:30,15:30,
-3,F,,SISTEMAS TECNOLOGICOS,Común,MESCHINI,,,,13,Teórica,,Miércoles,13:30,15:30,
-3,F,,LENGUAJE TECNOLOGICO,Común,"ALVAREZ, Lourdes",,,,13,Teórica,,Miércoles,15:50,17:50,
-3,F,,SISTEMAS TECNOLOGICOS,Común,MESCHINI,,,,13,Teórica,,Miércoles,15:50,17:50,
+3,F,,PROCEDIMIENTOS TECNICOS,Común,"AYZA, Diego",,,,13,Teórica,,Miércoles,13:30,15:30,A
+3,F,,SISTEMAS TECNOLOGICOS,Común,MESCHINI,,,,13,Teórica,,Miércoles,13:30,15:30,A
+3,F,,LENGUAJE TECNOLOGICO,Común,"ALVAREZ, Lourdes",,,,13,Teórica,,Miércoles,15:50,17:50,A
+3,F,,SISTEMAS TECNOLOGICOS,Común,MESCHINI,,,,13,Teórica,,Miércoles,15:50,17:50,A
 3,F,,MATEMATICA,Común,"MAMANI, Mirta",,,,35,Teórica,,Jueves,07:40,09:40,
 3,F,,PRACTICAS DEL LENGUAJE,Práctica,"BASUALDO, Ivana",,,,35,Teórica,,Jueves,10:00,12:00,
-3,F,,CONSTRUCCION DE CIUDADANIA,Común,"SAYAGO CASTRONUOVO",,,,35,Teórica,,Viernes,07:40,09:40,
+3,F,,CONSTRUCCION DE CIUDADANIA,Común,SAYAGO CASTRONUOVO,,,,35,Teórica,,Viernes,07:40,09:40,
 3,F,,BIOLOGIA,Común,"SANCHEZ, Alicia",,,,35,Teórica,,Viernes,10:00,12:00,
 3,G,,FISICOQUIMICA,Común,"CATTARUZZI, Tatiana",,,,36,Teórica,,Lunes,07:40,09:40,
 3,G,,HISTORIA,Común,"MURADAS, Mariela",,,,36,Teórica,,Lunes,10:00,12:00,
@@ -493,43 +493,43 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 3,G,,PRACTICAS DEL LENGUAJE,Práctica,"BASUALDO, Ivana",,,,36,Teórica,,Miércoles,07:40,09:40,
 3,G,,CONSTRUCCION DE CIUDADANIA,Común,"GARCIA, Sergio",,,,36,Teórica,,Miércoles,10:00,12:00,
 3,G,,MATEMATICA,Común,MOREIRA,,,,36,Teórica,,Miércoles,12:00,13:00,
-3,G,,PROCEDIMIENTOS TECNICOS,Común,"MEDRANO, Jorge",,,,111,Teórica,,Miércoles,13:30,15:30,
-3,G,,LENGUAJE TECNOLOGICO,Común,"ROBLES, Jorge",,,,111,Teórica,,Miércoles,13:30,15:30,
+3,G,,PROCEDIMIENTOS TECNICOS,Común,"MEDRANO, Jorge",,,,111,Teórica,,Miércoles,13:30,15:30,A
+3,G,,LENGUAJE TECNOLOGICO,Común,"ROBLES, Jorge",,,,111,Teórica,,Miércoles,13:30,15:30,A
 3,G,,"LENGUAJE TECNOLOGICO ROBLES, Jorge",Común,,,,,17,Teórica,,Miércoles,15:50,17:50,
-3,G,,PROCEDIMIENTOS TECNICOS MEDRANO JORGE,Común,,,,,17,Teórica,,Miércoles,15:50,17:50,
+3,G,,PROCEDIMIENTOS TECNICOS MEDRANO JORGE,Común,,,,,17,Teórica,,Miércoles,15:50,17:50,A
 3,G,,MATEMATICA,Común,MOREIRA,,,,36,Teórica,,Jueves,07:40,09:40,
 3,G,,BIOLOGIA,Común,"PONTNAU, Lucia",,,,36,Teórica,,Jueves,10:00,12:00,
-3,G,,EDUCACION FISICA,Común,"TROISI, Roberto _ DOMINGUEZ, Andr14:30 16:30",,,,PROGRESO,Teórica,1,Jueves,13:00,13:00,
+3,G,,EDUCACION FISICA,Común,"TROISI, Roberto _ DOMINGUEZ, Andr14:30 16:30",,,,PROGRESO,Teórica,1.0,Jueves,13:00,13:00,
 3,G,,PRACTICAS DEL LENGUAJE,Práctica,"BASUALDO, Ivana",,,,36,Teórica,,Viernes,07:40,09:40,
 3,G,,EDUCACION ARTISTICA,Común,"DONAIRE, Nancy",,,,36,Teórica,,Viernes,10:00,12:00,
 3,G,,MATEMATICA,Común,MOREIRA,,,,36,Teórica,,Viernes,12:00,13:00,
-3,G,,SISTEMAS TECNOLOGICOS,Común,CORTEZ Nestor,,,,12,Teórica,,Viernes,13:30,15:30,
+3,G,,SISTEMAS TECNOLOGICOS,Común,CORTEZ Nestor,,,,12,Teórica,,Viernes,13:30,15:30,A
 3,G,,"SISTEMAS TECNOLOGICOS CORTEZ, Nestor",Común,,,,,12,Teórica,,Viernes,15:50,00:00,
 3,G,,SISTEMAS TECNOLOGICOS MASSIMINO CRISTINA,Común,,,,,12,Teórica,,Viernes,15:50,00:00,
 3,H,,MATEMATICA,Común,"ORELLANA, Clara",,,,33,Teórica,,Lunes,07:40,09:40,
 3,H,,GEOGRAFIA,Común,ECHEVERRIA IGNACIO,,,,33,Teórica,,Lunes,12:00,13:00,
-3,H,,PROCEDIMIENTOS TECNICOS,Común,LOPEZ YEMINA,,,,,Teórica,,Lunes,13:30,14:30,
-3,H,,SISTEMAS TECNOLOGICOS,Común,RIOS ADRIAN,,,,,Teórica,,Lunes,13:30,14:30,
-3,H,,LENGUAJE TECNOLOGICO,Común,"LOPEZ, Yemina",,,,13,Teórica,,Lunes,15:50,17:50,
-3,H,,SISTEMAS TECNOLOGICOS,Común,"RIOS, Adrian",,,,13,Teórica,,Lunes,15:50,17:50,
+3,H,,PROCEDIMIENTOS TECNICOS,Común,LOPEZ YEMINA,,,,,Teórica,,Lunes,13:30,14:30,A
+3,H,,SISTEMAS TECNOLOGICOS,Común,RIOS ADRIAN,,,,,Teórica,,Lunes,13:30,14:30,A
+3,H,,LENGUAJE TECNOLOGICO,Común,"LOPEZ, Yemina",,,,13,Teórica,,Lunes,15:50,17:50,A
+3,H,,SISTEMAS TECNOLOGICOS,Común,"RIOS, Adrian",,,,13,Teórica,,Lunes,15:50,17:50,A
 3,H,,PRACTICAS DEL LENGUAJE,Práctica,"CABEZAS CORUJO, Ruth PALOMEQUE MONICA",,,,33,Teórica,,Martes,07:40,09:40,
-3,H,,EDUCACION FISICA,Común,"BONIFASI, Laura",,,,PROGRESO,Teórica,1,Martes,12:30,13:30,
+3,H,,EDUCACION FISICA,Común,"BONIFASI, Laura",,,,PROGRESO,Teórica,1.0,Martes,12:30,13:30,
 3,H,,INGLES,Común,"SOLANAS, Lucia Liliana",,,,33,Teórica,,Miércoles,07:40,09:40,
 3,H,,GEOGRAFIA,Común,ECHEVERRIA IGNACIO,,,,33,Teórica,,Miércoles,12:00,13:00,
-3,H,,SISTEMAS TECNOLOGICOS,Común,"MASSIMINO, Cristina",,,,15,Teórica,,Miércoles,13:30,15:30,
-3,H,,PROCEDIMIENTOS TECNICOS,Común,MARCOVICK SOLANGE,,,,15,Teórica,,Miércoles,13:30,15:30,
-3,H,,SISTEMAS TECNOLOGICOS,Común,"MASSIMINO, Cristina",,,,15,Teórica,,Miércoles,15:50,17:50,
-3,H,,LENGUAJE TECNOLOGICO,Común,"GONZALEZ, Abel",,,,15,Teórica,,Miércoles,15:50,17:50,
+3,H,,SISTEMAS TECNOLOGICOS,Común,"MASSIMINO, Cristina",,,,15,Teórica,,Miércoles,13:30,15:30,A
+3,H,,PROCEDIMIENTOS TECNICOS,Común,MARCOVICK SOLANGE,,,,15,Teórica,,Miércoles,13:30,15:30,A
+3,H,,SISTEMAS TECNOLOGICOS,Común,"MASSIMINO, Cristina",,,,15,Teórica,,Miércoles,15:50,17:50,A
+3,H,,LENGUAJE TECNOLOGICO,Común,"GONZALEZ, Abel",,,,15,Teórica,,Miércoles,15:50,17:50,A
 3,H,,PRACTICAS DEL LENGUAJE,Práctica,"CABEZAS CORUJO, Ruth PALOMEQUE MONICA",,,,33,Teórica,,Jueves,07:40,09:40,
 3,H,,"FISICOQUIMICA CRISTOFANO, Adrian",Común,,,,,33,Teórica,,Viernes,07:40,09:40,
 3,I,,EDUCACIÓN ARTISTICA,Común,"BRAVO, Maria",,,,37,Teórica,,Lunes,07:40,09:40,
 3,I,,FISICO QUIMICA,Común,"RUBIERA _ BERRETTI, Stella",,,,37,Teórica,,Lunes,10:00,12:00,
 3,I,,CONSTRUCCION DE CIUDADANIA,Común,"VIZZOTTO, Gabriela",,,,37,Teórica,,Lunes,12:00,13:00,
-3,I,,SISTEMAS TECNOLOGICOS,Común,"MANZANO, Gustavo",,,,12,Teórica,,Lunes,13:30,15:30,
-3,I,,SISTEMAS TECNOLOGICOS,Común,"MANZANO, Gustavo",,,,12,Teórica,,Lunes,15:50,17:50,
+3,I,,SISTEMAS TECNOLOGICOS,Común,"MANZANO, Gustavo",,,,12,Teórica,,Lunes,13:30,15:30,A
+3,I,,SISTEMAS TECNOLOGICOS,Común,"MANZANO, Gustavo",,,,12,Teórica,,Lunes,15:50,17:50,A
 3,I,,HISTORIA,Común,"BOSIO, Emilio",,,,37,Teórica,,Martes,07:40,09:40,
 3,I,,PRACTICAS DEL LENGUAJE,Práctica,CASALLE SERVINI,,,,37,Teórica,,Martes,10:00,12:00,
-3,I,,EDUCACION FISICA,Común,"MONICO, Vanes13:30 15:30",,,,PROGRESO,Teórica,1,Martes,13:30,15:30,
+3,I,,EDUCACION FISICA,Común,"MONICO, Vanes13:30 15:30",,,,PROGRESO,Teórica,1.0,Martes,13:30,15:30,
 3,I,,MATEMATICA,Común,"MAMANI, Mirta",,,,37,Teórica,,Miércoles,07:40,09:40,
 3,I,,INGLES,Común,"DE ANGELIS, Valeria",,,,37,Teórica,,Miércoles,10:00,12:00,
 3,I,,GEOGRAFIA,Común,"LEDESMA, Enrique",,,,37,Teórica,,Jueves,07:40,09:40,
@@ -537,16 +537,16 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 3,I,,BIOLOGIA,Común,"PONTNAU, Lucia",,,,37,Teórica,,Viernes,07:40,09:40,
 3,I,,MATEMATICA,Común,"MAMANI, Mirta",,,,37,Teórica,,Viernes,10:00,12:00,
 3,I,,CONSTRUCCION DE CIUDADANIA,Común,"VIZZOTTO, Gabriela",,,,37,Teórica,,Viernes,12:00,13:00,
-3,I,,LENGUAJE TECNOLOGICO,Común,LONERO. Ludmila,,,,5,Teórica,,Viernes,13:30,15:30,
-3,I,,PROCEDIMIENTOS TECNICOS,Común,"BARBALACE, Pablo",,,,111,Teórica,,Viernes,15:50,17:50,
-3,K,,EDUCACION FISICA,Común,"GARCIA, Diego",,,,PROGRESO,Teórica,1,Lunes,07:40,09:40,
+3,I,,LENGUAJE TECNOLOGICO,Común,LONERO. Ludmila,,,,5,Teórica,,Viernes,13:30,15:30,A
+3,I,,PROCEDIMIENTOS TECNICOS,Común,"BARBALACE, Pablo",,,,111,Teórica,,Viernes,15:50,17:50,A
+3,K,,EDUCACION FISICA,Común,"GARCIA, Diego",,,,PROGRESO,Teórica,1.0,Lunes,07:40,09:40,
 3,K,,MATEMATICA,Común,"ORELLANA, Soledad",,,,302,Teórica,,Lunes,12:30,13:30,
 3,K,,PRACTICAS DEL LENGUAJE,Práctica,"PERETTA, Daniela",,,,33,Teórica,,Lunes,13:30,15:30,
 3,K,,INGLES,Común,TOSORONI Natalia,,,,33,Teórica,,Lunes,15:50,17:50,
-3,K,,LENGUAJE TECNOLOGICO,Común,"GONZALEZ, Abel",,,,17,Teórica,,Martes,07:40,09:40,
-3,K,,PROCEDIMIENTOS TECNICOS,Común,MANZANO Gustavo,,,,17,Teórica,,Martes,07:40,09:40,
-3,K,,PROCEDIMIENTOS TECNICOS,Común,MANZANO Gustavo,,,,110,Teórica,,Martes,10:00,12:00,
-3,K,,LENGUAJE TECNOLOGICO,Común,"FERNANDEZ, Jonata",,,,110,Teórica,,Martes,10:00,12:00,
+3,K,,LENGUAJE TECNOLOGICO,Común,"GONZALEZ, Abel",,,,17,Teórica,,Martes,07:40,09:40,A
+3,K,,PROCEDIMIENTOS TECNICOS,Común,MANZANO Gustavo,,,,17,Teórica,,Martes,07:40,09:40,A
+3,K,,PROCEDIMIENTOS TECNICOS,Común,MANZANO Gustavo,,,,110,Teórica,,Martes,10:00,12:00,A
+3,K,,LENGUAJE TECNOLOGICO,Común,"FERNANDEZ, Jonata",,,,110,Teórica,,Martes,10:00,12:00,A
 3,K,,PRACTICAS DEL LENGUAJE,Práctica,"PERETTA, Daniela",,,,33,Teórica,,Martes,12:00,13:00,
 3,K,,FISICOQUIMICA,Común,"SCHAMBACH SOLARI, Carla B._ SCHNEIDER Erika",,,,33,Teórica,,Martes,13:30,15:30,
 3,K,,GEOGRAFIA,Común,"GESSI, Martin",,,,33,Teórica,,Martes,15:50,17:50,
@@ -554,8 +554,8 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 3,K,,HISTORIA,Común,"NOVO, Julian JARA, Miguel Angel",,,,33,Teórica,,Miércoles,15:50,17:50,
 3,K,,MATEMATICA,Común,"ORELLANA, Soledad",,,,33,Teórica,,Jueves,12:30,13:30,
 3,K,,BIOLOGIA,Común,"ZULAICA, Emilce",,,,33,Teórica,,Jueves,13:30,15:30,
-3,K,,SISTEMAS TECNOLOGICOS,Común,"FERRARI, Alberto",,,,15,Teórica,,Viernes,07:40,09:40,
-3,K,,SISTEMAS TECNOLOGICOS,Común,"FERRARI, Alberto",,,,15,Teórica,,Viernes,10:00,12:00,
+3,K,,SISTEMAS TECNOLOGICOS,Común,"FERRARI, Alberto",,,,15,Teórica,,Viernes,07:40,09:40,A
+3,K,,SISTEMAS TECNOLOGICOS,Común,"FERRARI, Alberto",,,,15,Teórica,,Viernes,10:00,12:00,A
 3,K,,PRACTICAS DEL LENGUAJE,Práctica,"PERETTA, Daniela",,,,33,Teórica,,Viernes,12:00,13:00,
 3,K,,CONSTRUCCION DE LA CIUDADANIA,Común,"SORIA _ GONZALEZ, Candela",,,,33,Teórica,,Viernes,13:30,15:30,
 3,K,,MATEMATICA,Común,"ORELLANA, Soledad",,,,33,Teórica,,Viernes,15:50,17:50,
@@ -564,16 +564,16 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 4,1,Electromecánica,SALUD Y ADOLESCENCIA,Común,"LIANOPULOS LILIANA _ FERNANDEZ, Yesica",,,,31,Teórica,,Martes,07:40,09:40,
 4,1,Electromecánica,FISICA,Común,"RODRIGUEZ, VIRGINIA",,,,31,Teórica,,Martes,10:00,12:00,
 4,1,Electromecánica,CONOCIMIENTO DE LOS MATERIALES,Común,"CUBITO, Fabian",,,,37,Teórica,,Martes,12:00,13:00,
-4,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Martes,13:30,15:30,
-4,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Martes,15:50,17:50,
-4,1,Electromecánica,DIBUJO TECNOLOGICO,Común,"MAÑE, Javier",,,,101,Teórica,,Miércoles,07:40,09:40,
+4,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Martes,13:30,15:30,A
+4,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Martes,15:50,17:50,A
+4,1,Electromecánica,DIBUJO TECNOLOGICO,Común,"MAÑE, Javier",,,,101,Teórica,,Miércoles,07:40,09:40,A
 4,1,Electromecánica,LITERATURA,Común,"CASALE SERVINI, Bettina",,,,31,Teórica,,Miércoles,10:00,12:00,
 4,1,Electromecánica,FISICA,Común,"RODRIGUEZ, Virgina",,,,202,Teórica,,Miércoles,12:00,13:00,
 4,1,Electromecánica,DISEÑO Y PROC. MEC.,Común,"RODRIGUEZ FERRARI, Fernando",,,,12,Teórica,,Miércoles,13:30,14:30,
 4,1,Electromecánica,DISEÑO Y PROC. MEC.,Común,"RODRIGUEZ FERRARI, Fernando",,,,12,Teórica,,Miércoles,15:50,17:50,
 4,1,Electromecánica,QUIMICA,Común,"PALADEA, Iara",,,,31,Teórica,,Jueves,07:40,09:40,
 4,1,Electromecánica,MATEMATICA CICLO SUPERIOR,Común,"CRISTOFANO, Adrián",,,,31,Teórica,,Jueves,10:00,12:00,
-4,1,Electromecánica,EDUCACION FISICA,Común,"TROISI, Roberto _ ORDANZA, Carlos",,,,PROGRESO,Teórica,1,Jueves,12:30,13:30,
+4,1,Electromecánica,EDUCACION FISICA,Común,"TROISI, Roberto _ ORDANZA, Carlos",,,,PROGRESO,Teórica,1.0,Jueves,12:30,13:30,
 4,1,Electromecánica,MATEMATICA CICLO SUPERIOR,Común,,,,,31,Teórica,,Viernes,07:40,09:40,
 4,1,Electromecánica,HISTORIA,Común,"AQUINO, Carina",,,,31,Teórica,,Viernes,10:00,12:00,
 4,1,Electromecánica,CONOCIMIENTO DE LOS MATERIALES,Común,"CUBITO, Fabian",,,,302,Teórica,,Viernes,12:00,13:00,
@@ -582,8 +582,8 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 4,2,Electromecánica,QUIMICA,Común,ETCHEGARAY,,,,32,Teórica,,Lunes,07:40,09:40,
 4,2,Electromecánica,CONOCIMIENTO DE LOS MATERIALES,Común,"MELFI, Valeria (s)",,,,32,Teórica,,Lunes,10:00,12:00,
 4,2,Electromecánica,"SALUD Y ADOLESCENCIA CRUZ, Marcela",Común,,,,,32,Teórica,,Lunes,12:00,13:00,
-4,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"BAUTISTA, Fermin",,,,108,Teórica,,Lunes,13:30,15:30,
-4,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"BAUTISTA, Fermin",,,,107,Teórica,,Lunes,15:50,17:50,
+4,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"BAUTISTA, Fermin",,,,108,Teórica,,Lunes,13:30,15:30,A
+4,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"BAUTISTA, Fermin",,,,107,Teórica,,Lunes,15:50,17:50,A
 4,2,Electromecánica,MATEMATICA CICLO SUP.,Común,"VILLANI, Liliana",,,,32,Teórica,,Martes,12:00,13:00,
 4,2,Electromecánica,DISEÑO Y PROC. MEC.,Común,RODRIGUEZ FERRARI,,,,12,Teórica,,Martes,13:30,15:30,
 4,2,Electromecánica,DISEÑO Y PROC. MEC.,Común,RODRIGUEZ FERRARI,,,,12,Teórica,,Martes,15:50,17:50,
@@ -596,27 +596,27 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 4,2,Electromecánica,HISTORIA,Común,"MURADAS, Mariela",,,,32,Teórica,,Jueves,10:00,12:00,
 4,2,Electromecánica,FISICA,Común,"CRISTOFANO, Adrián",,,,,Teórica,,Jueves,12:30,13:30,
 4,2,Electromecánica,LITERATURA,Común,"BELLÓ, Lucía _ YAMUNI, Marisa",,,,32,Teórica,,Viernes,07:40,09:40,
-4,2,Electromecánica,DIBUJO TECNOLOGICO,Común,"MAÑE, Javier",,,,102,Teórica,,Viernes,10:00,12:00,
+4,2,Electromecánica,DIBUJO TECNOLOGICO,Común,"MAÑE, Javier",,,,102,Teórica,,Viernes,10:00,12:00,A
 4,2,Electromecánica,MATEMATICA CICLO SUP.,Común,"VILLANI, Liliana",,,,32,Teórica,,Viernes,12:00,13:00,
 4,2,Electromecánica,GEOGRAFIA,Común,"MARTINEZ, Eliana",,,,16,Teórica,,Viernes,13:30,15:30,
-4,2,Electromecánica,EDUCACION FISICA,Común,"EXPOSITO, Jordan14:50 16:50",,,,PROGRESO,Teórica,1,Viernes,15:50,17:50,
+4,2,Electromecánica,EDUCACION FISICA,Común,"EXPOSITO, Jordan14:50 16:50",,,,PROGRESO,Teórica,1.0,Viernes,15:50,17:50,
 4,3,Electromecánica,DISEÑO Y PROC. MEC.,Común,MANZANO Gustavo,,,,12,Teórica,,Lunes,07:40,09:40,
-4,3,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,DIONICIO Alejandro,,,,12,Teórica,,Lunes,07:40,09:40,
+4,3,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,DIONICIO Alejandro,,,,12,Teórica,,Lunes,07:40,09:40,A
 4,3,Electromecánica,DISEÑO Y PROC. MEC.,Común,MANZANO Gustavo,,,,12,Teórica,,Lunes,10:00,12:00,
-4,3,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,DIONICIO Alejandro,,,,12,Teórica,,Lunes,10:00,12:00,
+4,3,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,DIONICIO Alejandro,,,,12,Teórica,,Lunes,10:00,12:00,A
 4,3,Electromecánica,MATEMATICA CICLO SUPERIOR,Común,"DANERI, Maria Soledad",,,,31,Teórica,,Lunes,13:30,15:30,
 4,3,Electromecánica,INGLES,Común,"BRENER, Marlene",,,,31,Teórica,,Lunes,15:50,17:50,
-4,3,Electromecánica,EDUCACION FISICA,Común,"EXPOSITO, Jordana",,,,PROGRESO,Teórica,1,Martes,07:40,09:40,
+4,3,Electromecánica,EDUCACION FISICA,Común,"EXPOSITO, Jordana",,,,PROGRESO,Teórica,1.0,Martes,07:40,09:40,
 4,3,Electromecánica,GEOGRAFIA,Común,"VAZQUEZ, Natalia _ CORBALAN, Dario",,,,31,Teórica,,Martes,13:30,15:30,
-4,3,Electromecánica,DIBUJO TECNOLOGICO,Común,"MAÑE, Javier",,,,102,Teórica,,Martes,15:50,17:50,
+4,3,Electromecánica,DIBUJO TECNOLOGICO,Común,"MAÑE, Javier",,,,102,Teórica,,Martes,15:50,17:50,A
 4,3,Electromecánica,INST. Y AP. DE LA ENERG.,Común,"TORRES, Juan",,,,109,Teórica,,Miércoles,07:40,09:40,
 4,3,Electromecánica,INST. Y AP. DE LA ENERG.,Común,"TORRES, Juan",,,,109,Teórica,,Miércoles,10:00,12:00,
 4,3,Electromecánica,LITERATURA,Común,"PEREYRA, Jesica",,,,31,Teórica,,Miércoles,12:00,13:00,
 4,3,Electromecánica,HISTORIA,Común,"MURADAS, Mariela",,,,31,Teórica,,Miércoles,13:30,15:30,
 4,3,Electromecánica,SALUD Y ADOLESCENCIA,Común,"MONSALVO, Andrea",,,,31,Teórica,,Miércoles,15:50,17:50,
-4,3,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Jueves,07:40,09:40,
+4,3,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Jueves,07:40,09:40,A
 4,3,Electromecánica,DISEÑO Y PROC. MEC.,Común,"MANZANO, Gustavo",,,,107,Teórica,,Jueves,07:40,09:40,
-4,3,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Jueves,10:00,12:00,
+4,3,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Jueves,10:00,12:00,A
 4,3,Electromecánica,DISEÑO Y PROC. MEC.,Común,"MANZANO, Gustavo",,,,107,Teórica,,Jueves,10:00,12:00,
 4,3,Electromecánica,LITERATURA,Común,"PEREYRA, Jesica",,,,31,Teórica,,Jueves,12:00,13:00,
 4,3,Electromecánica,QUIMICA,Común,"LEDESMA, Matias",,,,31,Teórica,,Jueves,13:30,15:30,
@@ -627,14 +627,14 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 4,4,Electromecánica,FISICA,Común,,,,,307,Teórica,,Lunes,07:40,09:40,
 4,4,Electromecánica,GEOGRAFIA,Común,"GESSI, Martin",,,,307,Teórica,,Lunes,10:00,12:00,
 4,4,Electromecánica,INGLES,Común,"FAILLA, Mariana",,,,307,Teórica,,Lunes,12:00,12:30,
-4,4,Electromecánica,INSTALACION Y APLICACION DE LA ENERGIA,Común,"HELBERT. Matias",,,,110,Teórica,,Lunes,13:30,13:40,
+4,4,Electromecánica,INSTALACION Y APLICACION DE LA ENERGIA,Común,HELBERT. Matias,,,,110,Teórica,,Lunes,13:30,13:40,
 4,4,Electromecánica,MAQUINAS ELECTRICAS Y AUTOMATISMOS,Común,"GOMEZ, Marcelo",,,,110,Teórica,,Lunes,13:30,13:40,
-4,4,Electromecánica,INSTALACION Y APLICACION DE LA ENERGIA,Común,"HELBERT. Matias",,,,110,Teórica,,Lunes,15:50,17:50,
+4,4,Electromecánica,INSTALACION Y APLICACION DE LA ENERGIA,Común,HELBERT. Matias,,,,110,Teórica,,Lunes,15:50,17:50,
 4,4,Electromecánica,MAQUINAS ELECTRICAS Y AUTOMATISMOS,Común,"GOMEZ, Marcelo",,,,110,Teórica,,Lunes,15:50,17:50,
 4,4,Electromecánica,MATEMATICA CICLO SUPERIOR,Común,"HIERREZUELO, Lorena",,,,307,Teórica,,Martes,07:40,09:40,
 4,4,Electromecánica,QUIMICA,Común,"ECHEGARAY, Claudio",,,,307,Teórica,,Martes,10:00,12:00,
 4,4,Electromecánica,FISICA,Común,"CRISTOFANO, Adrian",,,,307,Teórica,,Martes,12:00,13:00,
-4,4,Electromecánica,"EDUCACIÓN FISICA DOMINGUEZ, Andrea",Común,,,,,PROGRESO,Teórica,1,Martes,13:30,15:30,
+4,4,Electromecánica,"EDUCACIÓN FISICA DOMINGUEZ, Andrea",Común,,,,,PROGRESO,Teórica,1.0,Martes,13:30,15:30,
 4,4,Electromecánica,LITERATURA,Común,"CASALE CERVINI, Betina",,,,307,Teórica,,Miércoles,07:40,09:40,
 4,4,Electromecánica,HISTORIA,Común,"NOVO, Julian",,,,307,Teórica,,Miércoles,10:00,12:00,
 4,4,Electromecánica,INGLES,Común,"FAILLA, Mariana",,,,307,Teórica,,Miércoles,12:00,13:00,
@@ -645,35 +645,35 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 4,4,Electromecánica,MATEMATICA CICLO SUPERIOR,Común,"HIERREZUELO, Lorena",,,,307,Teórica,,Jueves,10:00,12:00,
 4,4,Electromecánica,DISEÑO Y PROCESAMIENTO MECANICO,Común,"MANZANO, Gustavo",,,,,Teórica,,Jueves,13:30,12:30,
 4,4,Electromecánica,DISEÑO Y PROCESAMIENTO MECANICO,Común,"MANZANO, Gustavo",,,,,Teórica,,Jueves,15:50,17:50,
-4,4,Electromecánica,DIBUJO TECNOLOGICO,Común,"LOPEZ, Yemina",,,,101,Teórica,,Viernes,07:40,09:40,
+4,4,Electromecánica,DIBUJO TECNOLOGICO,Común,"LOPEZ, Yemina",,,,101,Teórica,,Viernes,07:40,09:40,A
 4,4,Electromecánica,CONOCIMIENTO DE LOS MATERIALES,Común,"ACOSTA, Miguel",,,,301,Teórica,,Viernes,10:00,12:00,
 4,4,Electromecánica,SALUD Y ADOLESCENCIA,Común,"ZULAICA, Emilse",,,,301,Teórica,,Viernes,13:30,15:30,
 4,5,Construcciones,QUIMICA,Común,BRUNO MARIA JOSE,,,,1,Teórica,,Lunes,10:00,12:00,
 4,5,Construcciones,SISTEMAS CONSTRUCT.,Común,"PALAVECINO, Carlos",,,,104,Teórica,,Lunes,13:30,15:30,
 4,5,Construcciones,INTERPRET. DE ANTEPROYECTO,Común,"ALVAREZ, LOURDES",,,,104,Teórica,,Lunes,13:30,15:30,
-4,5,Construcciones,PROYECTO,Común,MOSCHET. Javier,,,,101,Teórica,,Lunes,15:50,17:50,
+4,5,Construcciones,PROYECTO,Común,MOSCHET. Javier,,,,101,Teórica,,Lunes,15:50,17:50,A
 4,5,Construcciones,SIST. CONSTRUC.,Común,"PALAVECINO, Carlos",,,,101,Teórica,,Lunes,15:50,17:50,
 4,5,Construcciones,FISICA,Común,HIERREZUELO,,,,26,Teórica,,Lunes,20:10,22:10,
 4,5,Construcciones,INGLES,Común,"DE ANGELIS, Valeria",,,,1,Teórica,,Martes,07:40,09:40,
 4,5,Construcciones,MATEMATICA CICLO SUPERIOR,Común,"COLACI, Daniel",,,,1,Teórica,,Martes,10:00,12:00,
 4,5,Construcciones,INTERPRET. DE ANTEPROYECTO,Común,"BETANCORT, Diego _ LEDESMA, Andrea",,,,14,Teórica,,Martes,13:30,15:30,
 4,5,Construcciones,INTER. DE ANTEPR.,Común,"BETANCORT, Diego_ LEDESMA, Andrea",,,,14,Teórica,,Martes,15:50,17:50,
-4,5,Construcciones,DIBUJO TECNOLOGICO,Común,ALONSO EVELIN,,,,17,Teórica,,Miércoles,07:40,09:40,
+4,5,Construcciones,DIBUJO TECNOLOGICO,Común,ALONSO EVELIN,,,,17,Teórica,,Miércoles,07:40,09:40,A
 4,5,Construcciones,FISICA,Común,HIERREZUELO,,,,1,Teórica,,Miércoles,10:00,12:00,
-4,5,Construcciones,DIBUJO TECNOL.,Común,ALONSO EVELIN,,,,17,Teórica,,Miércoles,12:30,12:00,
+4,5,Construcciones,DIBUJO TECNOL.,Común,ALONSO EVELIN,,,,17,Teórica,,Miércoles,12:30,12:00,A
 4,5,Construcciones,MATEMATICA CICLO SUPERIOR,Común,"COLACI, Daniel",,,,32,Teórica,,Miércoles,13:30,15:30,
-4,5,Construcciones,EDUCACION FISICA,Común,"TROISI, Roberto _ ALVAREZ, Andrea",,,,PROGRESO,Teórica,1,Miércoles,15:50,17:50,
+4,5,Construcciones,EDUCACION FISICA,Común,"TROISI, Roberto _ ALVAREZ, Andrea",,,,PROGRESO,Teórica,1.0,Miércoles,15:50,17:50,
 4,5,Construcciones,HISTORIA,Común,"HEINRICH, Marcela",,,,1,Teórica,,Jueves,07:40,09:40,
 4,5,Construcciones,SALUD Y ADOLESCENCIA,Común,"LIANOPULOS, Liliana _ VISCONTI, Carolina",,,,1,Teórica,,Jueves,10:00,12:00,
 4,5,Construcciones,PLANIFIC. DE OBRA,Común,"FERRARI, Alberto",,,,105,Teórica,,Jueves,13:30,15:30,
 4,5,Construcciones,PLANIFIC. DE OBRA,Común,"FERRARI, Alberto",,,,105,Teórica,,Jueves,15:50,17:50,
 4,5,Construcciones,"CONOCIMIENTO DE LOS MATERIALES ACOSTA, Miguel",Común,,,,,23,Teórica,,Jueves,20:10,22:10,
-4,5,Construcciones,PROYECTO,Común,"ALVAREZ, Lourdes",,,,,Teórica,,Viernes,10:00,12:00,
+4,5,Construcciones,PROYECTO,Común,"ALVAREZ, Lourdes",,,,,Teórica,,Viernes,10:00,12:00,A
 4,5,Construcciones,INTERP. DE ANTEPR.,Común,"ALVAREZ, Lourdes",,,,,Teórica,,Viernes,12:30,13:30,
 4,5,Construcciones,LITERATURA,Común,PEREYRA Jesica,,,,309,Teórica,,Viernes,13:30,15:30,
 4,5,Construcciones,GEOGRAFIA,Común,"MARTINEZ, Eliana",,,,309,Teórica,,Viernes,15:50,17:50,
 4,5,Construcciones,"CONOCIMIENTO DE LOS MATERIALES ACOSTA, Miguel",Común,,,,,203,Teórica,,Viernes,18:00,18:50,
-4,6,Construcciones,EDUCACION FISICA,Común,"TROISI, Roberto",,,,PROGRESO,Teórica,1,Lunes,07:40,09:40,
+4,6,Construcciones,EDUCACION FISICA,Común,"TROISI, Roberto",,,,PROGRESO,Teórica,1.0,Lunes,07:40,09:40,
 4,6,Construcciones,FISICA,Común,"RODRIGUEZ, Virginia",,,,202,Teórica,,Lunes,12:00,13:00,
 4,6,Construcciones,QUIMICA,Común,"MARTINEZ ARCE, Maria Paz",,,,303,Teórica,,Lunes,13:30,15:30,
 4,6,Construcciones,MATEMATICA CICLO SUPERIOR,Común,CRISTOFANO ADRIAN DANERI MARIA,,,,1,Teórica,,Lunes,15:50,17:50,
@@ -688,10 +688,10 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 4,6,Construcciones,PLANIFIC. DE OBRA,Común,"FERRARI, Alberto",,,,14,Teórica,,Miércoles,07:40,09:40,
 4,6,Construcciones,INTERP. DE ANTEPROYEC.,Común,MOSCHET. Javier,,,,14,Teórica,,Miércoles,07:40,09:40,
 4,6,Construcciones,PLANIFIC. DE OBRA,Común,"FERRARI, Alberto",,,,14,Teórica,,Miércoles,10:00,12:00,
-4,6,Construcciones,PROYECTO,Común,"COTEJA, Trinidad_ LONERO Ludmila",,,,14,Teórica,,Miércoles,10:00,12:00,
+4,6,Construcciones,PROYECTO,Común,"COTEJA, Trinidad_ LONERO Ludmila",,,,14,Teórica,,Miércoles,10:00,12:00,A
 4,6,Construcciones,DIBUJO TEC.,Común,"MOSCHET, Javier",,,,101,Teórica,,Miércoles,12:00,13:00,
 4,6,Construcciones,INGLES,Común,"TOSORONI, Natalia",,,,27,Teórica,,Miércoles,13:30,15:30,
-4,6,Construcciones,PROYECTO,Común,"COTEJA, Trinidad_ RODRIGUEZ CAVIDES",,,,6,Teórica,,Miércoles,15:50,17:50,
+4,6,Construcciones,PROYECTO,Común,"COTEJA, Trinidad_ RODRIGUEZ CAVIDES",,,,6,Teórica,,Miércoles,15:50,17:50,A
 4,6,Construcciones,SISTEMAS CONSTRUCT.,Común,LONERO LUDMILA,,,,6,Teórica,,Miércoles,15:50,17:50,
 4,6,Construcciones,LITERATURA,Común,"CASALE, Cervini",,,,303,Teórica,,Jueves,13:30,15:30,
 4,6,Construcciones,GEOGRAFIA,Común,"LUCIA, Sol Giulana",,,,,Teórica,,Jueves,15:50,17:50,
@@ -700,15 +700,15 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 4,6,Construcciones,MATEMATICA CICLO SUPERIOR,Común,"CRISTOFANO Adrian _ DANERI, Maria",,,,303,Teórica,,Viernes,15:50,17:50,
 4,7,Construcciones,SISTEMAS CONSTRUCT.,Común,"GONZALEZ, Abel",,,,101,Teórica,,Lunes,13:30,15:30,
 4,7,Construcciones,PLANIFIC. DE OBRA,Común,"ALONSO, Evelyn",,,,101,Teórica,,Lunes,13:30,15:30,
-4,7,Construcciones,PROYECTO,Común,"GONZALEZ, Abel",,,,101,Teórica,,Lunes,15:50,17:50,
+4,7,Construcciones,PROYECTO,Común,"GONZALEZ, Abel",,,,101,Teórica,,Lunes,15:50,17:50,A
 4,7,Construcciones,PLANIFIC. DE OBRA,Común,"ALONSO, Evelyn",,,,101,Teórica,,Lunes,15:50,17:50,
 4,7,Construcciones,INTERPRET. DE ANTEPROY.,Común,"MELFI, Valeria",,,,5,Teórica,,Martes,07:40,09:40,
-4,7,Construcciones,DIBUJO TECNOLOGICO,Común,"DE BELLIS, Silvina",,,,5,Teórica,,Martes,07:40,09:40,
+4,7,Construcciones,DIBUJO TECNOLOGICO,Común,"DE BELLIS, Silvina",,,,5,Teórica,,Martes,07:40,09:40,A
 4,7,Construcciones,INGLES,Común,"ZACCARDI, Cristian",,,,308,Teórica,,Martes,10:00,12:00,
 4,7,Construcciones,CONOCIM. DE LOS MATERIALES,Común,"MESCHINI, Mario",,,,PECERA,Teórica,,Martes,12:00,13:00,
 4,7,Construcciones,LITERATURA,Común,"PEREYRA, Jesica",,,,308,Teórica,,Martes,13:30,15:30,
 4,7,Construcciones,FISICA,Común,"FERNANDEZ, Jesica Fabiana",,,,308,Teórica,,Martes,15:50,17:50,
-4,7,Construcciones,EDUCACION FISICA,Común,"ALVAREZ, Andrea",,,,PROGRESO,Teórica,1,Miércoles,07:40,09:40,
+4,7,Construcciones,EDUCACION FISICA,Común,"ALVAREZ, Andrea",,,,PROGRESO,Teórica,1.0,Miércoles,07:40,09:40,
 4,7,Construcciones,CONOCIM. DE LOS MATERIALES,Común,"MESCHINI, Mario",,,,PECERA,Teórica,,Miércoles,12:00,13:00,
 4,7,Construcciones,MATEMATICA CICLO SUPERIOR,Común,"MOREIRA, Victor",,,,309,Teórica,,Miércoles,13:30,15:30,
 4,7,Construcciones,GEOGRAFIA,Común,"ALVAREZ, Leandro",,,,309,Teórica,,Miércoles,15:50,17:50,
@@ -716,62 +716,62 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 4,7,Construcciones,SALUD Y ADOLESCENCIA,Común,"CAÑAMAS, Miriam",,,,308,Teórica,,Jueves,07:40,09:40,
 4,7,Construcciones,HISTORIA,Común,"BOSIO, Emilio",,,,308,Teórica,,Jueves,10:00,12:00,
 4,7,Construcciones,INT. DE ANTEPR.,Común,"MELFI, Valeria",,,,16,Teórica,,Jueves,12:00,13:00,
-4,7,Construcciones,DIBUJO TECNOL.,Común,"DE BELLIS, Silvina",,,,16,Teórica,,Jueves,12:00,13:00,
+4,7,Construcciones,DIBUJO TECNOL.,Común,"DE BELLIS, Silvina",,,,16,Teórica,,Jueves,12:00,13:00,A
 4,7,Construcciones,MATEMATICA CICLO SUPERIOR,Común,"MOREIRA, Victor",,,,308,Teórica,,Jueves,13:30,15:30,
-4,7,Construcciones,DIBUJO TECNOLOGICO,Común,"MOSCHET, Javier",,,,101,Teórica,,Jueves,15:50,17:50,
+4,7,Construcciones,DIBUJO TECNOLOGICO,Común,"MOSCHET, Javier",,,,101,Teórica,,Jueves,15:50,17:50,A
 4,7,Construcciones,INTERPRET. DE ANTEPROY.,Común,"ALVAREZ, Lourdes",,,,101,Teórica,,Jueves,15:50,17:50,
-4,7,Construcciones,DIBUJO TECNOL.,Común,"MOSCHET, Javier",,,,101,Teórica,,Jueves,20:10,22:10,
+4,7,Construcciones,DIBUJO TECNOL.,Común,"MOSCHET, Javier",,,,101,Teórica,,Jueves,20:10,22:10,A
 4,7,Construcciones,INT. DE ANTEPR.,Común,"ALVAREZ, Lourdes",,,,101,Teórica,,Jueves,20:10,22:10,
 4,7,Construcciones,PLANIFIC. DE OBRA,Común,"MASSIMINO, Cristina",,,,105,Teórica,,Viernes,07:40,09:40,
-4,7,Construcciones,PROYECTO,Común,FLEISCHMAN Carina _ FERREYRA Nazarena,,,,105,Teórica,,Viernes,07:40,09:40,
+4,7,Construcciones,PROYECTO,Común,FLEISCHMAN Carina _ FERREYRA Nazarena,,,,105,Teórica,,Viernes,07:40,09:40,A
 4,7,Construcciones,PLANIFIC. DE OBRA,Común,"MASSIMINO, Cristina",,,,105,Teórica,,Viernes,10:00,12:00,
 4,7,Construcciones,SISTEMAS CONSTRUCTIVOS,Común,"FLEISCHMANCarina _ FERNANDEZ, Jonathan",,,,105,Teórica,,Viernes,10:00,12:00,
 4,7,Construcciones,QUIMICA,Común,"CATTARUZZI, Tatiana",,,,303,Teórica,,Viernes,13:30,15:30,
-4,8,Energías Renovables,EDUCACION FISICA,Común,"ALVAREZ, Andrea",,,,PROGRESO,Teórica,1,Lunes,07:40,09:40,
+4,8,Energías Renovables,EDUCACION FISICA,Común,"ALVAREZ, Andrea",,,,PROGRESO,Teórica,1.0,Lunes,07:40,09:40,
 4,8,Energías Renovables,FISICA,Común,"CRISTOFANO, Adrián",,,,305,Teórica,,Lunes,12:30,13:30,
 4,8,Energías Renovables,GEOGRAFIA,Común,"CORBALAN, Dario",,,,305,Teórica,,Lunes,13:30,15:30,
 4,8,Energías Renovables,SALUD Y ADOLESCENCIA,Común,"CAÑAMAS, Miriam",,,,305,Teórica,,Lunes,15:50,17:50,
-4,8,Energías Renovables,"PROY., DISEÑO E INST. DE ENERGIAS RENOV.",Común,"MACIEL, Martin",,,,,Teórica,,Martes,07:40,09:40,
-4,8,Energías Renovables,"PROY., DISEÑO E INST. DE ENERGIAS RENOV.",Común,"MACIEL, Martin",,,,,Teórica,,Martes,10:00,12:00,
-4,8,Energías Renovables,DIBUJO TECNOLOGICO,Común,"BARBALACE, Horacio",,,,17,Teórica,,Martes,13:30,15:30,
+4,8,Energías Renovables,"Proyecto",Común,"MACIEL, Martin",,,,,Teórica,,Martes,07:40,09:40,A
+4,8,Energías Renovables,"Proyecto",Común,"MACIEL, Martin",,,,,Teórica,,Martes,10:00,12:00,A
+4,8,Energías Renovables,DIBUJO TECNOLOGICO,Común,"BARBALACE, Horacio",,,,17,Teórica,,Martes,13:30,15:30,A
 4,8,Energías Renovables,MATEMATICA CICLO SUPERIOR,Común,"CRISTOFANO, Adrián _ CORONEL MARIA TERESA",,,,302,Teórica,,Martes,15:50,17:50,
-4,8,Energías Renovables,"PROY., DISEÑO E INST. DE ENERGIAS RENOV.",Común,"MACIEL, Martin",,,,202,Teórica,,Miércoles,07:40,09:40,
-4,8,Energías Renovables,INTROD. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,202,Teórica,,Miércoles,07:40,09:40,
-4,8,Energías Renovables,"PROY., DISEÑO E INST. DE ENERGIAS RENOV.",Común,"MACIEL, Martin",,,,202,Teórica,,Miércoles,10:00,12:00,
-4,8,Energías Renovables,INTROD. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,202,Teórica,,Miércoles,10:00,12:00,
+4,8,Energías Renovables,"Proyecto",Común,"MACIEL, Martin",,,,202,Teórica,,Miércoles,07:40,09:40,A
+4,8,Energías Renovables,INTROD. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,202,Teórica,,Miércoles,07:40,09:40,A
+4,8,Energías Renovables,"Proyecto",Común,"MACIEL, Martin",,,,202,Teórica,,Miércoles,10:00,12:00,A
+4,8,Energías Renovables,INTROD. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,202,Teórica,,Miércoles,10:00,12:00,A
 4,8,Energías Renovables,FISICA,Común,"CRISTOFANO, Adrián",,,,305,Teórica,,Miércoles,12:00,13:00,
 4,8,Energías Renovables,LITERATURA,Común,"PEREYRA, Jessica",,,,305,Teórica,,Miércoles,13:30,15:30,
 4,8,Energías Renovables,QUIMICA,Común,"LEDESMA, Matías",,,,305,Teórica,,Miércoles,15:50,17:50,
-4,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MACIEL, Martin",,,,202,Teórica,,Jueves,07:40,09:40,
-4,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MACIEL, Martin",,,,202,Teórica,,Jueves,10:00,12:00,
+4,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MACIEL, Martin",,,,202,Teórica,,Jueves,07:40,09:40,A
+4,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MACIEL, Martin",,,,202,Teórica,,Jueves,10:00,12:00,A
 4,8,Energías Renovables,HISTORIA,Común,"STOPPINI, Andrea",,,,305,Teórica,,Jueves,13:30,15:30,
 4,8,Energías Renovables,CONOCIMIENTO DE LOS MATERIALES,Común,"MORMILE, Gustavo",,,,305,Teórica,,Jueves,15:50,17:50,
-4,8,Energías Renovables,INTROD. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Viernes,07:40,09:40,
-4,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MACIEL, Martin",,,,107,Teórica,,Viernes,07:40,09:40,
-4,8,Energías Renovables,INTROD. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Viernes,10:00,12:00,
-4,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MACIEL, Martin",,,,107,Teórica,,Viernes,10:00,12:00,
+4,8,Energías Renovables,INTROD. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Viernes,07:40,09:40,A
+4,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MACIEL, Martin",,,,107,Teórica,,Viernes,07:40,09:40,A
+4,8,Energías Renovables,INTROD. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Viernes,10:00,12:00,A
+4,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MACIEL, Martin",,,,107,Teórica,,Viernes,10:00,12:00,A
 4,8,Energías Renovables,FISICA,Común,"CRISTOFANO, Adrián",,,,307,Teórica,,Viernes,12:00,13:00,
 4,8,Energías Renovables,INGLES,Común,"BRENER, Marlene",,,,305,Teórica,,Viernes,15:50,17:50,
-4,9,Energías Renovables,INTRODUCC. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Lunes,07:40,09:40,
-4,9,Energías Renovables,INTRODUCC. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Lunes,10:00,12:00,
-4,9,Energías Renovables,DIBUJO TECNOLOGICO,Común,"CERREIA CALVINO, Diego Roberto",,,,18,Teórica,,Lunes,13:30,15:30,
+4,9,Energías Renovables,INTRODUCC. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Lunes,07:40,09:40,A
+4,9,Energías Renovables,INTRODUCC. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Lunes,10:00,12:00,A
+4,9,Energías Renovables,DIBUJO TECNOLOGICO,Común,"CERREIA CALVINO, Diego Roberto",,,,18,Teórica,,Lunes,13:30,15:30,A
 4,9,Energías Renovables,HISTORIA,Común," MURADAS, Ruben _ PAZ, Veronica",,,,202,Teórica,,Lunes,15:50,17:50,
-4,9,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"GLATT, Osvaldo",,,,202,Teórica,,Martes,07:40,09:40,
-4,9,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MORMILE, Gustavo",,,,202,Teórica,,Martes,07:40,09:40,
-4,9,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"GLATT, Osvaldo",,,,202,Teórica,,Martes,10:00,12:00,
-4,9,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MORMILE, Gustavo",,,,202,Teórica,,Martes,10:00,12:00,
+4,9,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"GLATT, Osvaldo",,,,202,Teórica,,Martes,07:40,09:40,A
+4,9,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MORMILE, Gustavo",,,,202,Teórica,,Martes,07:40,09:40,A
+4,9,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"GLATT, Osvaldo",,,,202,Teórica,,Martes,10:00,12:00,A
+4,9,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MORMILE, Gustavo",,,,202,Teórica,,Martes,10:00,12:00,A
 4,9,Energías Renovables,FISICA,Común,"RODRIGUEZ, Virginia",,,,202,Teórica,,Martes,12:00,13:00,
 4,9,Energías Renovables,GEOGRAFIA,Común,"GESSI, Martin",,,,306,Teórica,,Martes,13:30,15:30,
 4,9,Energías Renovables,QUIMICA,Común,TORECILLA Ana,,,,306,Teórica,,Martes,15:50,17:50,
-4,9,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MORMILE, Gustavo",,,,111,Teórica,,Miércoles,07:40,09:40,
-4,9,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"GLATT, Osvaldo",,,,111,Teórica,,Miércoles,07:40,09:40,
-4,9,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"MORMILE, Gustavo",,,,111,Teórica,,Miércoles,10:00,12:00,
+4,9,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MORMILE, Gustavo",,,,111,Teórica,,Miércoles,07:40,09:40,A
+4,9,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"GLATT, Osvaldo",,,,111,Teórica,,Miércoles,07:40,09:40,A
+4,9,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"MORMILE, Gustavo",,,,111,Teórica,,Miércoles,10:00,12:00,A
 4,9,Energías Renovables,INGLES,Común,"LERA, Eliana",,,,306,Teórica,,Miércoles,13:30,15:30,
 4,9,Energías Renovables,CONOCIMIENTO DE LOS MATERIALES,Común,"MELFI, Valeria",,,,306,Teórica,,Miércoles,15:50,17:50,
 4,9,Energías Renovables,FISICA,Común,"RODRIGUEZ, Virginia",,,,202,Teórica,,Jueves,12:00,13:00,
 4,9,Energías Renovables,LITERATURA,Común,"PEREYRA, Jesica",,,,306,Teórica,,Jueves,13:30,15:30,
 4,9,Energías Renovables,MATEMATICA CICLO SUPERIOR,Común,"ORELLANA, Clara",,,,306,Teórica,,Jueves,15:50,17:50,
-4,9,Energías Renovables,EDUCACION FISICA,Común,"ALVAREZ, Andrea",,,,PROGRESO,Teórica,1,Viernes,07:40,09:40,
+4,9,Energías Renovables,EDUCACION FISICA,Común,"ALVAREZ, Andrea",,,,PROGRESO,Teórica,1.0,Viernes,07:40,09:40,
 4,9,Energías Renovables,FISICA,Común,"RODRIGUEZ, Virginia",,,,202,Teórica,,Viernes,12:00,13:00,
 4,9,Energías Renovables,MATEMATICA CICLO SUPERIOR,Común,"ORELLANA, Clara",,,,306,Teórica,,Viernes,13:30,15:30,
 4,9,Energías Renovables,SALUD Y ADOLESCENCIA,Común,"LIANOPULOS, Liliana _ MONSALVO, Andrea",,,,306,Teórica,,Viernes,15:50,17:50,
@@ -779,22 +779,22 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 5,1,Electromecánica,ELECTROTECNIA,Común,"GOMEZ, Marcelo Moises",,,,11,Teórica,,Lunes,10:00,12:00,
 5,1,Electromecánica,ELECTROTECNIA,Común,"GOMEZ, Marcelo Moises",,,,11,Teórica,,Lunes,12:00,13:00,
 5,1,Electromecánica,ANALISIS MATEMATICO,Común,"MAMANI, Mirta",,,,309,Teórica,,Lunes,13:30,15:30,
-5,1,Electromecánica,EDUCACION FISICA,Común,"ALVAREZ, Andrea",,,,PROGRESO,Teórica,1,Lunes,15:50,17:50,
+5,1,Electromecánica,EDUCACION FISICA,Común,"ALVAREZ, Andrea",,,,PROGRESO,Teórica,1.0,Lunes,15:50,17:50,
 5,1,Electromecánica,GEOGRAFIA,Común,"VAZQUEZ NATALIA _ LEZCANO, Juan _ CORBALAN, Dario",,,,11,Teórica,,Martes,07:40,09:40,
 5,1,Electromecánica,MECANICA Y MECANISMO,Común,"MORMILE Gustavo _ FERNANDEZ, Mateo",,,,32,Teórica,,Martes,13:30,15:30,
 5,1,Electromecánica,HISTORIA,Común,"STOPPINI, Andrea",,,,,Teórica,,Martes,15:50,17:50,
 5,1,Electromecánica,INGLÉS,Común,"FAILLA, Mariana",,,,11,Teórica,,Miércoles,07:40,09:40,
 5,1,Electromecánica,ANALISIS MATEMATICO,Común,"MAMANI, Mirta",,,,11,Teórica,,Miércoles,10:00,12:00,
 5,1,Electromecánica,DISEÑO Y PROC. MEC.,Común,"ALIAS, Emmanuel",,,,4,Teórica,,Miércoles,13:30,15:30,
-5,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,GOMEZ Marcelo,,,,4,Teórica,,Miércoles,13:30,15:30,
+5,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,GOMEZ Marcelo,,,,4,Teórica,,Miércoles,13:30,15:30,A
 5,1,Electromecánica,POLITICA Y CIUDADANIA,Común,"FELTRIN, Vanesa",,,,11,Teórica,,Jueves,07:40,09:40,
 5,1,Electromecánica,RESISTENCIA DE LOS MATERIALES,Común,"COLOMBRE, Vanina GRANELLI, Juan",,,,11,Teórica,,Jueves,10:00,12:00,
 5,1,Electromecánica,INST. Y AP DE LA ENERG. GRANELLI,Común,,,,,108,Teórica,,Jueves,13:30,15:30,
 5,1,Electromecánica,"DISEÑO Y PROC. MEC ALIAS, Emanuel",Común,,,,,108,Teórica,,Jueves,13:30,15:30,
 5,1,Electromecánica,DISEÑO Y PROC. MEC. MESCHINI,Común,,,,,108,Teórica,,Jueves,15:50,17:50,
-5,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"ARIAS, Raul",,,,109,Teórica,,Viernes,13:30,15:30,
+5,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"ARIAS, Raul",,,,109,Teórica,,Viernes,13:30,15:30,A
 5,1,Electromecánica,INST. Y AP. DE LA ENERG.,Común,"DIONICIO, Alejandro",,,,109,Teórica,,Viernes,13:30,15:30,
-5,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"ARIAS, Raul",,,,12,Teórica,,Viernes,15:50,17:50,
+5,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"ARIAS, Raul",,,,12,Teórica,,Viernes,15:50,17:50,A
 5,2,Electromecánica,RESIST. DE LOS MATERIALES,Común,"COLOMBRE, Vanina SUAREZ, Alejandro",,,,,Teórica,,Lunes,12:30,12:30,
 5,2,Electromecánica,LITERATURA,Común,"ALVAREZ, Selva",,,,203,Teórica,,Lunes,13:30,15:30,
 5,2,Electromecánica,MECANICA TECNICA,Común,"BORDA, Victor Hugo",,,,203,Teórica,,Lunes,15:50,17:50,
@@ -805,19 +805,19 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 5,2,Electromecánica,ELECTROTECNIA,Común,"DIONICIO, Alejandro",,,,203,Teórica,,Martes,12:00,13:00,
 5,2,Electromecánica,POLITICA Y CIUDADANIA,Común,"FELTRIN, Vanesa",,,,203,Teórica,,Martes,13:30,15:30,
 5,2,Electromecánica,HISTORIA,Común,"MURADAS, Mariela",,,,203,Teórica,,Martes,15:50,17:50,
-5,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,Manzano Gustavo,,,,108,Teórica,,Miércoles,07:40,09:40,
+5,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,Manzano Gustavo,,,,108,Teórica,,Miércoles,07:40,09:40,A
 5,2,Electromecánica,DISEÑO Y PROC. MEC.,Común,"ALIAS, Emmanuel",,,,108,Teórica,,Miércoles,07:40,09:40,
 5,2,Electromecánica,DISEÑO Y PROC. MEC.,Común,"ALIAS, Emmanuel",,,,12,Teórica,,Miércoles,10:30,10:00,
-5,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,Manzano Gustavo,,,,12,Teórica,,Miércoles,10:30,10:00,
+5,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,Manzano Gustavo,,,,12,Teórica,,Miércoles,10:30,10:00,A
 5,2,Electromecánica,ANALISIS MATEMATICO,Común,HIERREZUELO,,,,203,Teórica,,Miércoles,12:00,13:00,
 5,2,Electromecánica,INGLES,Común,"ANER, Santiago",,,,203,Teórica,,Miércoles,13:30,15:30,
 5,2,Electromecánica,MECANICA TECNICA,Común,"BORDA, Victor Hugo",,,,203,Teórica,,Miércoles,15:50,17:50,
-5,2,Electromecánica,EDUCACION FISICA,Común,"MONICO, Vanesa",,,,PROGRESO,Teórica,1,Jueves,07:40,09:40,
+5,2,Electromecánica,EDUCACION FISICA,Común,"MONICO, Vanesa",,,,PROGRESO,Teórica,1.0,Jueves,07:40,09:40,
 5,2,Electromecánica,ANALISIS MATEMATICO,Común,HIERRIZUELO,,,,203,Teórica,,Jueves,13:30,15:30,
 5,2,Electromecánica,ELECTROTECNIA,Común,"DIONICIO, Alejandro",,,,203,Teórica,,Jueves,15:50,17:50,
 5,2,Electromecánica,INST. Y AP. DE LA ENERG.,Común,CHANQUIA,,,,109,Teórica,,Viernes,07:40,09:40,
-5,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"TORRES, Juan",,,,109,Teórica,,Viernes,07:40,09:40,
-5,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"TORRES, Juan",,,,111,Teórica,,Viernes,10:30,12:00,
+5,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"TORRES, Juan",,,,109,Teórica,,Viernes,07:40,09:40,A
+5,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"TORRES, Juan",,,,111,Teórica,,Viernes,10:30,12:00,A
 5,2,Electromecánica,INST. Y AP. DE LA ENERG.,Común,"CHANQUIA, Martin",,,,111,Teórica,,Viernes,10:30,12:00,
 5,2,Electromecánica,ANALISIS MATEMATICO,Común,HIERREZUELO,,,,303,Teórica,,Viernes,12:00,13:00,
 5,2,Electromecánica,GEOGRAFIA,Común,"LOPEZ, Virginia",,,,307,Teórica,,Viernes,13:30,15:30,
@@ -829,86 +829,86 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 5,3,Construcciones,MATERIALES DE OBRA,Común,"GONZALEZ, Abel",,,,103,Teórica,,Martes,10:00,12:00,
 5,3,Construcciones,DOCUM. TECNICA,Común,"LEDESMA, Andrea",,,,103,Teórica,,Martes,10:00,12:00,
 5,3,Construcciones,SIST. CONSTRUC.,Común,"FERRARI, A._ RABAZA, Julian",,,,,Teórica,,Martes,12:00,13:00,
-5,3,Construcciones,PROYECTO,Común,FLORENCIA MARIA R,,,,104,Teórica,,Martes,13:30,15:30,
+5,3,Construcciones,PROYECTO,Común,FLORENCIA MARIA R,,,,104,Teórica,,Martes,13:30,15:30,A
 5,3,Construcciones,SISTEMAS CONSTRUCT.,Común,"FERRARI, Alberto",,,,104,Teórica,,Martes,13:30,15:30,
 5,3,Construcciones,DOCUM. TECNICA,Común,"ALONSO, Evelyn",,,,17,Teórica,,Martes,15:50,17:50,
 5,3,Construcciones,PROYECTO FLORENCIA MARIA R,Común,,,,,17,Teórica,,Martes,15:50,17:50,
 5,3,Construcciones,HISTORIA,Común,"STOPPINI, Andrea",,,,309,Teórica,,Miércoles,07:40,09:40,
-5,3,Construcciones,DOCUMENTACION TECNICA,Común,"ALONSO, Evelyn",,,,17,Teórica,,Miércoles,10:00,12:00,
+5,3,Construcciones,DOCUMENTACION TECNICA,Común,"ALONSO, Evelyn",,,,17,Teórica,,Miércoles,10:00,12:00,A
 5,3,Construcciones,RESISTENCIA DE LOS MATERIALES,Común,"COLOMBRE, Vanina_ FILLIPINI MARIA",,,,303,Teórica,,Miércoles,13:30,15:30,
 5,3,Construcciones,ANALISIS MATEMATICO,Común,"MAMANI, Mirta",,,,303,Teórica,,Miércoles,15:50,17:50,
 5,3,Construcciones,POLITICA Y CIUDADANIA,Común,"BORZI, Graciela",,,,309,Teórica,,Jueves,07:40,09:40,
 5,3,Construcciones,INSTALACIONES ELECTRICAS,Común,"INVERNON, Marcelo",,,,309,Teórica,,Jueves,10:00,12:00,
 5,3,Construcciones,SIST. CONSTRUC.,Común,"MIGLIANO, Rita",,,,104,Teórica,,Jueves,12:00,13:00,
 5,3,Construcciones,ANALISIS MATEMATICO,Común,"MAMANI, Mirta",,,,1,Teórica,,Jueves,13:30,15:30,
-5,3,Construcciones,EDUCACION FISICA,Común,"EXPOSITO, Oscar _ GONZALEZ, Maria Candela",,,,PROGRESO,Teórica,1,Jueves,15:50,17:50,
+5,3,Construcciones,EDUCACION FISICA,Común,"EXPOSITO, Oscar _ GONZALEZ, Maria Candela",,,,PROGRESO,Teórica,1.0,Jueves,15:50,17:50,
 5,3,Construcciones,INGLÉS,Común,"FAILLA, Mariana",,,,1,Teórica,,Viernes,07:40,09:40,
 5,3,Construcciones,GEOGRAFIA,Común,"MARTINEZ, Eliana",,,,1,Teórica,,Viernes,10:00,12:00,
-5,3,Construcciones,PROYECTO,Común,FLORNCIA MARIA R,,,,104,Teórica,,Viernes,13:30,15:30,
+5,3,Construcciones,PROYECTO,Común,FLORNCIA MARIA R,,,,104,Teórica,,Viernes,13:30,15:30,A
 5,3,Construcciones,MATERIALES DE OBRA,Común,"RIVAS PAUCA, Jesus",,,,104,Teórica,,Viernes,13:30,15:30,
 5,3,Construcciones,SISTEMAS CONSTRUCTIVOS,Común,"MIGLIANO, Rita",,,,14,Teórica,,Viernes,15:50,17:50,
-5,3,Construcciones,PROYECTO,Común,FLORNCIA MARIA R,,,,14,Teórica,,Viernes,15:50,17:50,
+5,3,Construcciones,PROYECTO,Común,FLORNCIA MARIA R,,,,14,Teórica,,Viernes,15:50,17:50,A
 5,4,Construcciones,EDUCACION FISICA,Común,"DOMINGUEZ, Andrea",,,,PATIO,Teórica,,Lunes,07:40,09:40,
 5,4,Construcciones,LITERATURA,Común,"TREZZA, Nazareno",,,,306,Teórica,,Lunes,13:30,15:30,
 5,4,Construcciones,INSTALACIONES ELECTRICAS,Común,"INVERNON, Marcelo",,,,306,Teórica,,Lunes,15:50,17:50,
-5,4,Construcciones,PROYECTO,Común,"COLOMBRE, Vanina FERREYRA, NAZARENA",,,,101,Teórica,,Martes,07:40,09:40,
-5,4,Construcciones,DOCUMENTACION TECNICA,Común,"ALONSO, Evelyn",,,,101,Teórica,,Martes,07:40,09:40,
-5,4,Construcciones,DOCUMENTACION TECNICA,Común,"MOSCHET, Javier",,,,101,Teórica,,Martes,10:00,12:00,
-5,4,Construcciones,PROYECTO,Común,"COLOMBRE Vanina _ MELFI, Valeria",,,,101,Teórica,,Martes,10:00,12:00,
+5,4,Construcciones,PROYECTO,Común,"COLOMBRE, Vanina FERREYRA, NAZARENA",,,,101,Teórica,,Martes,07:40,09:40,A
+5,4,Construcciones,DOCUMENTACION TECNICA,Común,"ALONSO, Evelyn",,,,101,Teórica,,Martes,07:40,09:40,A
+5,4,Construcciones,DOCUMENTACION TECNICA,Común,"MOSCHET, Javier",,,,101,Teórica,,Martes,10:00,12:00,A
+5,4,Construcciones,PROYECTO,Común,"COLOMBRE Vanina _ MELFI, Valeria",,,,101,Teórica,,Martes,10:00,12:00,A
 5,4,Construcciones,ANALISIS MATEMATICO,Común,"MAMANI, Mirta",,,,35,Teórica,,Martes,12:00,13:30,
 5,4,Construcciones,HISTORIA,Común,"MURADAS, Mariela",,,,309,Teórica,,Martes,13:30,15:30,
 5,4,Construcciones,GEOGRAFIA,Común,"DE DOMINGO, Sandra",,,,309,Teórica,,Martes,15:50,17:50,
 5,4,Construcciones,INGLÉS,Común,"TOSORONI, Natalia",,,,306,Teórica,,Miércoles,07:40,09:40,
-5,4,Construcciones,DOCUMENTACION TECNICA,Común,"MOSCHET, Javier",,,,101,Teórica,,Miércoles,10:00,12:00,
+5,4,Construcciones,DOCUMENTACION TECNICA,Común,"MOSCHET, Javier",,,,101,Teórica,,Miércoles,10:00,12:00,A
 5,4,Construcciones,SIST. CONSTR.,Común,"DE BELLIS, SilvIna",,,,101,Teórica,,Miércoles,10:00,12:00,
 5,4,Construcciones,SISTEMAS CONSTRUCTIVOS,Común,"MASSIMINO, Cristina",,,,102,Teórica,,Miércoles,12:00,13:30,
 5,4,Construcciones,POLITICA Y CIUDADANIA,Común,"FELTRIN, Vanesa",,,,12,Teórica,,Miércoles,13:30,15:30,
 5,4,Construcciones,RESISTENCIA DE LOS MATERIALES,Común,"COLOMBRE, Vanina _ CARBALLEIRA Fiorella",,,,32,Teórica,,Miércoles,15:50,17:50,
-5,4,Construcciones,"RES. DE LOS MAT.",Común,,,,,23,Teórica,,Miércoles,20:10,22:10,
+5,4,Construcciones,RES. DE LOS MAT.,Común,,,,,23,Teórica,,Miércoles,20:10,22:10,
 5,4,Construcciones,INSTALACIONES ELECTRICAS,Común,"INVERNON, Marcelo",,,,306,Teórica,,Jueves,07:40,09:40,
 5,4,Construcciones,SISTEMAS CONSTRUCTIVOS,Común,"MASSIMINO, Cristina",,,,14,Teórica,,Jueves,10:00,12:00,
-5,4,Construcciones,DOCUMENTACION TECNICA,Común,"ALONSO, Evelyn",,,,14,Teórica,,Jueves,10:00,12:00,
+5,4,Construcciones,DOCUMENTACION TECNICA,Común,"ALONSO, Evelyn",,,,14,Teórica,,Jueves,10:00,12:00,A
 5,4,Construcciones,ANALISIS MATEMATICO,Común,"MAMANI, Mirta",,,,303,Teórica,,Jueves,12:00,13:30,
 5,4,Construcciones,MATERIALES DE OBRA,Común,"PALAVECINO, Carlos",,,,103,Teórica,,Viernes,07:40,09:40,
-5,4,Construcciones,PROYECTO,Común,COLOMBRE Vanina MELFI VALERI,,,,103,Teórica,,Viernes,07:40,09:40,
-5,4,Construcciones,PROYECTO,Común,"COLOMBRE, Vanina FERREYRA, NAZARENA",,,,104,Teórica,,Viernes,10:00,12:00,
+5,4,Construcciones,PROYECTO,Común,COLOMBRE Vanina MELFI VALERI,,,,103,Teórica,,Viernes,07:40,09:40,A
+5,4,Construcciones,PROYECTO,Común,"COLOMBRE, Vanina FERREYRA, NAZARENA",,,,104,Teórica,,Viernes,10:00,12:00,A
 5,4,Construcciones,MATERIALES DE OBRA,Común,"PALAVECINO, Carlos",,,,104,Teórica,,Viernes,10:00,12:00,
 5,4,Construcciones,ANALISIS MATEMATICO,Común,"MAMANI, Mirta",,,,27,Teórica,,Viernes,13:30,15:30,
 5,4,Construcciones,RESISTENCIA DE LOS MATERIALES,Común,"COLOMBRE, Vanina _ CARBALLEIRA Fiorella",,,,22,Teórica,,Viernes,15:50,17:50,
-5,5,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,MACIEL Martin,,,,108,Teórica,,Lunes,07:40,09:40,
-5,5,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,MACIEL Martin,,,,108,Teórica,,Lunes,10:00,12:00,
+5,5,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,MACIEL Martin,,,,108,Teórica,,Lunes,07:40,09:40,A
+5,5,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,MACIEL Martin,,,,108,Teórica,,Lunes,10:00,12:00,A
 5,5,Energías Renovables,QUIMICA DEL AMBIENTE,Común,"CAÑAMAS, Miriam",,,,32,Teórica,,Lunes,13:30,15:30,
 5,5,Energías Renovables,ELECTROTECNIA Y MAQUINAS ELECTRICAS,Común,"AYZA, Diego",,,,32,Teórica,,Lunes,15:50,17:50,
-5,5,Energías Renovables,ELECTROTEC. Y MAQ. ELEC.,Común,"AYZA, Diego",,,,27,Teórica,,Lunes,20:10,22:10,
-5,5,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damián",,,,104,Teórica,,Martes,07:40,09:40,
-5,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,104,Teórica,,Martes,07:40,09:40,
-5,5,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damián",,,,104,Teórica,,Martes,10:00,12:00,
-5,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,104,Teórica,,Martes,10:00,12:00,
+5,5,Energías Renovables,ELECTROTEC. Y MAQ. ELEC.,Común,"AYZA, Diego",,,,27,Teórica,,Lunes,20:10,22:10,A
+5,5,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damián",,,,104,Teórica,,Martes,07:40,09:40,A
+5,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,104,Teórica,,Martes,07:40,09:40,A
+5,5,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damián",,,,104,Teórica,,Martes,10:00,12:00,A
+5,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,104,Teórica,,Martes,10:00,12:00,A
 5,5,Energías Renovables,ANALISIS MATEMATICO,Común,"CRISTOFANO, Adrian",,,,302,Teórica,,Martes,13:30,15:30,
 5,5,Energías Renovables,INGLÉS,Común,"MONTES _ BRENER, Marlene",,,,305,Teórica,,Martes,15:50,17:50,
 5,5,Energías Renovables,MECANICA,Común,"BORDA, Victor Hugo",,,,24,Teórica,,Martes,20:10,22:10,
-5,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,105,Teórica,,Miércoles,07:40,09:40,
-5,5,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damián",,,,105,Teórica,,Miércoles,07:40,09:40,
-5,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,105,Teórica,,Miércoles,10:00,12:00,
-5,5,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damián",,,,105,Teórica,,Miércoles,10:00,12:00,
+5,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,105,Teórica,,Miércoles,07:40,09:40,A
+5,5,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damián",,,,105,Teórica,,Miércoles,07:40,09:40,A
+5,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,105,Teórica,,Miércoles,10:00,12:00,A
+5,5,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damián",,,,105,Teórica,,Miércoles,10:00,12:00,A
 5,5,Energías Renovables,ANALISIS MATEMATICO,Común,"CRISTOFANO, Adrian",,,,301,Teórica,,Miércoles,13:30,15:30,
 5,5,Energías Renovables,LITERATURA,Común,"ASTORGA, Alejandra",,,,301,Teórica,,Miércoles,15:50,17:50,
 5,5,Energías Renovables,QUIMICA DEL AMBIENTE,Común,"CAÑAMAS, Miriam",,,,201,Teórica,,Miércoles,20:10,22:10,
-5,5,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,"FLORENTIN, Juan Francisco",,,,,Teórica,,Jueves,07:40,09:40,
-5,5,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,"FLORENTIN, Juan Francisco",,,,,Teórica,,Jueves,10:00,12:00,
+5,5,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,"FLORENTIN, Juan Francisco",,,,,Teórica,,Jueves,07:40,09:40,A
+5,5,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,"FLORENTIN, Juan Francisco",,,,,Teórica,,Jueves,10:00,12:00,A
 5,5,Energías Renovables,POLITICA Y CIUDADANIA,Común,,,,,32,Teórica,,Jueves,13:30,15:30,
 5,5,Energías Renovables,"MARTEARENA, Mariela",Común,,,,,,Teórica,,Jueves,15:30,15:30,
 5,5,Energías Renovables,HISTORIA,Común,"AQUINO, Carina",,,,27,Teórica,,Jueves,15:50,17:50,
-5,5,Energías Renovables,EDUCACION FISICA,Común,"DOMINGUEZ, Andrea",,,,PROGRESO,Teórica,1,Viernes,07:40,09:40,
+5,5,Energías Renovables,EDUCACION FISICA,Común,"DOMINGUEZ, Andrea",,,,PROGRESO,Teórica,1.0,Viernes,07:40,09:40,
 5,5,Energías Renovables,GEOGRAFIA,Común,"CORBALAN, Dario",,,,32,Teórica,,Viernes,13:30,15:30,
 5,5,Energías Renovables,MECANICA,Común,"BORDA, Victor Hugo",,,,32,Teórica,,Viernes,15:50,17:50,
 5,6,Electromecánica,HISTORIA,Común,"STOPPINI, Andrea",,,,308,Teórica,,Lunes,10:00,12:00,
-5,6,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"STAROPOLI, Fernando",,,,112,Teórica,,Lunes,13:30,15:30,
+5,6,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"STAROPOLI, Fernando",,,,112,Teórica,,Lunes,13:30,15:30,A
 5,6,Electromecánica,ELECTROTECNIA,Común,MARTINEZ Juan Manuel,,,,21,Teórica,,Lunes,15:50,17:50,
 5,6,Electromecánica,MECANICA Y MECANISMOS,Común,"BORDA, Victor",,,,21,Teórica,,Lunes,16:50,17:50,
 5,6,Electromecánica,LITERATURA,Común,SUAREZ Natalia,,,,24,Teórica,,Lunes,18:00,20:00,
 5,6,Electromecánica,ANALISIS MATEMATICO,Común,"CORBALAN, Lisandro",,,,301,Teórica,,Martes,10:00,12:00,
-5,6,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"STAROPOLI, Fernando",,,,109,Teórica,,Martes,13:30,15:30,
+5,6,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"STAROPOLI, Fernando",,,,109,Teórica,,Martes,13:30,15:30,A
 5,6,Electromecánica,DISEÑO Y PROC. MEC.,Común,"GRANELLI, JUAN PABLO",,,,109,Teórica,,Martes,13:30,15:30,
 5,6,Electromecánica,MECANICA Y MECANISMOS,Común,,,,,21,Teórica,,Martes,15:50,17:50,
 5,6,Electromecánica,GEOGRAFIA,Común,"ALVAREZ, Leandro",,,,25,Teórica,,Martes,18:00,20:00,
@@ -918,68 +918,68 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 5,6,Electromecánica,ANALISIS MATEMATICO,Común,,,,,21,Teórica,,Miércoles,15:50,17:50,
 5,6,Electromecánica,POLITICA Y CIUDADANIA,Común,"GUERRA, Lisandro_ AYOS MARCELO",,,,13,Teórica,,Miércoles,18:00,20:00,
 5,6,Electromecánica,INST. Y AP. DE LA ENERG.,Común,"DIONICIO, Alejandro",,,,106,Teórica,,Jueves,10:00,12:00,
-5,6,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"PERALTA, Gaston",,,,106,Teórica,,Jueves,10:00,12:00,
+5,6,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"PERALTA, Gaston",,,,106,Teórica,,Jueves,10:00,12:00,A
 5,6,Electromecánica,DISEÑO Y PROC. MEC.,Común,"MESCHINI, Mario",,,,12,Teórica,,Jueves,13:30,15:30,
 5,6,Electromecánica,INST. Y AP. DE LA ENERG.,Común,"CUBITO, Osvaldo",,,,12,Teórica,,Jueves,13:30,15:30,
 5,6,Electromecánica,RESISTENCIA DE LOS MAT,Común,,,,,21,Teórica,,Jueves,15:50,17:50,
 5,6,Electromecánica,RESISTENCIA DE LOS MAT,Común,"MELFI, Valeria",,,,26,Teórica,,Jueves,18:00,20:00,
-5,6,Electromecánica,EDUCACIÓN FÍSICA,Común,"ALVAREZ, Andrea",,,,PROGRESO,Teórica,1,Viernes,07:40,09:40,
+5,6,Electromecánica,EDUCACIÓN FÍSICA,Común,"ALVAREZ, Andrea",,,,PROGRESO,Teórica,1.0,Viernes,07:40,09:40,
 5,6,Electromecánica,DISEÑO Y PROC. MEC.,Común,"MESCHINI, Mario",,,,12,Teórica,,Viernes,13:30,15:30,
 5,6,Electromecánica,INST. Y AP. DE LA ENERG.,Común,"CUBITO, Osvaldo",,,,12,Teórica,,Viernes,13:30,15:30,
 5,6,Electromecánica,ELECTROTECNIA,Común,,,,,22,Teórica,,Viernes,15:50,16:50,
 5,7,Construcciones,INSTALACIONES ELECTRICAS,Común,"FERREYRA, Maria Nazarena",,,,21,Teórica,,Lunes,13:30,15:30,
 5,7,Construcciones,LITERATURA,Común,"SOBRECASA, Sonia",,,,309,Teórica,,Lunes,15:50,17:50,
 5,7,Construcciones,MATERIALES DE OBRA,Común,ALONSO EVELIN Noelia,,,,105,Teórica,,Martes,10:30,10:00,
-5,7,Construcciones,PROYECTO,Común,"MIGLIANO, Rita",,,,105,Teórica,,Martes,10:30,10:00,
+5,7,Construcciones,PROYECTO,Común,"MIGLIANO, Rita",,,,105,Teórica,,Martes,10:30,10:00,A
 5,7,Construcciones,RESISTENCIA DE LOS MATERIALES,Común,"ALVAREZ, Lourdes",,,,305,Teórica,,Martes,13:30,15:30,
-5,7,Construcciones,EDUCACION FISICA,Común,"MONICO, Vanesa",,,,PROGRESO,Teórica,1,Martes,15:50,17:50,
-5,7,Construcciones,DOCUMENTACION TECNICA,Común,"FERNANDEZ, Jonata",,,,,Teórica,,Miércoles,07:40,09:40,
+5,7,Construcciones,EDUCACION FISICA,Común,"MONICO, Vanesa",,,,PROGRESO,Teórica,1.0,Martes,15:50,17:50,
+5,7,Construcciones,DOCUMENTACION TECNICA,Común,"FERNANDEZ, Jonata",,,,,Teórica,,Miércoles,07:40,09:40,A
 5,7,Construcciones,SIST. CONSTR.,Común,"FERNANDEZ, Jonata",,,,102,Teórica,,Miércoles,10:30,10:00,
-5,7,Construcciones,PROYECTO,Común,"DE BELLIS, Silvana",,,,101,Teórica,,Miércoles,13:30,15:30,
+5,7,Construcciones,PROYECTO,Común,"DE BELLIS, Silvana",,,,101,Teórica,,Miércoles,13:30,15:30,A
 5,7,Construcciones,ANALISIS MATEMATICO,Común,"MOREIRA, Victor",,,,12,Teórica,,Miércoles,15:50,17:50,
 5,7,Construcciones,RESISTENCIA DE LOS MAT,Común,"ALVAREZ, Lourdes",,,,22,Teórica,,Miércoles,18:00,20:00,
 5,7,Construcciones,POLITICA Y CIUDADANIA,Común,"SUAREZ, Victor Martin",,,,23,Teórica,,Jueves,07:40,09:40,
-5,7,Construcciones,DOCUMENTACION TECNICA,Común,"DE BELLIS, Silvana",,,,17,Teórica,,Jueves,10:30,10:00,
-5,7,Construcciones,PROYECTO,Común,"MIGLIANO, Rita",,,,17,Teórica,,Jueves,10:30,10:00,
+5,7,Construcciones,DOCUMENTACION TECNICA,Común,"DE BELLIS, Silvana",,,,17,Teórica,,Jueves,10:30,10:00,A
+5,7,Construcciones,PROYECTO,Común,"MIGLIANO, Rita",,,,17,Teórica,,Jueves,10:30,10:00,A
 5,7,Construcciones,SIST. CONSTR.,Común,"FERNANDEZ, Jonata",,,,14,Teórica,,Jueves,12:00,13:00,
 5,7,Construcciones,RESISTENCIA DE LOS MATERIALES,Común,"ALVARES, Lourdes",,,,25,Teórica,,Jueves,13:30,15:30,
 5,7,Construcciones,HISTORIA,Común,"STOPPINI, Andrea",,,,25,Teórica,,Jueves,15:50,17:50,
 5,7,Construcciones,GEOGRAFIA,Común,"GESSI, MARTIN",,,,25,Teórica,,Jueves,18:00,20:00,
-5,7,Construcciones,DOCUMENTACION TECNICA,Común,"DE BELLIS, Silvana",,,,101,Teórica,,Viernes,07:40,09:40,
-5,7,Construcciones,PROYECTO,Común,"DE BELLIS, Silvana",,,,17,Teórica,,Viernes,10:30,12:00,
+5,7,Construcciones,DOCUMENTACION TECNICA,Común,"DE BELLIS, Silvana",,,,101,Teórica,,Viernes,07:40,09:40,A
+5,7,Construcciones,PROYECTO,Común,"DE BELLIS, Silvana",,,,17,Teórica,,Viernes,10:30,12:00,A
 5,7,Construcciones,MATERIALES DE OBRA,Común,"ALONSO, Evelyn",,,,17,Teórica,,Viernes,10:30,12:00,
 5,7,Construcciones,ANALISIS MATEMATICO,Común,"MOREIRA, Victor",,,,308,Teórica,,Viernes,14:30,15:30,
 5,7,Construcciones,INSTALACIONES ELECTRICAS,Común,"RIOS ANIBAL _ FERREYRA, Maria Nazarena",,,,22,Teórica,,Viernes,18:00,20:00,
-5,8,Energías Renovables,"PROY., DISEÑO E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damian",,,,104,Teórica,,Lunes,07:40,09:40,A
-5,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,104,Teórica,,Lunes,07:40,09:40,B
-5,8,Energías Renovables,"PROY., DISEÑO E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damian",,,,104,Teórica,,Lunes,10:00,12:00,A
-5,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,104,Teórica,,Lunes,10:00,12:00,B
+5,8,Energías Renovables,"Proyecto",Común,"PLANES JALUFF, Damian",,,,104,Teórica,,Lunes,07:40,09:40,A
+5,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,104,Teórica,,Lunes,07:40,09:40,A
+5,8,Energías Renovables,"Proyecto",Común,"PLANES JALUFF, Damian",,,,104,Teórica,,Lunes,10:00,12:00,A
+5,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,104,Teórica,,Lunes,10:00,12:00,A
 5,8,Energías Renovables,ANALISIS MATEMATICO,Común,"MOREIRA, Victor",,,,302,Teórica,,Lunes,13:30,15:30,
 5,8,Energías Renovables,MECANICA,Común,"NOVO, Pablo",,,,302,Teórica,,Lunes,15:50,17:50,
 5,8,Energías Renovables,LITERATURA,Común,"CABEZAS CORUJO _ MENDIETA, Eduardo",,,,203,Teórica,,Martes,10:00,12:00,
-5,8,Energías Renovables,ELECTR. Y MAQ ELECT,Común,"AYZA, Diego",,,,309,Teórica,,Martes,12:00,13:00,
+5,8,Energías Renovables,ELECTR. Y MAQ ELECT,Común,"AYZA, Diego",,,,309,Teórica,,Martes,12:00,13:00,A
 5,8,Energías Renovables,GEOGRAFIA,Común,"BOBRYCOWICZ, Romina _ MARTINEZ ELIANA",,,,307,Teórica,,Martes,13:30,14:30,
 5,8,Energías Renovables,ANALISIS MATEMATICO,Común,"MOREIRA, Victor",,,,307,Teórica,,Martes,15:50,17:50,
 5,8,Energías Renovables,POLITICA Y CIUDADANIA,Común,'Alberto',,,,203,Teórica,,Miércoles,07:40,09:40,
 5,8,Energías Renovables,QUIM. DEL AMBIENTE,Común,"CAÑAMAS, Miriam",,,,,Teórica,,Miércoles,10:00,12:00,
 5,8,Energías Renovables,HISTORIA,Común,"STOPPINI, Andrea",,,,203,Teórica,,Miércoles,10:00,12:00,
-5,8,Energías Renovables,"EDUCACION FISICA ALVAREZ, Andrea P",Común,,,,,PROGRESO,Teórica,1,Miércoles,12:30,12:30,
-5,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,,Teórica,,Jueves,07:40,09:40,
-5,8,Energías Renovables,"PROY., DISEÑO E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damian",,,,,Teórica,,Jueves,07:40,09:40,
-5,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,301,Teórica,,Jueves,10:00,12:00,
-5,8,Energías Renovables,"PROY., DISEÑO E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damian",,,,301,Teórica,,Jueves,10:00,12:00,
+5,8,Energías Renovables,"EDUCACION FISICA ALVAREZ, Andrea P",Común,,,,,PROGRESO,Teórica,1.0,Miércoles,12:30,12:30,
+5,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,,Teórica,,Jueves,07:40,09:40,A
+5,8,Energías Renovables,"Proyecto",Común,"PLANES JALUFF, Damian",,,,,Teórica,,Jueves,07:40,09:40,A
+5,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,301,Teórica,,Jueves,10:00,12:00,A
+5,8,Energías Renovables,"Proyecto",Común,"PLANES JALUFF, Damian",,,,301,Teórica,,Jueves,10:00,12:00,A
 5,8,Energías Renovables,QUIM. DEL AMBIENTE,Común,"CAÑAMAS, Miriam",,,,302,Teórica,,Jueves,12:00,13:00,
-5,8,Energías Renovables,ELECTR. Y MAQ ELECT,Común,"AYZA, Diego",,,,302,Teórica,,Jueves,13:30,14:30,
+5,8,Energías Renovables,ELECTR. Y MAQ ELECT,Común,"AYZA, Diego",,,,302,Teórica,,Jueves,13:30,14:30,A
 5,8,Energías Renovables,QUIMICA DEL AMBIENTE,Común,"CAÑAMAS, Miriam",,,,302,Teórica,,Jueves,15:50,17:50,
-5,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,"BAUTISTA, Federico",,,,,Teórica,,Viernes,07:40,09:40,
-5,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,"BAUTISTA, Federico",,,,,Teórica,,Viernes,10:00,11:50,
+5,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,"BAUTISTA, Federico",,,,,Teórica,,Viernes,07:40,09:40,A
+5,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,"BAUTISTA, Federico",,,,,Teórica,,Viernes,10:00,11:50,A
 5,8,Energías Renovables,MECANICA,Común,"NOVO, Pablo",,,,,Teórica,,Viernes,12:00,13:00,
 6,1,Electromecánica,LITERATURA,Común,"ALVAREZ, Selva",,,,11,Teórica,,Lunes,15:50,14:30,
-6,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"MACIEL, Martin",,,,108,Teórica,,Lunes,18:00,20:00,
+6,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"MACIEL, Martin",,,,108,Teórica,,Lunes,18:00,20:00,A
 6,1,Electromecánica,LABORAT. MED. ELECT.,Común,MARTINEZ Juan Manuel,,,,108,Teórica,,Lunes,18:00,20:00,
-6,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"MACIEL, Martin",,,,108,Teórica,,Lunes,20:10,22:10,
+6,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"MACIEL, Martin",,,,108,Teórica,,Lunes,20:10,22:10,A
 6,1,Electromecánica,INST. Y AP. DE LA ENERG.,Común,"YOLY, Ramon",,,,108,Teórica,,Lunes,20:10,22:10,
-6,1,Electromecánica,"EDUCACION FISICA DOMINGUEZ, Andrea",Común,,,,,PROGRESO,Teórica,1,Martes,12:30,12:30,
+6,1,Electromecánica,"EDUCACION FISICA DOMINGUEZ, Andrea",Común,,,,,PROGRESO,Teórica,1.0,Martes,12:30,12:30,
 6,1,Electromecánica,INGLES,Común,"TOSORONI, Natalia",,,,,Teórica,,Martes,15:50,17:50,
 6,1,Electromecánica,ELECTROTECNIA,Común,"DIONICIO, Alejandro",,,,24,Teórica,,Martes,20:10,22:10,
 6,1,Electromecánica,INST. Y AP. DE LA ENERG.,Común,"CUBITO, Osvaldo",,,,110,Teórica,,Martes,18:00,20:00,
@@ -990,15 +990,15 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 6,1,Electromecánica,FILOSOFIA,Común,"LIANIPULOS. Liliana _ KIRBY, Federico _ PRIETO, Valeria",,,,11,Teórica,,Miércoles,13:30,15:30,
 6,1,Electromecánica,ARTE,Común,"MOSCHET, Javier _ URQUIZA, Claudia",,,,11,Teórica,,Miércoles,15:50,17:50,
 6,1,Electromecánica,DISEÑO Y PROC. MEC.,Común,"CORTEZ, Nestor",,,,18,Teórica,,Miércoles,18:00,20:00,
-6,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"DIONICIO, Alejandro",,,,18,Teórica,,Miércoles,18:00,20:00,
+6,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"DIONICIO, Alejandro",,,,18,Teórica,,Miércoles,18:00,20:00,A
 6,1,Electromecánica,DISEÑO Y PROC. MEC.,Común,"CORTEZ, Nestor",,,,18,Teórica,,Miércoles,20:10,22:10,
-6,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"DIONICIO, Alejandro",,,,18,Teórica,,Miércoles,20:10,22:10,
+6,1,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"DIONICIO, Alejandro",,,,18,Teórica,,Miércoles,20:10,22:10,A
 6,1,Electromecánica,ELECTROTECNIA,Común,"DIONICIO, Alejandro",,,,12,Teórica,,Jueves,18:00,20:00,
-6,1,Electromecánica,SISTEMAS MECANICOS,Común,"CARMONA, Mario",,,,12,Teórica,,Jueves,20:10,22:10,
-6,1,Electromecánica,SISTEMAS MECANICOS,Común,"CARMONA, Mario",,,,21,Teórica,,Viernes,12:30,13:30,
+6,1,Electromecánica,SISTEMAS MECANICOS,Común,"CARMONA, Mario",,,,12,Teórica,,Jueves,20:10,22:10,A
+6,1,Electromecánica,SISTEMAS MECANICOS,Común,"CARMONA, Mario",,,,21,Teórica,,Viernes,12:30,13:30,A
 6,1,Electromecánica,MATEMATICA,Común,"RIAL TABOADA, Maria",,,,11,Teórica,,Viernes,13:30,15:30,
 6,1,Electromecánica,DERECHOS DEL TRABAJO,Común,"BORZI, Graciela _ TORRES, Mariela (P)",,,,11,Teórica,,Viernes,15:50,17:50,
-6,1,Electromecánica,LABORAT. MED. ELECT.,Común,"BARBALACE Pablo",,,,,Teórica,,Viernes,18:00,20:00,
+6,1,Electromecánica,LABORAT. MED. ELECT.,Común,BARBALACE Pablo,,,,,Teórica,,Viernes,18:00,20:00,
 6,1,Electromecánica,INST. Y AP. DE LA ENERG.,Común,"YOLY, Ramon",,,,,Teórica,,Viernes,18:00,20:00,
 6,1,Electromecánica,TERMODINAMICA,Común,,,,,12,Teórica,,Viernes,20:10,22:10,
 6,2,Electromecánica,ELECTROTECNIA,Común,"DIONICIO, Alejandro",,,,12,Teórica,,Lunes,12:30,12:30,
@@ -1008,23 +1008,23 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 6,2,Electromecánica,ARTE,Común,"MIRANDA, Sandra",,,,12,Teórica,,Lunes,20:10,22:10,
 6,2,Electromecánica,LITERATURA,Común,"CASALE CERVINI, Betina",,,,25,Teórica,,Martes,13:30,15:30,
 6,2,Electromecánica,TERMODINAMICA,Común,"CARMONA, Mario",,,,12,Teórica,,Martes,15:50,17:50,
-6,2,Electromecánica,SISTEMAS MECANICOS,Común,"CARMONA, Mario",,,,,Teórica,,Martes,20:10,22:10,
-6,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"MACIEL, Martin",,,,108,Teórica,,Martes,18:00,20:00,
+6,2,Electromecánica,SISTEMAS MECANICOS,Común,"CARMONA, Mario",,,,,Teórica,,Martes,20:10,22:10,A
+6,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"MACIEL, Martin",,,,108,Teórica,,Martes,18:00,20:00,A
 6,2,Electromecánica,INSTAL. Y APLIC. DE LA ENERGIA,Común,"SAVARESE, Hector",,,,108,Teórica,,Martes,18:00,20:00,
-6,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"MACIEL, Martin",,,,108,Teórica,,Martes,20:10,22:10,
+6,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"MACIEL, Martin",,,,108,Teórica,,Martes,20:10,22:10,A
 6,2,Electromecánica,INSTAL. Y APLIC. DE LA ENERGIA,Común,"SAVARESE, Hector",,,,108,Teórica,,Martes,20:10,22:10,
 6,2,Electromecánica,INSTAL. Y APLIC. DE LA ENERGIA,Común,"CUBITO, Osvaldo",,,,109,Teórica,,Miércoles,15:50,17:50,
 6,2,Electromecánica,INSTAL. Y APLIC. DE LA ENERGIA,Común,"CUBITO, Osvaldo",,,,109,Teórica,,Miércoles,18:00,20:00,
 6,2,Electromecánica,"DISEÑO Y PROC. MEC,",Común,"MESCHINI, Mario",,,,109,Teórica,,Miércoles,18:00,20:00,
 6,2,Electromecánica,"DISEÑO Y PROC. MEC,",Común,"MESCHINI, Mario",,,,,Teórica,,Miércoles,20:10,22:10,
-6,2,Electromecánica,SISTEMAS MECANICOS,Común,"CARMONA, Mario",,,,12,Teórica,,Jueves,15:50,17:50,
+6,2,Electromecánica,SISTEMAS MECANICOS,Común,"CARMONA, Mario",,,,12,Teórica,,Jueves,15:50,17:50,A
 6,2,Electromecánica,TERMODINAMICA,Común,"CARMONA, Mario",,,,21,Teórica,,Jueves,18:00,20:00,
 6,2,Electromecánica,LAB. DE METROL. Y CONTROL DE CAL.,Común,"DIONICIO, Alejandro",,,,116,Teórica,,Jueves,20:10,22:10,
-6,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"SAVARESE, Hector",,,,116,Teórica,,Jueves,20:10,22:10,
+6,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"SAVARESE, Hector",,,,116,Teórica,,Jueves,20:10,22:10,A
 6,2,Electromecánica,INGLES,Común,"TOSORONI, Natalia",,,,12,Teórica,,Viernes,13:30,15:30,
 6,2,Electromecánica,ELECTROTECNIA,Común,"DIONICIO, Alejandro",,,,12,Teórica,,Viernes,15:50,17:50,
 6,2,Electromecánica,"DISEÑO Y PROC. MEC,",Común,"MESCHINI, Mario",,,,18,Teórica,,Viernes,18:00,20:00,
-6,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"SAVARESE, Hector",,,,18,Teórica,,Viernes,18:00,20:00,
+6,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"SAVARESE, Hector",,,,18,Teórica,,Viernes,18:00,20:00,A
 6,2,Electromecánica,"DISEÑO Y PROC. MEC,",Común,"MESCHINI, Mario",,,,18,Teórica,,Viernes,20:10,22:10,
 6,2,Electromecánica,LAB. DE METROL. Y CONTROL DE CAL.,Común,"YOLY, Ramon",,,,18,Teórica,,Viernes,20:10,22:10,
 6,3,Construcciones,LITERATURA,Común,"CASALE CERVINI, Betina",,,,307,Teórica,,Lunes,13:30,15:30,
@@ -1034,39 +1034,39 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 6,3,Construcciones,ESTRUCTURAS,Común,"YUTT, Nicolas _ FILIPPINI, Maria",,,,BI,Teórica,,Martes,13:30,15:30,
 6,3,Construcciones,SISTEMAS CONSTRUCT.,Común,"FILIPPINI, Maria",,,,103,Teórica,,Martes,15:50,17:50,
 6,3,Construcciones,PROYECTO DE LAS INST.,Común,"FERRARI, Alberto",,,,103,Teórica,,Martes,15:50,17:50,
-6,3,Construcciones,PROYECTO,Común,"MOSCHET, Javier",,,,5,Teórica,,Martes,18:00,20:00,
+6,3,Construcciones,PROYECTO,Común,"MOSCHET, Javier",,,,5,Teórica,,Martes,18:00,20:00,A
 6,3,Construcciones,SISTEMAS CONSTRUCT.,Común,"RIOS, Anibal",,,,5,Teórica,,Martes,18:00,20:00,
 6,3,Construcciones,PROYECTO DE LAS INST.,Común,"VALENTINO, Gustavo",,,,5,Teórica,,Martes,20:10,22:10,
-6,3,Construcciones,PROYECTO,Común,"CRISTALDO, Valeria",,,,5,Teórica,,Martes,20:10,22:10,
+6,3,Construcciones,PROYECTO,Común,"CRISTALDO, Valeria",,,,5,Teórica,,Martes,20:10,22:10,A
 6,3,Construcciones,MATEMATICA APLICADA,Común,RIAL TABOADA,,,,307,Teórica,,Miércoles,13:30,15:30,
 6,3,Construcciones,PROYECTO DE LAS INST.,Común,"VALENTINO, Gustavo",,,,105,Teórica,,Miércoles,15:50,17:50,
 6,3,Construcciones,ARTE,Común,"MOSCHET, Javier _ URQUIZA, Claudia",,,,26,Teórica,,Miércoles,18:00,20:00,
 6,3,Construcciones,DIR. Y EJEC. DE LAS INST.,Común,"YOLY, Ramon",,,,,Teórica,,Miércoles,20:10,22:10,
 6,3,Construcciones,ESTRUCTURAS,Común,"YUTT, Nicolas _ FILIPPINI, Maria",,,,BI,Teórica,,Jueves,13:30,15:30,
 6,3,Construcciones,PROYECTO DE LAS INST.,Común,"VALENTINO, Gustavo",,,,16,Teórica,,Jueves,15:50,17:50,
-6,3,Construcciones,PROYECTO,Común,"CRISTALDO, Valeria",,,,16,Teórica,,Jueves,15:50,17:50,
-6,3,Construcciones,PROYECTO,Común,"MOSCHET, Javier _",,,,102,Teórica,,Jueves,18:00,20:00,
+6,3,Construcciones,PROYECTO,Común,"CRISTALDO, Valeria",,,,16,Teórica,,Jueves,15:50,17:50,A
+6,3,Construcciones,PROYECTO,Común,"MOSCHET, Javier _",,,,102,Teórica,,Jueves,18:00,20:00,A
 6,3,Construcciones,PROYECTO DE LAS INST.,Común,"FERRARI, Alberto",,,,102,Teórica,,Jueves,18:00,20:00,
 6,3,Construcciones,DIR. Y EJEC. DE LAS INST.,Común,"YOLY, Ramon",,,,5,Teórica,,Jueves,20:10,22:10,
 6,3,Construcciones,DERECHOS DEL TRABAJO,Común,RODRIGUEZ CORREA Sergio,,,,21,Teórica,,Viernes,13:30,15:30,
 6,3,Construcciones,INGLES,Común,"TOSORONI, Natalia",,,,21,Teórica,,Viernes,15:50,17:50,
 6,3,Construcciones,INSTALACIONES SANITARIAS Y DE GAS,Común,"VALENTINO, Gustavo",,,,13,Teórica,,Viernes,18:00,20:00,
 6,3,Construcciones,INST. SANITARIAS Y DE GAS,Común,"VALENTINO, Gustavo",,,,13,Teórica,,Viernes,20:10,22:10,
-6,4,Construcciones,EDUCACION FISICA,Común,"ALVAREZ, Andrea",,,,PROGRESO,Teórica,1,Lunes,09:40,11:40,
+6,4,Construcciones,EDUCACION FISICA,Común,"ALVAREZ, Andrea",,,,PROGRESO,Teórica,1.0,Lunes,09:40,11:40,
 6,4,Construcciones,INSTALACIONES SANITARIAS Y DE GAS,Común,"LUIZAGA, Alberto _ MIGLIANO, Rita",,,,308,Teórica,,Lunes,14:30,14:00,
 6,4,Construcciones,DIR. Y EJEC. DE LAS INST.,Común,"MIGLIANO, Rita",,,,18,Teórica,,Lunes,15:50,17:50,
 6,4,Construcciones,PROYECTO DE LAS INST.,Común,"FERNANDEZ, Jonata",,,,18,Teórica,,Lunes,15:50,17:50,
 6,4,Construcciones,ESTRUCTURAS,Común,"MELFI, Valeria",,,,11,Teórica,,Lunes,18:00,20:00,
 6,4,Construcciones,SISTEMAS CONSTRUCT.,Común,"MELFI, Valeria",,,,14,Teórica,,Lunes,20:10,22:10,
-6,4,Construcciones,PROYECTO,Común,"GONZALEZ, Abel",,,,14,Teórica,,Lunes,20:10,22:10,
+6,4,Construcciones,PROYECTO,Común,"GONZALEZ, Abel",,,,14,Teórica,,Lunes,20:10,22:10,A
 6,4,Construcciones,INGLES,Común,"DE LA PUENTE, Santiago",,,,303,Teórica,,Martes,15:50,17:50,
 6,4,Construcciones,DERECHOS DEL TRABAJO,Común,"TORRES, Maria Laura",,,,13,Teórica,,Martes,18:00,20:00,
 6,4,Construcciones,MATEMATICA APLICADA,Común,"DANERI, Maria Soledad",,,,13,Teórica,,Martes,20:10,22:10,
 6,4,Construcciones,ARTE,Común,"FANKHAUSER, María",,,,308,Teórica,,Miércoles,13:30,15:30,
 6,4,Construcciones,INSTALACIONES SANITARIAS Y DE GAS,Común,"LUIZAGA, Alberto _ MIGLIANO, Rita",,,,308,Teórica,,Miércoles,15:50,17:50,
-6,4,Construcciones,PROYECTO,Común,"CRISTALDO, Valeria",,,,17,Teórica,,Miércoles,18:00,20:00,
+6,4,Construcciones,PROYECTO,Común,"CRISTALDO, Valeria",,,,17,Teórica,,Miércoles,18:00,20:00,A
 6,4,Construcciones,ESTRUCTURAS,Común,"MELFI, Valeria",,,,13,Teórica,,Miércoles,20:10,22:10,
-6,4,Construcciones,PROYECTO,Común,"CRISTALDO, Valeria",,,,17,Teórica,,Jueves,13:30,15:30,
+6,4,Construcciones,PROYECTO,Común,"CRISTALDO, Valeria",,,,17,Teórica,,Jueves,13:30,15:30,A
 6,4,Construcciones,SISTEMAS CONSTRUTIVOS,Común,"DE BELLIS, Silvina",,,,17,Teórica,,Jueves,13:30,15:30,
 6,4,Construcciones,PROYECTO DE LAS INST.,Común,"FILIPINI, Maria",,,,17,Teórica,,Jueves,15:50,17:50,
 6,4,Construcciones,LITERATURA,Común,"ASTORGA, Maria",,,,13,Teórica,,Jueves,18:00,20:00,
@@ -1075,28 +1075,28 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 6,4,Construcciones,PROYECTO DE LAS INST.,Común,"FILIPINI, Maria",,,,17,Teórica,,Viernes,18:00,20:00,
 6,4,Construcciones,DIR. Y EJEC. DE LAS INST.,Común,"MELFI, Valeria",,,,17,Teórica,,Viernes,18:00,20:00,
 6,4,Construcciones,ESTRUCTURAS,Común,"MELFI, Valeria",,,,14,Teórica,,Viernes,20:10,22:10,
-6,5,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,"DIONICIO, Alejandro",,,,116,Teórica,,Lunes,13:30,15:30,
-6,5,Energías Renovables,6R MANTENIMIENTO DE LAS INSTALACIONES,Común,"CRIVARI, Juan Pablo",,,,25,Teórica,,Lunes,15:50,17:50,
-6,5,Energías Renovables,6R DERECHOS DEL TRABAJO,Común,"FELTRIN, Vanesa",,,,14,Teórica,,Lunes,18:00,20:00,
-6,5,Energías Renovables,6R MATEMATICA APLICADA,Común,"CRISTOFANO, Adrian _ DANERI, Maria Soledad",,,,14,Teórica,,Lunes,20:10,22:10,
-6,5,Energías Renovables,"6R PROY., DISEÑO E INST. DE ENERGIAS RENOV.",Común,,,,,,Teórica,,Martes,10:00,11:00,
-6,5,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,"DIONICIO, Alejandro",,,,116,Teórica,,Martes,13:30,15:30,
-6,5,Energías Renovables,6R RELEVAMIENTO AMBIENTAL,Común,"LEGNAZZI, Tamara",,,,25,Teórica,,Martes,15:50,17:50,
-6,5,Energías Renovables,6R INGLES,Común,"MUÑOZ, Jorge",,,,14,Teórica,,Martes,18:00,20:00,
-6,5,Energías Renovables,6R EDUCACION FISICA,Común,,,,,PROGRESO,Teórica,1,Miércoles,07:40,08:40,
-6,5,Energías Renovables,"6R PROY., DISEÑO E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,201,Teórica,,Miércoles,13:30,15:30,
-6,5,Energías Renovables,6R ARTE,Común,"FANKHAUSER, Veronica",,,,27,Teórica,,Miércoles,15:50,17:50,
-6,5,Energías Renovables,6R LITERATURA,Común,"ASTORGA, Maria",,,,14,Teórica,,Miércoles,18:00,20:00,
-6,5,Energías Renovables,6R TERMODINAMICA Y MAQ. TERMICAS,Común,"CRIVARI, Juan Pablo",,,,14,Teórica,,Miércoles,20:10,22:10,
-6,5,Energías Renovables,6R TECNOLOGIA D LAS ENERG. RENOV.,Común,"RODRIGUEZ, Maria Virginia",,,,202,Teórica,,Jueves,13:30,15:30,
-6,5,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,202,Teórica,,Jueves,13:30,15:30,
-6,5,Energías Renovables,6R TECNOLOGIA D LAS ENERG. RENOV.,Común,"RODRIGUEZ, Maria Virginia",,,,202,Teórica,,Jueves,15:50,17:50,
-6,5,Energías Renovables,6R TECNOLOGIA DE LAS ENERG. RENOV.,Común,SCHNEIDER Erica,,,,202,Teórica,,Jueves,15:50,17:50,
-6,5,Energías Renovables,6R ELECTRONICA,Común,"SAVARESE, Hector",,,,14,Teórica,,Jueves,18:00,20:00,
-6,5,Energías Renovables,6R FILOSOFIA,Común,"LOPEZ, Veronica",,,,14,Teórica,,Jueves,20:10,22:10,
-6,5,Energías Renovables,"6R PROY., DISEÑO E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,202,Teórica,,Viernes,15:50,17:50,
-6,5,Energías Renovables,6R TECNOLOGIA DE LAS ENERG. RENOV.,Común,SCHNEIDER Erica,,,,202,Teórica,,Viernes,15:50,17:50,
-6,5,Energías Renovables,6R TERM. Y MAQ. TERM.,Común,"CRIVARI, Juan Pablo",,,,15,Teórica,,Viernes,18:00,20:00,
+6,5,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,"DIONICIO, Alejandro",,,,116,Teórica,,Lunes,13:30,15:30,A
+6,5,Energías Renovables,MANTENIMIENTO DE LAS INSTALACIONES,Común,"CRIVARI, Juan Pablo",,,,25,Teórica,,Lunes,15:50,17:50,
+6,5,Energías Renovables,DERECHOS DEL TRABAJO,Común,"FELTRIN, Vanesa",,,,14,Teórica,,Lunes,18:00,20:00,
+6,5,Energías Renovables,MATEMATICA APLICADA,Común,"CRISTOFANO, Adrian _ DANERI, Maria Soledad",,,,14,Teórica,,Lunes,20:10,22:10,
+6,5,Energías Renovables,"Proyecto",Común,,,,,,Teórica,,Martes,10:00,11:00,A
+6,5,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,"DIONICIO, Alejandro",,,,116,Teórica,,Martes,13:30,15:30,A
+6,5,Energías Renovables,RELEVAMIENTO AMBIENTAL,Común,"LEGNAZZI, Tamara",,,,25,Teórica,,Martes,15:50,17:50,
+6,5,Energías Renovables,INGLES,Común,"MUÑOZ, Jorge",,,,14,Teórica,,Martes,18:00,20:00,
+6,5,Energías Renovables,EDUCACION FISICA,Común,,,,,PROGRESO,Teórica,1.0,Miércoles,07:40,08:40,
+6,5,Energías Renovables,"Proyecto",Común,"CAÑAMAS, Miriam",,,,201,Teórica,,Miércoles,13:30,15:30,A
+6,5,Energías Renovables,ARTE,Común,"FANKHAUSER, Veronica",,,,27,Teórica,,Miércoles,15:50,17:50,
+6,5,Energías Renovables,LITERATURA,Común,"ASTORGA, Maria",,,,14,Teórica,,Miércoles,18:00,20:00,
+6,5,Energías Renovables,TERMODINAMICA Y MAQ. TERMICAS,Común,"CRIVARI, Juan Pablo",,,,14,Teórica,,Miércoles,20:10,22:10,
+6,5,Energías Renovables,TECNOLOGIA D LAS ENERG. RENOV.,Común,"RODRIGUEZ, Maria Virginia",,,,202,Teórica,,Jueves,13:30,15:30,A
+6,5,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,202,Teórica,,Jueves,13:30,15:30,A
+6,5,Energías Renovables,TECNOLOGIA D LAS ENERG. RENOV.,Común,"RODRIGUEZ, Maria Virginia",,,,202,Teórica,,Jueves,15:50,17:50,A
+6,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,SCHNEIDER Erica,,,,202,Teórica,,Jueves,15:50,17:50,A
+6,5,Energías Renovables,ELECTRONICA,Común,"SAVARESE, Hector",,,,14,Teórica,,Jueves,18:00,20:00,
+6,5,Energías Renovables,FILOSOFIA,Común,"LOPEZ, Veronica",,,,14,Teórica,,Jueves,20:10,22:10,
+6,5,Energías Renovables,"Proyecto",Común,"CAÑAMAS, Miriam",,,,202,Teórica,,Viernes,15:50,17:50,A
+6,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,SCHNEIDER Erica,,,,202,Teórica,,Viernes,15:50,17:50,A
+6,5,Energías Renovables,TERM. Y MAQ. TERM.,Común,"CRIVARI, Juan Pablo",,,,15,Teórica,,Viernes,18:00,20:00,
 6,6,Electromecánica,ELECTROTECNIA,Común,"MARTINEZ, Juan Manuel",,,,1,Teórica,,Lunes,16:50,17:50,
 6,6,Electromecánica,MATEMATICA,Común,ORELLANA,,,,16,Teórica,,Lunes,18:00,20:00,
 6,6,Electromecánica,FILOSOFIA,Común,,,,,16,Teórica,,Lunes,20:10,22:10,
@@ -1104,19 +1104,19 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 6,6,Electromecánica,LAB. DE MED ELECTR,Común,MACIEL. Martin,,,,116,Teórica,,Martes,15:50,17:50,
 6,6,Electromecánica,INST. Y AP. DE LA ENERG.,Común,"HINOJOSA MAMANI, Luis Cristobal",,,,116,Teórica,,Martes,15:50,17:50,
 6,6,Electromecánica,TERMODINAMICA,Común,EL MISTERIO,,,,16,Teórica,,Martes,18:00,20:00,
-6,6,Electromecánica,SISTEMAS MECANICOS,Común,,,,,16,Teórica,,Martes,20:10,22:10,
+6,6,Electromecánica,SISTEMAS MECANICOS,Común,,,,,16,Teórica,,Martes,20:10,22:10,A
 6,6,Electromecánica,INST. Y AP. DE LA ENERG.,Común,"GOMEZ, MARCELO",,,,106,Teórica,,Miércoles,15:50,17:50,
 6,6,Electromecánica,LAB. DE MED ELECTR,Común,"DIONICIO, Alejandro",,,,106,Teórica,,Miércoles,15:50,17:50,
 6,6,Electromecánica,ARTE,Común,FRANKHAUSER,,,,16,Teórica,,Miércoles,18:00,20:00,
 6,6,Electromecánica,ELECTROTECNIA,Común,"MARTINEZ, Juan Manuel",,,,16,Teórica,,Miércoles,20:10,22:10,
 6,6,Electromecánica,DISEÑO Y PROC. MEC.,Común,"SUAREZ, Alejandro",,,,2,Teórica,,Jueves,13:30,15:30,
-6,6,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"BAUTISTA, Fermin",,,,2,Teórica,,Jueves,13:30,15:30,
+6,6,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"BAUTISTA, Fermin",,,,2,Teórica,,Jueves,13:30,15:30,A
 6,6,Electromecánica,DISEÑO Y PROC. MEC.,Común,"SUAREZ, Alejandro",,,,2,Teórica,,Jueves,15:50,17:50,
-6,6,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"BAUTISTA, Fermin",,,,2,Teórica,,Jueves,15:50,17:50,
+6,6,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"BAUTISTA, Fermin",,,,2,Teórica,,Jueves,15:50,17:50,A
 6,6,Electromecánica,LITERATURA,Común,,,,,16,Teórica,,Jueves,18:00,20:00,
-6,6,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"GOMEZ, Marcelo",,,,2,Teórica,,Viernes,13:30,15:30,
+6,6,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"GOMEZ, Marcelo",,,,2,Teórica,,Viernes,13:30,15:30,A
 6,6,Electromecánica,DISEÑO Y PROC. MEC.,Común,"MACIEL, Martin",,,,2,Teórica,,Viernes,13:30,15:30,
-6,6,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"GOMEZ, Marcelo",,,,2,Teórica,,Viernes,15:50,16:50,
+6,6,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,"GOMEZ, Marcelo",,,,2,Teórica,,Viernes,15:50,16:50,A
 6,6,Electromecánica,DISEÑO Y PROC. MEC.,Común,"MACIEL, Martin",,,,2,Teórica,,Viernes,15:50,16:50,
 6,6,Electromecánica,TERMODINAMICA,Común,"CARMONA, Mario",,,,16,Teórica,,Viernes,18:00,19:00,
 6,6,Electromecánica,SIST. MECANICOS,Común,"FELTRIN, Vanesa",,,,,Teórica,,Viernes,19:00:00,20:00,
@@ -1128,43 +1128,43 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 6,7,Construcciones,PROYECTO DE LAS INST.,Común,DE LA FUENTE CORREA Florencia Yanel (P),,,,105,Teórica,,Martes,15:50,16:50,
 6,7,Construcciones,ESTRUCTURAS,Común,"GIROLIMETTO, Noelia",,,,15,Teórica,,Martes,18:00,20:00,
 6,7,Construcciones,ESTRUCTURAS,Común,"GIROLIMETTO, Noelia",,,,15,Teórica,,Miércoles,18:00,20:00,
-6,7,Construcciones,PROYECTO,Común,"ALONSO, Evelyn",,,,5,Teórica,,Jueves,13:30,15:30,
+6,7,Construcciones,PROYECTO,Común,"ALONSO, Evelyn",,,,5,Teórica,,Jueves,13:30,15:30,A
 6,7,Construcciones,DIR. Y EJEC. DE LAS INST.,Común,"MELFI, Valeria",,,,5,Teórica,,Jueves,13:30,15:30,
 6,7,Construcciones,PROYECTO DE LAS INST.,Común,DE LA FUENTE CORREA Florencia Yanel (P),,,,101,Teórica,,Jueves,15:50,17:50,
-6,7,Construcciones,PROYECTO,Común,"ALONSO, Evelyn",,,,101,Teórica,,Jueves,15:50,17:50,
+6,7,Construcciones,PROYECTO,Común,"ALONSO, Evelyn",,,,101,Teórica,,Jueves,15:50,17:50,A
 6,7,Construcciones,INGLES,Común,"TOSORONI, Natalia",,,,15,Teórica,,Jueves,18:00,20:00,
 6,7,Construcciones,LITERATURA,Común,"PALOMEQUE, Monica",,,,15,Teórica,,Jueves,20:10,22:10,
 6,7,Construcciones,SISTEMAS CONSTRUTIVOS,Común,"FERNANDEZ, Jonata",,,,105,Teórica,,Viernes,13:30,15:30,
-6,7,Construcciones,PROYECTO,Común,"ALONSO, Evelyn",,,,105,Teórica,,Viernes,13:30,15:30,
-6,7,Construcciones,PROYECTO,Común,"ALONSO, Evelyn",,,,101,Teórica,,Viernes,15:50,17:50,
+6,7,Construcciones,PROYECTO,Común,"ALONSO, Evelyn",,,,105,Teórica,,Viernes,13:30,15:30,A
+6,7,Construcciones,PROYECTO,Común,"ALONSO, Evelyn",,,,101,Teórica,,Viernes,15:50,17:50,A
 6,7,Construcciones,SISTEMAS CONSTRUTIVOS,Común,"ALVAREZ, Lourdes",,,,101,Teórica,,Viernes,15:50,17:50,
 6,7,Construcciones,PROYECTO DE LAS INST.,Común,DE LA FUENTE CORREA Florencia Yanel (P),,,,101,Teórica,,Viernes,18:00,20:00,
 6,7,Construcciones,INSTALACIONES SANITARIAS Y DE GAS,Común,DE LA FUENTE CORREA Florencia Yanel (P),,,,15,Teórica,,Viernes,20:10,22:10,
-6,8,Energías Renovables,6R TECNOLOGIA D LAS ENERG. RENOV.,Común,RODRIGUEZ Maria Virginia,,,,,Teórica,,Lunes,13:30,15:30,
+6,8,Energías Renovables,TECNOLOGIA D LAS ENERG. RENOV.,Común,RODRIGUEZ Maria Virginia,,,,,Teórica,,Lunes,13:30,15:30,A
 6,8,Energías Renovables,DERECHOS DEL TRABAJO,Común,"FELTRIN, Vanesa",,,,301,Teórica,,Lunes,15:50,17:50,
-6,8,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,23,Teórica,,Lunes,18:00,20:00,
-6,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,BAUTISTA Fermin,,,,23,Teórica,,Lunes,18:00,20:00,
-6,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,BAUTISTA Fermin,,,,,Teórica,,Lunes,20:10,22:10,
-6,8,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,,Teórica,,Martes,13:30,15:30,
+6,8,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,23,Teórica,,Lunes,18:00,20:00,A
+6,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,BAUTISTA Fermin,,,,23,Teórica,,Lunes,18:00,20:00,A
+6,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,BAUTISTA Fermin,,,,,Teórica,,Lunes,20:10,22:10,A
+6,8,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,,Teórica,,Martes,13:30,15:30,A
 6,8,Energías Renovables,MATEMATICA,Común,"QUINTANA, Melisa",,,,27,Teórica,,Martes,15:50,17:50,
-6,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,HINOJOSA Luis,,,,106,Teórica,,Martes,18:00,20:00,
-6,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,HINOJOSA Luis,,,,106,Teórica,,Martes,20:10,22:10,
-6,8,Energías Renovables,6R TECNOLOGIA D LAS ENERG. RENOV.,Común,"RODRIGUEZ, Maria Virginia",,,,,Teórica,,Miércoles,13:30,15:30,
-6,8,Energías Renovables,6R LITERATURA,Común,"SOBRECASA, Sonia",,,,22,Teórica,,Miércoles,15:50,17:50,
+6,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,HINOJOSA Luis,,,,106,Teórica,,Martes,18:00,20:00,A
+6,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,HINOJOSA Luis,,,,106,Teórica,,Martes,20:10,22:10,A
+6,8,Energías Renovables,TECNOLOGIA D LAS ENERG. RENOV.,Común,"RODRIGUEZ, Maria Virginia",,,,,Teórica,,Miércoles,13:30,15:30,A
+6,8,Energías Renovables,LITERATURA,Común,"SOBRECASA, Sonia",,,,22,Teórica,,Miércoles,15:50,17:50,
 6,8,Energías Renovables,FILOSOFIA,Común,"KIRKBY, Federico",,,,25,Teórica,,Miércoles,18:00,20:00,
-6,8,Energías Renovables,6R MANTENIMIENTO DE LAS INSTALACIONES,Común,"PLANES JALUFF, Damian",,,,,Teórica,,Miércoles,20:10,22:10,
-6,8,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,101,Teórica,,Jueves,10:00,12:00,
+6,8,Energías Renovables,MANTENIMIENTO DE LAS INSTALACIONES,Común,"PLANES JALUFF, Damian",,,,,Teórica,,Miércoles,20:10,22:10,
+6,8,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,101,Teórica,,Jueves,10:00,12:00,A
 6,8,Energías Renovables,RELEVAMIENTO AMBIENTAL,Común,"SCHNEIDER, Erika",,,,301,Teórica,,Jueves,13:30,15:30,
 6,8,Energías Renovables,INGLES,Común,"GARTISANI, Lorena",,,,301,Teórica,,Jueves,15:50,17:50,
-6,8,Energías Renovables,6R TECNOLOGIA D LAS ENERG. RENOV.,Común,"ESCALANTE, Florencia",,,,201,Teórica,,Jueves,18:00,20:00,
-6,8,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,201,Teórica,,Jueves,18:00,20:00,
-6,8,Energías Renovables,6R TECNOLOGIA D LAS ENERG. RENOV.,Común,"ESCALANTE, Florencia",,,,201,Teórica,,Jueves,20:10,22:10,
+6,8,Energías Renovables,TECNOLOGIA D LAS ENERG. RENOV.,Común,"ESCALANTE, Florencia",,,,201,Teórica,,Jueves,18:00,20:00,A
+6,8,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,201,Teórica,,Jueves,18:00,20:00,A
+6,8,Energías Renovables,TECNOLOGIA D LAS ENERG. RENOV.,Común,"ESCALANTE, Florencia",,,,201,Teórica,,Jueves,20:10,22:10,A
 6,8,Energías Renovables,ARTE,Común,,,,,307,Teórica,,Viernes,07:40,08:40,
-6,8,Energías Renovables,EDUCACION FISICA,Común,,,,,PROGRESO,Teórica,1,Viernes,10:00,11:00,
+6,8,Energías Renovables,EDUCACION FISICA,Común,,,,,PROGRESO,Teórica,1.0,Viernes,10:00,11:00,
 6,8,Energías Renovables,"TERMODINAMICA Y MAQUINAS TERMICAS CRIVARI, Juan Pablo",Común,,,,,23,Teórica,,Viernes,15:50,17:50,
 6,8,Energías Renovables,"FILOSOFIA KIRKBY, Federico",Común,,,,,25,Teórica,,Viernes,18:00,20:00,
 6,8,Energías Renovables,"TERMODINAMICA Y MAQ. TERM. CRIVARI, Juan Pablo",Común,,,,,,Teórica,,Viernes,20:10,22:10,
-6,8,Energías Renovables,6R ELECTRONICA,Común,"GLATT,Osvaldo",,,,25,Teórica,,Viernes,20:10,22:10,
+6,8,Energías Renovables,ELECTRONICA,Común,"GLATT,Osvaldo",,,,25,Teórica,,Viernes,20:10,22:10,
 7,1,Electromecánica,Practicas Profesionalizantes,Práctica,"RANALLO, Gustavo",,,,18,Teórica,,Lunes,07:40,09:40,
 7,1,Electromecánica,Practicas Profesionalizantes,Práctica,"RANALLO, Gustavo",,,,18,Teórica,,Lunes,07:40,09:40,
 7,1,Electromecánica,Practicas Profesionalizantes,Práctica,"RANALLO, Gustavo",,,,,Teórica,,Lunes,13:30,15:30,
@@ -1190,8 +1190,8 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 7,1,Electromecánica,Lab. de Metrol. y Control de Cal.,Común,"MORMILE, Fernando",,,,115,Teórica,,Jueves,15:50,17:50,
 7,1,Electromecánica,Proy. y Diseño Instalac. Electr.,Común,"YOLY, Ramon",,,,116,Teórica,,Jueves,18:00,19:30,
 7,1,Electromecánica,Proy. y Diseño Electromecanico,Común,"MESCHINI, Mario",,,,116,Teórica,,Jueves,18:00,19:30,
-7,1,Electromecánica,Sistemas Mecanicos,Común,"OLIVEIRA, Lorena",,,,23,Teórica,,Jueves,20:10,22:10,
-7,1,Electromecánica,Sistemas Mecanicos,Común,"OLIVEIRA, Lorena _ BRAVO, Maria Elena",,,,23,Teórica,,Viernes,18:00,20:00,
+7,1,Electromecánica,Sistemas Mecanicos,Común,"OLIVEIRA, Lorena",,,,23,Teórica,,Jueves,20:10,22:10,A
+7,1,Electromecánica,Sistemas Mecanicos,Común,"OLIVEIRA, Lorena _ BRAVO, Maria Elena",,,,23,Teórica,,Viernes,18:00,20:00,A
 7,1,Electromecánica,Maquinas Electricas,Común,"GOMEZ, Marcelo",,,,23,Teórica,,Viernes,20:10,22:10,
 7,2,Construcciones,Ejer. Prof. Const.,Común,"COLOSSIMO, Miriam",,,,17,Teórica,,Lunes,12:30,14:30,
 7,2,Construcciones,Direccion de Obra,Común,,,,,,Teórica,,Lunes,12:30,14:30,
@@ -1233,7 +1233,7 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 7,3,Electromecánica,Proy. y Diseño Electromecanico,Común,"MESCHINI, Mario",,,,2,Teórica,,Martes,15:50,17:50,
 7,3,Electromecánica,Lab. de Metrol. y Control de Cal.,Común,"MORMILE, Fernando",,,,115,Teórica,,Martes,15:50,17:50,
 7,3,Electromecánica,Maquinas Electricas,Común,"DIONICIO, Alejandro",,,,21,Teórica,,Martes,18:00,20:00,
-7,3,Electromecánica,Sistemas Mecanicos,Común,"VAZQUEZ, Ivan",,,,21,Teórica,,Martes,20:10,22:10,
+7,3,Electromecánica,Sistemas Mecanicos,Común,"VAZQUEZ, Ivan",,,,21,Teórica,,Martes,20:10,22:10,A
 7,3,Electromecánica,Practicas Profesionalizantes,Práctica,"RANALLO, Gustavo",,,,4,Teórica,,Miércoles,07:40,09:40,
 7,3,Electromecánica,Practicas Profesionalizantes,Práctica,"RANALLO, Gustavo",,,,4,Teórica,,Miércoles,10:00,12:00,
 7,3,Electromecánica,Proy. y Diseño Instalac. Electr.,Común,"YOLY, Ramon",,,,5,Teórica,,Miércoles,13:30,15:30,
@@ -1249,29 +1249,29 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 7,3,Electromecánica,Proy. y Diseño Elec.,Común,"MESCHINI, Mario",,,,18,Teórica,,Jueves,20:10,22:10,
 7,3,Electromecánica,Mantenimiento y Montaje Electromecanico,Común,"CUBITO, Fabian _ MANZANO, Gustavo",,,,107,Teórica,,Jueves,20:10,22:10,
 7,3,Electromecánica,Maquinas Electricas,Común,"VAZQUEZ, Ivan",,,,21,Teórica,,Viernes,18:00,20:00,
-7,3,Electromecánica,Sistemas Mecanicos,Común,"VAZQUEZ, Ivan",,,,21,Teórica,,Viernes,18:00,20:00,
+7,3,Electromecánica,Sistemas Mecanicos,Común,"VAZQUEZ, Ivan",,,,21,Teórica,,Viernes,18:00,20:00,A
 7,3,Electromecánica,Electrotecnia Industrial,Común,"DIONICIO, Alejandro",,,,21,Teórica,,Viernes,20:10,22:10,
-7,4,Energías Renovables,Ejecucion de Proyecto Aplicado a las Energias Renov,Común,"ENGELS, Carlos",,,,201,Teórica,,Lunes,15:50,17:50,
+7,4,Energías Renovables,Ejecucion de Proy.,Común,"ENGELS, Carlos",,,,201,Teórica,,Lunes,15:50,17:50,
 7,4,Energías Renovables,Emprendimientos Productivos y Desarrollo Local,Común,"GESSI, Martin",,,,21,Teórica,,Lunes,18:00,20:00,
 7,4,Energías Renovables,Seguridad Higiene y Proteccion Ambiental,Común,"DOMINIQUE, Gonzalo",,,,21,Teórica,,Lunes,20:10,22:10,
-7,4,Energías Renovables,7 Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,18,Teórica,,Martes,08:00,10:00,
-7,4,Energías Renovables,Elaboracion de Proyectos Aplicados a las Energias Renov,Común,"QUIROGA, Lucas",,,,202,Teórica,,Martes,18:00,20:00,
-7,4,Energías Renovables,Ejecucion de Proyecto Aplicado a las Energias Renov,Común,"ENGELS, Carlos",,,,202,Teórica,,Martes,18:00,20:00,
-7,4,Energías Renovables,Elaboracion de Proyectos Aplicados a las Energias Renov,Común,"QUIROGA, Lucas",,,,202,Teórica,,Martes,20:10,22:10,
-7,4,Energías Renovables,Ejecucion de Proyecto Aplicado a las Energias Renov,Común,"ENGELS, Carlos",,,,202,Teórica,,Martes,20:10,22:10,
-7,4,Energías Renovables,7 Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,18,Teórica,,Miércoles,08:00,10:00,
-7,4,Energías Renovables,7 Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,18,Teórica,,Miércoles,10:00,12:00,
+7,4,Energías Renovables,Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,18,Teórica,,Martes,08:00,10:00,
+7,4,Energías Renovables,Elaboracion de Proy.,Común,"QUIROGA, Lucas",,,,202,Teórica,,Martes,18:00,20:00,
+7,4,Energías Renovables,Ejecucion de Proy.,Común,"ENGELS, Carlos",,,,202,Teórica,,Martes,18:00,20:00,
+7,4,Energías Renovables,Elaboracion de Proy.,Común,"QUIROGA, Lucas",,,,202,Teórica,,Martes,20:10,22:10,
+7,4,Energías Renovables,Ejecucion de Proy.,Común,"ENGELS, Carlos",,,,202,Teórica,,Martes,20:10,22:10,
+7,4,Energías Renovables,Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,18,Teórica,,Miércoles,08:00,10:00,
+7,4,Energías Renovables,Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,18,Teórica,,Miércoles,10:00,12:00,
 7,4,Energías Renovables,Gestion de las Energias Renov,Común,"CRIVARI, Juan Pablo",,,,202,Teórica,,Miércoles,15:50,17:50,
 7,4,Energías Renovables,Gestion de las Energias Renov,Común,"CRIVARI, Juan Pablo",,,,11,Teórica,,Miércoles,18:00,20:00,
 7,4,Energías Renovables,Eficiencia Energ. y Uso Racional de la Energia,Común,"OCAMPO, Ricardo",,,,11,Teórica,,Miércoles,20:10,21:00,
-7,4,Energías Renovables,7 Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,18,Teórica,,Jueves,08:00,10:00,
-7,4,Energías Renovables,Ejecucion de Proyecto Aplicado a las Energias Renov,Común,"ENGELS, Carlos",,,,11,Teórica,,Jueves,18:00,20:00,
-7,4,Energías Renovables,Elaboracion de Proyectos Aplicados a las Energias Renov,Común,QUIROGA,,,,11,Teórica,,Jueves,18:00,20:00,
-7,4,Energías Renovables,Ejecucion de Proyecto Aplicado a las Energias Renov,Común,"ENGELS, Carlos",,,,11,Teórica,,Jueves,20:10,22:10,
-7,4,Energías Renovables,Elaboracion de Proyectos Aplicados a las Energias Renov,Común,QUIROGA,,,,11,Teórica,,Jueves,20:10,22:10,
-7,4,Energías Renovables,7 Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,5,Teórica,,Viernes,08:00,10:00,
-7,4,Energías Renovables,7 Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,5,Teórica,,Viernes,10:00,12:00,
-7,4,Energías Renovables,Ejecucion de Proyecto Aplicado a las Energias Renov,Común,"ENGELS, Carlos",,,,301,Teórica,,Viernes,15:50,17:50,
+7,4,Energías Renovables,Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,18,Teórica,,Jueves,08:00,10:00,
+7,4,Energías Renovables,Ejecucion de Proy.,Común,"ENGELS, Carlos",,,,11,Teórica,,Jueves,18:00,20:00,
+7,4,Energías Renovables,Elaboracion de Proy.,Común,QUIROGA,,,,11,Teórica,,Jueves,18:00,20:00,
+7,4,Energías Renovables,Ejecucion de Proy.,Común,"ENGELS, Carlos",,,,11,Teórica,,Jueves,20:10,22:10,
+7,4,Energías Renovables,Elaboracion de Proy.,Común,QUIROGA,,,,11,Teórica,,Jueves,20:10,22:10,
+7,4,Energías Renovables,Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,5,Teórica,,Viernes,08:00,10:00,
+7,4,Energías Renovables,Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,5,Teórica,,Viernes,10:00,12:00,
+7,4,Energías Renovables,Ejecucion de Proy.,Común,"ENGELS, Carlos",,,,301,Teórica,,Viernes,15:50,17:50,
 7,4,Energías Renovables,Eficiencia Energ. y Uso Racional de la Energia,Común,"OCAMPO, Ricardo",,,,11,Teórica,,Viernes,18:00,20:00,
 7,4,Energías Renovables,Sistemas Electroenergeticos,Común,"SAVARESE, Hector",,,,11,Teórica,,Viernes,20:10,22:10,
 7,5,Construcciones,Practicas Profesionalizantes,Práctica,"COLOSSIMO, Miriam",,,,17,Teórica,,Lunes,07:30,09:30,
@@ -1305,28 +1305,28 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 7,5,Construcciones,Ejer. Prof. de la Const.,Común,"FERREYRA, Maria Nazarena _ VERDUGUEZ, Lino",,,,22,Teórica,,Viernes,18:00,20:00,
 7,5,Construcciones,Direcc. de Obra,Común,"COLOSSIMO, Miriam",,,,14,Teórica,,Viernes,18:00,20:00,
 7,5,Construcciones,Inst. de Aire Acondicionado,Común,"CASTRO, Sergio",,,,22,Teórica,,Viernes,20:10,22:10,
-7,6,Energías Renovables,7 Practicas Profes.,Práctica,"TORRES, Juan",,,,,Teórica,,Lunes,07:40,09:40,
-7,6,Energías Renovables,7 Practicas Profes.,Práctica,,,,,,Teórica,,Lunes,10:00,12:00,
-7,6,Energías Renovables,7 Practicas Profes.,Práctica,"TORRES, Juan",,,,,Teórica,,Lunes,13:30,15:30,
+7,6,Energías Renovables,Practicas Profes.,Práctica,"TORRES, Juan",,,,,Teórica,,Lunes,07:40,09:40,
+7,6,Energías Renovables,Practicas Profes.,Práctica,,,,,,Teórica,,Lunes,10:00,12:00,
+7,6,Energías Renovables,Practicas Profes.,Práctica,"TORRES, Juan",,,,,Teórica,,Lunes,13:30,15:30,
 7,6,Energías Renovables,Gestion de las Energias Renov,Común,"ENGELS, Carlos",,,,25,Teórica,,Lunes,18:00,20:00,
 7,6,Energías Renovables,Eficiencia Energ. y Uso Racional de la Energia,Común,"ENGELS, Carlos",,,,25,Teórica,,Lunes,20:10,22:10,
-7,6,Energías Renovables,Ejecucion de Proyecto Aplicado a las E.R.,Común,"GRANELLI, J.Pablo",,,,303,Teórica,,Martes,15:50,17:50,
+7,6,Energías Renovables,Ejecucion de Proy.,Común,"GRANELLI, J.Pablo",,,,303,Teórica,,Martes,15:50,17:50,
 7,6,Energías Renovables,Elaboracion de Proyectos Aplicados a las ER.,Común,"ENGELS, Carlos",,,,202,Teórica,,Martes,15:50,17:50,A
-7,6,Energías Renovables,Ejecucion de Proyecto Aplicado a las E.R.,Común,"GRANELLI, J.Pablo",,,,201,Teórica,,Martes,15:50,17:50,B
+7,6,Energías Renovables,Ejecucion de Proy.,Común,"GRANELLI, J.Pablo",,,,201,Teórica,,Martes,15:50,17:50,B
 7,6,Energías Renovables,Emprendimientos Productivos y Desarrollo Local,Común,"GESSI, Martin",,,,22,Teórica,,Martes,18:00,20:00,
-7,6,Energías Renovables,7 Practicas Profes.,Práctica,"TORRES, Juan",,,,18,Teórica,,Miércoles,10:00,12:00,
-7,6,Energías Renovables,Ejecucion de Proyecto Aplicado a las E.R.,Común,"GRANELLI, J.Pablo",,,,201,Teórica,,Miércoles,15:50,17:50,
+7,6,Energías Renovables,Practicas Profes.,Práctica,"TORRES, Juan",,,,18,Teórica,,Miércoles,10:00,12:00,
+7,6,Energías Renovables,Ejecucion de Proy.,Común,"GRANELLI, J.Pablo",,,,201,Teórica,,Miércoles,15:50,17:50,
 7,6,Energías Renovables,Gestion de las Energias Renov,Común,"ENGELS, Carlos",,,,24,Teórica,,Miércoles,18:00,20:00,
 7,6,Energías Renovables,Eficiencia Energ. y Uso Racional de la Energia,Común,"ENGELS, Carlos",,,,24,Teórica,,Miércoles,18:00,20:00,
 7,6,Energías Renovables,Elaboracion de Proyectos Aplicados a las ER.,Común,"ENGELS, Carlos",,,,202,Teórica,,Miércoles,20:10,21:00,
-7,6,Energías Renovables,7 Practicas Profes.,Práctica,"TORRES, Juan",,,,18,Teórica,,Jueves,08:00,10:00,
-7,6,Energías Renovables,7 Practicas Profes.,Práctica,"TORRES, Juan",,,,18,Teórica,,Jueves,10:00,12:00,
+7,6,Energías Renovables,Practicas Profes.,Práctica,"TORRES, Juan",,,,18,Teórica,,Jueves,08:00,10:00,
+7,6,Energías Renovables,Practicas Profes.,Práctica,"TORRES, Juan",,,,18,Teórica,,Jueves,10:00,12:00,
 7,6,Energías Renovables,Sistemas Electroenergeticos,Común,"SAVARESE, Hector",,,,309,Teórica,,Jueves,15:50,17:50,
 7,6,Energías Renovables,Seguridad Higiene y Proteccion Ambiental,Común,"DOMINIQUE, Gonzalo",,,,22,Teórica,,Jueves,18:00,20:00,
-7,6,Energías Renovables,7 Practicas Profes.,Práctica,"TORRES, Juan",,,,5,Teórica,,Viernes,10:00,12:00,
-7,6,Energías Renovables,7 Practicas Profes.,Práctica,"TORRES, Juan",,,,,Teórica,,Viernes,13:30,15:30,
-7,6,Energías Renovables,Ejecucion de Proyecto Aplicado a las E.R.,Común,"GRANELLI, J.Pablo",,,,203,Teórica,,Viernes,15:50,17:50,
-7,6,Energías Renovables,Ejecucion de Proyecto Aplicado a las E.R.,Común,"GRANELLI, J.Pablo",,,,202,Teórica,,Viernes,18:00,20:00,
+7,6,Energías Renovables,Practicas Profes.,Práctica,"TORRES, Juan",,,,5,Teórica,,Viernes,10:00,12:00,
+7,6,Energías Renovables,Practicas Profes.,Práctica,"TORRES, Juan",,,,,Teórica,,Viernes,13:30,15:30,
+7,6,Energías Renovables,Ejecucion de Proy.,Común,"GRANELLI, J.Pablo",,,,203,Teórica,,Viernes,15:50,17:50,
+7,6,Energías Renovables,Ejecucion de Proy.,Común,"GRANELLI, J.Pablo",,,,202,Teórica,,Viernes,18:00,20:00,
 7,6,Energías Renovables,Elaboracion de Proyectos Aplicados a las ER.,Común,"ENGELS, Carlos",,,,202,Teórica,,Viernes,18:00,20:00,
-7,6,Energías Renovables,Ejecucion de Proyecto Aplicado a las E.R.,Común,"GRANELLI, J.Pablo",,,,202,Teórica,,Viernes,20:10,22:10,
+7,6,Energías Renovables,Ejecucion de Proy.,Común,"GRANELLI, J.Pablo",,,,202,Teórica,,Viernes,20:10,22:10,
 7,6,Energías Renovables,Elaboracion de Proyectos Aplicados a las ER.,Común,"ENGELS, Carlos",,,,202,Teórica,,Viernes,20:10,22:10,

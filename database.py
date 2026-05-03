@@ -92,7 +92,10 @@ def cargar_csv(archivo_csv):
             inicio, fin = corregir_horarios(row.get('hora_inicio', ''), row.get('hora_fin', ''))
             
             superposicion_raw = row.get('superposicion', '0')
-            superposicion_val = int(superposicion_raw) if superposicion_raw.strip() != '' else 0 # Handle empty string for 'superposicion'
+            try:
+                superposicion_val = int(superposicion_raw) if superposicion_raw and superposicion_raw.strip() != '' else 0
+            except (ValueError, TypeError):
+                superposicion_val = 0
             datos = (
                 row.get('curso', ''), row.get('division', ''), row.get('especialidad', ''),
                 eliminar_acentos(row.get('materia', '')).upper().strip(), row.get('tipo_materia', ''),
