@@ -6,8 +6,6 @@ import io
 
 app = Flask(__name__)
 
-# ... (keep obtener_filas and index functions same)
-
 def obtener_filas(tipo, valor):
     try:
         con = database.conectar()
@@ -175,7 +173,7 @@ def export_pdf(tipo, valor):
         for _ in range(2): # Dos pasadas para estabilizar clusters
             for i in range(len(text_positions) - 1):
                 diff = text_positions[i+1]['text_y'] - text_positions[i]['text_y']
-                if diff < 3.5: # Aumentado ligeramente para fuentes más grandes
+                if diff < 3.5: # Restaurado a 3.5 para fuentes grandes
                     nudge = (3.5 - diff) / 2
                     text_positions[i]['text_y'] -= nudge
                     text_positions[i+1]['text_y'] += nudge
@@ -227,9 +225,9 @@ def export_pdf(tipo, valor):
                     pdf.set_text_color(0, 0, 0)
                     contiene_letras = any(c.isalpha() for c in ind_txt)
                     if tipo != 'aula' and contiene_letras and (len(ind_txt) > 4 or h > ind_w * 2):
-                        pdf.set_font('Arial', 'B', 6) # Aumentado de 5 a 6
+                        pdf.set_font('Arial', 'B', 6) # Restaurado a 6
                         # Dibujar letra por letra verticalmente
-                        char_h = 3.0 # Aumentado de 2.5 para fuente más grande
+                        char_h = 3.0 # Restaurado a 3.0
                         # Truncar si el texto es muy largo para la altura h
                         max_chars = int((h - 2) / char_h)
                         display_txt = ind_txt[:max_chars]
@@ -240,7 +238,7 @@ def export_pdf(tipo, valor):
                             pdf.cell(ind_w, char_h, char, 0, 0, 'C')
                     else:
                         # Para números o textos cortos, mantener horizontal
-                        pdf.set_font('Arial', 'B', 8) # Aumentado de 6 a 8
+                        pdf.set_font('Arial', 'B', 8) # Restaurado a 8
                         pdf.set_xy(x, y)
                         pdf.cell(ind_w, h, ind_txt, 0, 0, 'C')
                     # Contenido Materia Centrado
@@ -248,56 +246,163 @@ def export_pdf(tipo, valor):
                     materia_w = w - ind_w - 0.6
                     
                     if materia_w > 2:
-                        # Ajuste de tamaño de fuente agrandado (si no es división angosta)
-                        is_narrow = materia_w < 15
-                        font_size_mat = 8.5 if not is_narrow else 6.5
-                        font_size_det = 7.5 if not is_narrow else 5.2
-                        line_h = 3.5 if not is_narrow else 2.4
+                        # Ajuste de tamaño de fuente
+                        is_narrow = materia_w < 20
                         
-                        pdf.set_font('Arial', 'B', font_size_mat)
-                        materia_txt = clase[3] # Eliminada función wrap_with_hyphen
-                        lines_mat = pdf.multi_cell(materia_w, line_h, materia_txt, split_only=True)
-                        
-                        pdf.set_font('Arial', '', font_size_det)
-                        # Prof: en lugar de P:
-                        det_raw = f"Prof: {clase[5]}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
-                        lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
-                        
-                        # Altura total estimada
-                        actual_lines = len(lines_mat)
-                        show_det = False
-                        show_time = False
-                        
-                        # Prioridad: 1. Materia, 2. Profesor, 3. Horario
-                        if (actual_lines + len(lines_det)) * line_h <= h - 1:
-                            show_det = True
-                            # Solo intentamos mostrar el tiempo si ya cupo el profesor
-                            if (actual_lines + len(lines_det) + 1) * line_h <= h - 1:
-                                show_time = True
-                        
-                        # Calcular altura total para centrado basada en lo que realmente mostraremos
-                        final_total_lines = actual_lines
-                        if show_det: final_total_lines += len(lines_det)
-                        if show_time: final_total_lines += 1
-                        
-                        total_content_h = final_total_lines * line_h
-                        y_start = max(y + 0.5, y + (h - total_content_h) / 2)
-                        
-                        pdf.set_xy(txt_x, y_start)
-                        
-                        pdf.set_font('Arial', 'B', font_size_mat)
-                        pdf.multi_cell(materia_w, line_h, materia_txt, 0, 'C')
-                        
-                        if show_det:
-                            pdf.set_font('Arial', '', font_size_det)
-                            pdf.set_x(txt_x)
-                            pdf.multi_cell(materia_w, line_h, det_raw, 0, 'C')
+                        if is_narrow:
+                            # CASO ESPECIAL GRUPOS A/B (Bloques finos)
+                            font_size_mat = 7.2
+                            font_size_det = 5.8
+                            line_h = 2.7
                             
-                        if show_time:
+                            is_short = h < 20 # Aumentado de 15 para captar mejor clases de < 1h
+                            is_tiny = h < 12 # Caso extremo (ej: 40-50 min en calendarios largos)
+
+                            if is_tiny:
+                                font_size_mat = 6.0
+                                font_size_det = 5.0
+                                line_h = 2.2
+
+                            pdf.set_font('Arial', 'B', font_size_mat)
+                            lines_mat_full = pdf.multi_cell(materia_w, line_h, clase[3], split_only=True)
+                            
+                            # Límite de líneas para la materia: 1 si es corto/tiny, 3 si es normal
+                            max_lines_mat_allowed = 1 if is_short else 3
+                            
+                            if len(lines_mat_full) > max_lines_mat_allowed:
+                                materia_display = ""
+                                for k in range(max_lines_mat_allowed - 1):
+                                    materia_display += lines_mat_full[k].strip() + "\n"
+                                
+                                last_l = lines_mat_full[max_lines_mat_allowed - 1].strip()
+                                while pdf.get_string_width(last_l + "...") > materia_w - 1.0 and len(last_l) > 5:
+                                    last_l = last_l[:-1]
+                                materia_display += last_l + "..."
+                                actual_lines_mat = max_lines_mat_allowed
+                            else:
+                                materia_display = clase[3]
+                                actual_lines_mat = len(lines_mat_full)
+                            
+                            # Preparar Profesor
                             pdf.set_font('Arial', '', font_size_det)
-                            pdf.set_x(txt_x)
-                            pdf.cell(materia_w, line_h, f"{clase[12]} - {clase[13]}", 0, 1, 'C')
-                    
+                            det_raw = f"Prof: {clase[5]}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
+                            lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
+                            
+                            # Decidir qué mostrar
+                            show_det = (actual_lines_mat + 1) * line_h <= h - 0.3
+                            show_time = show_det and (actual_lines_mat + len(lines_det) + 1) * line_h <= h - 0.3
+                            
+                            total_h = actual_lines_mat * line_h
+                            if show_det: total_h += min(len(lines_det), 2) * line_h
+                            if show_time: total_h += line_h
+                            
+                            y_start = max(y + 0.2, y + (h - total_h) / 2)
+                            pdf.set_xy(txt_x, y_start)
+                            
+                            pdf.set_font('Arial', 'B', font_size_mat)
+                            pdf.multi_cell(materia_w, line_h, materia_display, 0, 'C')
+                            
+                            if show_det:
+                                pdf.set_font('Arial', '', font_size_det)
+                                space_for_prof = h - (actual_lines_mat * line_h) - 0.5
+                                if show_time: space_for_prof -= line_h
+                                
+                                max_lines_prof = int(space_for_prof / line_h)
+                                if max_lines_prof > 0:
+                                    display_det = det_raw
+                                    if len(lines_det) > max_lines_prof:
+                                        d_lines = []
+                                        for k in range(max_lines_prof - 1): d_lines.append(lines_det[k].strip())
+                                        last_dl = lines_det[max_lines_prof-1].strip()
+                                        while pdf.get_string_width(last_dl + "...") > materia_w - 0.8 and len(last_dl) > 5:
+                                            last_dl = last_dl[:-1]
+                                        d_lines.append(last_dl + "...")
+                                        display_det = "\n".join(d_lines)
+                                    
+                                    pdf.set_x(txt_x)
+                                    pdf.multi_cell(materia_w, line_h, display_det, 0, 'C')
+                            
+                            if show_time:
+                                pdf.set_font('Arial', '', font_size_det)
+                                if pdf.get_y() - y + line_h <= h:
+                                    pdf.set_x(txt_x)
+                                    pdf.cell(materia_w, line_h, f"{clase[12]} - {clase[13]}", 0, 1, 'C')
+                        
+                        else:
+                            # CASO NORMAL (BLOQUE ANCHO)
+                            is_short = h < 20
+                            is_tiny = h < 12
+                            
+                            font_size_mat = 9.5
+                            font_size_det = 8.0
+                            line_h = 3.8
+                            
+                            if is_short:
+                                font_size_mat = 8.0
+                                font_size_det = 7.0
+                                line_h = 3.0
+                            if is_tiny:
+                                font_size_mat = 7.0
+                                font_size_det = 6.0
+                                line_h = 2.5
+                            
+                            pdf.set_font('Arial', 'B', font_size_mat)
+                            lines_mat_full = pdf.multi_cell(materia_w, line_h, clase[3], split_only=True)
+                            
+                            max_lines_mat_allowed = 1 if is_short else 4
+                            
+                            if len(lines_mat_full) > max_lines_mat_allowed:
+                                materia_display = ""
+                                for k in range(max_lines_mat_allowed - 1):
+                                    materia_display += lines_mat_full[k].strip() + "\n"
+                                last_l = lines_mat_full[max_lines_mat_allowed - 1].strip()
+                                while pdf.get_string_width(last_l + "...") > materia_w - 1.2 and len(last_l) > 5:
+                                    last_l = last_l[:-1]
+                                materia_display += last_l + "..."
+                                actual_lines_mat = max_lines_mat_allowed
+                            else:
+                                materia_display = clase[3]
+                                actual_lines_mat = len(lines_mat_full)
+                            
+                            pdf.set_font('Arial', '', font_size_det)
+                            det_raw = f"Prof: {clase[5]}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
+                            lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
+                            
+                            show_det = (actual_lines_mat + 1) * line_h <= h - 0.8
+                            show_time = show_det and (actual_lines_mat + len(lines_det) + 1) * line_h <= h - 0.8
+                            
+                            final_lines = actual_lines_mat
+                            if show_det: final_lines += min(len(lines_det), 2)
+                            if show_time: final_lines += 1
+                            
+                            y_start = max(y + 0.4, y + (h - (final_lines * line_h)) / 2)
+                            pdf.set_xy(txt_x, y_start)
+                            
+                            pdf.set_font('Arial', 'B', font_size_mat)
+                            pdf.multi_cell(materia_w, line_h, materia_display, 0, 'C')
+                            
+                            if show_det:
+                                pdf.set_font('Arial', '', font_size_det)
+                                space_for_prof = h - (actual_lines_mat * line_h) - 0.8
+                                max_lines_prof = max(1, int(space_for_prof / line_h))
+                                
+                                display_det = det_raw
+                                if len(lines_det) > max_lines_prof:
+                                    d_lines = [lines_det[k].strip() for k in range(max_lines_prof-1)]
+                                    last_dl = lines_det[max_lines_prof-1].strip()
+                                    while pdf.get_string_width(last_dl + "...") > materia_w - 1.2 and len(last_dl) > 5:
+                                        last_dl = last_dl[:-1]
+                                    d_lines.append(last_dl + "...")
+                                    display_det = "\n".join(d_lines)
+
+                                pdf.set_x(txt_x)
+                                pdf.multi_cell(materia_w, line_h, display_det, 0, 'C')
+
+                            if show_time:
+                                pdf.set_font('Arial', '', font_size_det)
+                                if pdf.get_y() - y + line_h <= h:
+                                    pdf.set_x(txt_x)
+                                    pdf.cell(materia_w, line_h, f"{clase[12]} - {clase[13]}", 0, 1, 'C')                    
                 elif b['tipo'] == 'superposicion':
                     y_ini = ((time_to_min(b['clases'][0][12]) - cal['hora_min']) / duracion) * height
                     latest = max(b['clases'], key=lambda x: time_to_min(x[13]))

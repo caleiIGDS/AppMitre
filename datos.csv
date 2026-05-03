@@ -742,30 +742,30 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 4,8,Energías Renovables,FISICA,Común,"CRISTOFANO, Adrián",,,,305,Teórica,,Miércoles,12:00,13:00,
 4,8,Energías Renovables,LITERATURA,Común,"PEREYRA, Jessica",,,,305,Teórica,,Miércoles,13:30,15:30,
 4,8,Energías Renovables,QUIMICA,Común,"LEDESMA, Matías",,,,305,Teórica,,Miércoles,15:50,17:50,
-4,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MACIEL, Martin",,,,202,Teórica,,Jueves,07:40,09:40,A
-4,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MACIEL, Martin",,,,202,Teórica,,Jueves,10:00,12:00,A
+4,8,Energías Renovables,Tecnologia,Común,"MACIEL, Martin",,,,202,Teórica,,Jueves,07:40,09:40,A
+4,8,Energías Renovables,Tecnologia,Común,"MACIEL, Martin",,,,202,Teórica,,Jueves,10:00,12:00,A
 4,8,Energías Renovables,HISTORIA,Común,"STOPPINI, Andrea",,,,305,Teórica,,Jueves,13:30,15:30,
 4,8,Energías Renovables,CONOCIMIENTO DE LOS MATERIALES,Común,"MORMILE, Gustavo",,,,305,Teórica,,Jueves,15:50,17:50,
 4,8,Energías Renovables,INTROD. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Viernes,07:40,09:40,A
-4,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MACIEL, Martin",,,,107,Teórica,,Viernes,07:40,09:40,A
+4,8,Energías Renovables,Tecnologia,Común,"MACIEL, Martin",,,,107,Teórica,,Viernes,07:40,09:40,A
 4,8,Energías Renovables,INTROD. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Viernes,10:00,12:00,A
-4,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MACIEL, Martin",,,,107,Teórica,,Viernes,10:00,12:00,A
+4,8,Energías Renovables,Tecnologia,Común,"MACIEL, Martin",,,,107,Teórica,,Viernes,10:00,12:00,A
 4,8,Energías Renovables,FISICA,Común,"CRISTOFANO, Adrián",,,,307,Teórica,,Viernes,12:00,13:00,
 4,8,Energías Renovables,INGLES,Común,"BRENER, Marlene",,,,305,Teórica,,Viernes,15:50,17:50,
 4,9,Energías Renovables,INTRODUCC. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Lunes,07:40,09:40,A
 4,9,Energías Renovables,INTRODUCC. A LA ELECTR. Y MEDIC.,Común,"CUBITO, Osvaldo",,,,107,Teórica,,Lunes,10:00,12:00,A
 4,9,Energías Renovables,DIBUJO TECNOLOGICO,Común,"CERREIA CALVINO, Diego Roberto",,,,18,Teórica,,Lunes,13:30,15:30,A
 4,9,Energías Renovables,HISTORIA,Común," MURADAS, Ruben _ PAZ, Veronica",,,,202,Teórica,,Lunes,15:50,17:50,
-4,9,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"GLATT, Osvaldo",,,,202,Teórica,,Martes,07:40,09:40,A
-4,9,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MORMILE, Gustavo",,,,202,Teórica,,Martes,07:40,09:40,A
-4,9,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"GLATT, Osvaldo",,,,202,Teórica,,Martes,10:00,12:00,A
-4,9,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MORMILE, Gustavo",,,,202,Teórica,,Martes,10:00,12:00,A
+4,9,Energías Renovables,"Proyecto",Común,"GLATT, Osvaldo",,,,202,Teórica,,Martes,07:40,09:40,A
+4,9,Energías Renovables,Tecnologia,Común,"MORMILE, Gustavo",,,,202,Teórica,,Martes,07:40,09:40,A
+4,9,Energías Renovables,"Proyecto",Común,"GLATT, Osvaldo",,,,202,Teórica,,Martes,10:00,12:00,A
+4,9,Energías Renovables,Tecnologia,Común,"MORMILE, Gustavo",,,,202,Teórica,,Martes,10:00,12:00,A
 4,9,Energías Renovables,FISICA,Común,"RODRIGUEZ, Virginia",,,,202,Teórica,,Martes,12:00,13:00,
 4,9,Energías Renovables,GEOGRAFIA,Común,"GESSI, Martin",,,,306,Teórica,,Martes,13:30,15:30,
 4,9,Energías Renovables,QUIMICA,Común,TORECILLA Ana,,,,306,Teórica,,Martes,15:50,17:50,
-4,9,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"MORMILE, Gustavo",,,,111,Teórica,,Miércoles,07:40,09:40,A
-4,9,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"GLATT, Osvaldo",,,,111,Teórica,,Miércoles,07:40,09:40,A
-4,9,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"MORMILE, Gustavo",,,,111,Teórica,,Miércoles,10:00,12:00,A
+4,9,Energías Renovables,Tecnologia,Común,"MORMILE, Gustavo",,,,111,Teórica,,Miércoles,07:40,09:40,A
+4,9,Energías Renovables,"Proyecto",Común,"GLATT, Osvaldo",,,,111,Teórica,,Miércoles,07:40,09:40,A
+4,9,Energías Renovables,"Proyecto",Común,"MORMILE, Gustavo",,,,111,Teórica,,Miércoles,10:00,12:00,A
 4,9,Energías Renovables,INGLES,Común,"LERA, Eliana",,,,306,Teórica,,Miércoles,13:30,15:30,
 4,9,Energías Renovables,CONOCIMIENTO DE LOS MATERIALES,Común,"MELFI, Valeria",,,,306,Teórica,,Miércoles,15:50,17:50,
 4,9,Energías Renovables,FISICA,Común,"RODRIGUEZ, Virginia",,,,202,Teórica,,Jueves,12:00,13:00,
@@ -800,15 +800,15 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 5,2,Electromecánica,MECANICA TECNICA,Común,"BORDA, Victor Hugo",,,,203,Teórica,,Lunes,15:50,17:50,
 5,2,Electromecánica,DISEÑO Y PROC. MEC.,Común,"ALIAS, Emmanuel",,,,12,Teórica,,Martes,07:40,09:40,
 5,2,Electromecánica,INST. Y AP. DE LA ENERG.,Común,"CHANQUIA, Martin",,,,12,Teórica,,Martes,07:40,09:40,
-5,2,Electromecánica,INST. Y AP. DE LA ENERG.,Común,"CHANQUIA, Martin",,,,108,Teórica,,Martes,10:30,10:00,
-5,2,Electromecánica,DISEÑO Y PROC. MEC.,Común,"ALIAS, Emmanuel",,,,108,Teórica,,Martes,10:30,10:00,
+5,2,Electromecánica,INST. Y AP. DE LA ENERG.,Común,"CHANQUIA, Martin",,,,108,Teórica,,Martes,10:00,12:00,
+5,2,Electromecánica,DISEÑO Y PROC. MEC.,Común,"ALIAS, Emmanuel",,,,108,Teórica,,Martes,10:00,12:00,
 5,2,Electromecánica,ELECTROTECNIA,Común,"DIONICIO, Alejandro",,,,203,Teórica,,Martes,12:00,13:00,
 5,2,Electromecánica,POLITICA Y CIUDADANIA,Común,"FELTRIN, Vanesa",,,,203,Teórica,,Martes,13:30,15:30,
 5,2,Electromecánica,HISTORIA,Común,"MURADAS, Mariela",,,,203,Teórica,,Martes,15:50,17:50,
 5,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,Manzano Gustavo,,,,108,Teórica,,Miércoles,07:40,09:40,A
 5,2,Electromecánica,DISEÑO Y PROC. MEC.,Común,"ALIAS, Emmanuel",,,,108,Teórica,,Miércoles,07:40,09:40,
-5,2,Electromecánica,DISEÑO Y PROC. MEC.,Común,"ALIAS, Emmanuel",,,,12,Teórica,,Miércoles,10:30,10:00,
-5,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,Manzano Gustavo,,,,12,Teórica,,Miércoles,10:30,10:00,A
+5,2,Electromecánica,DISEÑO Y PROC. MEC.,Común,"ALIAS, Emmanuel",,,,12,Teórica,,Miércoles,10:00,12:00,
+5,2,Electromecánica,MAQ. ELEC. Y AUTOMAT,Común,Manzano Gustavo,,,,12,Teórica,,Miércoles,10:00,12:00,A
 5,2,Electromecánica,ANALISIS MATEMATICO,Común,HIERREZUELO,,,,203,Teórica,,Miércoles,12:00,13:00,
 5,2,Electromecánica,INGLES,Común,"ANER, Santiago",,,,203,Teórica,,Miércoles,13:30,15:30,
 5,2,Electromecánica,MECANICA TECNICA,Común,"BORDA, Victor Hugo",,,,203,Teórica,,Miércoles,15:50,17:50,
@@ -880,17 +880,17 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 5,5,Energías Renovables,QUIMICA DEL AMBIENTE,Común,"CAÑAMAS, Miriam",,,,32,Teórica,,Lunes,13:30,15:30,
 5,5,Energías Renovables,ELECTROTECNIA Y MAQUINAS ELECTRICAS,Común,"AYZA, Diego",,,,32,Teórica,,Lunes,15:50,17:50,
 5,5,Energías Renovables,ELECTROTEC. Y MAQ. ELEC.,Común,"AYZA, Diego",,,,27,Teórica,,Lunes,20:10,22:10,A
-5,5,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damián",,,,104,Teórica,,Martes,07:40,09:40,A
-5,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,104,Teórica,,Martes,07:40,09:40,A
-5,5,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damián",,,,104,Teórica,,Martes,10:00,12:00,A
-5,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,104,Teórica,,Martes,10:00,12:00,A
+5,5,Energías Renovables,"Proyecto",Común,"PLANES JALUFF, Damián",,,,104,Teórica,,Martes,07:40,09:40,A
+5,5,Energías Renovables,Tecnologia,Común,"ACOSTA, Miguel",,,,104,Teórica,,Martes,07:40,09:40,A
+5,5,Energías Renovables,"Proyecto",Común,"PLANES JALUFF, Damián",,,,104,Teórica,,Martes,10:00,12:00,A
+5,5,Energías Renovables,Tecnologia,Común,"ACOSTA, Miguel",,,,104,Teórica,,Martes,10:00,12:00,A
 5,5,Energías Renovables,ANALISIS MATEMATICO,Común,"CRISTOFANO, Adrian",,,,302,Teórica,,Martes,13:30,15:30,
 5,5,Energías Renovables,INGLÉS,Común,"MONTES _ BRENER, Marlene",,,,305,Teórica,,Martes,15:50,17:50,
 5,5,Energías Renovables,MECANICA,Común,"BORDA, Victor Hugo",,,,24,Teórica,,Martes,20:10,22:10,
-5,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,105,Teórica,,Miércoles,07:40,09:40,A
-5,5,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damián",,,,105,Teórica,,Miércoles,07:40,09:40,A
-5,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,105,Teórica,,Miércoles,10:00,12:00,A
-5,5,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"PLANES JALUFF, Damián",,,,105,Teórica,,Miércoles,10:00,12:00,A
+5,5,Energías Renovables,Tecnologia,Común,"ACOSTA, Miguel",,,,105,Teórica,,Miércoles,07:40,09:40,A
+5,5,Energías Renovables,"Proyecto",Común,"PLANES JALUFF, Damián",,,,105,Teórica,,Miércoles,07:40,09:40,A
+5,5,Energías Renovables,Tecnologia,Común,"ACOSTA, Miguel",,,,105,Teórica,,Miércoles,10:00,12:00,A
+5,5,Energías Renovables,"Proyecto",Común,"PLANES JALUFF, Damián",,,,105,Teórica,,Miércoles,10:00,12:00,A
 5,5,Energías Renovables,ANALISIS MATEMATICO,Común,"CRISTOFANO, Adrian",,,,301,Teórica,,Miércoles,13:30,15:30,
 5,5,Energías Renovables,LITERATURA,Común,"ASTORGA, Alejandra",,,,301,Teórica,,Miércoles,15:50,17:50,
 5,5,Energías Renovables,QUIMICA DEL AMBIENTE,Común,"CAÑAMAS, Miriam",,,,201,Teórica,,Miércoles,20:10,22:10,
@@ -929,18 +929,18 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 5,6,Electromecánica,ELECTROTECNIA,Común,,,,,22,Teórica,,Viernes,15:50,16:50,
 5,7,Construcciones,INSTALACIONES ELECTRICAS,Común,"FERREYRA, Maria Nazarena",,,,21,Teórica,,Lunes,13:30,15:30,
 5,7,Construcciones,LITERATURA,Común,"SOBRECASA, Sonia",,,,309,Teórica,,Lunes,15:50,17:50,
-5,7,Construcciones,MATERIALES DE OBRA,Común,ALONSO EVELIN Noelia,,,,105,Teórica,,Martes,10:30,10:00,
-5,7,Construcciones,PROYECTO,Común,"MIGLIANO, Rita",,,,105,Teórica,,Martes,10:30,10:00,A
+5,7,Construcciones,MATERIALES DE OBRA,Común,ALONSO EVELIN Noelia,,,,105,Teórica,,Martes,10:00,12:00,
+5,7,Construcciones,PROYECTO,Común,"MIGLIANO, Rita",,,,105,Teórica,,Martes,10:00,12:00,A
 5,7,Construcciones,RESISTENCIA DE LOS MATERIALES,Común,"ALVAREZ, Lourdes",,,,305,Teórica,,Martes,13:30,15:30,
 5,7,Construcciones,EDUCACION FISICA,Común,"MONICO, Vanesa",,,,PROGRESO,Teórica,1.0,Martes,15:50,17:50,
 5,7,Construcciones,DOCUMENTACION TECNICA,Común,"FERNANDEZ, Jonata",,,,,Teórica,,Miércoles,07:40,09:40,A
-5,7,Construcciones,SIST. CONSTR.,Común,"FERNANDEZ, Jonata",,,,102,Teórica,,Miércoles,10:30,10:00,
+5,7,Construcciones,SIST. CONSTR.,Común,"FERNANDEZ, Jonata",,,,102,Teórica,,Miércoles,10:00,12:00,
 5,7,Construcciones,PROYECTO,Común,"DE BELLIS, Silvana",,,,101,Teórica,,Miércoles,13:30,15:30,A
 5,7,Construcciones,ANALISIS MATEMATICO,Común,"MOREIRA, Victor",,,,12,Teórica,,Miércoles,15:50,17:50,
 5,7,Construcciones,RESISTENCIA DE LOS MAT,Común,"ALVAREZ, Lourdes",,,,22,Teórica,,Miércoles,18:00,20:00,
 5,7,Construcciones,POLITICA Y CIUDADANIA,Común,"SUAREZ, Victor Martin",,,,23,Teórica,,Jueves,07:40,09:40,
-5,7,Construcciones,DOCUMENTACION TECNICA,Común,"DE BELLIS, Silvana",,,,17,Teórica,,Jueves,10:30,10:00,A
-5,7,Construcciones,PROYECTO,Común,"MIGLIANO, Rita",,,,17,Teórica,,Jueves,10:30,10:00,A
+5,7,Construcciones,DOCUMENTACION TECNICA,Común,"DE BELLIS, Silvana",,,,17,Teórica,,Jueves,10:00,12:00,A
+5,7,Construcciones,PROYECTO,Común,"MIGLIANO, Rita",,,,17,Teórica,,Jueves,10:00,12:00,A
 5,7,Construcciones,SIST. CONSTR.,Común,"FERNANDEZ, Jonata",,,,14,Teórica,,Jueves,12:00,13:00,
 5,7,Construcciones,RESISTENCIA DE LOS MATERIALES,Común,"ALVARES, Lourdes",,,,25,Teórica,,Jueves,13:30,15:30,
 5,7,Construcciones,HISTORIA,Común,"STOPPINI, Andrea",,,,25,Teórica,,Jueves,15:50,17:50,
@@ -951,9 +951,9 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 5,7,Construcciones,ANALISIS MATEMATICO,Común,"MOREIRA, Victor",,,,308,Teórica,,Viernes,14:30,15:30,
 5,7,Construcciones,INSTALACIONES ELECTRICAS,Común,"RIOS ANIBAL _ FERREYRA, Maria Nazarena",,,,22,Teórica,,Viernes,18:00,20:00,
 5,8,Energías Renovables,"Proyecto",Común,"PLANES JALUFF, Damian",,,,104,Teórica,,Lunes,07:40,09:40,A
-5,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,104,Teórica,,Lunes,07:40,09:40,A
+5,8,Energías Renovables,Tecnologia,Común,"ACOSTA, Miguel",,,,104,Teórica,,Lunes,07:40,09:40,A
 5,8,Energías Renovables,"Proyecto",Común,"PLANES JALUFF, Damian",,,,104,Teórica,,Lunes,10:00,12:00,A
-5,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,104,Teórica,,Lunes,10:00,12:00,A
+5,8,Energías Renovables,Tecnologia,Común,"ACOSTA, Miguel",,,,104,Teórica,,Lunes,10:00,12:00,A
 5,8,Energías Renovables,ANALISIS MATEMATICO,Común,"MOREIRA, Victor",,,,302,Teórica,,Lunes,13:30,15:30,
 5,8,Energías Renovables,MECANICA,Común,"NOVO, Pablo",,,,302,Teórica,,Lunes,15:50,17:50,
 5,8,Energías Renovables,LITERATURA,Común,"CABEZAS CORUJO _ MENDIETA, Eduardo",,,,203,Teórica,,Martes,10:00,12:00,
@@ -964,9 +964,9 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 5,8,Energías Renovables,QUIM. DEL AMBIENTE,Común,"CAÑAMAS, Miriam",,,,,Teórica,,Miércoles,10:00,12:00,
 5,8,Energías Renovables,HISTORIA,Común,"STOPPINI, Andrea",,,,203,Teórica,,Miércoles,10:00,12:00,
 5,8,Energías Renovables,"EDUCACION FISICA ALVAREZ, Andrea P",Común,,,,,PROGRESO,Teórica,1.0,Miércoles,12:30,12:30,
-5,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,,Teórica,,Jueves,07:40,09:40,A
+5,8,Energías Renovables,Tecnologia,Común,"ACOSTA, Miguel",,,,,Teórica,,Jueves,07:40,09:40,A
 5,8,Energías Renovables,"Proyecto",Común,"PLANES JALUFF, Damian",,,,,Teórica,,Jueves,07:40,09:40,A
-5,8,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,"ACOSTA, Miguel",,,,301,Teórica,,Jueves,10:00,12:00,A
+5,8,Energías Renovables,Tecnologia,Común,"ACOSTA, Miguel",,,,301,Teórica,,Jueves,10:00,12:00,A
 5,8,Energías Renovables,"Proyecto",Común,"PLANES JALUFF, Damian",,,,301,Teórica,,Jueves,10:00,12:00,A
 5,8,Energías Renovables,QUIM. DEL AMBIENTE,Común,"CAÑAMAS, Miriam",,,,302,Teórica,,Jueves,12:00,13:00,
 5,8,Energías Renovables,ELECTR. Y MAQ ELECT,Común,"AYZA, Diego",,,,302,Teórica,,Jueves,13:30,14:30,A
@@ -1089,13 +1089,13 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 6,5,Energías Renovables,LITERATURA,Común,"ASTORGA, Maria",,,,14,Teórica,,Miércoles,18:00,20:00,
 6,5,Energías Renovables,TERMODINAMICA Y MAQ. TERMICAS,Común,"CRIVARI, Juan Pablo",,,,14,Teórica,,Miércoles,20:10,22:10,
 6,5,Energías Renovables,TECNOLOGIA D LAS ENERG. RENOV.,Común,"RODRIGUEZ, Maria Virginia",,,,202,Teórica,,Jueves,13:30,15:30,A
-6,5,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,202,Teórica,,Jueves,13:30,15:30,A
+6,5,Energías Renovables,"Proyecto",Común,"CAÑAMAS, Miriam",,,,202,Teórica,,Jueves,13:30,15:30,A
 6,5,Energías Renovables,TECNOLOGIA D LAS ENERG. RENOV.,Común,"RODRIGUEZ, Maria Virginia",,,,202,Teórica,,Jueves,15:50,17:50,A
-6,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,SCHNEIDER Erica,,,,202,Teórica,,Jueves,15:50,17:50,A
+6,5,Energías Renovables,Tecnologia,Común,SCHNEIDER Erica,,,,202,Teórica,,Jueves,15:50,17:50,A
 6,5,Energías Renovables,ELECTRONICA,Común,"SAVARESE, Hector",,,,14,Teórica,,Jueves,18:00,20:00,
 6,5,Energías Renovables,FILOSOFIA,Común,"LOPEZ, Veronica",,,,14,Teórica,,Jueves,20:10,22:10,
 6,5,Energías Renovables,"Proyecto",Común,"CAÑAMAS, Miriam",,,,202,Teórica,,Viernes,15:50,17:50,A
-6,5,Energías Renovables,TECNOLOGIA DE LAS ENERG. RENOV.,Común,SCHNEIDER Erica,,,,202,Teórica,,Viernes,15:50,17:50,A
+6,5,Energías Renovables,Tecnologia,Común,SCHNEIDER Erica,,,,202,Teórica,,Viernes,15:50,17:50,A
 6,5,Energías Renovables,TERM. Y MAQ. TERM.,Común,"CRIVARI, Juan Pablo",,,,15,Teórica,,Viernes,18:00,20:00,
 6,6,Electromecánica,ELECTROTECNIA,Común,"MARTINEZ, Juan Manuel",,,,1,Teórica,,Lunes,16:50,17:50,
 6,6,Electromecánica,MATEMATICA,Común,ORELLANA,,,,16,Teórica,,Lunes,18:00,20:00,
@@ -1142,10 +1142,10 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 6,7,Construcciones,INSTALACIONES SANITARIAS Y DE GAS,Común,DE LA FUENTE CORREA Florencia Yanel (P),,,,15,Teórica,,Viernes,20:10,22:10,
 6,8,Energías Renovables,TECNOLOGIA D LAS ENERG. RENOV.,Común,RODRIGUEZ Maria Virginia,,,,,Teórica,,Lunes,13:30,15:30,A
 6,8,Energías Renovables,DERECHOS DEL TRABAJO,Común,"FELTRIN, Vanesa",,,,301,Teórica,,Lunes,15:50,17:50,
-6,8,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,23,Teórica,,Lunes,18:00,20:00,A
+6,8,Energías Renovables,"Proyecto",Común,"CAÑAMAS, Miriam",,,,23,Teórica,,Lunes,18:00,20:00,A
 6,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,BAUTISTA Fermin,,,,23,Teórica,,Lunes,18:00,20:00,A
 6,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,BAUTISTA Fermin,,,,,Teórica,,Lunes,20:10,22:10,A
-6,8,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,,Teórica,,Martes,13:30,15:30,A
+6,8,Energías Renovables,"Proyecto",Común,"CAÑAMAS, Miriam",,,,,Teórica,,Martes,13:30,15:30,A
 6,8,Energías Renovables,MATEMATICA,Común,"QUINTANA, Melisa",,,,27,Teórica,,Martes,15:50,17:50,
 6,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,HINOJOSA Luis,,,,106,Teórica,,Martes,18:00,20:00,A
 6,8,Energías Renovables,CONTROLES Y AUTOMATISMOS,Común,HINOJOSA Luis,,,,106,Teórica,,Martes,20:10,22:10,A
@@ -1153,11 +1153,11 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 6,8,Energías Renovables,LITERATURA,Común,"SOBRECASA, Sonia",,,,22,Teórica,,Miércoles,15:50,17:50,
 6,8,Energías Renovables,FILOSOFIA,Común,"KIRKBY, Federico",,,,25,Teórica,,Miércoles,18:00,20:00,
 6,8,Energías Renovables,MANTENIMIENTO DE LAS INSTALACIONES,Común,"PLANES JALUFF, Damian",,,,,Teórica,,Miércoles,20:10,22:10,
-6,8,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,101,Teórica,,Jueves,10:00,12:00,A
+6,8,Energías Renovables,"Proyecto",Común,"CAÑAMAS, Miriam",,,,101,Teórica,,Jueves,10:00,12:00,A
 6,8,Energías Renovables,RELEVAMIENTO AMBIENTAL,Común,"SCHNEIDER, Erika",,,,301,Teórica,,Jueves,13:30,15:30,
 6,8,Energías Renovables,INGLES,Común,"GARTISANI, Lorena",,,,301,Teórica,,Jueves,15:50,17:50,
 6,8,Energías Renovables,TECNOLOGIA D LAS ENERG. RENOV.,Común,"ESCALANTE, Florencia",,,,201,Teórica,,Jueves,18:00,20:00,A
-6,8,Energías Renovables,"PROY., DIS. E INST. DE ENERGIAS RENOV.",Común,"CAÑAMAS, Miriam",,,,201,Teórica,,Jueves,18:00,20:00,A
+6,8,Energías Renovables,"Proyecto",Común,"CAÑAMAS, Miriam",,,,201,Teórica,,Jueves,18:00,20:00,A
 6,8,Energías Renovables,TECNOLOGIA D LAS ENERG. RENOV.,Común,"ESCALANTE, Florencia",,,,201,Teórica,,Jueves,20:10,22:10,A
 6,8,Energías Renovables,ARTE,Común,,,,,307,Teórica,,Viernes,07:40,08:40,
 6,8,Energías Renovables,EDUCACION FISICA,Común,,,,,PROGRESO,Teórica,1.0,Viernes,10:00,11:00,
@@ -1255,9 +1255,9 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 7,4,Energías Renovables,Emprendimientos Productivos y Desarrollo Local,Común,"GESSI, Martin",,,,21,Teórica,,Lunes,18:00,20:00,
 7,4,Energías Renovables,Seguridad Higiene y Proteccion Ambiental,Común,"DOMINIQUE, Gonzalo",,,,21,Teórica,,Lunes,20:10,22:10,
 7,4,Energías Renovables,Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,18,Teórica,,Martes,08:00,10:00,
-7,4,Energías Renovables,Elaboracion de Proy.,Común,"QUIROGA, Lucas",,,,202,Teórica,,Martes,18:00,20:00,
+7,4,Energías Renovables,Elaboracion de P.,Común,"QUIROGA, Lucas",,,,202,Teórica,,Martes,18:00,20:00,
 7,4,Energías Renovables,Ejecucion de Proy.,Común,"ENGELS, Carlos",,,,202,Teórica,,Martes,18:00,20:00,
-7,4,Energías Renovables,Elaboracion de Proy.,Común,"QUIROGA, Lucas",,,,202,Teórica,,Martes,20:10,22:10,
+7,4,Energías Renovables,Elaboracion de P.,Común,"QUIROGA, Lucas",,,,202,Teórica,,Martes,20:10,22:10,
 7,4,Energías Renovables,Ejecucion de Proy.,Común,"ENGELS, Carlos",,,,202,Teórica,,Martes,20:10,22:10,
 7,4,Energías Renovables,Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,18,Teórica,,Miércoles,08:00,10:00,
 7,4,Energías Renovables,Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,18,Teórica,,Miércoles,10:00,12:00,
@@ -1266,9 +1266,9 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 7,4,Energías Renovables,Eficiencia Energ. y Uso Racional de la Energia,Común,"OCAMPO, Ricardo",,,,11,Teórica,,Miércoles,20:10,21:00,
 7,4,Energías Renovables,Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,18,Teórica,,Jueves,08:00,10:00,
 7,4,Energías Renovables,Ejecucion de Proy.,Común,"ENGELS, Carlos",,,,11,Teórica,,Jueves,18:00,20:00,
-7,4,Energías Renovables,Elaboracion de Proy.,Común,QUIROGA,,,,11,Teórica,,Jueves,18:00,20:00,
+7,4,Energías Renovables,Elaboracion de P.,Común,QUIROGA,,,,11,Teórica,,Jueves,18:00,20:00,
 7,4,Energías Renovables,Ejecucion de Proy.,Común,"ENGELS, Carlos",,,,11,Teórica,,Jueves,20:10,22:10,
-7,4,Energías Renovables,Elaboracion de Proy.,Común,QUIROGA,,,,11,Teórica,,Jueves,20:10,22:10,
+7,4,Energías Renovables,Elaboracion de P.,Común,QUIROGA,,,,11,Teórica,,Jueves,20:10,22:10,
 7,4,Energías Renovables,Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,5,Teórica,,Viernes,08:00,10:00,
 7,4,Energías Renovables,Practicas Profes.,Práctica,"DIONICIO, Alejandro",,,,5,Teórica,,Viernes,10:00,12:00,
 7,4,Energías Renovables,Ejecucion de Proy.,Común,"ENGELS, Carlos",,,,301,Teórica,,Viernes,15:50,17:50,
@@ -1311,14 +1311,14 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 7,6,Energías Renovables,Gestion de las Energias Renov,Común,"ENGELS, Carlos",,,,25,Teórica,,Lunes,18:00,20:00,
 7,6,Energías Renovables,Eficiencia Energ. y Uso Racional de la Energia,Común,"ENGELS, Carlos",,,,25,Teórica,,Lunes,20:10,22:10,
 7,6,Energías Renovables,Ejecucion de Proy.,Común,"GRANELLI, J.Pablo",,,,303,Teórica,,Martes,15:50,17:50,
-7,6,Energías Renovables,Elaboracion de Proyectos Aplicados a las ER.,Común,"ENGELS, Carlos",,,,202,Teórica,,Martes,15:50,17:50,A
+7,6,Energías Renovables,Elaboracion de P.,Común,"ENGELS, Carlos",,,,202,Teórica,,Martes,15:50,17:50,A
 7,6,Energías Renovables,Ejecucion de Proy.,Común,"GRANELLI, J.Pablo",,,,201,Teórica,,Martes,15:50,17:50,B
 7,6,Energías Renovables,Emprendimientos Productivos y Desarrollo Local,Común,"GESSI, Martin",,,,22,Teórica,,Martes,18:00,20:00,
 7,6,Energías Renovables,Practicas Profes.,Práctica,"TORRES, Juan",,,,18,Teórica,,Miércoles,10:00,12:00,
 7,6,Energías Renovables,Ejecucion de Proy.,Común,"GRANELLI, J.Pablo",,,,201,Teórica,,Miércoles,15:50,17:50,
 7,6,Energías Renovables,Gestion de las Energias Renov,Común,"ENGELS, Carlos",,,,24,Teórica,,Miércoles,18:00,20:00,
 7,6,Energías Renovables,Eficiencia Energ. y Uso Racional de la Energia,Común,"ENGELS, Carlos",,,,24,Teórica,,Miércoles,18:00,20:00,
-7,6,Energías Renovables,Elaboracion de Proyectos Aplicados a las ER.,Común,"ENGELS, Carlos",,,,202,Teórica,,Miércoles,20:10,21:00,
+7,6,Energías Renovables,Elaboracion de P.,Común,"ENGELS, Carlos",,,,202,Teórica,,Miércoles,20:10,21:00,
 7,6,Energías Renovables,Practicas Profes.,Práctica,"TORRES, Juan",,,,18,Teórica,,Jueves,08:00,10:00,
 7,6,Energías Renovables,Practicas Profes.,Práctica,"TORRES, Juan",,,,18,Teórica,,Jueves,10:00,12:00,
 7,6,Energías Renovables,Sistemas Electroenergeticos,Común,"SAVARESE, Hector",,,,309,Teórica,,Jueves,15:50,17:50,
@@ -1327,6 +1327,6 @@ curso,division,especialidad,materia,tipo_materia,profesor,dni,telefono,email,aul
 7,6,Energías Renovables,Practicas Profes.,Práctica,"TORRES, Juan",,,,,Teórica,,Viernes,13:30,15:30,
 7,6,Energías Renovables,Ejecucion de Proy.,Común,"GRANELLI, J.Pablo",,,,203,Teórica,,Viernes,15:50,17:50,
 7,6,Energías Renovables,Ejecucion de Proy.,Común,"GRANELLI, J.Pablo",,,,202,Teórica,,Viernes,18:00,20:00,
-7,6,Energías Renovables,Elaboracion de Proyectos Aplicados a las ER.,Común,"ENGELS, Carlos",,,,202,Teórica,,Viernes,18:00,20:00,
+7,6,Energías Renovables,Elaboracion de P.,Común,"ENGELS, Carlos",,,,202,Teórica,,Viernes,18:00,20:00,
 7,6,Energías Renovables,Ejecucion de Proy.,Común,"GRANELLI, J.Pablo",,,,202,Teórica,,Viernes,20:10,22:10,
-7,6,Energías Renovables,Elaboracion de Proyectos Aplicados a las ER.,Común,"ENGELS, Carlos",,,,202,Teórica,,Viernes,20:10,22:10,
+7,6,Energías Renovables,Elaboracion de P.,Común,"ENGELS, Carlos",,,,202,Teórica,,Viernes,20:10,22:10,
