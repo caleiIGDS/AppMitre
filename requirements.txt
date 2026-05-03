@@ -1,2 +1,3 @@
 Flask
-weasyprint
+fpdf2
+# weasyprint removed for performance and hosting compatibility

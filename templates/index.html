@@ -136,7 +136,7 @@
 
         function mostrarInfoClase(json) {
             const c = JSON.parse(decodeURIComponent(json));
-            let cursoDisplay = `${c[0]} ${c[1]}`;
+            let cursoDisplay = `${c[0]}° ${c[1]}`;
             if (c[14] && c[14].trim() !== '') { // Check if group exists and is not empty
                 cursoDisplay += ` (Grupo: ${c[14]})`;
             }
@@ -168,7 +168,7 @@
                         <div class="info-label">Profesor</div>
                         <div class="info-valor">${c[5]}</div>
                         <div class="info-label">Curso</div>
-                        <div class="info-valor">${c[0]} ${c[1]}</div>
+                        <div class="info-valor">${c[0]}° ${c[1]}</div>
                         <div class="info-label">Aula</div>
                         <div class="info-valor">${c[9] || '-'}</div>
                         <div class="info-label">Horario</div>
@@ -330,13 +330,13 @@
                                         <div class="materia-bloque" 
                                              style="top: ${top}px; height: ${alto}px; ${styleExtra}" 
                                              onclick="mostrarInfoClase('${jsonClase}')"
-                                             onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]} ${clase[1]}')" 
+                                             onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
                                              onmouseout="hideTooltip()">
-                                            <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]} ${clase[1]}` : (clase[9] || '?')}</div>
+                                            <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>
                                             <div class="materia-contenido">
                                                 <div class="materia-nombre">${clase[3]}</div>
                                                 <div class="materia-detalles">
-                                                    ${modo === 'aula' ? (clase[5] || '-') : (modo === 'profesor' ? `${clase[0]} ${clase[1]}` : (clase[5] || '-'))}
+                                                    ${modo === 'aula' ? (clase[5] || '-') : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : (clase[5] || '-'))}
                                                 </div>
                                             </div>
                                         </div>`;
@@ -373,13 +373,13 @@
                                     <div class="materia-bloque" 
                                          style="top: ${top}px; height: ${alto}px; ${styleExtra}" 
                                          onclick="mostrarInfoClase('${jsonClase}')"
-                                         onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]} ${clase[1]}')" 
+                                         onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
                                          onmouseout="hideTooltip()">
-                                        <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]} ${clase[1]}` : (clase[9] || '?')}</div>
+                                        <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>
                                         <div class="materia-contenido">
                                             <div class="materia-nombre">${clase[3]}</div>
                                             <div class="materia-detalles">
-                                                ${modo === 'aula' ? (clase[5] || '-') : (modo === 'profesor' ? `${clase[0]} ${clase[1]}` : (clase[5] || '-'))}
+                                                ${modo === 'aula' ? (clase[5] || '-') : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : (clase[5] || '-'))}
                                             </div>
                                         </div>
                                     </div>`;
