@@ -1,4 +1,41 @@
+# Database
+escuela.db
 *.db
-datos.csv
-/pycache/
+
+# Python
+__pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.toast
+.lucid
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+.coverage
+.hypothesis/
+
+# Flask
+instance/
+.webassets-cache
+
+# Data files (Generated or private)
+horarios_actualizados.csv
+datos.csv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
