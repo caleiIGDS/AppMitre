@@ -17,7 +17,7 @@ AppMitre is a Flask-based web application designed to manage and display school 
 -   `ordenar.py`: A utility script that uses `pandas` and fuzzy matching (`get_close_matches`) to automatically assign groups (e.g., 'A' for technical subjects) to classes based on predefined criteria.
 -   `datos.csv`: The source of truth for schedule data, which is imported into the SQLite database.
 -   `templates/`: Contains HTML templates (`index.html` for the main UI, `pdf_template.html` - though `fpdf2` is used programmatically in `app.py`).
--   `static/`: Contains static assets like CSS (`style.css`) and images.
+-   `static/`: Contains static assets like CSS (`style.css`), JavaScript (`js/script.js`), and images.
 
 ## Getting Started
 
@@ -60,7 +60,8 @@ This script reads `datos.csv` and outputs `horarios_actualizados.csv` with assig
 -   **PDF Export:** Located in `app.py`, use the `FPDF` class to customize the exported schedule's layout and style.
 
 ### Frontend
--   **Dynamic Calendar:** The calendar in `index.html` is generated on the fly via JavaScript. It calculates overlaps and positions blocks based on start/end times.
+-   **Separation of Concerns:** JavaScript logic is separated from HTML templates. Logic resides in `static/js/script.js`, while `index.html` only contains a minimal initialization script to pass data via `window.APP_DATA`.
+-   **Dynamic Calendar:** The calendar in `index.html` is generated on the fly via JavaScript in `script.js`. It calculates overlaps and positions blocks based on start/end times.
 -   **Styling:** Follow the CSS variables defined in `:root` in `style.css` to maintain visual consistency (Google/Material-inspired aesthetic).
 -   **Modals:** Used for displaying detailed class information and handling overlaps.
 
@@ -77,4 +78,5 @@ This script reads `datos.csv` and outputs `horarios_actualizados.csv` with assig
 | `requirements.txt` | Project dependencies. |
 | `datos.csv` | Input data for schedules. |
 | `static/style.css` | UI styling. |
+| `static/js/script.js` | Main frontend logic (calendar generation, search, etc.). |
 | `templates/index.html` | Main interactive user interface. |
