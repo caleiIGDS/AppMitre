@@ -1,7 +1,7 @@
 from flask import Flask, render_template, jsonify, Response
 import database
 import sqlite3
-from fpdf import FPDF
+from weasyprint import HTML
 
 app = Flask(__name__)
 
@@ -45,54 +45,14 @@ def index():
 def api(tipo, valor):
     return jsonify(obtener_filas(tipo, valor))
 
-class PDF(FPDF):
-    def header(self):
-        self.set_font('Arial', 'B', 12)
-        self.cell(0, 10, 'Horario', 0, 1, 'C')
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font('Arial', 'I', 8)
-        self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
-
-    def chapter_title(self, title):
-        self.set_font('Arial', 'B', 12)
-        self.cell(0, 10, title, 0, 1, 'L')
-        self.ln(10)
-
-    def chapter_body(self, data):
-        self.set_font('Arial', '', 10)
-        # Header
-        self.cell(40, 10, 'Dia', 1)
-        self.cell(40, 10, 'Inicio', 1)
-        self.cell(40, 10, 'Fin', 1)
-        self.cell(60, 10, 'Materia', 1)
-        self.cell(60, 10, 'Profesor', 1)
-        self.cell(40, 10, 'Aula', 1)
-        self.cell(40, 10, 'Grupo', 1)
-        self.ln()
-        # Data
-        for row in data:
-            self.cell(40, 10, str(row[11]), 1)
-            self.cell(40, 10, str(row[12]), 1)
-            self.cell(40, 10, str(row[13]), 1)
-            self.cell(60, 10, str(row[3]), 1)
-            self.cell(60, 10, str(row[5]), 1)
-            self.cell(40, 10, str(row[9]), 1)
-            self.cell(40, 10, str(row[14]), 1)
-            self.ln()
-
 @app.route('/export/pdf/<tipo>/<valor>')
 def export_pdf(tipo, valor):
     filas = obtener_filas(tipo, valor)
-    pdf = PDF(orientation='L', unit='mm', format='A4')
-    pdf.add_page()
-    pdf.chapter_title(f'Horario para {tipo}: {valor}')
-    pdf.chapter_body(filas)
     
-    return Response(pdf.output(dest='S'),
-                    mimetype='application/pdf',
-                    headers={'Content-Disposition': f'inline; filename={tipo}_{valor}.pdf'})
+    rendered_html = render_template('pdf_template.html', tipo=tipo, valor=valor, filas=filas)
+    pdf = HTML(string=rendered_html).write_pdf()
+    
+    return Response(pdf, mimetype='application/pdf', headers={'Content-Disposition': f'inline; filename={tipo}_{valor}.pdf'})
 
 if __name__ == '__main__':
     # Esto garantiza que si cambias el CSV, la web se actualiza al arrancar
