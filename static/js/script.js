@@ -42,15 +42,15 @@ function filtrarOpciones(input, modo) {
 }
 
 function seleccionarOpcion(valor, modo) {
-    const input = document.querySelector(`#tab-${modo} .search-input`);
+    const input = document.querySelector(`#tab-${modo} .search-input, #tab-${modo} .search-input-fun, #tab-${modo} .minimal-input, #tab-${modo} .tech-input`);
     input.value = valor;
-    document.getElementById(`dropdown-${modo}`).style.display = 'none';
+    document.querySelectorAll('.custom-dropdown, .custom-dropdown-fun, .minimal-dropdown, .tech-dropdown').forEach(d => d.style.display = 'none');
     buscarEnServidor(modo, valor);
 }
 
 document.addEventListener('click', (e) => {
-    if (!e.target.classList.contains('search-input')) {
-        document.querySelectorAll('.custom-dropdown').forEach(d => d.style.display = 'none');
+    if (!e.target.classList.contains('search-input') && !e.target.classList.contains('search-input-fun') && !e.target.classList.contains('minimal-input') && !e.target.classList.contains('tech-input')) {
+        document.querySelectorAll('.custom-dropdown, .custom-dropdown-fun, .minimal-dropdown, .tech-dropdown').forEach(d => d.style.display = 'none');
     }
 });
 
@@ -118,15 +118,17 @@ function cambiarTab(evt, idTab) {
     var i, tabcontent, tablinks;
     tabcontent = document.getElementsByClassName("seccion-busqueda");
     for (i = 0; i < tabcontent.length; i++) tabcontent[i].style.display = "none";
-    tablinks = document.getElementsByClassName("tab-btn");
-    for (i = 0; i < tablinks.length; i++) tablinks[i].className = tablinks[i].className.replace(" active", "");
+    
+    // Support for multiple design styles (tabs, vertical tabs, fun tabs, minimal links, tech tags)
+    tablinks = document.querySelectorAll(".tab-btn, .tab-btn-vertical, .tab-btn-fun, .nav-link, .tech-tag");
+    for (i = 0; i < tablinks.length; i++) tablinks[i].classList.remove("active");
     
     document.getElementById(idTab).style.display = "block";
-    evt.currentTarget.className += " active";
+    evt.currentTarget.classList.add("active");
     
     // Reset views
-    document.querySelectorAll('.search-input').forEach(input => input.value = "");
-    document.querySelectorAll('.custom-dropdown').forEach(d => d.style.display = 'none');
+    document.querySelectorAll('.search-input, .search-input-fun, .minimal-input, .tech-input').forEach(input => input.value = "");
+    document.querySelectorAll('.custom-dropdown, .custom-dropdown-fun, .minimal-dropdown, .tech-dropdown').forEach(d => d.style.display = 'none');
     document.getElementById('contenedor-calendario').innerHTML = "";
     document.getElementById('contenedor-lista').innerHTML = "";
     document.getElementById('contenedor-dashboard').style.display = 'none';
@@ -140,7 +142,13 @@ function cambiarTab(evt, idTab) {
     
     // Clear the dynamic title when tab changes
     const titleDisplay = document.getElementById('search-title-display');
-    if (titleDisplay) titleDisplay.textContent = "";
+    if (titleDisplay) {
+        if (titleDisplay.classList.contains('tech-status-bar')) {
+            titleDisplay.textContent = "MODO_ESPERA: SELECCIONE_CRITERIO";
+        } else {
+            titleDisplay.textContent = "";
+        }
+    }
     document.getElementById('export-pdf-btn').style.display = 'none';
 }
 
@@ -286,7 +294,13 @@ function buscarEnServidor(modo, valor) {
     const titleDisplay = document.getElementById('search-title-display');
     const exportBtn = document.getElementById('export-pdf-btn');
     if (!valor) {
-        if (titleDisplay) titleDisplay.textContent = ""; // Clear title if no value
+        if (titleDisplay) {
+            if (titleDisplay.classList.contains('tech-status-bar')) {
+                titleDisplay.textContent = "MODO_ESPERA: SELECCIONE_CRITERIO";
+            } else {
+                titleDisplay.textContent = "";
+            }
+        }
         exportBtn.style.display = 'none';
         return;
     }
@@ -295,12 +309,16 @@ function buscarEnServidor(modo, valor) {
     // Update the title here
     if (titleDisplay) {
         let titleText = "";
-        if (modo === 'profesor') {
-            titleText = `Calendario semanal de Prof: ${valor}`;
-        } else if (modo === 'aula') {
-            titleText = `Calendario semanal de Aula: ${valor}`;
-        } else if (modo === 'curso') {
-            titleText = `Calendario semanal de Curso: ${valor}`;
+        if (titleDisplay.classList.contains('tech-status-bar')) {
+             titleText = `QUERY_RESULT: CALENDARIO_SEMANAL_${modo.toUpperCase()}_[${valor.toUpperCase()}]`;
+        } else {
+            if (modo === 'profesor') {
+                titleText = `Calendario semanal de Prof: ${valor}`;
+            } else if (modo === 'aula') {
+                titleText = `Calendario semanal de Aula: ${valor}`;
+            } else if (modo === 'curso') {
+                titleText = `Calendario semanal de Curso: ${valor}`;
+            }
         }
         titleDisplay.textContent = titleText;
         exportBtn.style.display = 'inline-block';
