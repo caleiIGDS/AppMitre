@@ -1,3 +1,6 @@
+// Configuración
+const HORAS_PROXIMAS = 2; // Rango en horas para la columna "Próximas"
+
 // Datos y estado global
 const rawData = window.APP_DATA ? window.APP_DATA.rawData : {};
 let currentSearch = {
@@ -243,22 +246,19 @@ function renderizarDashboard(filas) {
 
         if (currentTime >= start && currentTime <= end) {
             inProgress.push(f);
-        } else if (currentTime < start) {
+        } else if (currentTime < start && start < currentTime + (HORAS_PROXIMAS * 60)) {
             upcoming.push(f);
-        } else if (currentTime > end) {
-            finished.push(f);
         }
     });
 
     inProgress.sort((a, b) => timeToMin(a[12]) - timeToMin(b[12]));
     upcoming.sort((a, b) => timeToMin(a[12]) - timeToMin(b[12]));
-    finished.sort((a, b) => timeToMin(b[13]) - timeToMin(a[13]));
 
     const renderList = (list) => {
         if (list.length === 0) return '<div style="text-align:center; padding:20px; color:#5f6368;">SIN ACTIVIDAD</div>';
         return list.map(f => `
             <div class="class-item-light">
-                <div class="class-time-light">${f[12]}</div>
+                <div class="class-time-light">${f[12]} - ${f[13]}</div>
                 <div class="class-info-light">
                     <span class="class-materia-light">${f[3]}</span>
                     <span class="class-meta-light">${f[0]}° ${f[1]} | ${f[5]}</span>
@@ -270,17 +270,13 @@ function renderizarDashboard(filas) {
 
     contenedor.innerHTML = `
         <div class="dashboard-grid-light">
-            <div class="dashboard-column-light finished">
-                <h2>Terminadas</h2>
-                <div class="class-list-light">${renderList(finished.slice(0, 15))}</div>
-            </div>
             <div class="dashboard-column-light in-progress">
                 <h2>En Curso</h2>
                 <div class="class-list-light">${renderList(inProgress)}</div>
             </div>
             <div class="dashboard-column-light upcoming">
                 <h2>Próximas</h2>
-                <div class="class-list-light">${renderList(upcoming.slice(0, 15))}</div>
+                <div class="class-list-light">${renderList(upcoming)}</div>
             </div>
         </div>
     `;

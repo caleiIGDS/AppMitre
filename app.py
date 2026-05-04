@@ -124,6 +124,11 @@ class PDF(FPDF):
         # Header removed as per user request
         pass
 
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.cell(0, 10, 'by Calei', 0, 0, 'L')
+
 @app.route('/export/pdf/<tipo>/<valor>')
 def export_pdf(tipo, valor):
     import time

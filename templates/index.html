@@ -10,7 +10,7 @@
     <header>
         <div class="header-content">
             <img src="{{ url_for('static', filename='images/logoMitre.jpg') }}" alt="Logo Escuela" class="logo">
-            <h1>Sistema de Horarios UN CAMBIO</h1>
+            <h1>SISTEMA DE HORARIOS Emilio Mitre</h1>
         </div>
     </header>
 
@@ -19,7 +19,7 @@
             <button class="tab-btn" onclick="cambiarTab(event, 'tab-profesor')">Profesor</button>
             <button class="tab-btn" onclick="cambiarTab(event, 'tab-aula')">Aula</button>
             <button class="tab-btn active" onclick="cambiarTab(event, 'tab-curso')">Curso</button>
-            <button class="tab-btn" onclick="cambiarTab(event, 'tab-envivo')">En Vivo ✈️</button>
+            <button class="tab-btn" onclick="cambiarTab(event, 'tab-envivo')">Clases En Curso</button>
         </div>
 
         <div class="contenedor-busqueda">
@@ -86,6 +86,10 @@
     </div>
 
     <div id="calendar-tooltip" class="calendar-tooltip"></div>
+    
+    <footer>
+        <p>Hecho por Calei | <a href="https://github.com/caleiIGDS/AppMitre" target="_blank">Repositorio en GitHub</a></p>
+    </footer>
 
     <script>
         window.APP_DATA = {
