@@ -1,13 +1,14 @@
 :root {
-    --primary: #4285f4; /* Google Blue */
-    --secondary: #1967d2;
-    --tertiary: #f8f9fa;
+    --primary: #46518C; /* Azul Técnico/Guardapolvo */
+    --secondary: #F28D35; /* Naranja Escudo */
+    --tertiary: #f0f2f5;
+    --accent: #8C0303; /* Rojo Escudo */
     --white: #ffffff;
-    --light-gray: #dadce0;
-    --dark-gray: #3c4043;
-    --shadow: 0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
-    --border-radius: 8px;
-    --grid-line: #e8eaed;
+    --light-gray: #cfd8dc;
+    --dark-gray: #263238;
+    --shadow: 2px 2px 5px rgba(0,0,0,0.1);
+    --border-radius: 4px; /* Más cuadrado/técnico */
+    --grid-line: #d1d9e0;
 }
 
 body {
@@ -20,7 +21,7 @@ body {
 
 header {
     background-color: var(--white);
-    padding: 15px 0;
+    padding: 25px 0;
     border-bottom: 1px solid var(--light-gray);
     position: sticky;
     top: 0;
@@ -46,6 +47,11 @@ h1 {
     font-weight: 400;
     color: #5f6368;
     text-transform: uppercase;
+}
+
+h1 .school-name {
+    font-size: 1.3em;
+    font-weight: 600;
 }
 
 h1 .school-name {
