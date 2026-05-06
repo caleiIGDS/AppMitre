@@ -9,7 +9,12 @@ let currentSearch = {
 };
 
 function normalize(text) {
-    return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "");
+    if (!text) return "";
+    return text.toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, "")
+        .replace(/°/g, "");
 }
 
 function filtrarOpciones(input, modo) {
@@ -39,6 +44,14 @@ function filtrarOpciones(input, modo) {
     } else {
         dropdown.style.display = 'none';
     }
+
+    // Enter key support to select first match
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter' && matches.length > 0) {
+            seleccionarOpcion(matches[0], modo);
+            input.blur();
+        }
+    };
 }
 
 function seleccionarOpcion(valor, modo) {

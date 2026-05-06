@@ -478,5 +478,7 @@ def api_dashboard():
 if __name__ == '__main__':
     # Esto garantiza que si cambias el CSV, la web se actualiza al arrancar
     database.crear_tablas()
-    database.cargar_csv('datos.csv')
+    SHEET_ID = "1GJxwpxXfLosqKxgIa6zyZhwjDK-89ZDavLi6nouWTsw"
+    GID = "1041328323"
+    database.cargar_desde_sheets(SHEET_ID, GID)
     app.run(host='0.0.0.0', port=5000, debug=True)

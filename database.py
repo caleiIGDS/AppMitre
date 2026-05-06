@@ -3,7 +3,8 @@ import csv
 import os
 import re
 import unicodedata
-
+import urllib.request
+import io
 def conectar():
     return sqlite3.connect('escuela.db')
 
@@ -79,32 +80,43 @@ def corregir_horarios(inicio, fin):
             return inicio, fin
     return inicio, fin
 
-def cargar_csv(archivo_csv):
-    if not os.path.exists(archivo_csv): return
+
+
+def descargar_sheet(sheet_id, gid=0):
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+    with urllib.request.urlopen(url) as response:
+        contenido = response.read().decode('utf-8')
+        lineas = contenido.splitlines()
+        lineas[0] = lineas[0].lower().replace(' ', '_')
+        return io.StringIO('\n'.join(lineas))
+
+def cargar_desde_sheets(sheet_id, gid=0):
     con = conectar()
     cur = con.cursor()
     
-    with open(archivo_csv, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            profesor = limpiar_profesor(row.get('profesor', ''))
-            aula = limpiar_aula(row.get('aula', ''))
-            inicio, fin = corregir_horarios(row.get('hora_inicio', ''), row.get('hora_fin', ''))
+    archivo = descargar_sheet(sheet_id, gid)
+    reader = csv.DictReader(archivo)
+    
+    for row in reader:
+        profesor = limpiar_profesor(row.get('profesor', ''))
+        aula = limpiar_aula(row.get('aula', ''))
+        inicio, fin = corregir_horarios(row.get('hora_inicio', ''), row.get('hora_fin', ''))
+        
+        superposicion_raw = row.get('superposicion', '0')
+        try:
+            superposicion_val = int(superposicion_raw) if superposicion_raw and superposicion_raw.strip() != '' else 0
+        except (ValueError, TypeError):
+            superposicion_val = 0
             
-            superposicion_raw = row.get('superposicion', '0')
-            try:
-                superposicion_val = int(superposicion_raw) if superposicion_raw and superposicion_raw.strip() != '' else 0
-            except (ValueError, TypeError):
-                superposicion_val = 0
-            datos = (
-                row.get('curso', ''), row.get('division', ''), row.get('especialidad', ''),
-                eliminar_acentos(row.get('materia', '')).upper().strip(), row.get('tipo_materia', ''),
-                profesor, row.get('dni', ''), row.get('telefono', ''), row.get('email', ''),
-                aula, row.get('tipo_aula', ''),
-                row.get('dia', ''), inicio, fin, row.get('grupo', ''),
-                superposicion_val # Add the new column value
-            )
-            cur.execute('INSERT INTO clases VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', datos) # Updated to 16 placeholders
-            
+        datos = (
+            row.get('curso', ''), row.get('division', ''), row.get('especialidad', ''),
+            eliminar_acentos(row.get('materia', '')).upper().strip(), row.get('tipo_materia', ''),
+            profesor, row.get('dni', ''), row.get('telefono', ''), row.get('email', ''),
+            aula, row.get('tipo_aula', ''),
+            row.get('dia', ''), inicio, fin, row.get('grupo', ''),
+            superposicion_val
+        )
+        cur.execute('INSERT INTO clases VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', datos)
+    
     con.commit()
     con.close()
