@@ -90,33 +90,36 @@ def descargar_sheet(sheet_id, gid=0):
         lineas[0] = lineas[0].lower().replace(' ', '_')
         return io.StringIO('\n'.join(lineas))
 
-def cargar_desde_sheets(sheet_id, gid=0):
+def cargar_desde_sheets(sheet_id, gids):
     con = conectar()
     cur = con.cursor()
     
-    archivo = descargar_sheet(sheet_id, gid)
-    reader = csv.DictReader(archivo)
-    
-    for row in reader:
-        profesor = limpiar_profesor(row.get('profesor', ''))
-        aula = limpiar_aula(row.get('aula', ''))
-        inicio, fin = corregir_horarios(row.get('hora_inicio', ''), row.get('hora_fin', ''))
+    for gid in gids.items():
+        print(f"Cargando curso con GID {gid}...")
+        archivo = descargar_sheet(sheet_id, gid)
+        reader = csv.DictReader(archivo)
         
-        superposicion_raw = row.get('superposicion', '0')
-        try:
-            superposicion_val = int(superposicion_raw) if superposicion_raw and superposicion_raw.strip() != '' else 0
-        except (ValueError, TypeError):
-            superposicion_val = 0
+        for row in reader:
+            profesor = limpiar_profesor(row.get('profesor', ''))
+            aula = limpiar_aula(row.get('aula', ''))
+            inicio, fin = corregir_horarios(row.get('hora_inicio', ''), row.get('hora_fin', ''))
             
-        datos = (
-            row.get('curso', ''), row.get('division', ''), row.get('especialidad', ''),
-            eliminar_acentos(row.get('materia', '')).upper().strip(), row.get('tipo_materia', ''),
-            profesor, row.get('dni', ''), row.get('telefono', ''), row.get('email', ''),
-            aula, row.get('tipo_aula', ''),
-            row.get('dia', ''), inicio, fin, row.get('grupo', ''),
-            superposicion_val
-        )
-        cur.execute('INSERT INTO clases VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', datos)
+            superposicion_raw = row.get('superposicion', '0')
+            try:
+                superposicion_val = int(superposicion_raw) if superposicion_raw and superposicion_raw.strip() != '' else 0
+            except (ValueError, TypeError):
+                superposicion_val = 0
+                
+            datos = (
+                row.get('curso', ''), row.get('division', ''), row.get('especialidad', ''),
+                eliminar_acentos(row.get('materia', '')).upper().strip(), row.get('tipo_materia', ''),
+                profesor, row.get('dni', ''), row.get('telefono', ''), row.get('email', ''),
+                aula, row.get('tipo_aula', ''),
+                row.get('dia', ''), inicio, fin, row.get('grupo', ''),
+                superposicion_val
+            )
+            cur.execute('INSERT INTO clases VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', datos)
     
     con.commit()
     con.close()
+    print("Listo.")

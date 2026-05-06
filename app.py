@@ -479,6 +479,14 @@ if __name__ == '__main__':
     # Esto garantiza que si cambias el CSV, la web se actualiza al arrancar
     database.crear_tablas()
     SHEET_ID = "1GJxwpxXfLosqKxgIa6zyZhwjDK-89ZDavLi6nouWTsw"
-    GID = "1041328323"
-    database.cargar_desde_sheets(SHEET_ID, GID)
+    GIDS = {
+        1: "1041328323",
+        2: "1960185081",
+        3: "576881307",
+        4: "1940684424",
+        5: "310218861",
+        6: "618740516",
+        7: "15078021",
+    }
+    database.cargar_desde_sheets(SHEET_ID, GIDS)
     app.run(host='0.0.0.0', port=5000, debug=True)
