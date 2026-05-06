@@ -94,7 +94,7 @@ def cargar_desde_sheets(sheet_id, gids):
     con = conectar()
     cur = con.cursor()
     
-    for gid in gids.items():
+    for gid in gids.values():
         print(f"Cargando curso con GID {gid}...")
         archivo = descargar_sheet(sheet_id, gid)
         reader = csv.DictReader(archivo)
@@ -119,7 +119,7 @@ def cargar_desde_sheets(sheet_id, gids):
                 superposicion_val
             )
             cur.execute('INSERT INTO clases VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', datos)
-    
+        print("Listo")
     con.commit()
     con.close()
     print("Listo.")
