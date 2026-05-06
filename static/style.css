@@ -165,10 +165,60 @@ body {
 }
 
 .materia-bloque {
+    position: absolute;
+    left: 4px;
+    right: 4px;
     background: var(--primary);
     border-radius: 0;
     border: 1px solid rgba(255,255,255,0.2);
     box-shadow: 2px 2px 0 var(--secondary);
+    color: white;
+    font-size: 11px;
+    overflow: hidden;
+    z-index: 5;
+    cursor: pointer;
+    display: flex;
+}
+
+.materia-bloque:hover {
+    filter: brightness(0.9);
+    z-index: 20;
+}
+
+.aula-indicador {
+    background-color: rgba(0,0,0,0.15);
+    width: 35px;
+    min-width: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+}
+
+.aula-indicador.sin-numero {
+    writing-mode: vertical-lr;
+    text-orientation: upright;
+}
+
+.materia-contenido {
+    padding: 4px 8px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.materia-nombre { 
+    font-weight: 600; 
+    line-height: 1.1;
+    margin-bottom: 2px;
+}
+
+.materia-detalles { 
+    font-size: 10px; 
+    opacity: 0.9; 
+    line-height: 1.1;
 }
 
 /* Action Button */
