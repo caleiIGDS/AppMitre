@@ -1,19 +1,29 @@
 :root {
-    --primary: #46518C; /* Azul Guardapolvo */
-    --secondary: #F28D35; /* Naranja Escudo */
-    --alert: #8C0303; /* Rojo Escudo */
-    --tech-bg: #e5e7eb;
+    --primary: #1A365D;
+    --secondary: #FF6B00;
+    --alert: #DC2626;
+    --tech-bg: #F1F5F9;
     --white: #ffffff;
-    --dark: #1f2937;
-    --grid-color: rgba(70, 81, 140, 0.1);
+    --dark: #0F172A;
+    --grid-color: rgba(26, 54, 93, 0.08);
 }
 
 body {
-    font-family: 'Courier New', Courier, monospace;
+    font-family: 'Rajdhani', sans-serif;
     background-color: var(--tech-bg);
     color: var(--dark);
     margin: 0;
     padding: 0;
+}
+
+.tech-titles h1, 
+.tech-tag, 
+.tech-status-bar, 
+.tech-input, 
+.sys-clock, 
+.tech-btn-action, 
+.hora-label {
+    font-family: 'Share Tech Mono', monospace;
 }
 
 .blueprint-bg {
