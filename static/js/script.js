@@ -328,7 +328,7 @@ function buscarEnServidor(modo, valor) {
         .then(res => res.json())
         .then(filas => {
             generarCalendario(filas, modo);
-            generarTablaDetallada(filas);
+            // generarTablaDetallada(filas); // Removed to avoid "detalles" banner at bottom
         })
         .catch(err => console.error("Error API:", err));
 }
@@ -411,11 +411,8 @@ function generarCalendario(filas, modo) {
                 }
                 const todosTienenGrupo = cluster.every(c => c[14] && c[14].trim() !== "");
                 if (cluster.length > 1 && !todosTienenGrupo) {
-                    console.log("Cluster with superposition detected:", cluster);
-                    console.log("Value of cluster[0][15]:", cluster[0][15]);
-                    // Check for superposition split condition (clase[15] == 1)
+                    // Logic for superposition
                     if (cluster[0][15] == 1) { 
-                        console.log("Executing split superposition logic (clase[15] == 1)");
                         const numClases = cluster.length;
                         cluster.forEach((clase, idxInCluster) => {
                             const inicio = clase[12];
@@ -442,8 +439,7 @@ function generarCalendario(filas, modo) {
                                     </div>
                                 </div>`;
                         });
-                    } else { // Original logic for F[15] != 1 or not present
-                        console.log("Executing single superposition block logic (clase[15] != 1)");
+                    } else { 
                         const top = getPosicionY(cluster[0][12]);
                         const latestEndClase = cluster.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
                         const bottom = getPosicionY(latestEndClase[13]);
