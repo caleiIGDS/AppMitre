@@ -13,8 +13,8 @@
                 <div class="header-blueprint">
                     <img src="{{ url_for('static', filename='images/logoMitre.jpg') }}" alt="Escudo" class="tech-logo">
                     <div class="tech-titles">
-                        <h1>SISTEMA TÉCNICO <span class="serial">v1.0.42</span></h1>
-                        <p class="institution">Escuela Emilio Mitre</p>
+                        <h1>EMILIO MITRE <span class="serial">V1.01</span></h1>
+                        <p class="institution">Sistema de Horarios</p>
                     </div>
                 </div>
             </div>
@@ -22,16 +22,15 @@
 
         <div class="tech-container">
             <nav class="tech-tags">
-                <button class="tech-tag" onclick="cambiarTab(event, 'tab-curso')">CURSOS_DB</button>
-                <button class="tech-tag" onclick="cambiarTab(event, 'tab-profesor')">PROFESORES_DB</button>
-                <button class="tech-tag" onclick="cambiarTab(event, 'tab-aula')">AULAS_DB</button>
-                <button class="tech-tag" onclick="cambiarTab(event, 'tab-envivo')">TIEMPO_REAL</button>
+                <button class="tech-tag" onclick="cambiarTab(event, 'tab-curso')">CURSOS</button>
+                <button class="tech-tag" onclick="cambiarTab(event, 'tab-profesor')">PROFESORES</button>
+                <button class="tech-tag" onclick="cambiarTab(event, 'tab-aula')">AULAS</button>
+                <button class="tech-tag active" onclick="cambiarTab(event, 'tab-envivo')">TIEMPO REAL</button>
             </nav>
 
             <section class="tech-search-module">
                 <div id="tab-profesor" class="seccion-busqueda">
                     <div class="tech-field">
-                        <label>ID_PROFESOR > </label>
                         <input type="text" class="tech-input" placeholder="INGRESE NOMBRE..." oninput="filtrarOpciones(this, 'profesor')" onfocus="filtrarOpciones(this, 'profesor')">
                         <div id="dropdown-profesor" class="tech-dropdown"></div>
                     </div>
@@ -39,28 +38,32 @@
 
                 <div id="tab-aula" class="seccion-busqueda">
                     <div class="tech-field">
-                        <label>ID_AULA > </label>
                         <input type="text" class="tech-input" placeholder="INGRESE UBICACIÓN..." oninput="filtrarOpciones(this, 'aula')" onfocus="filtrarOpciones(this, 'aula')">
                         <div id="dropdown-aula" class="tech-dropdown"></div>
                     </div>
                 </div>
 
-                <div id="tab-curso" class="seccion-busqueda active">
+                <div id="tab-curso" class="seccion-busqueda">
                     <div class="tech-field">
-                        <label>ID_CURSO > </label>
                         <input type="text" class="tech-input" placeholder="INGRESE GRADO..." oninput="filtrarOpciones(this, 'curso')" onfocus="filtrarOpciones(this, 'curso')">
                         <div id="dropdown-curso" class="tech-dropdown"></div>
                     </div>
                 </div>
 
-                <div id="tab-envivo" class="seccion-busqueda">
+                <div id="tab-envivo" class="seccion-busqueda active">
                     <div class="tech-live-module">
-                        <div class="sys-clock" id="dashboard-clock">00:00:00</div>
+                        <div class="sys-clock-container">
+                            <div class="sys-clock" id="dashboard-clock">00:00:00</div>
+                        </div>
+
                         <div class="sys-controls">
-                            <label class="tech-switch">
-                                <input type="checkbox" id="manual-clock-toggle" onchange="toggleManualClock()">
-                                <span class="tech-slider"></span>
-                            </label>
+                            <div class="manual-mode-group">
+                                <span class="manual-label">MODO MANUAL</span>
+                                <label class="tech-switch">
+                                    <input type="checkbox" id="manual-clock-toggle" onchange="toggleManualClock()">
+                                    <span class="tech-slider"></span>
+                                </label>
+                            </div>
                             <div class="sys-inputs">
                                 <input type="date" id="manual-date-input" class="tech-input-sm" oninput="setManualTime()">
                                 <input type="time" id="manual-clock-input" class="tech-input-sm" oninput="setManualTime()">
@@ -70,12 +73,17 @@
                 </div>
             </section>
 
-            <div id="search-title-display" class="tech-status-bar">MODO_ESPERA: SELECCIONE_CRITERIO</div>
-
             <main class="tech-workspace">
-                <div id="contenedor-dashboard" style="display: none;"></div>
-                <div id="contenedor-calendario" class="tech-grid-container"></div>
-                <button id="export-pdf-btn" class="tech-btn-action" style="display: none;" onclick="exportarAPDF()">GENERAR_REPORTE_PDF</button>
+                <div id="contenedor-dashboard"></div>
+                
+                <div id="workspace-calendar-header" style="display: none;">
+                    <div class="workspace-header">
+                        <h2 id="calendar-title" class="tech-title-center"></h2>
+                        <button id="export-pdf-btn" class="tech-btn-pdf" onclick="exportarAPDF()">PDF</button>
+                    </div>
+                </div>
+
+                <div id="contenedor-calendario" class="tech-grid-container" style="display: none;"></div>
                 <div id="contenedor-lista" class="tech-data-table"></div>
             </main>
         </div>

@@ -69,7 +69,11 @@ window.onclick = function(event) {
     if (event.target == modal) cerrarModal();
 }
 
-function mostrarInfoClase(json) {
+function mostrarInfoClase(json, element) {
+    // Remove selected class from any other block
+    document.querySelectorAll('.materia-bloque').forEach(b => b.classList.remove('selected'));
+    if (element) element.classList.add('selected');
+
     const c = JSON.parse(decodeURIComponent(json));
     let cursoDisplay = `${c[0]}° ${c[1]}`;
     if (c[14] && c[14].trim() !== '') { // Check if group exists and is not empty
@@ -134,22 +138,15 @@ function cambiarTab(evt, idTab) {
     document.getElementById('contenedor-dashboard').style.display = 'none';
     document.getElementById('contenedor-calendario').style.display = 'block';
     
+    // Header management
+    const workspaceHeader = document.getElementById('workspace-calendar-header');
+    if (workspaceHeader) workspaceHeader.style.display = 'none';
+
     if (idTab === 'tab-envivo') {
         document.getElementById('contenedor-calendario').style.display = 'none';
         document.getElementById('contenedor-dashboard').style.display = 'block';
         iniciarDashboard();
     }
-    
-    // Clear the dynamic title when tab changes
-    const titleDisplay = document.getElementById('search-title-display');
-    if (titleDisplay) {
-        if (titleDisplay.classList.contains('tech-status-bar')) {
-            titleDisplay.textContent = "MODO_ESPERA: SELECCIONE_CRITERIO";
-        } else {
-            titleDisplay.textContent = "";
-        }
-    }
-    document.getElementById('export-pdf-btn').style.display = 'none';
 }
 
 let dashboardInterval = null;
@@ -291,37 +288,19 @@ function renderizarDashboard(filas) {
 }
 
 function buscarEnServidor(modo, valor) {
-    const titleDisplay = document.getElementById('search-title-display');
-    const exportBtn = document.getElementById('export-pdf-btn');
+    const workspaceHeader = document.getElementById('workspace-calendar-header');
+    const calendarTitle = document.getElementById('calendar-title');
+    
     if (!valor) {
-        if (titleDisplay) {
-            if (titleDisplay.classList.contains('tech-status-bar')) {
-                titleDisplay.textContent = "MODO_ESPERA: SELECCIONE_CRITERIO";
-            } else {
-                titleDisplay.textContent = "";
-            }
-        }
-        exportBtn.style.display = 'none';
+        if (workspaceHeader) workspaceHeader.style.display = 'none';
         return;
     }
     currentSearch.modo = modo;
     currentSearch.valor = valor;
-    // Update the title here
-    if (titleDisplay) {
-        let titleText = "";
-        if (titleDisplay.classList.contains('tech-status-bar')) {
-             titleText = `QUERY_RESULT: CALENDARIO_SEMANAL_${modo.toUpperCase()}_[${valor.toUpperCase()}]`;
-        } else {
-            if (modo === 'profesor') {
-                titleText = `Calendario semanal de Prof: ${valor}`;
-            } else if (modo === 'aula') {
-                titleText = `Calendario semanal de Aula: ${valor}`;
-            } else if (modo === 'curso') {
-                titleText = `Calendario semanal de Curso: ${valor}`;
-            }
-        }
-        titleDisplay.textContent = titleText;
-        exportBtn.style.display = 'inline-block';
+
+    if (workspaceHeader && calendarTitle) {
+        workspaceHeader.style.display = 'block';
+        calendarTitle.textContent = `Horario de ${modo}: ${valor}`;
     }
 
     fetch(`/api/${modo}/${valor}`)
@@ -427,7 +406,7 @@ function generarCalendario(filas, modo) {
                             html += `
                                 <div class="materia-bloque" 
                                      style="top: ${top}px; height: ${alto}px; ${styleExtra}" 
-                                     onclick="mostrarInfoClase('${jsonClase}')"
+                                     onclick="mostrarInfoClase('${jsonClase}', this)"
                                      onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
                                      onmouseout="hideTooltip()">
                                     <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>
@@ -469,7 +448,7 @@ function generarCalendario(filas, modo) {
                         html += `
                             <div class="materia-bloque" 
                                  style="top: ${top}px; height: ${alto}px; ${styleExtra}" 
-                                 onclick="mostrarInfoClase('${jsonClase}')"
+                                 onclick="mostrarInfoClase('${jsonClase}', this)"
                                  onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
                                  onmouseout="hideTooltip()">
                                 <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>
@@ -488,6 +467,7 @@ function generarCalendario(filas, modo) {
         });
         html += '</div>';
         contenedor.innerHTML = html;
+        contenedor.style.display = 'block';
     } catch (err) {
         console.error("Error crítico:", err);
     }
@@ -533,3 +513,33 @@ function exportarAPDF() {
         window.open(`/export/pdf/${currentSearch.modo}/${currentSearch.valor}`, '_blank');
     }
 }
+
+document.addEventListener('fullscreenchange', () => {
+    if (document.fullscreenElement) {
+        document.body.classList.add('is-fullscreen');
+    } else {
+        document.body.classList.remove('is-fullscreen');
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'F11') {
+        e.preventDefault();
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.log(`Error attempting to enable fullscreen: ${err.message}`);
+            });
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const activeTab = document.querySelector('.seccion-busqueda.active');
+    if (activeTab && activeTab.id === 'tab-envivo') {
+        iniciarDashboard();
+    }
+});

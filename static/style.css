@@ -57,25 +57,34 @@ body {
 .tech-logo {
     height: 80px;
     border: 2px solid white;
+    border-radius: 50%;
 }
 
 .tech-titles h1 {
     margin: 0;
-    font-size: 24px;
-    letter-spacing: 2px;
+    font-size: 32px;
+    letter-spacing: 3px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 15px;
 }
 
 .serial {
     font-size: 14px;
     color: var(--secondary);
     background: rgba(0,0,0,0.2);
-    padding: 2px 8px;
+    padding: 2px 10px;
+    font-weight: normal;
+    border: 1px solid var(--secondary);
 }
 
 .institution {
-    margin: 5px 0 0;
-    font-size: 14px;
-    opacity: 0.8;
+    margin: 2px 0 0;
+    font-size: 16px;
+    opacity: 0.9;
+    letter-spacing: 1px;
+    text-transform: uppercase;
 }
 
 /* Tags Navigation */
@@ -117,21 +126,16 @@ body {
     position: relative;
 }
 
-.tech-search-module::before {
-    content: "MODULE_SEARCH_PARAM";
-    position: absolute;
-    top: -12px;
-    left: 20px;
-    background: var(--primary);
-    color: white;
-    padding: 0 10px;
-    font-size: 10px;
+.tech-field label {
+    display: none;
 }
 
-.tech-field {
-    display: flex;
-    align-items: center;
-    gap: 15px;
+.manual-label {
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--primary);
+    margin-right: 10px;
+    text-transform: uppercase;
 }
 
 .tech-input {
@@ -174,6 +178,26 @@ body {
     font-weight: bold;
 }
 
+/* Footer Styling */
+footer {
+    background: var(--primary);
+    color: white;
+    padding: 20px 0;
+    text-align: center;
+    border-top: 4px solid var(--secondary);
+    margin-top: 40px;
+}
+
+footer a {
+    color: #3b82f6;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+footer a:hover {
+    text-decoration: underline;
+}
+
 .materia-bloque {
     position: absolute;
     left: 4px;
@@ -181,13 +205,18 @@ body {
     background: var(--primary);
     border-radius: 0;
     border: 1px solid rgba(255,255,255,0.2);
-    box-shadow: 2px 2px 0 var(--secondary);
     color: white;
     font-size: 11px;
     overflow: hidden;
     z-index: 5;
     cursor: pointer;
     display: flex;
+    transition: box-shadow 0.2s;
+}
+
+.materia-bloque.selected {
+    box-shadow: 0 0 0 3px var(--secondary);
+    z-index: 10;
 }
 
 .materia-bloque:hover {
@@ -231,18 +260,39 @@ body {
     line-height: 1.1;
 }
 
-/* Action Button */
-.tech-btn-action {
-    display: block;
-    width: 100%;
+/* Workspace Header */
+.workspace-header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    margin-bottom: 15px;
+}
+
+.tech-title-center {
+    margin: 0;
+    font-size: 18px;
+    text-transform: uppercase;
+    color: var(--primary);
+    letter-spacing: 1px;
+}
+
+.tech-btn-pdf {
+    position: absolute;
+    right: 0;
     background: var(--secondary);
     color: white;
     border: none;
-    padding: 15px;
-    font-family: inherit;
+    padding: 8px 15px;
+    font-size: 12px;
     font-weight: bold;
     cursor: pointer;
-    margin: 20px 0;
+    clip-path: polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%);
+}
+
+/* Action Button (legacy or unused) */
+.tech-btn-action {
+    display: none;
 }
 
 /* Table Tech */
@@ -429,43 +479,64 @@ body {
 .class-list-light {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
+}
+
+/* Multi-column support only in Fullscreen mode */
+body.is-fullscreen .class-list-light {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
 }
 
 .class-item-light {
-    padding: 12px;
+    padding: 8px 12px;
     border: 1px solid #ddd;
     background: #f9fafb;
     display: grid;
-    grid-template-columns: 80px 1fr 50px;
+    grid-template-columns: 75px 1fr auto;
+    gap: 10px;
     align-items: center;
 }
 
 .class-time-light {
     font-weight: bold;
     color: var(--primary);
-    font-size: 12px;
+    font-size: 11px;
+    white-space: nowrap;
 }
 
 .class-info-light {
-    padding: 0 10px;
+    padding: 0 5px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
 }
 
 .class-materia-light {
     font-weight: bold;
-    font-size: 14px;
+    font-size: 13px;
     display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .class-meta-light {
-    font-size: 11px;
+    font-size: 10px;
     color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .class-room-light {
     text-align: right;
     font-weight: bold;
     color: var(--secondary);
+    font-size: 12px;
+    min-width: 60px;
 }
 
 /* Tooltip */
@@ -494,3 +565,156 @@ body {
     z-index: 15;
     cursor: pointer;
 }
+
+/* Real Time Tab Enhancements */
+.tech-live-module {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--white);
+    border: 1px solid var(--primary);
+    padding: 10px 25px;
+    margin-bottom: 15px;
+}
+
+.sys-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.manual-mode-group {
+    display: flex;
+    align-items: center;
+}
+
+.sys-inputs {
+    display: flex;
+    gap: 10px;
+}
+
+.tech-input-sm {
+    padding: 3px 5px;
+    font-family: inherit;
+    border: 1px solid #ccc;
+    font-size: 11px;
+}
+
+/* Enlarged Digital Clock */
+.sys-clock-container {
+    background: var(--dark);
+    padding: 5px 20px;
+    border: 1px solid var(--secondary);
+}
+
+.sys-clock {
+    font-size: 40px;
+    color: var(--secondary);
+    letter-spacing: 2px;
+}
+
+/* Fullscreen Styles */
+body.is-fullscreen {
+    overflow: hidden;
+}
+
+body.is-fullscreen .tech-header,
+body.is-fullscreen footer,
+body.is-fullscreen .tech-tags,
+body.is-fullscreen #tab-profesor,
+body.is-fullscreen #tab-aula,
+body.is-fullscreen #tab-curso {
+    display: none !important;
+}
+
+body.is-fullscreen .blueprint-bg {
+    background: var(--tech-bg);
+}
+
+body.is-fullscreen .tech-container {
+    max-width: 100%;
+    height: 100vh;
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+}
+
+body.is-fullscreen .tech-search-module {
+    margin-bottom: 0px;
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+
+body.is-fullscreen .tech-live-module {
+    padding: 5px 15px;
+    margin-bottom: 5px;
+}
+
+body.is-fullscreen .sys-clock {
+    font-size: 32px;
+}
+
+body.is-fullscreen .tech-workspace {
+    flex: 1;
+    overflow-y: auto;
+}
+
+body.is-fullscreen .dashboard-grid-light {
+    margin-top: 5px;
+}
+
+body.is-fullscreen .dashboard-column-light.upcoming {
+    display: none;
+}
+
+body.is-fullscreen .dashboard-grid-light {
+    grid-template-columns: 1fr;
+    height: 100%;
+}
+
+/* Switch Styles */
+.tech-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+    margin-left: 10px;
+}
+
+.tech-switch input { 
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.tech-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+}
+
+.tech-slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+}
+
+input:checked + .tech-slider {
+    background-color: var(--secondary);
+}
+
+input:checked + .tech-slider:before {
+    transform: translateX(20px);
+}
+
