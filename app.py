@@ -490,3 +490,19 @@ if __name__ == '__main__':
     }
     database.cargar_desde_sheets(SHEET_ID, GIDS)
     app.run(host='0.0.0.0', port=5000, debug=True)
+
+def recargar_db(app):
+    SHEET_ID = "1GJxwpxXfLosqKxgIa6zyZhwjDK-89ZDavLi6nouWTsw"
+    GIDS = {
+        1: "1041328323",
+        2: "1960185081",
+        3: "576881307",
+        4: "1940684424",
+        5: "310218861",
+        6: "618740516",
+        7: "15078021",
+    }
+
+    with app.app_context():
+        database.crear_tablas()
+        database.cargar_desde_sheets(SHEET_ID, GIDS)
