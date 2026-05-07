@@ -144,6 +144,8 @@ function cambiarTab(evt, idTab) {
     evt.currentTarget.classList.add("active");
     
     // Reset views
+    currentSearch.modo = null;
+    currentSearch.valor = null;
     document.querySelectorAll('.search-input, .search-input-fun, .minimal-input, .tech-input').forEach(input => input.value = "");
     document.querySelectorAll('.custom-dropdown, .custom-dropdown-fun, .minimal-dropdown, .tech-dropdown').forEach(d => d.style.display = 'none');
     document.getElementById('contenedor-calendario').innerHTML = "";
@@ -153,7 +155,9 @@ function cambiarTab(evt, idTab) {
     
     // Header management
     const workspaceHeader = document.getElementById('workspace-calendar-header');
+    const calendarTitle = document.getElementById('calendar-title');
     if (workspaceHeader) workspaceHeader.style.display = 'none';
+    if (calendarTitle) calendarTitle.textContent = "";
 
     if (idTab === 'tab-envivo') {
         document.getElementById('contenedor-calendario').style.display = 'none';
@@ -312,7 +316,7 @@ function buscarEnServidor(modo, valor) {
     currentSearch.valor = valor;
 
     if (workspaceHeader && calendarTitle) {
-        workspaceHeader.style.display = 'block';
+        workspaceHeader.style.display = 'flex';
         calendarTitle.textContent = `Horario de ${modo}: ${valor}`;
     }
 
