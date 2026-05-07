@@ -336,6 +336,8 @@ function generarCalendario(filas, modo) {
     try {
         if (!filas || filas.length === 0) {
             contenedor.innerHTML = "<div style='padding:20px; text-align:center; color:#70757a;'>No hay clases para mostrar.</div>";
+            const workspaceHeader = document.getElementById('workspace-calendar-header');
+            if (workspaceHeader) workspaceHeader.style.display = 'none';
             return;
         }
 

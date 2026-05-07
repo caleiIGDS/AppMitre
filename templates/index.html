@@ -73,12 +73,14 @@
                 </div>
             </section>
 
-            <div id="search-title-display" class="tech-status-bar" style="display: none;"></div>
+            <div id="workspace-calendar-header" class="workspace-header" style="display: none;">
+                <h2 id="calendar-title" class="tech-title-center"></h2>
+                <button id="export-pdf-btn" class="tech-btn-pdf" onclick="exportarAPDF()">GENERAR PDF</button>
+            </div>
 
             <main class="tech-workspace">
                 <div id="contenedor-dashboard" style="display: block;"></div>
                 <div id="contenedor-calendario" class="tech-grid-container" style="display: none;"></div>
-                <button id="export-pdf-btn" class="tech-btn-action" style="display: none;" onclick="exportarAPDF()">GENERAR_REPORTE_PDF</button>
                 <div id="contenedor-lista" class="tech-data-table"></div>
             </main>
         </div>
