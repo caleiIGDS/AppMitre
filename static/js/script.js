@@ -258,7 +258,7 @@ function renderizarDashboard(filas) {
 
     const inProgress = [];
     const upcoming = [];
-    const finished = [];
+    const finid = [];
 
     filas.forEach(f => {
         if (f[11] !== currentDay) return;
@@ -408,9 +408,12 @@ function generarCalendario(filas, modo) {
                     } else { break; }
                 }
                 const todosTienenGrupo = cluster.every(c => c[14] && c[14].trim() !== "");
-                if (cluster.length > 1 && !todosTienenGrupo) {
-                    // Logic for superposition
-                    if (cluster[0][15] == 1) { 
+                const haySuperposicion = cluster.length > 1 && (modo === 'aula' || modo === 'profesor' || !todosTienenGrupo);
+
+                if (haySuperposicion) {
+                    // Logic for superposition: only divide side-by-side if ALL classes allow it (F[15] == 1)
+                    const todosPermitenSuperposicion = cluster.every(c => c[15] == 1);
+                    if (todosPermitenSuperposicion) { 
                         const numClases = cluster.length;
                         cluster.forEach((clase, idxInCluster) => {
                             const inicio = clase[12];
@@ -421,6 +424,7 @@ function generarCalendario(filas, modo) {
                             const anchoPct = 100 / numClases;
                             const leftPct = anchoPct * idxInCluster;
                             const styleExtra = `width: calc(${anchoPct}% - 6px); left: calc(${leftPct}% + 4px);`;
+
                             const jsonClase = encodeURIComponent(JSON.stringify(clase));
                             html += `
                                 <div class="materia-bloque" 
@@ -528,7 +532,9 @@ function generarTablaDetallada(filas) {
 }
 
 function exportarAPDF() {
-    if (currentSearch.modo && currentSearch.valor) {
+    if (isPlanillaGeneral) {
+        window.open(`/export/pdf/planilla/${selectedDay}|${selectedFloor}`, '_blank');
+    } else if (currentSearch.modo && currentSearch.valor) {
         window.open(`/export/pdf/${currentSearch.modo}/${currentSearch.valor}`, '_blank');
     }
 }
@@ -561,4 +567,226 @@ document.addEventListener('DOMContentLoaded', () => {
     if (activeTab && activeTab.id === 'tab-envivo') {
         iniciarDashboard();
     }
+});
+
+function toggleMenu(e, id) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById(id);
+    const isVisible = menu.style.display === "block";
+    // Close all other menus first
+    document.querySelectorAll('.menu-dropdown').forEach(m => m.style.display = 'none');
+    menu.style.display = isVisible ? "none" : "block";
+}
+
+function toggleAdvancedMode(checkbox) {
+    const controls = document.getElementById('manual-controls');
+    if (checkbox.checked) {
+        controls.style.display = 'flex';
+    } else {
+        controls.style.display = 'none';
+        const manualToggle = document.getElementById('manual-clock-toggle');
+        if (manualToggle.checked) {
+            manualToggle.checked = false;
+            toggleManualClock();
+        }
+    }
+}
+
+let selectedDay = 'Lunes';
+let selectedFloor = 'Piso 1';
+let isPlanillaGeneral = false;
+let allDataCache = null;
+
+function togglePlanillaGeneral(checkbox) {
+    isPlanillaGeneral = checkbox.checked;
+    const controls = document.getElementById('planilla-controls');
+    const searchField = document.querySelector('#tab-aula .tech-field');
+    
+    if (isPlanillaGeneral) {
+        controls.style.display = 'block';
+        searchField.style.opacity = '0.5';
+        searchField.style.pointerEvents = 'none';
+        
+        if (allDataCache) {
+            generarPlanillaGeneral();
+        } else {
+            fetch('/api/dashboard')
+                .then(res => res.json())
+                .then(data => {
+                    allDataCache = data;
+                    generarPlanillaGeneral();
+                });
+        }
+    } else {
+        controls.style.display = 'none';
+        searchField.style.opacity = '1';
+        searchField.style.pointerEvents = 'auto';
+        
+        const input = document.querySelector('#tab-aula .tech-input');
+        if (input.value) {
+            buscarEnServidor('aula', input.value);
+        } else {
+            document.getElementById('contenedor-calendario').innerHTML = "";
+            const workspaceHeader = document.getElementById('workspace-calendar-header');
+            if (workspaceHeader) workspaceHeader.style.display = 'none';
+        }
+    }
+}
+
+function setDiaPlanilla(btn, dia) {
+    selectedDay = dia;
+    document.querySelectorAll('.planilla-tabs.dias .planilla-tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    generarPlanillaGeneral();
+}
+
+function setPisoPlanilla(btn, piso) {
+    selectedFloor = piso;
+    document.querySelectorAll('.planilla-tabs.pisos .planilla-tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    generarPlanillaGeneral();
+}
+
+function generarPlanillaGeneral() {
+    if (!allDataCache) return;
+    
+    const contenedor = document.getElementById('contenedor-calendario');
+    const classrooms = window.APP_DATA.floorMapping[selectedFloor];
+    
+    const timeToMin = (t) => {
+        if (!t || typeof t !== 'string' || !t.includes(':')) return 0;
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+    };
+
+    const filasDia = allDataCache.filter(f => f[11] === selectedDay && classrooms.includes(String(f[9])));
+    
+    if (filasDia.length === 0) {
+        contenedor.innerHTML = `<div style='padding:20px; text-align:center; color:#70757a;'>No hay clases para ${selectedFloor} el ${selectedDay}.</div>`;
+        return;
+    }
+
+    let tiempos = new Set();
+    filasDia.forEach(f => {
+        if (f[12]) tiempos.add(f[12]);
+        if (f[13]) tiempos.add(f[13]);
+    });
+    
+    const horariosDinamicos = Array.from(tiempos).sort((a, b) => timeToMin(a) - timeToMin(b));
+    const minMins = timeToMin(horariosDinamicos[0]) - 30; 
+    const maxMins = timeToMin(horariosDinamicos[horariosDinamicos.length - 1]) + 30;
+    const HORA_MIN = Math.max(0, minMins);
+    const HORA_MAX = Math.min(1440, maxMins);
+    const duracionTotal = HORA_MAX - HORA_MIN;
+    const ALTURA_TOTAL = Math.max(duracionTotal * 1.05, 450); 
+
+    const getPosicionY = (horaStr) => {
+        const minutos = timeToMin(horaStr);
+        return ((minutos - HORA_MIN) / (HORA_MAX - HORA_MIN)) * ALTURA_TOTAL;
+    };
+
+    let html = '<div class="calendario-grid" style="grid-template-columns: 60px repeat(' + classrooms.length + ', 1fr);">';
+    html += '<div class="cabecera-vacia"></div>';
+    classrooms.forEach(aula => {
+        html += `<div class="cabecera-dia"><div class="dia-nombre">Aula ${aula}</div></div>`;
+    });
+
+    html += `<div class="columna-horas" style="height:${ALTURA_TOTAL}px; position:relative;">`;
+    horariosDinamicos.forEach(hora => {
+        const top = getPosicionY(hora);
+        html += `<div class="hora-label" style="top:${top}px;">${hora}</div>`;
+    });
+    html += '</div>';
+
+    classrooms.forEach(aula => {
+        html += `<div class="columna-dia" style="height:${ALTURA_TOTAL}px;">`;
+        horariosDinamicos.forEach(hora => {
+            const top = getPosicionY(hora);
+            html += `<div class="grid-line-horizontal" style="top:${top}px;"></div>`;
+        });
+
+        const clasesAula = filasDia.filter(f => String(f[9]) === aula).sort((a,b) => timeToMin(a[12]) - timeToMin(b[12]));
+        let procesados = new Set();
+        for (let i = 0; i < clasesAula.length; i++) {
+            if (procesados.has(i)) continue;
+            let cluster = [clasesAula[i]];
+            let clusterIdx = [i];
+            let maxFin = timeToMin(clasesAula[i][13]);
+            for (let j = i + 1; j < clasesAula.length; j++) {
+                if (timeToMin(clasesAula[j][12]) < maxFin) {
+                    cluster.push(clasesAula[j]);
+                    clusterIdx.push(j);
+                    maxFin = Math.max(maxFin, timeToMin(clasesAula[j][13]));
+                } else { break; }
+            }
+            
+            const todosTienenGrupo = cluster.every(c => c[14] && c[14].trim() !== "");
+            const haySuperposicion = cluster.length > 1 && !todosTienenGrupo;
+
+            if (haySuperposicion) {
+                const todosPermitenSuperposicion = cluster.every(c => c[15] == 1);
+                if (todosPermitenSuperposicion) {
+                    const numClases = cluster.length;
+                    cluster.forEach((clase, idxInCluster) => {
+                        const top = getPosicionY(clase[12]) + 2;
+                        const bottom = getPosicionY(clase[13]) - 2;
+                        const alto = Math.max(bottom - top, 20);
+                        const anchoPct = 100 / numClases;
+                        const leftPct = anchoPct * idxInCluster;
+                        const styleExtra = `width: calc(${anchoPct}% - 6px); left: calc(${leftPct}% + 4px);`;
+                        const jsonClase = encodeURIComponent(JSON.stringify(clase));
+                        html += `
+                            <div class="materia-bloque" style="top: ${top}px; height: ${alto}px; ${styleExtra}" onclick="mostrarInfoClase('${jsonClase}', this)">
+                                <div class="materia-contenido" style="text-align:center;">
+                                    <div class="materia-nombre" style="font-size:14px;">${clase[0]}° ${clase[1]}</div>
+                                </div>
+                            </div>`;
+                    });
+                } else {
+                    const top = getPosicionY(cluster[0][12]);
+                    const latestEndClase = cluster.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
+                    const bottom = getPosicionY(latestEndClase[13]);
+                    const alto = Math.max(bottom - top, 30);
+                    const jsonDetalles = encodeURIComponent(JSON.stringify(cluster));
+                    html += `<div class="bloque-superposicion" style="top: ${top}px; height: ${alto}px;" onclick="verDetalleSuperposicion('${jsonDetalles}')">⚠️ Superposición (${cluster.length})</div>`;
+                }
+            } else {
+                cluster.forEach((clase) => {
+                    const top = getPosicionY(clase[12]) + 2;
+                    const bottom = getPosicionY(clase[13]) - 2;
+                    const alto = Math.max(bottom - top, 20);
+                    const jsonClase = encodeURIComponent(JSON.stringify(clase));
+                    html += `
+                        <div class="materia-bloque" style="top: ${top}px; height: ${alto}px; left:4px; right:4px;" onclick="mostrarInfoClase('${jsonClase}', this)">
+                            <div class="materia-contenido" style="text-align:center;">
+                                <div class="materia-nombre" style="font-size:14px;">${clase[0]}° ${clase[1]}</div>
+                            </div>
+                        </div>`;
+                });
+            }
+            clusterIdx.forEach(idx => procesados.add(idx));
+        }
+        html += '</div>';
+    });
+    
+    html += '</div>';
+    contenedor.innerHTML = html;
+    contenedor.style.display = 'block';
+    
+    const workspaceHeader = document.getElementById('workspace-calendar-header');
+    const calendarTitle = document.getElementById('calendar-title');
+    if (workspaceHeader && calendarTitle) {
+        workspaceHeader.style.display = 'flex';
+        calendarTitle.textContent = `Planilla General: ${selectedFloor} - ${selectedDay}`;
+    }
+}
+
+// Close menus when clicking outside
+document.addEventListener('click', (e) => {
+    const menus = document.querySelectorAll(".menu-dropdown");
+    menus.forEach(menu => {
+        if (menu.style.display === "block" && !menu.contains(e.target) && !e.target.classList.contains('btn-menu')) {
+            menu.style.display = "none";
+        }
+    });
 });

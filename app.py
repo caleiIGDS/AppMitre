@@ -6,6 +6,14 @@ import io
 
 app = Flask(__name__)
 
+FLOOR_MAPPING = {
+    "Piso 1": ["11", "12", "13", "14", "15", "16"],
+    "Piso 2": ["21", "22", "23", "24", "25", "26"],
+    "Piso 3": ["13", "14", "15", "16", "17", "18"],
+    "Entrepiso 1": ["101","102", "103", "104", "105", "106", "107", "108"],
+    "Entrepiso 2": ["301", "302", "303", "304", "305", "306"]
+}
+
 def obtener_filas(tipo, valor):
     try:
         con = database.conectar()
@@ -20,6 +28,16 @@ def obtener_filas(tipo, valor):
                 cur.execute("SELECT * FROM clases WHERE curso = ? AND division = ?", (partes[0], partes[1]))
             else:
                 cur.execute("SELECT * FROM clases WHERE curso = ?", (partes[0],))
+        elif tipo == 'planilla':
+            if '|' in valor:
+                dia, piso = valor.split('|')
+                aulas = FLOOR_MAPPING.get(piso, [])
+                if aulas:
+                    placeholders = ','.join(['?'] * len(aulas))
+                    query = f"SELECT * FROM clases WHERE dia = ? AND aula IN ({placeholders})"
+                    cur.execute(query, [dia] + aulas)
+            else:
+                return []
         
         filas = [list(row) for row in cur.fetchall()]
         con.close()
@@ -39,7 +57,7 @@ def index():
     cur.execute("SELECT DISTINCT curso, division FROM clases WHERE curso != '' ORDER BY curso, division")
     cursos = [f"{r[0]}° {r[1]}" for r in cur.fetchall()]
     con.close()
-    return render_template('index.html', datos={'profesor': profes, 'aula': aulas, 'curso': cursos})
+    return render_template('index.html', datos={'profesor': profes, 'aula': aulas, 'curso': cursos}, floor_mapping=FLOOR_MAPPING)
 
 @app.route('/api/<tipo>/<valor>')
 def api(tipo, valor):
@@ -58,11 +76,13 @@ def time_to_min(t):
     except:
         return 0
 
-def obtener_datos_calendario(filas):
+def obtener_datos_calendario(filas, tipo, columnas=None):
     if not filas:
         return None
     
-    dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
+    if columnas is None:
+        columnas = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
+    
     tiempos = set()
     for f in filas:
         if f[12]: tiempos.add(f[12])
@@ -78,31 +98,39 @@ def obtener_datos_calendario(filas):
     hora_max = min(1440, max_mins)
     
     calendario = {
-        'dias': dias,
+        'columnas': columnas,
         'horarios': horarios_ordenados,
         'hora_min': hora_min,
         'hora_max': hora_max,
-        'bloques_por_dia': {}
+        'bloques_por_columna': {}
     }
 
-    for dia in dias:
-        clases_dia = sorted([f for f in filas if f[11] == dia], key=lambda x: time_to_min(x[12]))
+    for col in columnas:
+        if tipo == 'planilla':
+            clases_col = sorted([f for f in filas if str(f[9]) == col], key=lambda x: time_to_min(x[12]))
+        else:
+            clases_col = sorted([f for f in filas if f[11] == col], key=lambda x: time_to_min(x[12]))
+            
         bloques = []
         procesados = set()
         
-        for i in range(len(clases_dia)):
+        for i in range(len(clases_col)):
             if i in procesados: continue
-            cluster = [clases_dia[i]]; cluster_idx = [i]
-            max_fin = time_to_min(clases_dia[i][13])
-            for j in range(i + 1, len(clases_dia)):
-                if time_to_min(clases_dia[j][12]) < max_fin:
-                    cluster.append(clases_dia[j]); cluster_idx.append(j)
-                    max_fin = max(max_fin, time_to_min(clases_dia[j][13]))
+            cluster = [clases_col[i]]; cluster_idx = [i]
+            max_fin = time_to_min(clases_col[i][13])
+            for j in range(i + 1, len(clases_col)):
+                if time_to_min(clases_col[j][12]) < max_fin:
+                    cluster.append(clases_col[j]); cluster_idx.append(j)
+                    max_fin = max(max_fin, time_to_min(clases_col[j][13]))
                 else: break
             
             todos_tienen_grupo = all(c[14] and str(c[14]).strip() != "" for c in cluster)
-            if len(cluster) > 1 and not todos_tienen_grupo:
-                if cluster[0][15] == 1:
+            hay_superposicion = len(cluster) > 1 and (tipo not in ['curso', 'planilla'] or not todos_tienen_grupo)
+
+            if hay_superposicion:
+                # Logic for superposition: only divide side-by-side if ALL classes allow it (F[15] == 1)
+                todos_permiten = all(c[15] == 1 for c in cluster)
+                if todos_permiten:
                     for idx, clase in enumerate(cluster):
                         bloques.append({'tipo': 'materia', 'ancho': 100/len(cluster), 'left': (100/len(cluster))*idx, 'clase': clase})
                 else:
@@ -116,7 +144,7 @@ def obtener_datos_calendario(filas):
                         elif grupo == 'B': ancho = 50; left = 50
                     bloques.append({'tipo': 'materia', 'ancho': ancho, 'left': left, 'clase': clase})
             for idx in cluster_idx: procesados.add(idx)
-        calendario['bloques_por_dia'][dia] = bloques
+        calendario['bloques_por_columna'][col] = bloques
     return calendario
 
 class PDF(FPDF):
@@ -136,11 +164,17 @@ def export_pdf(tipo, valor):
     
     # Limpiar el valor si es curso para la búsqueda en BD
     search_valor = valor
+    columnas = None
     if tipo == 'curso' and '°' in valor:
         search_valor = valor.replace('°', '')
         
+    if tipo == 'planilla':
+        if '|' in valor:
+            _, piso = valor.split('|')
+            columnas = FLOOR_MAPPING.get(piso, [])
+
     filas = obtener_filas(tipo, search_valor)
-    cal = obtener_datos_calendario(filas)
+    cal = obtener_datos_calendario(filas, tipo, columnas)
     
     pdf = PDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
@@ -148,22 +182,31 @@ def export_pdf(tipo, valor):
     # Nuevo Título simple y centrado
     pdf.set_font('Arial', 'B', 16)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(0, 10, f"Horario Semanal de {tipo.capitalize()}: {valor}", 0, 1, 'C')
+    
+    titulo = f"Horario Semanal de {tipo.capitalize()}: {valor}"
+    if tipo == 'planilla':
+        dia, piso = valor.split('|')
+        titulo = f"Planilla General: {piso} - {dia}"
+
+    pdf.cell(0, 10, titulo, 0, 1, 'C')
     pdf.ln(5)
 
     if cal:
         # Configuración del Grid
         margin_left = 15; margin_top = 30; width = 267; height = 140
-        col_hour_w = 15; col_day_w = (width - col_hour_w) / 5
+        col_hour_w = 15; col_day_w = (width - col_hour_w) / len(cal['columnas'])
         
-        # Dibujar Cabecera Días
+        # Dibujar Cabecera Días / Aulas
         pdf.set_fill_color(240, 240, 240); pdf.set_font('Arial', 'B', 10)
         pdf.set_xy(margin_left + col_hour_w, margin_top)
-        for dia in cal['dias']:
-            pdf.cell(col_day_w, 8, dia, 1, 0, 'C', True)
+        for col_name in cal['columnas']:
+            display_name = col_name if tipo != 'planilla' else f"A {col_name}"
+            if tipo == 'planilla' and len(cal['columnas']) > 6:
+                pdf.set_font('Arial', 'B', 8)
+            pdf.cell(col_day_w, 8, display_name, 1, 0, 'C', True)
         
         # Dibujar Horas y Grid
-        pdf.set_font('Arial', '', 10); pdf.set_text_color(100, 100, 100) # Tamaño horario agrandado a 10
+        pdf.set_font('Arial', '', 10); pdf.set_text_color(100, 100, 100)
         duracion = cal['hora_max'] - cal['hora_min']
         
         # Pre-calcular posiciones de texto para evitar solapamientos
@@ -175,10 +218,10 @@ def export_pdf(tipo, valor):
             text_positions.append({'txt': hora_str, 'line_y': y_line, 'text_y': y_line - 2})
             
         # Ajustar si hay colisiones (nudge up/down)
-        for _ in range(2): # Dos pasadas para estabilizar clusters
+        for _ in range(2): 
             for i in range(len(text_positions) - 1):
                 diff = text_positions[i+1]['text_y'] - text_positions[i]['text_y']
-                if diff < 3.5: # Restaurado a 3.5 para fuentes grandes
+                if diff < 3.5:
                     nudge = (3.5 - diff) / 2
                     text_positions[i]['text_y'] -= nudge
                     text_positions[i+1]['text_y'] += nudge
@@ -191,8 +234,8 @@ def export_pdf(tipo, valor):
 
         # Dibujar Bloques
         pdf.set_draw_color(0, 0, 0)
-        for d_idx, dia in enumerate(cal['dias']):
-            for b in cal['bloques_por_dia'][dia]:
+        for d_idx, col_name in enumerate(cal['columnas']):
+            for b in cal['bloques_por_columna'][col_name]:
                 if b['tipo'] == 'materia':
                     clase = b['clase']
                     y_ini = ((time_to_min(clase[12]) - cal['hora_min']) / duracion) * height
@@ -207,14 +250,14 @@ def export_pdf(tipo, valor):
                     pdf.set_fill_color(255, 255, 255)
                     pdf.rect(x, y, w, h, 'FD')
                     
-                    # Indicador lateral (Vertical si el nombre es largo o el ancho es poco)
+                    # Indicador lateral
                     ind_w = 7
                     if w < 15: ind_w = w * 0.4
                     
                     pdf.set_fill_color(245, 245, 245)
                     pdf.rect(x, y, ind_w, h, 'FD')
                     
-                    # Formatear curso y división con grado selectivo
+                    # Formatear curso y división
                     curso_num = str(clase[0])
                     division = str(clase[1])
                     try:
@@ -225,15 +268,13 @@ def export_pdf(tipo, valor):
                     div_display = f"{division}°" if is_high_course else division
                     
                     ind_txt = str(clase[9] or '?')
-                    if tipo == 'aula': ind_txt = f"{curso_num}° {div_display}"
+                    if tipo == 'aula' or tipo == 'planilla': ind_txt = f"{curso_num}° {div_display}"
                     
                     pdf.set_text_color(0, 0, 0)
                     contiene_letras = any(c.isalpha() for c in ind_txt)
-                    if tipo != 'aula' and contiene_letras and (len(ind_txt) > 4 or h > ind_w * 2):
-                        pdf.set_font('Arial', 'B', 6) # Restaurado a 6
-                        # Dibujar letra por letra verticalmente
-                        char_h = 3.0 # Restaurado a 3.0
-                        # Truncar si el texto es muy largo para la altura h
+                    if tipo != 'aula' and tipo != 'planilla' and contiene_letras and (len(ind_txt) > 4 or h > ind_w * 2):
+                        pdf.set_font('Arial', 'B', 6)
+                        char_h = 3.0
                         max_chars = int((h - 2) / char_h)
                         display_txt = ind_txt[:max_chars]
 
@@ -242,43 +283,35 @@ def export_pdf(tipo, valor):
                             pdf.set_xy(x, max(y, start_y + (i * char_h)))
                             pdf.cell(ind_w, char_h, char, 0, 0, 'C')
                     else:
-                        # Para números o textos cortos, mantener horizontal
-                        pdf.set_font('Arial', 'B', 8) # Restaurado a 8
+                        pdf.set_font('Arial', 'B', 8)
                         pdf.set_xy(x, y)
                         pdf.cell(ind_w, h, ind_txt, 0, 0, 'C')
+                    
                     # Contenido Materia Centrado
                     txt_x = x + ind_w + 0.3
                     materia_w = w - ind_w - 0.6
                     
                     if materia_w > 2:
-                        # Ajuste de tamaño de fuente
                         is_narrow = materia_w < 20
                         
                         if is_narrow:
-                            # CASO ESPECIAL GRUPOS A/B (Bloques finos)
                             font_size_mat = 7.2
                             font_size_det = 5.8
                             line_h = 2.7
-                            
-                            is_short = h < 20 # Aumentado de 15 para captar mejor clases de < 1h
-                            is_tiny = h < 12 # Caso extremo (ej: 40-50 min en calendarios largos)
+                            is_short = h < 20
+                            is_tiny = h < 12
 
                             if is_tiny:
-                                font_size_mat = 6.0
-                                font_size_det = 5.0
-                                line_h = 2.2
+                                font_size_mat = 6.0; font_size_det = 5.0; line_h = 2.2
 
                             pdf.set_font('Arial', 'B', font_size_mat)
                             lines_mat_full = pdf.multi_cell(materia_w, line_h, clase[3], split_only=True)
                             
-                            # Límite de líneas para la materia: 1 si es corto/tiny, 3 si es normal
                             max_lines_mat_allowed = 1 if is_short else 3
-                            
                             if len(lines_mat_full) > max_lines_mat_allowed:
                                 materia_display = ""
                                 for k in range(max_lines_mat_allowed - 1):
                                     materia_display += lines_mat_full[k].strip() + "\n"
-                                
                                 last_l = lines_mat_full[max_lines_mat_allowed - 1].strip()
                                 while pdf.get_string_width(last_l + "...") > materia_w - 1.0 and len(last_l) > 5:
                                     last_l = last_l[:-1]
@@ -288,12 +321,10 @@ def export_pdf(tipo, valor):
                                 materia_display = clase[3]
                                 actual_lines_mat = len(lines_mat_full)
                             
-                            # Preparar Profesor
                             pdf.set_font('Arial', '', font_size_det)
                             det_raw = f"Prof: {clase[5]}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
                             lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
                             
-                            # Decidir qué mostrar
                             show_det = (actual_lines_mat + 1) * line_h <= h - 0.3
                             show_time = show_det and (actual_lines_mat + len(lines_det) + 1) * line_h <= h - 0.3
                             
@@ -303,7 +334,6 @@ def export_pdf(tipo, valor):
                             
                             y_start = max(y + 0.2, y + (h - total_h) / 2)
                             pdf.set_xy(txt_x, y_start)
-                            
                             pdf.set_font('Arial', 'B', font_size_mat)
                             pdf.multi_cell(materia_w, line_h, materia_display, 0, 'C')
                             
@@ -311,19 +341,16 @@ def export_pdf(tipo, valor):
                                 pdf.set_font('Arial', '', font_size_det)
                                 space_for_prof = h - (actual_lines_mat * line_h) - 0.5
                                 if show_time: space_for_prof -= line_h
-                                
                                 max_lines_prof = int(space_for_prof / line_h)
                                 if max_lines_prof > 0:
                                     display_det = det_raw
                                     if len(lines_det) > max_lines_prof:
-                                        d_lines = []
-                                        for k in range(max_lines_prof - 1): d_lines.append(lines_det[k].strip())
+                                        d_lines = [lines_det[k].strip() for k in range(max_lines_prof - 1)]
                                         last_dl = lines_det[max_lines_prof-1].strip()
                                         while pdf.get_string_width(last_dl + "...") > materia_w - 0.8 and len(last_dl) > 5:
                                             last_dl = last_dl[:-1]
                                         d_lines.append(last_dl + "...")
                                         display_det = "\n".join(d_lines)
-                                    
                                     pdf.set_x(txt_x)
                                     pdf.multi_cell(materia_w, line_h, display_det, 0, 'C')
                             
@@ -332,28 +359,14 @@ def export_pdf(tipo, valor):
                                 if pdf.get_y() - y + line_h <= h:
                                     pdf.set_x(txt_x)
                                     pdf.cell(materia_w, line_h, f"{clase[12]} - {clase[13]}", 0, 1, 'C')
-                        
                         else:
-                            # CASO NORMAL (BLOQUE ANCHO)
-                            is_short = h < 20
-                            is_tiny = h < 12
-                            
-                            font_size_mat = 9.5
-                            font_size_det = 8.0
-                            line_h = 3.8
-                            
-                            if is_short:
-                                font_size_mat = 8.0
-                                font_size_det = 7.0
-                                line_h = 3.0
-                            if is_tiny:
-                                font_size_mat = 7.0
-                                font_size_det = 6.0
-                                line_h = 2.5
+                            is_short = h < 20; is_tiny = h < 12
+                            font_size_mat = 9.5; font_size_det = 8.0; line_h = 3.8
+                            if is_short: font_size_mat = 8.0; font_size_det = 7.0; line_h = 3.0
+                            if is_tiny: font_size_mat = 7.0; font_size_det = 6.0; line_h = 2.5
                             
                             pdf.set_font('Arial', 'B', font_size_mat)
                             lines_mat_full = pdf.multi_cell(materia_w, line_h, clase[3], split_only=True)
-                            
                             max_lines_mat_allowed = 1 if is_short else 4
                             
                             if len(lines_mat_full) > max_lines_mat_allowed:
@@ -372,7 +385,6 @@ def export_pdf(tipo, valor):
                             pdf.set_font('Arial', '', font_size_det)
                             det_raw = f"Prof: {clase[5]}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
                             lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
-                            
                             show_det = (actual_lines_mat + 1) * line_h <= h - 0.8
                             show_time = show_det and (actual_lines_mat + len(lines_det) + 1) * line_h <= h - 0.8
                             
@@ -382,7 +394,6 @@ def export_pdf(tipo, valor):
                             
                             y_start = max(y + 0.4, y + (h - (final_lines * line_h)) / 2)
                             pdf.set_xy(txt_x, y_start)
-                            
                             pdf.set_font('Arial', 'B', font_size_mat)
                             pdf.multi_cell(materia_w, line_h, materia_display, 0, 'C')
                             
@@ -390,7 +401,6 @@ def export_pdf(tipo, valor):
                                 pdf.set_font('Arial', '', font_size_det)
                                 space_for_prof = h - (actual_lines_mat * line_h) - 0.8
                                 max_lines_prof = max(1, int(space_for_prof / line_h))
-                                
                                 display_det = det_raw
                                 if len(lines_det) > max_lines_prof:
                                     d_lines = [lines_det[k].strip() for k in range(max_lines_prof-1)]
@@ -399,15 +409,13 @@ def export_pdf(tipo, valor):
                                         last_dl = last_dl[:-1]
                                     d_lines.append(last_dl + "...")
                                     display_det = "\n".join(d_lines)
-
-                                pdf.set_x(txt_x)
-                                pdf.multi_cell(materia_w, line_h, display_det, 0, 'C')
+                                pdf.set_x(txt_x); pdf.multi_cell(materia_w, line_h, display_det, 0, 'C')
 
                             if show_time:
                                 pdf.set_font('Arial', '', font_size_det)
                                 if pdf.get_y() - y + line_h <= h:
                                     pdf.set_x(txt_x)
-                                    pdf.cell(materia_w, line_h, f"{clase[12]} - {clase[13]}", 0, 1, 'C')                    
+                                    pdf.cell(materia_w, line_h, f"{clase[12]} - {clase[13]}", 0, 1, 'C')
                 elif b['tipo'] == 'superposicion':
                     y_ini = ((time_to_min(b['clases'][0][12]) - cal['hora_min']) / duracion) * height
                     latest = max(b['clases'], key=lambda x: time_to_min(x[13]))
@@ -441,13 +449,9 @@ def export_pdf(tipo, valor):
         pdf.cell(60, 6, str(f[5])[:35], 1)
         pdf.cell(20, 6, str(f[9]), 1, 0, 'C')
         
-        # Formato de curso y división selectivo en tabla
-        c_num = str(f[0])
-        div = str(f[1])
-        try:
-            is_high = int(c_num) >= 4
-        except:
-            is_high = False
+        c_num = str(f[0]); div = str(f[1])
+        try: is_high = int(c_num) >= 4
+        except: is_high = False
         div_txt = f"{div}°" if is_high else div
         
         pdf.cell(40, 6, f"{c_num}° {div_txt}", 1)
@@ -460,7 +464,8 @@ def export_pdf(tipo, valor):
     output.seek(0)
     
     print(f"Total Export PDF (fpdf2): {time.time() - start_time:.4f}s")
-    return send_file(output, mimetype='application/pdf', as_attachment=False, download_name=f"{tipo}_{valor}.pdf")
+    filename = f"{tipo}_{valor}.pdf".replace('|', '_')
+    return send_file(output, mimetype='application/pdf', as_attachment=False, download_name=filename)
 
 @app.route('/api/dashboard')
 def api_dashboard():

@@ -37,9 +37,43 @@
                 </div>
 
                 <div id="tab-aula" class="seccion-busqueda">
-                    <div class="tech-field">
-                        <input type="text" class="tech-input" placeholder="INGRESE UBICACIÓN..." oninput="filtrarOpciones(this, 'aula')" onfocus="filtrarOpciones(this, 'aula')">
-                        <div id="dropdown-aula" class="tech-dropdown"></div>
+                    <div class="tech-field-group">
+                        <div class="tech-field">
+                            <input type="text" class="tech-input" placeholder="INGRESE UBICACIÓN..." oninput="filtrarOpciones(this, 'aula')" onfocus="filtrarOpciones(this, 'aula')">
+                            <div id="dropdown-aula" class="tech-dropdown"></div>
+                        </div>
+                        <div class="menu-global">
+                            <button class="btn-menu" onclick="toggleMenu(event, 'menu-dropdown-aula')">⋮</button>
+                            <div id="menu-dropdown-aula" class="menu-dropdown">
+                                <label class="menu-item">
+                                    <input type="checkbox" id="planilla-general-toggle" onchange="togglePlanillaGeneral(this)">
+                                    Planilla General
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="planilla-controls" class="planilla-controls" style="display: none;">
+                        <div class="planilla-section">
+                            <span class="planilla-label">DÍA:</span>
+                            <div class="planilla-tabs dias">
+                                <button class="planilla-tab-btn active" onclick="setDiaPlanilla(this, 'Lunes')">L</button>
+                                <button class="planilla-tab-btn" onclick="setDiaPlanilla(this, 'Martes')">M</button>
+                                <button class="planilla-tab-btn" onclick="setDiaPlanilla(this, 'Miércoles')">X</button>
+                                <button class="planilla-tab-btn" onclick="setDiaPlanilla(this, 'Jueves')">J</button>
+                                <button class="planilla-tab-btn" onclick="setDiaPlanilla(this, 'Viernes')">V</button>
+                            </div>
+                        </div>
+                        <div class="planilla-section">
+                            <span class="planilla-label">UBICACIÓN:</span>
+                            <div class="planilla-tabs pisos">
+                                <button class="planilla-tab-btn active" onclick="setPisoPlanilla(this, 'Piso 1')">P1</button>
+                                <button class="planilla-tab-btn" onclick="setPisoPlanilla(this, 'Piso 2')">P2</button>
+                                <button class="planilla-tab-btn" onclick="setPisoPlanilla(this, 'Piso 3')">P3</button>
+                                <button class="planilla-tab-btn" onclick="setPisoPlanilla(this, 'Entrepiso 1')">E1</button>
+                                <button class="planilla-tab-btn" onclick="setPisoPlanilla(this, 'Entrepiso 2')">E2</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -56,7 +90,16 @@
                             <div class="sys-clock" id="dashboard-clock">00:00:00</div>
                         </div>
 
-                        <div class="sys-controls">
+                        <div class="menu-global">
+                            <button class="btn-menu" onclick="toggleMenu(event, 'menu-dropdown-envivo')">⋮</button>
+                            <div id="menu-dropdown-envivo" class="menu-dropdown">
+                                <label class="menu-item">
+                                    <input type="checkbox" id="advanced-mode-toggle" onchange="toggleAdvancedMode(this)">
+                                    Modo Avanzado
+                                </label>
+                            </div>
+                         </div>
+                        <div id="manual-controls" class="sys-controls" style="display: none;">
                             <div class="manual-mode-group">
                                 <span class="manual-label">MODO MANUAL</span>
                                 <label class="tech-switch">
@@ -105,6 +148,7 @@
     <script>
         window.APP_DATA = {
             rawData: {{ datos | tojson | safe }},
+            floorMapping: {{ floor_mapping | tojson | safe }},
         };
     </script>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>

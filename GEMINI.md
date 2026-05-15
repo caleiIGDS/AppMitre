@@ -1,85 +1,56 @@
 # AppMitre - School Schedule Management System
 
-AppMitre is a Flask-based web application designed to manage and display school schedules (clases) for professors, classrooms (aulas), and courses (cursos). It features a dynamic weekly calendar view, PDF export capabilities, and automated data cleaning/preprocessing.
+AppMitre is a Flask-based web application designed to manage and display school schedules for professors, classrooms (aulas), and courses (cursos). It features a dynamic weekly calendar view, "Planilla General" for floor-wide overviews, a real-time "En Vivo" dashboard, and PDF export capabilities.
 
 ## Project Overview
 
 -   **Backend:** Python 3 with Flask
--   **Database:** SQLite (`escuela.db`)
+-   **Database:** SQLite (`escuela.db`) - used as a local cache for normalized data.
+-   **Data Source:** Google Sheets (real-time fetch via CSV export URL).
 -   **PDF Generation:** `fpdf2`
--   **Data Processing:** `pandas` (for CSV preprocessing)
--   **Frontend:** HTML5, Vanilla CSS, and JavaScript (ES6+)
+-   **Frontend:** HTML5, CSS3 (Custom Tech/Blueprint theme), and JavaScript (ES6+).
 
 ### Core Components
 
--   `app.py`: The main entry point. Handles routing, API endpoints for schedule data, and PDF export logic.
--   `database.py`: Manages SQLite database interactions, including table creation and CSV data ingestion. It includes normalization logic for professor names and classroom identifiers.
--   `ordenar.py`: A utility script that uses `pandas` and fuzzy matching (`get_close_matches`) to automatically assign groups (e.g., 'A' for technical subjects) to classes based on predefined criteria.
--   `datos.csv`: The source of truth for schedule data, which is imported into the SQLite database.
--   `templates/`: Contains HTML templates (`index.html` for the main UI, `pdf_template.html` - though `fpdf2` is used programmatically in `app.py`).
--   `static/`: Contains static assets like CSS (`style.css`), JavaScript (`js/script.js`), and images.
+-   `app.py`: Main entry point. Handles routing, API endpoints for schedule data, and PDF export logic.
+-   `database.py`: Manages SQLite database interactions, including table creation and data ingestion from Google Sheets. Includes normalization logic for professor names and classroom identifiers.
+-   `templates/`: Contains `index.html`, the main interactive UI.
+-   `static/`: Contains static assets like `style.css` and `js/script.js`.
 
-## Getting Started
+## Technical Features
 
-### Prerequisites
+### Data Synchronization
+- Data is pulled from a specific Google Sheet ID and multiple GIDs (representing different sheets/years).
+- `database.cargar_desde_sheets` downloads these as CSVs, cleans them, and populates the local `clases` table.
 
--   Python 3.x
--   Pip (Python package manager)
+### Dynamic Calendar Logic
+- The calendar is rendered on the client side (`script.js`).
+- **Clusters:** It groups overlapping classes into "clusters" to calculate positioning.
+- **Superposition:** If multiple classes occupy the same slot and are not group-based (A/B), it either splits the column width or shows a "Superposición" warning block based on the `superposicion` flag in the DB.
+- **Group A/B:** For courses with technical groups, it splits the block into 50% width columns automatically.
 
-### Installation
+### "En Vivo" Dashboard
+- Shows classes "In Progress" and "Upcoming" (within 2 hours).
+- **Simulated Time:** Allows users to manually set a date and time to check future/past schedules.
 
-1.  Install the required dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-### Running the Application
-
-1.  Execute the main application script:
-    ```bash
-    python app.py
-    ```
-    The application will automatically:
-    -   Create/reset the SQLite tables.
-    -   Load data from `datos.csv` into `escuela.db`.
-    -   Start the Flask development server at `http://localhost:5000`.
-
-### Data Preprocessing
-
-If you need to update the group assignments in your CSV before running the app:
-```bash
-python ordenar.py
-```
-This script reads `datos.csv` and outputs `horarios_actualizados.csv` with assigned groups for technical subjects.
+### Planilla General
+- A specialized view in the "Aulas" tab that shows all classrooms on a specific floor for a specific day.
+- Useful for administrative overviews and physical verification.
 
 ## Development Conventions
 
 ### Backend
--   **Database Schema:** The `clases` table stores all schedule information. New columns should be added to both `crear_tablas` and `cargar_csv` in `database.py`.
+-   **Database Schema:** The `clases` table stores: `curso`, `division`, `especialidad`, `materia`, `tipo_materia`, `profesor`, `dni`, `telefono`, `email`, `aula`, `tipo_aula`, `dia`, `hora_inicio`, `hora_fin`, `grupo`, `superposicion`.
 -   **API Endpoints:** 
-    -   `/api/<tipo>/<valor>`: returns JSON data for the frontend calendar.
-    -   `/api/dashboard`: returns all classes for the real-time "En Vivo" dashboard.
--   **PDF Export:** Located in `app.py`, use the `FPDF` class to customize the exported schedule's layout and style.
+    -   `/api/<tipo>/<valor>`: Returns JSON data for a specific professor, aula, or course.
+    -   `/api/dashboard`: Returns all classes for the dashboard or planilla.
+-   **PDF Export:** Uses `FPDF` in `app.py`. It includes complex logic for font scaling and text wrapping within limited block heights.
 
 ### Frontend
--   **Separation of Concerns:** JavaScript logic is separated from HTML templates. Logic resides in `static/js/script.js`, while `index.html` only contains a minimal initialization script to pass data via `window.APP_DATA`.
--   **Dynamic Calendar:** The calendar in `index.html` is generated on the fly via JavaScript in `script.js`. It calculates overlaps and positions blocks based on start/end times.
--   **En Vivo Dashboard:** An airport-style board that shows classes currently in progress, finished, and upcoming. It includes a "Simulated Time" feature for testing or planning.
--   **Styling:** Follow the CSS variables defined in `:root` in `style.css` to maintain visual consistency (Google/Material-inspired aesthetic).
--   **Modals:** Used for displaying detailed class information and handling overlaps.
+-   **Modular JS:** Logic resides in `static/js/script.js`.
+-   **Styles:** CSS variables in `style.css` manage the color palette and typography.
+-   **Full Screen:** Supports F11/fullscreen mode for kiosk-style displays.
 
 ### Data Normalization
--   `database.py` contains `limpiar_profesor` and `limpiar_aula` functions. These are critical for ensuring that searches work correctly despite variations in the input CSV data (e.g., "J.PABLO" vs "J PABLO").
+- `database.py` includes `limpiar_profesor` (accents, formatting, manual mappings) and `limpiar_aula` (extracts numbers). This ensures search consistency.
 
-## Key Files Summary
-
-| File | Purpose |
-| :--- | :--- |
-| `app.py` | Main Flask app, routing, and PDF generation. |
-| `database.py` | SQLite DB management and CSV import logic. |
-| `ordenar.py` | Data cleaning and technical group assignment script. |
-| `requirements.txt` | Project dependencies. |
-| `datos.csv` | Input data for schedules. |
-| `static/style.css` | UI styling. |
-| `static/js/script.js` | Main frontend logic (calendar generation, search, etc.). |
-| `templates/index.html` | Main interactive user interface. |
