@@ -487,15 +487,22 @@ function generarCalendario(filas, modo) {
                             <div class="materia-bloque" 
                                  style="top: ${top}px; height: ${alto}px; ${styleExtra}" 
                                  onclick="mostrarInfoClase('${jsonClase}', this)"
-                                 onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
+                                 onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${(clase[16] === 1 ? clase[17] : (clase[5] || '-')).replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
                                  onmouseout="hideTooltip()">
                                 <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>
                                 <div class="materia-contenido">
-                                    <div class="materia-nombre">${clase[3]}</div>
-                                    <div class="materia-detalles">
-                                        ${modo === 'aula' ? (clase[5] || '-') : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : (clase[5] || '-'))}
-                                    </div>
+                                    ${modo === 'profesor' && clase[16] === 1 ? 
+                                        `<div class="materia-nombre" style="color:var(--alert); font-weight:bold; display:flex; align-items:center; justify-content:center; height:100%;">LICENCIADA</div>` :
+                                        `<div class="materia-nombre">${clase[3]}</div>
+                                         <div class="materia-detalles">
+                                            ${(() => {
+                                                const profName = (clase[16] === 1 && clase[17]) ? clase[17] : (clase[5] || '-');
+                                                return modo === 'aula' ? profName : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : profName);
+                                            })()}
+                                         </div>`
+                                    }
                                 </div>
+
                             </div>`;
                     });
                     clusterIdx.forEach(idx => procesados.add(idx));
@@ -537,9 +544,10 @@ function generarTablaDetallada(filas) {
             <tr><th>Día</th><th>Inicio</th><th>Fin</th><th>Materia</th><th>Profesor</th><th>Aula</th><th>Grupo</th></tr>
         </thead><tbody>`;
     filas.forEach(f => {
+        let profName = f[16] === 1 ? f[17] : f[5];
         html += `<tr>
             <td>${f[11]}</td><td>${f[12]}</td><td>${f[13]}</td>
-            <td><b>${f[3]}</b></td><td>${f[5]}</td><td>${f[9]}</td><td>${f[14] || '-'}</td>
+            <td><b>${f[3]}</b></td><td>${profName}</td><td>${f[9]}</td><td>${f[14] || '-'}</td>
         </tr>`;
     });
     html += '</tbody></table>';

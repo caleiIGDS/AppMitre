@@ -89,7 +89,10 @@ def descargar_sheet(sheet_id, gid=0):
     with urllib.request.urlopen(url) as response:
         contenido = response.read().decode('utf-8')
         lineas = contenido.splitlines()
-        lineas[0] = lineas[0].lower().replace(' ', '_')
+        # Normalizar encabezados: minúsculas, sin acentos, espacios a _
+        encabezados = lineas[0].lower().replace(' ', '_')
+        encabezados = eliminar_acentos(encabezados)
+        lineas[0] = encabezados
         return io.StringIO('\n'.join(lineas))
 
 def cargar_desde_sheets(sheet_id, gids):
