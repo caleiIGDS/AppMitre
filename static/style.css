@@ -234,9 +234,12 @@ body {
 
 .cabecera-dia {
     background: #f3f4f6;
-    border-bottom: 2px solid var(--primary);
-    padding: 10px;
-    text-align: center;
+    border-bottom: 1px solid var(--primary);
+    border-right: 1px solid var(--primary);
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-weight: bold;
 }
 
@@ -413,14 +416,14 @@ footer a:hover {
 }
 
 .cabecera-vacia {
-    height: 50px;
+    height: 35px;
     background: var(--white);
     border-bottom: 1px solid var(--primary);
     border-right: 1px solid var(--primary);
 }
 
 .cabecera-dia {
-    height: 50px;
+    height: 35px;
     display: flex;
     align-items: center;
     justify-content: center;

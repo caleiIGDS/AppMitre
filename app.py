@@ -203,7 +203,7 @@ def export_pdf(tipo, valor):
             display_name = col_name if tipo != 'planilla' else f"A {col_name}"
             if tipo == 'planilla' and len(cal['columnas']) > 6:
                 pdf.set_font('Arial', 'B', 8)
-            pdf.cell(col_day_w, 8, display_name, 1, 0, 'C', True)
+            pdf.cell(col_day_w, 6, display_name, 1, 0, 'C', True)
         
         # Dibujar Horas y Grid
         pdf.set_font('Arial', '', 10); pdf.set_text_color(100, 100, 100)
@@ -214,7 +214,7 @@ def export_pdf(tipo, valor):
         for hora_str in cal['horarios']:
             m = time_to_min(hora_str)
             y_rel = ((m - cal['hora_min']) / duracion) * height
-            y_line = margin_top + 8 + y_rel
+            y_line = margin_top + 6 + y_rel
             text_positions.append({'txt': hora_str, 'line_y': y_line, 'text_y': y_line - 2})
             
         # Ajustar si hay colisiones (nudge up/down)
@@ -242,7 +242,7 @@ def export_pdf(tipo, valor):
                     y_fin = ((time_to_min(clase[13]) - cal['hora_min']) / duracion) * height
                     
                     x = margin_left + col_hour_w + (d_idx * col_day_w) + (b['left'] * col_day_w / 100) + 0.5
-                    y = margin_top + 8 + y_ini + 0.5
+                    y = margin_top + 6 + y_ini + 0.5
                     w = (b['ancho'] * col_day_w / 100) - 1
                     h = (y_fin - y_ini) - 1
                     
@@ -322,7 +322,11 @@ def export_pdf(tipo, valor):
                                 actual_lines_mat = len(lines_mat_full)
                             
                             pdf.set_font('Arial', '', font_size_det)
-                            det_raw = f"Prof: {clase[5]}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
+                            # Mostrar suplente si esta activo
+                            prof_display = clase[5]
+                            if len(clase) > 16 and clase[16] == 1:
+                                prof_display = clase[17]
+                            det_raw = f"Prof: {prof_display}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
                             lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
                             
                             show_det = (actual_lines_mat + 1) * line_h <= h - 0.3
@@ -383,7 +387,11 @@ def export_pdf(tipo, valor):
                                 actual_lines_mat = len(lines_mat_full)
                             
                             pdf.set_font('Arial', '', font_size_det)
-                            det_raw = f"Prof: {clase[5]}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
+                            # Mostrar suplente si esta activo
+                            prof_display = clase[5]
+                            if len(clase) > 16 and clase[16] == 1:
+                                prof_display = clase[17]
+                            det_raw = f"Prof: {prof_display}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
                             lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
                             show_det = (actual_lines_mat + 1) * line_h <= h - 0.8
                             show_time = show_det and (actual_lines_mat + len(lines_det) + 1) * line_h <= h - 0.8
@@ -421,7 +429,7 @@ def export_pdf(tipo, valor):
                     latest = max(b['clases'], key=lambda x: time_to_min(x[13]))
                     y_fin = ((time_to_min(latest[13]) - cal['hora_min']) / duracion) * height
                     x = margin_left + col_hour_w + (d_idx * col_day_w) + 1
-                    y = margin_top + 8 + y_ini + 1
+                    y = margin_top + 6 + y_ini + 1
                     w = col_day_w - 2; h = (y_fin - y_ini) - 2
                     pdf.set_fill_color(220, 220, 220); pdf.rect(x, y, w, h, 'FD')
                     pdf.set_text_color(0, 0, 0); pdf.set_font('Arial', 'B', 8)
@@ -446,7 +454,13 @@ def export_pdf(tipo, valor):
         pdf.cell(15, 6, str(f[12]), 1, 0, 'C')
         pdf.cell(15, 6, str(f[13]), 1, 0, 'C')
         pdf.cell(70, 6, str(f[3])[:40], 1)
-        pdf.cell(60, 6, str(f[5])[:35], 1)
+        
+        # Mostrar suplente si esta activo
+        prof_display = f[5]
+        if len(f) > 16 and f[16] == 1:
+            prof_display = f[17]
+        pdf.cell(60, 6, str(prof_display)[:35], 1)
+        
         pdf.cell(20, 6, str(f[9]), 1, 0, 'C')
         
         c_num = str(f[0]); div = str(f[1])

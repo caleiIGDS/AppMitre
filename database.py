@@ -19,7 +19,9 @@ def crear_tablas():
             profesor TEXT, dni TEXT, telefono TEXT, email TEXT,
             aula TEXT, tipo_aula TEXT,
             dia TEXT, hora_inicio TEXT, hora_fin TEXT, grupo TEXT,
-            superposicion INTEGER DEFAULT 0
+            superposicion INTEGER DEFAULT 0,
+            suplente_activo INTEGER DEFAULT 0,
+            prof_suplente TEXT, sup_ini TEXT, sup_fin TEXT
         )
     ''')
     con.commit()
@@ -109,6 +111,16 @@ def cargar_desde_sheets(sheet_id, gids):
                 superposicion_val = int(superposicion_raw) if superposicion_raw and superposicion_raw.strip() != '' else 0
             except (ValueError, TypeError):
                 superposicion_val = 0
+
+            suplente_activo_raw = row.get('suplente_activo', '0')
+            try:
+                # Handle boolean-like values (TRUE/FALSE, 1/0)
+                if str(suplente_activo_raw).strip().upper() in ['TRUE', '1', 'VERDADERO']:
+                    suplente_activo_val = 1
+                else:
+                    suplente_activo_val = 0
+            except (ValueError, TypeError):
+                suplente_activo_val = 0
                 
             datos = (
                 row.get('curso', ''), row.get('division', ''), row.get('especialidad', ''),
@@ -116,9 +128,11 @@ def cargar_desde_sheets(sheet_id, gids):
                 profesor, row.get('dni', ''), row.get('telefono', ''), row.get('email', ''),
                 aula, row.get('tipo_aula', ''),
                 row.get('dia', ''), inicio, fin, row.get('grupo', ''),
-                superposicion_val
+                superposicion_val, suplente_activo_val,
+                limpiar_profesor(row.get('prof_suplente', '')),
+                row.get('sup_ini', ''), row.get('sup_fin', '')
             )
-            cur.execute('INSERT INTO clases VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', datos)
+            cur.execute('INSERT INTO clases VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', datos)
         print("Listo")
     con.commit()
     con.close()

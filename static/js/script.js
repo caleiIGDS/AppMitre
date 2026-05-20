@@ -92,12 +92,20 @@ function mostrarInfoClase(json, element) {
     if (c[14] && c[14].trim() !== '') { // Check if group exists and is not empty
         cursoDisplay += ` (Grupo: ${c[14]})`;
     }
+
+    let profesorLabel = "Profesor";
+    let profesorValor = c[5];
+    if (c[16] === 1) {
+        profesorLabel = "Suplente";
+        profesorValor = `${c[17]} (desde ${c[18]} hasta ${c[19]})`;
+    }
+
     const html = `
         <div class="info-card">
             <div class="info-label">Materia</div>
             <div class="info-valor">${c[3]}</div>
-            <div class="info-label">Profesor</div>
-            <div class="info-valor">${c[5]}</div>
+            <div class="info-label">${profesorLabel}</div>
+            <div class="info-valor">${profesorValor}</div>
             <div class="info-label">Curso</div>
             <div class="info-valor">${cursoDisplay}</div>
             <div class="info-label">Aula</div>
@@ -278,16 +286,20 @@ function renderizarDashboard(filas) {
 
     const renderList = (list) => {
         if (list.length === 0) return '<div style="text-align:center; padding:20px; color:#5f6368;">SIN ACTIVIDAD</div>';
-        return list.map(f => `
-            <div class="class-item-light">
-                <div class="class-time-light">${f[12]} - ${f[13]}</div>
-                <div class="class-info-light">
-                    <span class="class-materia-light">${f[3]}</span>
-                    <span class="class-meta-light">${f[0]}° ${f[1]} | ${f[5]}</span>
+        return list.map(f => {
+            let profName = f[5];
+            if (f[16] === 1) profName = f[17];
+            return `
+                <div class="class-item-light">
+                    <div class="class-time-light">${f[12]} - ${f[13]}</div>
+                    <div class="class-info-light">
+                        <span class="class-materia-light">${f[3]}</span>
+                        <span class="class-meta-light">${f[0]}° ${f[1]} | ${profName}</span>
+                    </div>
+                    <div class="class-room-light">${f[9] || '-'}</div>
                 </div>
-                <div class="class-room-light">${f[9] || '-'}</div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     };
 
     contenedor.innerHTML = `
@@ -430,13 +442,16 @@ function generarCalendario(filas, modo) {
                                 <div class="materia-bloque" 
                                      style="top: ${top}px; height: ${alto}px; ${styleExtra}" 
                                      onclick="mostrarInfoClase('${jsonClase}', this)"
-                                     onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
+                                     onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${(clase[16] === 1 ? clase[17] : (clase[5] || '-')).replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
                                      onmouseout="hideTooltip()">
                                     <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>
                                     <div class="materia-contenido">
                                         <div class="materia-nombre">${clase[3]}</div>
                                         <div class="materia-detalles">
-                                            ${modo === 'aula' ? (clase[5] || '-') : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : (clase[5] || '-'))}
+                                            ${(() => {
+                                                const profName = clase[16] === 1 ? clase[17] : (clase[5] || '-');
+                                                return modo === 'aula' ? profName : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : profName);
+                                            })()}
                                         </div>
                                     </div>
                                 </div>`;
