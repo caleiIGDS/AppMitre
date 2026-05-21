@@ -189,6 +189,45 @@ def export_pdf(tipo, valor):
         titulo = f"Planilla General: {piso} - {dia}"
 
     pdf.cell(0, 10, titulo, 0, 1, 'C')
+
+    if tipo == 'curso':
+        try:
+            con = database.conectar()
+            cur = con.cursor()
+            search_valor_p = valor.replace('°', '')
+            partes = search_valor_p.split(' ')
+            curso = partes[0]
+            division = partes[1] if len(partes) > 1 else ""
+            cur.execute("SELECT * FROM preceptores WHERE curso = ? AND division = ?", (curso, division))
+            row = cur.fetchone()
+            con.close()
+            if row:
+                turno_principal = str(row[2] or "").strip().upper()
+                precs = []
+                # indices: 3:manana, 4:tarde, 5:noche
+                mapping = {"T.M": 3, "T.T": 4, "T.V": 5, "T.N": 5}
+                # Use startsWith to be more flexible with T.M., T.M, etc.
+                p_idx = -1
+                for k, v in mapping.items():
+                    if turno_principal.startswith(k):
+                        p_idx = v
+                        break
+                
+                labels = {3: "T.M.", 4: "T.T.", 5: "T.N."}
+                if p_idx != -1 and row[p_idx]:
+                    precs.append(f"Preceptor {labels[p_idx]}: {row[p_idx]}")
+                
+                for idx in [3, 4, 5]:
+                    if idx == p_idx: continue
+                    if row[idx]:
+                        precs.append(f"Preceptor {labels[idx]}: {row[idx]}")
+                
+                if precs:
+                    pdf.set_font('Arial', 'B', 10)
+                    pdf.cell(0, 8, " | ".join(precs), 0, 1, 'C')
+        except Exception as e:
+            print(f"Error PDF preceptor: {e}")
+
     pdf.ln(5)
 
     if cal:
@@ -292,6 +331,7 @@ def export_pdf(tipo, valor):
                     materia_w = w - ind_w - 0.6
                     
                     if materia_w > 2:
+                        is_licencia = tipo == 'profesor' and len(clase) > 16 and clase[16] == 1
                         is_narrow = materia_w < 20
                         
                         if is_narrow:
@@ -305,7 +345,8 @@ def export_pdf(tipo, valor):
                                 font_size_mat = 6.0; font_size_det = 5.0; line_h = 2.2
 
                             pdf.set_font('Arial', 'B', font_size_mat)
-                            lines_mat_full = pdf.multi_cell(materia_w, line_h, clase[3], split_only=True)
+                            materia_txt = "LICENCIADA" if is_licencia else clase[3]
+                            lines_mat_full = pdf.multi_cell(materia_w, line_h, materia_txt, split_only=True)
                             
                             max_lines_mat_allowed = 1 if is_short else 3
                             if len(lines_mat_full) > max_lines_mat_allowed:
@@ -318,7 +359,7 @@ def export_pdf(tipo, valor):
                                 materia_display += last_l + "..."
                                 actual_lines_mat = max_lines_mat_allowed
                             else:
-                                materia_display = clase[3]
+                                materia_display = materia_txt
                                 actual_lines_mat = len(lines_mat_full)
                             
                             pdf.set_font('Arial', '', font_size_det)
@@ -329,7 +370,7 @@ def export_pdf(tipo, valor):
                             det_raw = f"Prof: {prof_display}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
                             lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
                             
-                            show_det = (actual_lines_mat + 1) * line_h <= h - 0.3
+                            show_det = (actual_lines_mat + 1) * line_h <= h - 0.3 and not is_licencia
                             show_time = show_det and (actual_lines_mat + len(lines_det) + 1) * line_h <= h - 0.3
                             
                             total_h = actual_lines_mat * line_h
@@ -339,7 +380,9 @@ def export_pdf(tipo, valor):
                             y_start = max(y + 0.2, y + (h - total_h) / 2)
                             pdf.set_xy(txt_x, y_start)
                             pdf.set_font('Arial', 'B', font_size_mat)
+                            if is_licencia: pdf.set_text_color(220, 38, 38)
                             pdf.multi_cell(materia_w, line_h, materia_display, 0, 'C')
+                            pdf.set_text_color(0, 0, 0)
                             
                             if show_det:
                                 pdf.set_font('Arial', '', font_size_det)
@@ -370,7 +413,8 @@ def export_pdf(tipo, valor):
                             if is_tiny: font_size_mat = 7.0; font_size_det = 6.0; line_h = 2.5
                             
                             pdf.set_font('Arial', 'B', font_size_mat)
-                            lines_mat_full = pdf.multi_cell(materia_w, line_h, clase[3], split_only=True)
+                            materia_txt = "LICENCIADA" if is_licencia else clase[3]
+                            lines_mat_full = pdf.multi_cell(materia_w, line_h, materia_txt, split_only=True)
                             max_lines_mat_allowed = 1 if is_short else 4
                             
                             if len(lines_mat_full) > max_lines_mat_allowed:
@@ -383,7 +427,7 @@ def export_pdf(tipo, valor):
                                 materia_display += last_l + "..."
                                 actual_lines_mat = max_lines_mat_allowed
                             else:
-                                materia_display = clase[3]
+                                materia_display = materia_txt
                                 actual_lines_mat = len(lines_mat_full)
                             
                             pdf.set_font('Arial', '', font_size_det)
@@ -393,7 +437,7 @@ def export_pdf(tipo, valor):
                                 prof_display = clase[17]
                             det_raw = f"Prof: {prof_display}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
                             lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
-                            show_det = (actual_lines_mat + 1) * line_h <= h - 0.8
+                            show_det = (actual_lines_mat + 1) * line_h <= h - 0.8 and not is_licencia
                             show_time = show_det and (actual_lines_mat + len(lines_det) + 1) * line_h <= h - 0.8
                             
                             final_lines = actual_lines_mat
@@ -403,7 +447,9 @@ def export_pdf(tipo, valor):
                             y_start = max(y + 0.4, y + (h - (final_lines * line_h)) / 2)
                             pdf.set_xy(txt_x, y_start)
                             pdf.set_font('Arial', 'B', font_size_mat)
+                            if is_licencia: pdf.set_text_color(220, 38, 38)
                             pdf.multi_cell(materia_w, line_h, materia_display, 0, 'C')
+                            pdf.set_text_color(0, 0, 0)
                             
                             if show_det:
                                 pdf.set_font('Arial', '', font_size_det)
@@ -481,6 +527,31 @@ def export_pdf(tipo, valor):
     filename = f"{tipo}_{valor}.pdf".replace('|', '_')
     return send_file(output, mimetype='application/pdf', as_attachment=False, download_name=filename)
 
+@app.route('/api/preceptor/<valor>')
+def api_preceptor(valor):
+    try:
+        search_valor = valor
+        if '°' in valor:
+            search_valor = valor.replace('°', '')
+        
+        partes = search_valor.split(' ')
+        curso = partes[0]
+        division = partes[1] if len(partes) > 1 else ""
+        
+        con = database.conectar()
+        cur = con.cursor()
+        cur.execute("SELECT * FROM preceptores WHERE curso = ? AND division = ?", (curso, division))
+        row = cur.fetchone()
+        con.close()
+        
+        if row:
+            cols = ["curso", "division", "turno", "preceptores_manana", "preceptores_tarde", "preceptores_noche"]
+            return jsonify(dict(zip(cols, row)))
+        return jsonify(None)
+    except Exception as e:
+        print(f"Error preceptor: {e}")
+        return jsonify(None)
+
 @app.route('/api/dashboard')
 def api_dashboard():
     try:
@@ -508,6 +579,7 @@ if __name__ == '__main__':
         7: "15078021",
     }
     database.cargar_desde_sheets(SHEET_ID, GIDS)
+    database.cargar_preceptores(SHEET_ID, "813054425")
     app.run(host='0.0.0.0', port=5000, debug=True)
 
 def recargar_db(app):
@@ -525,3 +597,4 @@ def recargar_db(app):
     with app.app_context():
         database.crear_tablas()
         database.cargar_desde_sheets(SHEET_ID, GIDS)
+        database.cargar_preceptores(SHEET_ID, "813054425")
