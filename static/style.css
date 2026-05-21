@@ -663,11 +663,6 @@ body.is-fullscreen .class-list-light {
     gap: 5px;
 }
 
-.manual-mode-group {
-    display: flex;
-    align-items: center;
-}
-
 .sys-inputs {
     display: flex;
     gap: 10px;

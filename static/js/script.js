@@ -179,23 +179,6 @@ let isManualClock = false;
 let manualTime = null;
 let manualDate = null;
 
-function toggleManualClock() {
-    isManualClock = document.getElementById('manual-clock-toggle').checked;
-    if (!isManualClock) {
-        manualTime = null;
-        manualDate = null;
-        actualizarReloj();
-    } else {
-        // Initialize manual inputs with current time/date
-        const now = new Date();
-        document.getElementById('manual-clock-input').value = now.toTimeString().slice(0, 5);
-        document.getElementById('manual-date-input').value = now.toISOString().split('T')[0];
-        manualTime = document.getElementById('manual-clock-input').value;
-        manualDate = document.getElementById('manual-date-input').value;
-    }
-    cargarDatosDashboard();
-}
-
 function setManualTime() {
     if (isManualClock) {
         manualTime = document.getElementById('manual-clock-input').value;
@@ -601,18 +584,25 @@ function toggleMenu(e, id) {
     menu.style.display = isVisible ? "none" : "block";
 }
 
-function toggleAdvancedMode(checkbox) {
+function toggleManualMode(checkbox) {
     const controls = document.getElementById('manual-controls');
-    if (checkbox.checked) {
+    isManualClock = checkbox.checked;
+    
+    if (isManualClock) {
         controls.style.display = 'flex';
+        // Initialize manual inputs with current time/date
+        const now = new Date();
+        document.getElementById('manual-clock-input').value = now.toTimeString().slice(0, 5);
+        document.getElementById('manual-date-input').value = now.toISOString().split('T')[0];
+        manualTime = document.getElementById('manual-clock-input').value;
+        manualDate = document.getElementById('manual-date-input').value;
     } else {
         controls.style.display = 'none';
-        const manualToggle = document.getElementById('manual-clock-toggle');
-        if (manualToggle.checked) {
-            manualToggle.checked = false;
-            toggleManualClock();
-        }
+        manualTime = null;
+        manualDate = null;
+        actualizarReloj();
     }
+    cargarDatosDashboard();
 }
 
 let selectedDay = 'Lunes';

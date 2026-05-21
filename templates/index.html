@@ -13,7 +13,7 @@
                 <div class="header-blueprint">
                     <img src="{{ url_for('static', filename='images/logoMitre.jpg') }}" alt="Escudo" class="tech-logo">
                     <div class="tech-titles">
-                        <h1>EMILIO MITRE <span class="serial">V1.07</span></h1>
+                        <h1>EMILIO MITRE <span class="serial">V1.12</span></h1>
                         <p class="institution">Sistema de Horarios</p>
                     </div>
                 </div>
@@ -94,19 +94,12 @@
                             <button class="btn-menu" onclick="toggleMenu(event, 'menu-dropdown-envivo')">⋮</button>
                             <div id="menu-dropdown-envivo" class="menu-dropdown">
                                 <label class="menu-item">
-                                    <input type="checkbox" id="advanced-mode-toggle" onchange="toggleAdvancedMode(this)">
-                                    Modo Avanzado
+                                    <input type="checkbox" id="manual-mode-toggle" onchange="toggleManualMode(this)">
+                                    Modo Manual
                                 </label>
                             </div>
                          </div>
                         <div id="manual-controls" class="sys-controls" style="display: none;">
-                            <div class="manual-mode-group">
-                                <span class="manual-label">MODO MANUAL</span>
-                                <label class="tech-switch">
-                                    <input type="checkbox" id="manual-clock-toggle" onchange="toggleManualClock()">
-                                    <span class="tech-slider"></span>
-                                </label>
-                            </div>
                             <div class="sys-inputs">
                                 <input type="date" id="manual-date-input" class="tech-input-sm" oninput="setManualTime()">
                                 <input type="time" id="manual-clock-input" class="tech-input-sm" oninput="setManualTime()">
