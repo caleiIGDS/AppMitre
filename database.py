@@ -24,6 +24,13 @@ def crear_tablas():
             prof_suplente TEXT, sup_ini TEXT, sup_fin TEXT
         )
     ''')
+    cur.execute('DROP TABLE IF EXISTS preceptores')
+    cur.execute('''
+        CREATE TABLE preceptores (
+            curso TEXT, division TEXT, turno TEXT,
+            preceptores_manana TEXT, preceptores_tarde TEXT, preceptores_noche TEXT
+        )
+    ''')
     con.commit()
     con.close()
 
@@ -140,3 +147,25 @@ def cargar_desde_sheets(sheet_id, gids):
     con.commit()
     con.close()
     print("Listo.")
+
+def cargar_preceptores(sheet_id, gid):
+    con = conectar()
+    cur = con.cursor()
+    print(f"Cargando preceptores con GID {gid}...")
+    try:
+        archivo = descargar_sheet(sheet_id, gid)
+        reader = csv.DictReader(archivo)
+        for row in reader:
+            div_raw = str(row.get('division', '')).strip()
+            div_clean = div_raw[0] if div_raw else ""
+            datos = (
+                row.get('curso', ''), div_clean, row.get('turno', ''),
+                row.get('preceptores_manana', ''), row.get('preceptores_tarde', ''),
+                row.get('preceptores_noche', '')
+            )
+            cur.execute('INSERT INTO preceptores VALUES (?,?,?,?,?,?)', datos)
+        print("Listo preceptores")
+    except Exception as e:
+        print(f"Error cargando preceptores: {e}")
+    con.commit()
+    con.close()

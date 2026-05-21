@@ -335,7 +335,26 @@ footer a:hover {
     padding: 10px 5px;
     z-index: 100;
     width: 100%;
-    flex-wrap: nowrap !important;
+    flex-wrap: wrap !important;
+}
+
+.preceptor-info-container {
+    width: 100%;
+    text-align: center;
+    margin-top: 5px;
+    margin-bottom: 5px;
+    font-size: 14px;
+    color: var(--primary);
+    order: 3;
+}
+
+.preceptor-info-container span b {
+    color: var(--secondary);
+}
+
+.preceptor-info-container .sep {
+    margin: 0 10px;
+    opacity: 0.3;
 }
 
 .tech-title-center {
@@ -349,6 +368,7 @@ footer a:hover {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    order: 1;
 }
 
 .tech-btn-pdf {
@@ -364,6 +384,7 @@ footer a:hover {
     white-space: nowrap;
     margin-left: 20px;
     flex-shrink: 0;
+    order: 2;
 }
 
 .tech-btn-pdf:hover {
@@ -529,6 +550,20 @@ footer a:hover {
     font-size: 15px;
     color: var(--dark);
     margin-bottom: 4px;
+}
+
+.clickable-valor {
+    font-size: 15px;
+    color: var(--dark);
+    margin-bottom: 4px;
+    display: inline-block;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.clickable-valor:hover {
+    color: var(--secondary);
+    font-weight: bold;
 }
 
 /* Dashboard En Vivo - Tech Style */

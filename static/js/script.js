@@ -75,11 +75,42 @@ function abrirModal(titulo, html) {
 
 function cerrarModal() {
     document.getElementById('modal-detalles').style.display = 'none';
+    // Remove selected class from any class block when closing
+    document.querySelectorAll('.materia-bloque').forEach(b => b.classList.remove('selected'));
 }
 
 window.onclick = function(event) {
     const modal = document.getElementById('modal-detalles');
     if (event.target == modal) cerrarModal();
+}
+
+function navegarDesdeModal(modo, valor) {
+    if (!valor || valor === '-' || valor === '?') return;
+    
+    // Cerrar el modal actual
+    cerrarModal();
+    
+    // Bandera para evitar el autofocus automático que abre el dropdown
+    window.isProgrammaticNavigation = true;
+    
+    // Simular el clic en la pestaña correspondiente para limpiar el estado y cambiar la vista
+    const tabBtn = document.querySelector(`button[onclick*="tab-${modo}"]`);
+    if (tabBtn) {
+        tabBtn.click();
+    }
+    
+    // Ejecutar búsqueda con un retardo mínimo para que el cambio de tab sea fluido
+    setTimeout(() => {
+        const input = document.querySelector(`#tab-${modo} .tech-input`);
+        if (input) {
+            input.value = valor;
+            buscarEnServidor(modo, valor);
+            // Asegurarnos de que el dropdown esté oculto
+            const dropdown = document.getElementById(`dropdown-${modo}`);
+            if (dropdown) dropdown.style.display = 'none';
+        }
+        window.isProgrammaticNavigation = false;
+    }, 10);
 }
 
 function mostrarInfoClase(json, element) {
@@ -105,11 +136,11 @@ function mostrarInfoClase(json, element) {
             <div class="info-label">Materia</div>
             <div class="info-valor">${c[3]}</div>
             <div class="info-label">${profesorLabel}</div>
-            <div class="info-valor">${profesorValor}</div>
+            <div class="clickable-valor" onclick="navegarDesdeModal('profesor', '${c[5].replace(/'/g, "\\'")}')">${profesorValor}</div>
             <div class="info-label">Curso</div>
-            <div class="info-valor">${cursoDisplay}</div>
+            <div class="clickable-valor" onclick="navegarDesdeModal('curso', '${c[0]} ${c[1]}')">${cursoDisplay}</div>
             <div class="info-label">Aula</div>
-            <div class="info-valor">${c[9] || '-'}</div>
+            <div class="clickable-valor" onclick="navegarDesdeModal('aula', '${(c[9] || '-').replace(/'/g, "\\'")}')">${c[9] || '-'}</div>
             <div class="info-label">Horario</div>
             <div class="info-valor">${c[12]} - ${c[13]} (${c[11]})</div>
         </div>
@@ -126,11 +157,11 @@ function verDetalleSuperposicion(json) {
                 <div class="info-label">Materia</div>
                 <div class="info-valor">${c[3]}</div>
                 <div class="info-label">Profesor</div>
-                <div class="info-valor">${c[5]}</div>
+                <div class="clickable-valor" onclick="navegarDesdeModal('profesor', '${c[5].replace(/'/g, "\\'")}')">${c[5]}</div>
                 <div class="info-label">Curso</div>
-                <div class="info-valor">${c[0]}° ${c[1]}</div>
+                <div class="clickable-valor" onclick="navegarDesdeModal('curso', '${c[0]} ${c[1]}')">${c[0]}° ${c[1]}</div>
                 <div class="info-label">Aula</div>
-                <div class="info-valor">${c[9] || '-'}</div>
+                <div class="clickable-valor" onclick="navegarDesdeModal('aula', '${(c[9] || '-').replace(/'/g, "\\'")}')">${c[9] || '-'}</div>
                 <div class="info-label">Horario</div>
                 <div class="info-valor">${c[12]} - ${c[13]}</div>
             </div>
@@ -156,8 +187,16 @@ function cambiarTab(evt, idTab) {
     currentSearch.valor = null;
     document.querySelectorAll('.search-input, .search-input-fun, .minimal-input, .tech-input').forEach(input => input.value = "");
     document.querySelectorAll('.custom-dropdown, .custom-dropdown-fun, .minimal-dropdown, .tech-dropdown').forEach(d => d.style.display = 'none');
-    document.getElementById('contenedor-calendario').innerHTML = "";
-    document.getElementById('contenedor-lista').innerHTML = "";
+    
+    // Solo borramos el calendario si es una navegación manual
+    if (!window.isProgrammaticNavigation) {
+        document.getElementById('contenedor-calendario').innerHTML = "";
+        document.getElementById('contenedor-lista').innerHTML = "";
+    } else {
+        // Mantenemos el calendario viejo visible pero atenuado para dar feedback de carga
+        document.getElementById('contenedor-calendario').style.opacity = '0.6';
+    }
+    
     document.getElementById('contenedor-dashboard').style.display = 'none';
     document.getElementById('contenedor-calendario').style.display = 'block';
     
@@ -171,6 +210,15 @@ function cambiarTab(evt, idTab) {
         document.getElementById('contenedor-calendario').style.display = 'none';
         document.getElementById('contenedor-dashboard').style.display = 'block';
         iniciarDashboard();
+    } else {
+        // Focus the input inside the active tab ONLY if not navigating from modal
+        if (!window.isProgrammaticNavigation) {
+            const activeInput = document.querySelector(`#${idTab} input[type="text"]`);
+            if (activeInput) {
+                // Use setTimeout to ensure the element is fully rendered and visible before focusing
+                setTimeout(() => activeInput.focus(), 50);
+            }
+        }
     }
 }
 
@@ -302,6 +350,7 @@ function renderizarDashboard(filas) {
 function buscarEnServidor(modo, valor) {
     const workspaceHeader = document.getElementById('workspace-calendar-header');
     const calendarTitle = document.getElementById('calendar-title');
+    const preceptorContainer = document.getElementById('preceptor-info-container');
     
     if (!valor) {
         if (workspaceHeader) workspaceHeader.style.display = 'none';
@@ -313,15 +362,55 @@ function buscarEnServidor(modo, valor) {
     if (workspaceHeader && calendarTitle) {
         workspaceHeader.style.display = 'flex';
         calendarTitle.textContent = `Horario de ${modo}: ${valor}`;
+        if (preceptorContainer) preceptorContainer.innerHTML = "";
     }
 
     fetch(`/api/${modo}/${valor}`)
         .then(res => res.json())
         .then(filas => {
             generarCalendario(filas, modo);
-            // generarTablaDetallada(filas); // Removed to avoid "detalles" banner at bottom
+            if (modo === 'curso') {
+                fetch(`/api/preceptor/${valor}`)
+                    .then(r => r.json())
+                    .then(preceptorData => {
+                        if (preceptorData) {
+                            renderizarPreceptor(preceptorData);
+                        }
+                    });
+            }
         })
         .catch(err => console.error("Error API:", err));
+}
+
+function renderizarPreceptor(data) {
+    const container = document.getElementById('preceptor-info-container');
+    if (!container) return;
+
+    const turnoPrincipal = (data.turno || "").trim().toUpperCase();
+    const precs = [];
+    const mapping = {"T.M": "preceptores_manana", "T.T": "preceptores_tarde", "T.V": "preceptores_noche", "T.N": "preceptores_noche"};
+    const labels = {"preceptores_manana": "T.M.", "preceptores_tarde": "T.T.", "preceptores_noche": "T.N."};
+    
+    let keyPrincipal = null;
+    for (let k in mapping) {
+        if (turnoPrincipal.startsWith(k)) {
+            keyPrincipal = mapping[k];
+            break;
+        }
+    }
+
+    if (keyPrincipal && data[keyPrincipal]) {
+        precs.push(`<span>Preceptor ${labels[keyPrincipal]}: <b>${data[keyPrincipal]}</b></span>`);
+    }
+
+    ["preceptores_manana", "preceptores_tarde", "preceptores_noche"].forEach(key => {
+        if (key === keyPrincipal) return;
+        if (data[key]) {
+            precs.push(`<span>Preceptor ${labels[key]}: <b>${data[key]}</b></span>`);
+        }
+    });
+
+    container.innerHTML = precs.join(' <span class="sep">|</span> ');
 }
 
 function generarCalendario(filas, modo) {
@@ -429,13 +518,16 @@ function generarCalendario(filas, modo) {
                                      onmouseout="hideTooltip()">
                                     <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>
                                     <div class="materia-contenido">
-                                        <div class="materia-nombre">${clase[3]}</div>
-                                        <div class="materia-detalles">
-                                            ${(() => {
-                                                const profName = clase[16] === 1 ? clase[17] : (clase[5] || '-');
-                                                return modo === 'aula' ? profName : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : profName);
-                                            })()}
-                                        </div>
+                                        ${modo === 'profesor' && clase[16] === 1 ? 
+                                            `<div class="materia-nombre" style="color:var(--alert); font-weight:bold; display:flex; align-items:center; justify-content:center; height:100%;">LICENCIADA</div>` :
+                                            `<div class="materia-nombre">${clase[3]}</div>
+                                             <div class="materia-detalles">
+                                                ${(() => {
+                                                    const profName = (clase[16] === 1 && clase[17]) ? clase[17] : (clase[5] || '-');
+                                                    return modo === 'aula' ? profName : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : profName);
+                                                })()}
+                                             </div>`
+                                        }
                                     </div>
                                 </div>`;
                         });
