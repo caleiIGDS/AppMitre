@@ -202,29 +202,35 @@ def export_pdf(tipo, valor):
             row = cur.fetchone()
             con.close()
             if row:
-                turno_principal = str(row[2] or "").strip().upper()
-                precs = []
-                # indices: 3:manana, 4:tarde, 5:noche
-                mapping = {"T.M": 3, "T.T": 4, "T.V": 5, "T.N": 5}
-                # Use startsWith to be more flexible with T.M., T.M, etc.
-                p_idx = -1
+                turno_curso = str(row[2] or "").strip().upper()
+                labels = {3: "T.M:", 4: "T.T:", 5: "T.N:"}
+                mapping = {"T.M": 3, "T.T": 4, "T.N": 5, "T.V": 5}
+                
+                key_principal = -1
                 for k, v in mapping.items():
-                    if turno_principal.startswith(k):
-                        p_idx = v
+                    if turno_curso.startswith(k):
+                        key_principal = v
                         break
                 
-                labels = {3: "T.M.", 4: "T.T.", 5: "T.N."}
-                if p_idx != -1 and row[p_idx]:
-                    precs.append(f"Preceptor {labels[p_idx]}: {row[p_idx]}")
+                # Ancho total A4 Landscape es ~297mm. Margen aprox 15mm cada lado -> 267mm útiles.
+                ancho_util = 267
+                col_w = ancho_util / 3
+                
+                pdf.set_text_color(30, 50, 100)
                 
                 for idx in [3, 4, 5]:
-                    if idx == p_idx: continue
-                    if row[idx]:
-                        precs.append(f"Preceptor {labels[idx]}: {row[idx]}")
-                
-                if precs:
-                    pdf.set_font('Arial', 'B', 10)
-                    pdf.cell(0, 8, " | ".join(precs), 0, 1, 'C')
+                    es_principal = (idx == key_principal)
+                    label = "PRECEPTOR PRINCIPAL" if es_principal else "Preceptor"
+                    txt = f"{label} {labels[idx]} {str(row[idx] or '').strip()}" if row[idx] else ""
+                    
+                    if es_principal:
+                        pdf.set_font('Arial', 'B', 11)
+                    else:
+                        pdf.set_font('Arial', 'B', 9)
+                    
+                    align = 'L' if idx == 3 else ('C' if idx == 4 else 'R')
+                    # No saltar línea hasta el último
+                    pdf.cell(col_w, 8, txt, 0, 0 if idx < 5 else 1, align)
         except Exception as e:
             print(f"Error PDF preceptor: {e}")
 
@@ -481,42 +487,6 @@ def export_pdf(tipo, valor):
                     pdf.set_text_color(0, 0, 0); pdf.set_font('Arial', 'B', 8)
                     pdf.set_xy(x, y + (h/2) - 2)
                     pdf.cell(w, 4, f"SUPERPOSICION", 0, 0, 'C')
-
-    # Segunda Página: Detalles
-    pdf.add_page()
-    pdf.set_font('Arial', 'B', 12); pdf.set_text_color(60, 64, 67)
-    pdf.cell(0, 10, 'Detalle de Clases', 0, 1, 'L')
-    pdf.ln(2)
-    
-    # Tabla de detalles
-    pdf.set_font('Arial', 'B', 9); pdf.set_fill_color(241, 243, 244)
-    cols = [('Día', 20), ('Inicio', 15), ('Fin', 15), ('Materia', 70), ('Profesor', 60), ('Aula', 20), ('Curso', 40), ('G', 10)]
-    for txt, w in cols: pdf.cell(w, 7, txt, 1, 0, 'C', True)
-    pdf.ln()
-    
-    pdf.set_font('Arial', '', 8)
-    for f in filas:
-        pdf.cell(20, 6, str(f[11]), 1)
-        pdf.cell(15, 6, str(f[12]), 1, 0, 'C')
-        pdf.cell(15, 6, str(f[13]), 1, 0, 'C')
-        pdf.cell(70, 6, str(f[3])[:40], 1)
-        
-        # Mostrar suplente si esta activo
-        prof_display = f[5]
-        if len(f) > 16 and f[16] == 1:
-            prof_display = f[17]
-        pdf.cell(60, 6, str(prof_display)[:35], 1)
-        
-        pdf.cell(20, 6, str(f[9]), 1, 0, 'C')
-        
-        c_num = str(f[0]); div = str(f[1])
-        try: is_high = int(c_num) >= 4
-        except: is_high = False
-        div_txt = f"{div}°" if is_high else div
-        
-        pdf.cell(40, 6, f"{c_num}° {div_txt}", 1)
-        pdf.cell(10, 6, str(f[14] or '-'), 1, 0, 'C')
-        pdf.ln()
 
     output = io.BytesIO()
     pdf_content = pdf.output()

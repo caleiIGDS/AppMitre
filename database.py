@@ -91,11 +91,15 @@ def corregir_horarios(inicio, fin):
 
 
 
-def descargar_sheet(sheet_id, gid=0):
+def descargar_sheet(sheet_id, gid=0, skip_rows=0):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
     with urllib.request.urlopen(url) as response:
         contenido = response.read().decode('utf-8')
         lineas = contenido.splitlines()
+        
+        if skip_rows > 0:
+            lineas = lineas[skip_rows:]
+
         # Normalizar encabezados: minúsculas, sin acentos, espacios a _
         encabezados = lineas[0].lower().replace(' ', '_')
         encabezados = eliminar_acentos(encabezados)
@@ -118,7 +122,11 @@ def cargar_desde_sheets(sheet_id, gids):
             
             superposicion_raw = row.get('superposicion', '0')
             try:
-                superposicion_val = int(superposicion_raw) if superposicion_raw and superposicion_raw.strip() != '' else 0
+                # Manejar valores tipo checkbox de Google Sheets (TRUE/FALSE, 1/0, VERDADERO/FALSO)
+                if str(superposicion_raw).strip().upper() in ['TRUE', '1', 'VERDADERO']:
+                    superposicion_val = 1
+                else:
+                    superposicion_val = 0
             except (ValueError, TypeError):
                 superposicion_val = 0
 
@@ -153,7 +161,8 @@ def cargar_preceptores(sheet_id, gid):
     cur = con.cursor()
     print(f"Cargando preceptores con GID {gid}...")
     try:
-        archivo = descargar_sheet(sheet_id, gid)
+        # Saltamos 1 fila porque la primera es el título "LISTADO GENERAL..."
+        archivo = descargar_sheet(sheet_id, gid, skip_rows=1)
         reader = csv.DictReader(archivo)
         for row in reader:
             div_raw = str(row.get('division', '')).strip()

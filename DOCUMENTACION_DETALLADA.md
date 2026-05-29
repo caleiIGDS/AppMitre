@@ -76,7 +76,7 @@ La generación de PDF es una de las partes más complejas del sistema debido a l
 1.  **Cálculo de Grid:** Se dibuja un grid basado en los mismos clusters del frontend.
 2.  **Escalado de Fuente Dinámico:** Dependiendo del ancho del bloque (`materia_w`) y su altura (`h`), el sistema ajusta el tamaño de la letra.
 3.  **Truncamiento Inteligente:** Si el nombre de la materia es muy largo para el bloque, se divide en múltiples líneas o se añade "..." al final para evitar que el texto se salga del recuadro.
-4.  **Segunda Página (Detalles):** Todos los PDF incluyen una segunda página con una tabla tradicional con todos los datos crudos de las clases mostradas en el gráfico.
+4.  **Exportación a PDF:** Los PDF generados contienen la vista de calendario semanal optimizada. Se ha eliminado la segunda página de detalles para simplificar el documento.
 
 ### Casos Especiales en PDF:
 -   **Aulas/Planilla:** El indicador lateral del bloque muestra el curso (ej: 4° 1°).

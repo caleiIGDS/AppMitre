@@ -331,8 +331,8 @@ footer a:hover {
     flex-direction: row !important;
     justify-content: space-between !important;
     align-items: center !important;
-    margin-bottom: 20px;
-    padding: 10px 5px;
+    margin-bottom: 10px;
+    padding: 5px 5px;
     z-index: 100;
     width: 100%;
     flex-wrap: wrap !important;
@@ -340,21 +340,32 @@ footer a:hover {
 
 .preceptor-info-container {
     width: 100%;
-    text-align: center;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-top: 5px;
-    margin-bottom: 5px;
+    margin-bottom: 2px;
     font-size: 14px;
     color: var(--primary);
     order: 3;
+    padding: 0 10px;
+    box-sizing: border-box;
 }
 
-.preceptor-info-container span b {
-    color: var(--secondary);
+.preceptor-info-container span {
+    flex: 1;
 }
 
-.preceptor-info-container .sep {
-    margin: 0 10px;
-    opacity: 0.3;
+.preceptor-info-container span:nth-child(1) { text-align: left; }
+.preceptor-info-container span:nth-child(2) { text-align: center; }
+.preceptor-info-container span:nth-child(3) { text-align: right; }
+
+.preceptor-info-container span.principal {
+    font-weight: 800;
+}
+
+.preceptor-info-container span.principal b {
+    text-decoration: none;
 }
 
 .tech-title-center {

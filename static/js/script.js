@@ -192,9 +192,6 @@ function cambiarTab(evt, idTab) {
     if (!window.isProgrammaticNavigation) {
         document.getElementById('contenedor-calendario').innerHTML = "";
         document.getElementById('contenedor-lista').innerHTML = "";
-    } else {
-        // Mantenemos el calendario viejo visible pero atenuado para dar feedback de carga
-        document.getElementById('contenedor-calendario').style.opacity = '0.6';
     }
     
     document.getElementById('contenedor-dashboard').style.display = 'none';
@@ -324,8 +321,8 @@ function renderizarDashboard(filas) {
                 <div class="class-item-light">
                     <div class="class-time-light">${f[12]} - ${f[13]}</div>
                     <div class="class-info-light">
-                        <span class="class-materia-light">${f[3]}</span>
-                        <span class="class-meta-light">${f[0]}° ${f[1]} | ${profName}</span>
+                        <span class="class-materia-light">${f[0]}° ${f[1]} | ${profName}</span>
+                        <span class="class-meta-light">${f[3]}</span>
                     </div>
                     <div class="class-room-light">${f[9] || '-'}</div>
                 </div>
@@ -386,31 +383,42 @@ function renderizarPreceptor(data) {
     const container = document.getElementById('preceptor-info-container');
     if (!container) return;
 
-    const turnoPrincipal = (data.turno || "").trim().toUpperCase();
-    const precs = [];
-    const mapping = {"T.M": "preceptores_manana", "T.T": "preceptores_tarde", "T.V": "preceptores_noche", "T.N": "preceptores_noche"};
-    const labels = {"preceptores_manana": "T.M.", "preceptores_tarde": "T.T.", "preceptores_noche": "T.N."};
+    const labels = {
+        "preceptores_manana": "T.M:",
+        "preceptores_tarde": "T.T:",
+        "preceptores_noche": "T.N:"
+    };
     
+    // Mapeo del turno del curso a la columna de la DB
+    const turnoCurso = (data.turno || "").trim().toUpperCase();
+    const mapping = {
+        "T.M": "preceptores_manana",
+        "T.T": "preceptores_tarde",
+        "T.N": "preceptores_noche",
+        "T.V": "preceptores_noche"
+    };
+
     let keyPrincipal = null;
     for (let k in mapping) {
-        if (turnoPrincipal.startsWith(k)) {
+        if (turnoCurso.startsWith(k)) {
             keyPrincipal = mapping[k];
             break;
         }
     }
 
-    if (keyPrincipal && data[keyPrincipal]) {
-        precs.push(`<span>Preceptor ${labels[keyPrincipal]}: <b>${data[keyPrincipal]}</b></span>`);
-    }
-
+    let html = "";
     ["preceptores_manana", "preceptores_tarde", "preceptores_noche"].forEach(key => {
-        if (key === keyPrincipal) return;
-        if (data[key]) {
-            precs.push(`<span>Preceptor ${labels[key]}: <b>${data[key]}</b></span>`);
+        if (data[key] && data[key].trim() !== "") {
+            const esPrincipal = (key === keyPrincipal);
+            const label = esPrincipal ? "PRECEPTOR PRINCIPAL" : "Preceptor";
+            const extraClass = esPrincipal ? ' class="principal"' : "";
+            html += `<span${extraClass}>${label} ${labels[key]} <b>${data[key].trim()}</b></span>`;
+        } else {
+            html += `<span></span>`;
         }
     });
 
-    container.innerHTML = precs.join(' <span class="sep">|</span> ');
+    container.innerHTML = html;
 }
 
 function generarCalendario(filas, modo) {
