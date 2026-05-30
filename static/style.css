@@ -697,10 +697,10 @@ body.is-fullscreen .class-list-light {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: var(--white);
-    border: 1px solid var(--primary);
-    padding: 10px 25px;
-    margin-bottom: 15px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin-bottom: 0;
 }
 
 .sys-controls {
@@ -723,14 +723,14 @@ body.is-fullscreen .class-list-light {
 
 /* Enlarged Digital Clock */
 .sys-clock-container {
-    background: var(--dark);
+    background: var(--primary);
     padding: 5px 20px;
     border: 1px solid var(--secondary);
 }
 
 .sys-clock {
     font-size: 40px;
-    color: var(--secondary);
+    color: white;
     letter-spacing: 2px;
 }
 
