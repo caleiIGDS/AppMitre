@@ -223,6 +223,7 @@ let dashboardInterval = null;
 let isManualClock = false;
 let manualTime = null;
 let manualDate = null;
+let lastDashboardData = []; // Cache para filtrar en tiempo real
 
 function setManualTime() {
     if (isManualClock) {
@@ -260,12 +261,18 @@ function actualizarReloj() {
 function cargarDatosDashboard() {
     fetch('/api/dashboard')
         .then(res => res.json())
-        .then(filas => renderizarDashboard(filas))
+        .then(filas => {
+            lastDashboardData = filas;
+            renderizarDashboard(filas);
+        })
         .catch(err => console.error("Error Dashboard:", err));
 }
 
 function renderizarDashboard(filas) {
+    if (!filas) return;
     const contenedor = document.getElementById('contenedor-dashboard');
+    const filterInput = document.getElementById('dashboard-filter-input');
+    const filterText = normalize(filterInput ? filterInput.value : "");
     const now = new Date();
     
     // Obtenemos el día actual (Lunes a Viernes)
@@ -292,13 +299,21 @@ function renderizarDashboard(filas) {
         return h * 60 + m;
     };
 
-    const inProgress = [];
-    const upcoming = [];
-    const finid = [];
+    let inProgress = [];
+    let upcoming = [];
 
     filas.forEach(f => {
         if (f[11] !== currentDay) return;
         
+        // Aplicar filtro si existe texto
+        if (filterText) {
+            const curso = normalize(`${f[0]} ${f[1]}`);
+            const prof = normalize(f[16] === 1 ? f[17] : f[5]);
+            if (!curso.includes(filterText) && !prof.includes(filterText)) {
+                return;
+            }
+        }
+
         const start = timeToMin(f[12]);
         const end = timeToMin(f[13]);
 
@@ -313,7 +328,7 @@ function renderizarDashboard(filas) {
     upcoming.sort((a, b) => timeToMin(a[12]) - timeToMin(b[12]));
 
     const renderList = (list) => {
-        if (list.length === 0) return '<div style="text-align:center; padding:20px; color:#5f6368;">SIN ACTIVIDAD</div>';
+        if (list.length === 0) return `<div style="text-align:center; padding:20px; color:#5f6368;">${filterText ? 'SIN COINCIDENCIAS' : 'SIN ACTIVIDAD'}</div>`;
         return list.map(f => {
             let profName = f[5];
             if (f[16] === 1) profName = f[17];
@@ -333,11 +348,11 @@ function renderizarDashboard(filas) {
     contenedor.innerHTML = `
         <div class="dashboard-grid-light">
             <div class="dashboard-column-light in-progress">
-                <h2>En Curso</h2>
+                <h2>En Curso ${filterText ? '(Filtrado)' : ''}</h2>
                 <div class="class-list-light">${renderList(inProgress)}</div>
             </div>
             <div class="dashboard-column-light upcoming">
-                <h2>Próximas</h2>
+                <h2>Próximas ${filterText ? '(Filtrado)' : ''}</h2>
                 <div class="class-list-light">${renderList(upcoming)}</div>
             </div>
         </div>
