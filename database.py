@@ -238,7 +238,7 @@ def cargar_horarios_preceptores(sheet_id, gid):
                             dia_idx = off + 3 + i
                             if len(row) > dia_idx:
                                 marca = row[dia_idx].strip().upper()
-                                if marca in ['X', 'TRUE', 'VERDADERO', '1']:
+                                if marca in ['X', 'TRUE', 'VERDADERO']:
                                     to_insert.append((
                                         bloque["turno"],
                                         preceptor,
