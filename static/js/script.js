@@ -62,8 +62,20 @@ function seleccionarOpcion(valor, modo) {
 }
 
 document.addEventListener('click', (e) => {
-    if (!e.target.classList.contains('search-input') && !e.target.classList.contains('search-input-fun') && !e.target.classList.contains('minimal-input') && !e.target.classList.contains('tech-input')) {
+    const isSearchInput = e.target.classList.contains('search-input') || 
+                          e.target.classList.contains('search-input-fun') || 
+                          e.target.classList.contains('minimal-input') || 
+                          e.target.classList.contains('tech-input');
+                          
+    if (!isSearchInput) {
         document.querySelectorAll('.custom-dropdown, .custom-dropdown-fun, .minimal-dropdown, .tech-dropdown').forEach(d => d.style.display = 'none');
+    } else {
+        // Si ya está enfocado pero el dropdown se cerró (clic drag afuera), lo forzamos a abrir
+        if (typeof e.target.onfocus === 'function') {
+            e.target.onfocus(e);
+        } else {
+            e.target.dispatchEvent(new Event('focus'));
+        }
     }
 });
 

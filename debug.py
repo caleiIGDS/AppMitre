@@ -1,9 +1,10 @@
 import urllib.request
 import io
 import csv
+from config import SHEET_ID, GIDS_CURSOS
 
-SHEET_ID = "1GJxwpxXfLosqKxgIa6zyZhwjDK-89ZDavLi6nouWTsw"
-GID = "1041328323"
+# Usamos el GID del 1er año para la prueba
+GID = GIDS_CURSOS[1]
 
 url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}"
 

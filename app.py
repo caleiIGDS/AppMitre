@@ -1,5 +1,6 @@
 from flask import Flask, render_template, jsonify, Response, send_file
 import database
+from config import SHEET_ID, GIDS_CURSOS, GID_PRECEPTORES
 import sqlite3
 from fpdf import FPDF
 import io
@@ -538,33 +539,12 @@ def api_dashboard():
 if __name__ == '__main__':
     # Esto garantiza que si cambias el CSV, la web se actualiza al arrancar
     database.crear_tablas()
-    SHEET_ID = "1GJxwpxXfLosqKxgIa6zyZhwjDK-89ZDavLi6nouWTsw"
-    GIDS = {
-        1: "1041328323",
-        2: "1960185081",
-        3: "576881307",
-        4: "1940684424",
-        5: "310218861",
-        6: "618740516",
-        7: "15078021",
-    }
-    database.cargar_desde_sheets(SHEET_ID, GIDS)
-    database.cargar_preceptores(SHEET_ID, "813054425")
+    database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
+    database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
     app.run(host='0.0.0.0', port=5000, debug=True)
 
 def recargar_db(app):
-    SHEET_ID = "1GJxwpxXfLosqKxgIa6zyZhwjDK-89ZDavLi6nouWTsw"
-    GIDS = {
-        1: "1041328323",
-        2: "1960185081",
-        3: "576881307",
-        4: "1940684424",
-        5: "310218861",
-        6: "618740516",
-        7: "15078021",
-    }
-
     with app.app_context():
         database.crear_tablas()
-        database.cargar_desde_sheets(SHEET_ID, GIDS)
-        database.cargar_preceptores(SHEET_ID, "813054425")
+        database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
+        database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
