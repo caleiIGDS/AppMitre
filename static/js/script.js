@@ -431,46 +431,65 @@ function renderizarTablaPreceptor(filas) {
         return;
     }
 
-    const diasSemana = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES"];
-    const horariosPorDia = {
-        "LUNES": [],
-        "MARTES": [],
-        "MIERCOLES": [],
-        "JUEVES": [],
-        "VIERNES": []
-    };
+    const turnosOrden = ["MAÑANA", "TARDE", "VESPERTINO"];
+    const turnosEncontrados = {};
 
-    // Agrupar cursos por día
     filas.forEach(f => {
-        const dia = f.dia.toUpperCase();
-        if (horariosPorDia[dia]) {
-            horariosPorDia[dia].push(f.curso);
+        const turno = f.turno ? f.turno.toUpperCase() : "MAÑANA";
+        if (!turnosEncontrados[turno]) {
+            turnosEncontrados[turno] = [];
         }
+        turnosEncontrados[turno].push(f);
     });
 
-    let html = `
-        <table style="table-layout: fixed;">
-            <thead>
-                <tr>
-                    ${diasSemana.map(d => `<th>${d}</th>`).join('')}
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    ${diasSemana.map(d => {
-                        const cursos = horariosPorDia[d];
-                        return `
-                            <td style="vertical-align: top; padding: 10px; height: 100px;">
-                                ${cursos.length > 0 
-                                    ? cursos.map(c => `<div class="preceptor-curso-item">${c}</div>`).join('') 
-                                    : '<span style="opacity:0.3; font-style:italic;">-</span>'}
-                            </td>
-                        `;
-                    }).join('')}
-                </tr>
-            </tbody>
-        </table>
-    `;
+    let html = '';
+
+    turnosOrden.forEach(turno => {
+        if (!turnosEncontrados[turno]) return;
+
+        const filasTurno = turnosEncontrados[turno];
+        const diasSemana = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES"];
+        const horariosPorDia = {
+            "LUNES": [],
+            "MARTES": [],
+            "MIERCOLES": [],
+            "JUEVES": [],
+            "VIERNES": []
+        };
+
+        // Agrupar cursos por día
+        filasTurno.forEach(f => {
+            const dia = f.dia.toUpperCase();
+            if (horariosPorDia[dia]) {
+                horariosPorDia[dia].push(f.curso);
+            }
+        });
+
+        html += `
+            <h3 style="margin-top: 30px; margin-bottom: 15px; color: var(--primary); border-bottom: 2px solid var(--secondary); padding-bottom: 5px;">TURNO ${turno}</h3>
+            <table style="table-layout: fixed; margin-bottom: 30px;">
+                <thead>
+                    <tr>
+                        ${diasSemana.map(d => `<th>${d}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        ${diasSemana.map(d => {
+                            const cursos = horariosPorDia[d];
+                            return `
+                                <td style="vertical-align: top; padding: 10px; height: 100px;">
+                                    ${cursos.length > 0 
+                                        ? cursos.map(c => `<div class="preceptor-curso-item">${c}</div>`).join('') 
+                                        : '<span style="opacity:0.3; font-style:italic;">-</span>'}
+                                </td>
+                            `;
+                        }).join('')}
+                    </tr>
+                </tbody>
+            </table>
+        `;
+    });
 
     contenedorLista.innerHTML = html;
 }

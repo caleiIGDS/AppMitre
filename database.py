@@ -199,35 +199,53 @@ def cargar_preceptores(sheet_id, gid):
 def cargar_horarios_preceptores(sheet_id, gid):
     """
     Descarga e importa los horarios individuales de los preceptores desde Google Sheets.
-    La hoja tiene columnas para cada día (lunes, martes, etc.) con una 'X'.
+    La hoja tiene 3 bloques (MAÑANA, TARDE, VESPERTINO) en distintas columnas.
     """
     con = conectar()
     cur = con.cursor()
     print(f"Cargando horarios detallados de preceptores (GID {gid})...")
     try:
         cur.execute("DELETE FROM horarios_preceptores")
-        archivo = descargar_sheet(sheet_id, gid)
-        reader = csv.DictReader(archivo)
-        to_insert = []
+        # Saltamos 1 fila porque la primera es la que dice "MAÑANA,,,,,,TARDE..."
+        archivo = descargar_sheet(sheet_id, gid, skip_rows=1)
+        reader = csv.reader(archivo)
         
-        dias_semana = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes']
+        # Saltamos la fila de encabezados (preceptor, estado, curso, etc.)
+        next(reader, None)
+        
+        to_insert = []
+        dias_nombres = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES']
+        
+        # Definición de los bloques y sus columnas iniciales
+        # MAÑANA: A=0, TARDE: J=9, VESPERTINO: S=18
+        bloques = [
+            {"turno": "MAÑANA", "offset": 0},
+            {"turno": "TARDE", "offset": 9},
+            {"turno": "VESPERTINO", "offset": 18}
+        ]
         
         for row in reader:
-            preceptor = row.get('preceptor', '').strip()
-            tipo = row.get('tipo', '').strip()
-            curso = row.get('curso', '').strip()
-            turno = row.get('turno', '').strip() # Por si existe la columna turno
-            
-            for dia in dias_semana:
-                # Si la celda del día tiene una 'X' (o cualquier contenido), creamos una fila para ese día
-                if row.get(dia, '').strip().upper() == 'X':
-                    to_insert.append((
-                        turno,
-                        preceptor,
-                        tipo,
-                        curso,
-                        dia.upper()
-                    ))
+            for bloque in bloques:
+                off = bloque["offset"]
+                # Validar que la fila tenga suficientes columnas para este bloque
+                if len(row) > off + 2:
+                    preceptor = row[off].strip()
+                    tipo = row[off+1].strip()
+                    curso = row[off+2].strip()
+                    
+                    if preceptor and preceptor.upper() != "PRECEPTOR": # Solo si hay un nombre real
+                        for i, dia_nombre in enumerate(dias_nombres):
+                            dia_idx = off + 3 + i
+                            if len(row) > dia_idx:
+                                marca = row[dia_idx].strip().upper()
+                                if marca == 'X':
+                                    to_insert.append((
+                                        bloque["turno"],
+                                        preceptor,
+                                        tipo,
+                                        curso,
+                                        dia_nombre
+                                    ))
         
         if to_insert:
             cur.executemany(
@@ -237,10 +255,12 @@ def cargar_horarios_preceptores(sheet_id, gid):
         con.commit()
         print("Listo horarios preceptores")
     except Exception as e:
-        con.rollback()
+        if 'con' in locals():
+            con.rollback()
         print(f"Error cargando horarios de preceptores desde Sheets: {e}")
     finally:
-        con.close()
+        if 'con' in locals():
+            con.close()
 
 def obtener_horario_preceptor(nombre_buscado):
     """
