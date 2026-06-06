@@ -13,7 +13,7 @@
                 <div class="header-blueprint">
                     <img src="{{ url_for('static', filename='images/logoMitre.jpg') }}" alt="Escudo" class="tech-logo">
                     <div class="tech-titles">
-                        <h1>EMILIO MITRE <span class="serial">V1.13</span></h1>
+                        <h1>EMILIO MITRE <span class="serial">V1.15</span></h1>
                         <p class="institution">Sistema de Horarios</p>
                     </div>
                 </div>
@@ -25,10 +25,17 @@
                 <button class="tech-tag" onclick="cambiarTab(event, 'tab-curso')">CURSOS</button>
                 <button class="tech-tag" onclick="cambiarTab(event, 'tab-profesor')">PROFESORES</button>
                 <button class="tech-tag" onclick="cambiarTab(event, 'tab-aula')">AULAS</button>
+                <button class="tech-tag" onclick="cambiarTab(event, 'tab-horario_preceptor')">PRECEPTORES</button>
                 <button class="tech-tag active" onclick="cambiarTab(event, 'tab-envivo')">TIEMPO REAL</button>
             </nav>
 
             <section class="tech-search-module">
+                <div id="tab-horario_preceptor" class="seccion-busqueda">
+                    <div class="tech-field">
+                        <input type="text" class="tech-input" placeholder="INGRESE PRECEPTOR..." oninput="filtrarOpciones(this, 'horario_preceptor')" onfocus="filtrarOpciones(this, 'horario_preceptor')">
+                        <div id="dropdown-horario_preceptor" class="tech-dropdown"></div>
+                    </div>
+                </div>
                 <div id="tab-profesor" class="seccion-busqueda">
                     <div class="tech-field">
                         <input type="text" class="tech-input" placeholder="INGRESE NOMBRE..." oninput="filtrarOpciones(this, 'profesor')" onfocus="filtrarOpciones(this, 'profesor')">

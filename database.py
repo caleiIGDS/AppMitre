@@ -31,6 +31,21 @@ def crear_tablas():
             preceptores_manana TEXT, preceptores_tarde TEXT, preceptores_noche TEXT
         )
     ''')
+    
+    # Nueva tabla para horarios individuales de preceptores
+    cur.execute('DROP TABLE IF EXISTS horarios_preceptores')
+    cur.execute('''
+        CREATE TABLE horarios_preceptores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            turno TEXT NOT NULL,
+            preceptor TEXT NOT NULL,
+            tipo TEXT NOT NULL,
+            curso TEXT NOT NULL,
+            dia TEXT NOT NULL
+        )
+    ''')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_horario_preceptor ON horarios_preceptores(preceptor)')
+    
     con.commit()
     con.close()
 
@@ -110,8 +125,8 @@ def cargar_desde_sheets(sheet_id, gids):
     con = conectar()
     cur = con.cursor()
     
-    for gid in gids.values():
-        print(f"Cargando curso con GID {gid}...")
+    for nombre, gid in gids.items():
+        print(f"Cargando {nombre} (GID {gid})...")
         archivo = descargar_sheet(sheet_id, gid)
         reader = csv.DictReader(archivo)
         
@@ -174,7 +189,92 @@ def cargar_preceptores(sheet_id, gid):
             )
             cur.execute('INSERT INTO preceptores VALUES (?,?,?,?,?,?)', datos)
         print("Listo preceptores")
+        con.commit()
     except Exception as e:
         print(f"Error cargando preceptores: {e}")
-    con.commit()
+        con.rollback()
+    finally:
+        con.close()
+
+def cargar_horarios_preceptores(sheet_id, gid):
+    """
+    Descarga e importa los horarios individuales de los preceptores desde Google Sheets.
+    La hoja tiene columnas para cada día (lunes, martes, etc.) con una 'X'.
+    """
+    con = conectar()
+    cur = con.cursor()
+    print(f"Cargando horarios detallados de preceptores (GID {gid})...")
+    try:
+        cur.execute("DELETE FROM horarios_preceptores")
+        archivo = descargar_sheet(sheet_id, gid)
+        reader = csv.DictReader(archivo)
+        to_insert = []
+        
+        dias_semana = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes']
+        
+        for row in reader:
+            preceptor = row.get('preceptor', '').strip()
+            tipo = row.get('tipo', '').strip()
+            curso = row.get('curso', '').strip()
+            turno = row.get('turno', '').strip() # Por si existe la columna turno
+            
+            for dia in dias_semana:
+                # Si la celda del día tiene una 'X' (o cualquier contenido), creamos una fila para ese día
+                if row.get(dia, '').strip().upper() == 'X':
+                    to_insert.append((
+                        turno,
+                        preceptor,
+                        tipo,
+                        curso,
+                        dia.upper()
+                    ))
+        
+        if to_insert:
+            cur.executemany(
+                "INSERT INTO horarios_preceptores (turno, preceptor, tipo, curso, dia) VALUES (?, ?, ?, ?, ?)",
+                to_insert
+            )
+        con.commit()
+        print("Listo horarios preceptores")
+    except Exception as e:
+        con.rollback()
+        print(f"Error cargando horarios de preceptores desde Sheets: {e}")
+    finally:
+        con.close()
+
+def obtener_horario_preceptor(nombre_buscado):
+    """
+    Busca el horario de un preceptor por nombre y lo ordena por turno, tipo, curso y día.
+    """
+    con = conectar()
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+    query = """
+        SELECT turno, preceptor, tipo, curso, dia 
+        FROM horarios_preceptores 
+        WHERE preceptor LIKE ?
+        ORDER BY turno, tipo, curso, 
+            CASE dia 
+                WHEN 'LUNES' THEN 1 
+                WHEN 'MARTES' THEN 2 
+                WHEN 'MIERCOLES' THEN 3 
+                WHEN 'JUEVES' THEN 4 
+                WHEN 'VIERNES' THEN 5 
+                ELSE 6 
+            END
+    """
+    cur.execute(query, (f"%{nombre_buscado}%",))
+    rows = [dict(row) for row in cur.fetchall()]
     con.close()
+    return rows
+
+def obtener_lista_preceptores_horario():
+    """
+    Retorna una lista única de nombres de preceptores que tienen horarios cargados.
+    """
+    con = conectar()
+    cur = con.cursor()
+    cur.execute("SELECT DISTINCT preceptor FROM horarios_preceptores WHERE preceptor != '' ORDER BY preceptor")
+    preceptores = [r[0] for r in cur.fetchall()]
+    con.close()
+    return preceptores

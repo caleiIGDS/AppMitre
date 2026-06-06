@@ -1,6 +1,6 @@
 from flask import Flask, render_template, jsonify, Response, send_file
 import database
-from config import SHEET_ID, GIDS_CURSOS, GID_PRECEPTORES
+from config import SHEET_ID, GIDS_CURSOS, GID_PRECEPTORES, GID_HORARIOS_PRECEPTORES
 import sqlite3
 from fpdf import FPDF
 import io
@@ -57,8 +57,11 @@ def index():
     aulas = [r[0] for r in cur.fetchall()]
     cur.execute("SELECT DISTINCT curso, division FROM clases WHERE curso != '' ORDER BY curso, division")
     cursos = [f"{r[0]}° {r[1]}" for r in cur.fetchall()]
+    
+    preceptores_horario = database.obtener_lista_preceptores_horario()
+    
     con.close()
-    return render_template('index.html', datos={'profesor': profes, 'aula': aulas, 'curso': cursos}, floor_mapping=FLOOR_MAPPING)
+    return render_template('index.html', datos={'profesor': profes, 'aula': aulas, 'curso': cursos, 'horario_preceptor': preceptores_horario}, floor_mapping=FLOOR_MAPPING)
 
 @app.route('/api/<tipo>/<valor>')
 def api(tipo, valor):
@@ -536,11 +539,19 @@ def api_dashboard():
         print(f"Error en dashboard: {e}")
         return jsonify([])
 
+@app.route('/api/horario_preceptor/<nombre>')
+def api_horario_preceptor(nombre):
+    """
+    Endpoint para obtener el horario individual de un preceptor.
+    """
+    return jsonify(database.obtener_horario_preceptor(nombre))
+
 if __name__ == '__main__':
     # Esto garantiza que si cambias el CSV, la web se actualiza al arrancar
     database.crear_tablas()
     database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
     database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
+    database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
     app.run(host='0.0.0.0', port=5000, debug=True)
 
 def recargar_db(app):
@@ -548,3 +559,4 @@ def recargar_db(app):
         database.crear_tablas()
         database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
         database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
+        database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)

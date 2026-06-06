@@ -4,7 +4,7 @@ import csv
 from config import SHEET_ID, GIDS_CURSOS
 
 # Usamos el GID del 1er año para la prueba
-GID = GIDS_CURSOS[1]
+GID = GIDS_CURSOS["1ro"]
 
 url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}"
 

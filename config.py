@@ -8,20 +8,26 @@ SHEET_ID = "1GJxwpxXfLosqKxgIa6zyZhwjDK-89ZDavLi6nouWTsw"
 # Los números del 1 al 7 corresponden a los horarios de cada año escolar.
 GIDS = {
     # Horarios por Año (1ro a 7mo)
-    1: "1041328323",
-    2: "1960185081",
-    3: "576881307",
-    4: "1940684424",
-    5: "310218861",
-    6: "618740516",
-    7: "15078021",
+    "1ro": "1041328323",
+    "2do": "1960185081",
+    "3ro": "576881307",
+    "4to": "1940684424",
+    "5to": "310218861",
+    "6to": "618740516",
+    "7mo": "15078021",
     
-    # Hoja de datos de Preceptores
-    "preceptores": "813054425"
+    # Hoja de datos de Preceptores (Asignación de cursos)
+    "preceptores": "813054425",
+    
+    # Hoja de horarios detallados de Preceptores
+    "horarios_preceptores": "576226512"
 }
 
 # Selección de GIDs específicos para la carga de horarios de clases
-GIDS_CURSOS = {k: v for k, v in GIDS.items() if isinstance(k, int)}
+GIDS_CURSOS = {k: v for k, v in GIDS.items() if k not in ["preceptores", "horarios_preceptores"]}
 
 # GID específico para preceptores
 GID_PRECEPTORES = GIDS["preceptores"]
+
+# GID específico para los horarios de preceptores
+GID_HORARIOS_PRECEPTORES = GIDS["horarios_preceptores"]

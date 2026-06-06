@@ -208,6 +208,7 @@ function cambiarTab(evt, idTab) {
     
     document.getElementById('contenedor-dashboard').style.display = 'none';
     document.getElementById('contenedor-calendario').style.display = 'block';
+    document.getElementById('contenedor-lista').style.display = 'none';
     
     // Header management
     const workspaceHeader = document.getElementById('workspace-calendar-header');
@@ -375,7 +376,8 @@ function buscarEnServidor(modo, valor) {
     const workspaceHeader = document.getElementById('workspace-calendar-header');
     const calendarTitle = document.getElementById('calendar-title');
     const preceptorContainer = document.getElementById('preceptor-info-container');
-    
+    const exportBtn = document.getElementById('export-pdf-btn');
+
     if (!valor) {
         if (workspaceHeader) workspaceHeader.style.display = 'none';
         return;
@@ -385,27 +387,93 @@ function buscarEnServidor(modo, valor) {
 
     if (workspaceHeader && calendarTitle) {
         workspaceHeader.style.display = 'flex';
-        calendarTitle.textContent = `Horario de ${modo}: ${valor}`;
+        calendarTitle.textContent = `Horario de ${modo.replace('_', ' ')}: ${valor}`;
         if (preceptorContainer) preceptorContainer.innerHTML = "";
+        
+        // Ocultar botón PDF si es horario de preceptor
+        if (exportBtn) {
+            exportBtn.style.display = (modo === 'horario_preceptor') ? 'none' : 'block';
+        }
     }
 
-    fetch(`/api/${modo}/${valor}`)
+    const endpoint = modo === 'horario_preceptor' ? `/api/horario_preceptor/${valor}` : `/api/${modo}/${valor}`;
+
+    fetch(endpoint)
         .then(res => res.json())
         .then(filas => {
-            generarCalendario(filas, modo);
-            if (modo === 'curso') {
-                fetch(`/api/preceptor/${valor}`)
-                    .then(r => r.json())
-                    .then(preceptorData => {
-                        if (preceptorData) {
-                            renderizarPreceptor(preceptorData);
-                        }
-                    });
+            if (modo === 'horario_preceptor') {
+                renderizarTablaPreceptor(filas);
+            } else {
+                generarCalendario(filas, modo);
+                if (modo === 'curso') {
+                    fetch(`/api/preceptor/${valor}`)
+                        .then(r => r.json())
+                        .then(preceptorData => {
+                            if (preceptorData) {
+                                renderizarPreceptor(preceptorData);
+                            }
+                        });
+                }
             }
         })
         .catch(err => console.error("Error API:", err));
 }
 
+function renderizarTablaPreceptor(filas) {
+    const contenedorCalendario = document.getElementById('contenedor-calendario');
+    const contenedorLista = document.getElementById('contenedor-lista');
+
+    contenedorCalendario.style.display = 'none';
+    contenedorLista.style.display = 'block';
+
+    if (!filas || filas.length === 0) {
+        contenedorLista.innerHTML = "<div style='padding:20px; text-align:center; color:#70757a;'>No hay horarios cargados para este preceptor.</div>";
+        return;
+    }
+
+    const diasSemana = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES"];
+    const horariosPorDia = {
+        "LUNES": [],
+        "MARTES": [],
+        "MIERCOLES": [],
+        "JUEVES": [],
+        "VIERNES": []
+    };
+
+    // Agrupar cursos por día
+    filas.forEach(f => {
+        const dia = f.dia.toUpperCase();
+        if (horariosPorDia[dia]) {
+            horariosPorDia[dia].push(f.curso);
+        }
+    });
+
+    let html = `
+        <table style="table-layout: fixed;">
+            <thead>
+                <tr>
+                    ${diasSemana.map(d => `<th>${d}</th>`).join('')}
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    ${diasSemana.map(d => {
+                        const cursos = horariosPorDia[d];
+                        return `
+                            <td style="vertical-align: top; padding: 10px; height: 100px;">
+                                ${cursos.length > 0 
+                                    ? cursos.map(c => `<div class="preceptor-curso-item">${c}</div>`).join('') 
+                                    : '<span style="opacity:0.3; font-style:italic;">-</span>'}
+                            </td>
+                        `;
+                    }).join('')}
+                </tr>
+            </tbody>
+        </table>
+    `;
+
+    contenedorLista.innerHTML = html;
+}
 function renderizarPreceptor(data) {
     const container = document.getElementById('preceptor-info-container');
     if (!container) return;
