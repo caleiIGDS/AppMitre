@@ -449,43 +449,42 @@ function renderizarTablaPreceptor(filas) {
 
         const filasTurno = turnosEncontrados[turno];
         const diasSemana = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES"];
-        const horariosPorDia = {
-            "LUNES": [],
-            "MARTES": [],
-            "MIERCOLES": [],
-            "JUEVES": [],
-            "VIERNES": []
-        };
-
-        // Agrupar cursos por día
+        
+        // Agrupar por preceptor, curso y estado (tipo) para tener una fila por curso
+        const cursosMap = {};
         filasTurno.forEach(f => {
-            const dia = f.dia.toUpperCase();
-            if (horariosPorDia[dia]) {
-                horariosPorDia[dia].push(f.curso);
+            const key = `${f.preceptor}|${f.curso}|${f.tipo}`;
+            if (!cursosMap[key]) {
+                cursosMap[key] = { preceptor: f.preceptor, curso: f.curso, estado: f.tipo || '-', dias: [] };
             }
+            cursosMap[key].dias.push(f.dia.toUpperCase());
         });
+        const cursosLista = Object.values(cursosMap);
 
         html += `
             <h3 style="margin-top: 30px; margin-bottom: 15px; color: var(--primary); border-bottom: 2px solid var(--secondary); padding-bottom: 5px;">TURNO ${turno}</h3>
-            <table style="table-layout: fixed; margin-bottom: 30px;">
+            <table style="table-layout: fixed; margin-bottom: 30px; width: 100%;">
                 <thead>
                     <tr>
+                        <th style="width: 20%;">PRECEPTOR</th>
+                        <th style="width: 15%;">ESTADO</th>
                         ${diasSemana.map(d => `<th>${d}</th>`).join('')}
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        ${diasSemana.map(d => {
-                            const cursos = horariosPorDia[d];
-                            return `
-                                <td style="vertical-align: top; padding: 10px; height: 100px;">
-                                    ${cursos.length > 0 
-                                        ? cursos.map(c => `<div class="preceptor-curso-item">${c}</div>`).join('') 
+                    ${cursosLista.map(c => `
+                        <tr>
+                            <td style="padding: 10px; text-align: center;">${c.preceptor}</td>
+                            <td style="padding: 10px; text-align: center;">${c.estado}</td>
+                            ${diasSemana.map(d => `
+                                <td style="padding: 10px; text-align: center; vertical-align: middle;">
+                                    ${c.dias.includes(d) 
+                                        ? `<div class="preceptor-curso-item" style="margin: 0 auto;">${c.curso}</div>` 
                                         : '<span style="opacity:0.3; font-style:italic;">-</span>'}
                                 </td>
-                            `;
-                        }).join('')}
-                    </tr>
+                            `).join('')}
+                        </tr>
+                    `).join('')}
                 </tbody>
             </table>
         `;
