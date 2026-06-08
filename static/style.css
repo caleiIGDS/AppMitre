@@ -9,7 +9,7 @@
 }
 
 body {
-    font-family: 'Rajdhani', sans-serif;
+    font-family: 'Roboto Mono', monospace;
     background-color: var(--tech-bg);
     color: var(--dark);
     margin: 0;
@@ -23,7 +23,7 @@ body {
 .sys-clock, 
 .tech-btn-action, 
 .hora-label {
-    font-family: 'Share Tech Mono', monospace;
+    font-family: 'Roboto Mono', monospace;
 }
 
 .blueprint-bg {
@@ -276,6 +276,7 @@ footer a:hover {
     z-index: 5;
     cursor: pointer;
     display: flex;
+    flex-direction: column;
     transition: box-shadow 0.2s;
 }
 
@@ -291,17 +292,20 @@ footer a:hover {
 
 .aula-indicador {
     background-color: rgba(0,0,0,0.15);
-    width: 35px;
-    min-width: 35px;
+    height: 22px;
+    width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
+    font-size: 13px;
+    border-top: 1px solid rgba(255,255,255,0.1);
 }
 
 .aula-indicador.sin-numero {
-    writing-mode: vertical-lr;
-    text-orientation: upright;
+    writing-mode: horizontal-tb;
+    text-orientation: mixed;
+    font-size: 11px;
 }
 
 .materia-contenido {
@@ -310,6 +314,8 @@ footer a:hover {
     display: flex;
     flex-direction: column;
     justify-content: center;
+    align-items: center;
+    text-align: center;
     overflow: hidden;
 }
 

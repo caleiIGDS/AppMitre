@@ -158,7 +158,8 @@ class PDF(FPDF):
 
     def footer(self):
         self.set_y(-15)
-        self.set_font('Arial', 'I', 8)
+        self.add_font('RobotoMono', 'I', 'static/fonts/RobotoMono-Italic.ttf')
+        self.set_font('RobotoMono', 'I', 8)
         self.cell(0, 10, 'by Calei', 0, 0, 'L')
 
 @app.route('/export/pdf/<tipo>/<valor>')
@@ -181,10 +182,13 @@ def export_pdf(tipo, valor):
     cal = obtener_datos_calendario(filas, tipo, columnas)
     
     pdf = PDF(orientation='L', unit='mm', format='A4')
+    pdf.add_font('RobotoMono', '', 'static/fonts/RobotoMono-Regular.ttf')
+    pdf.add_font('RobotoMono', 'B', 'static/fonts/RobotoMono-Bold.ttf')
+    pdf.add_font('RobotoMono', 'I', 'static/fonts/RobotoMono-Italic.ttf')
     pdf.add_page()
     
     # Nuevo Título simple y centrado
-    pdf.set_font('Arial', 'B', 16)
+    pdf.set_font('RobotoMono', 'B', 16)
     pdf.set_text_color(0, 0, 0)
     
     titulo = f"Horario Semanal de {tipo.capitalize()}: {valor}"
@@ -228,9 +232,9 @@ def export_pdf(tipo, valor):
                     txt = f"{label} {labels[idx]} {str(row[idx] or '').strip()}" if row[idx] else ""
                     
                     if es_principal:
-                        pdf.set_font('Arial', 'B', 11)
+                        pdf.set_font('RobotoMono', 'B', 11)
                     else:
-                        pdf.set_font('Arial', 'B', 9)
+                        pdf.set_font('RobotoMono', 'B', 9)
                     
                     align = 'L' if idx == 3 else ('C' if idx == 4 else 'R')
                     # No saltar línea hasta el último
@@ -246,16 +250,16 @@ def export_pdf(tipo, valor):
         col_hour_w = 15; col_day_w = (width - col_hour_w) / len(cal['columnas'])
         
         # Dibujar Cabecera Días / Aulas
-        pdf.set_fill_color(240, 240, 240); pdf.set_font('Arial', 'B', 10)
+        pdf.set_fill_color(240, 240, 240); pdf.set_font('RobotoMono', 'B', 10)
         pdf.set_xy(margin_left + col_hour_w, margin_top)
         for col_name in cal['columnas']:
             display_name = col_name if tipo != 'planilla' else f"A {col_name}"
             if tipo == 'planilla' and len(cal['columnas']) > 6:
-                pdf.set_font('Arial', 'B', 8)
+                pdf.set_font('RobotoMono', 'B', 8)
             pdf.cell(col_day_w, 6, display_name, 1, 0, 'C', True)
         
         # Dibujar Horas y Grid
-        pdf.set_font('Arial', '', 10); pdf.set_text_color(100, 100, 100)
+        pdf.set_font('RobotoMono', '', 10); pdf.set_text_color(100, 100, 100)
         duracion = cal['hora_max'] - cal['hora_min']
         
         # Pre-calcular posiciones de texto para evitar solapamientos
@@ -299,12 +303,12 @@ def export_pdf(tipo, valor):
                     pdf.set_fill_color(255, 255, 255)
                     pdf.rect(x, y, w, h, 'FD')
                     
-                    # Indicador lateral
-                    ind_w = 7
-                    if w < 15: ind_w = w * 0.4
+                    # Indicador inferior (Aula)
+                    ind_h = 7
+                    if h < 15: ind_h = h * 0.4
                     
                     pdf.set_fill_color(245, 245, 245)
-                    pdf.rect(x, y, ind_w, h, 'FD')
+                    pdf.rect(x, y + h - ind_h, w, ind_h, 'FD')
                     
                     # Formatear curso y división
                     curso_num = str(clase[0])
@@ -320,25 +324,14 @@ def export_pdf(tipo, valor):
                     if tipo == 'aula' or tipo == 'planilla': ind_txt = f"{curso_num}° {div_display}"
                     
                     pdf.set_text_color(0, 0, 0)
-                    contiene_letras = any(c.isalpha() for c in ind_txt)
-                    if tipo != 'aula' and tipo != 'planilla' and contiene_letras and (len(ind_txt) > 4 or h > ind_w * 2):
-                        pdf.set_font('Arial', 'B', 6)
-                        char_h = 3.0
-                        max_chars = int((h - 2) / char_h)
-                        display_txt = ind_txt[:max_chars]
-
-                        start_y = y + (h - (len(display_txt) * char_h)) / 2
-                        for i, char in enumerate(display_txt):
-                            pdf.set_xy(x, max(y, start_y + (i * char_h)))
-                            pdf.cell(ind_w, char_h, char, 0, 0, 'C')
-                    else:
-                        pdf.set_font('Arial', 'B', 8)
-                        pdf.set_xy(x, y)
-                        pdf.cell(ind_w, h, ind_txt, 0, 0, 'C')
+                    pdf.set_font('RobotoMono', 'B', 9)
+                    pdf.set_xy(x, y + h - ind_h)
+                    pdf.cell(w, ind_h, ind_txt, 0, 0, 'C')
                     
                     # Contenido Materia Centrado
-                    txt_x = x + ind_w + 0.3
-                    materia_w = w - ind_w - 0.6
+                    txt_x = x + 0.3
+                    materia_w = w - 0.6
+                    materia_h_avail = h - ind_h
                     
                     if materia_w > 2:
                         is_licencia = tipo == 'profesor' and len(clase) > 16 and clase[16] == 1
@@ -348,13 +341,13 @@ def export_pdf(tipo, valor):
                             font_size_mat = 7.2
                             font_size_det = 5.8
                             line_h = 2.7
-                            is_short = h < 20
-                            is_tiny = h < 12
+                            is_short = materia_h_avail < 15
+                            is_tiny = materia_h_avail < 10
 
                             if is_tiny:
                                 font_size_mat = 6.0; font_size_det = 5.0; line_h = 2.2
 
-                            pdf.set_font('Arial', 'B', font_size_mat)
+                            pdf.set_font('RobotoMono', 'B', font_size_mat)
                             materia_txt = "LICENCIADA" if is_licencia else clase[3]
                             lines_mat_full = pdf.multi_cell(materia_w, line_h, materia_txt, split_only=True)
                             
@@ -372,7 +365,7 @@ def export_pdf(tipo, valor):
                                 materia_display = materia_txt
                                 actual_lines_mat = len(lines_mat_full)
                             
-                            pdf.set_font('Arial', '', font_size_det)
+                            pdf.set_font('RobotoMono', '', font_size_det)
                             # Mostrar suplente si esta activo
                             prof_display = clase[5]
                             if len(clase) > 16 and clase[16] == 1:
@@ -380,23 +373,23 @@ def export_pdf(tipo, valor):
                             det_raw = f"Prof: {prof_display}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
                             lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
                             
-                            show_det = (actual_lines_mat + 1) * line_h <= h - 0.3 and not is_licencia
-                            show_time = show_det and (actual_lines_mat + len(lines_det) + 1) * line_h <= h - 0.3
+                            show_det = (actual_lines_mat + 1) * line_h <= materia_h_avail - 0.3 and not is_licencia
+                            show_time = show_det and (actual_lines_mat + len(lines_det) + 1) * line_h <= materia_h_avail - 0.3
                             
                             total_h = actual_lines_mat * line_h
                             if show_det: total_h += min(len(lines_det), 2) * line_h
                             if show_time: total_h += line_h
                             
-                            y_start = max(y + 0.2, y + (h - total_h) / 2)
+                            y_start = max(y + 0.2, y + (materia_h_avail - total_h) / 2)
                             pdf.set_xy(txt_x, y_start)
-                            pdf.set_font('Arial', 'B', font_size_mat)
+                            pdf.set_font('RobotoMono', 'B', font_size_mat)
                             if is_licencia: pdf.set_text_color(220, 38, 38)
                             pdf.multi_cell(materia_w, line_h, materia_display, 0, 'C')
                             pdf.set_text_color(0, 0, 0)
                             
                             if show_det:
-                                pdf.set_font('Arial', '', font_size_det)
-                                space_for_prof = h - (actual_lines_mat * line_h) - 0.5
+                                pdf.set_font('RobotoMono', '', font_size_det)
+                                space_for_prof = materia_h_avail - (actual_lines_mat * line_h) - 0.5
                                 if show_time: space_for_prof -= line_h
                                 max_lines_prof = int(space_for_prof / line_h)
                                 if max_lines_prof > 0:
@@ -412,17 +405,17 @@ def export_pdf(tipo, valor):
                                     pdf.multi_cell(materia_w, line_h, display_det, 0, 'C')
                             
                             if show_time:
-                                pdf.set_font('Arial', '', font_size_det)
-                                if pdf.get_y() - y + line_h <= h:
+                                pdf.set_font('RobotoMono', '', font_size_det)
+                                if pdf.get_y() - y + line_h <= materia_h_avail:
                                     pdf.set_x(txt_x)
                                     pdf.cell(materia_w, line_h, f"{clase[12]} - {clase[13]}", 0, 1, 'C')
                         else:
-                            is_short = h < 20; is_tiny = h < 12
+                            is_short = materia_h_avail < 20; is_tiny = materia_h_avail < 12
                             font_size_mat = 9.5; font_size_det = 8.0; line_h = 3.8
                             if is_short: font_size_mat = 8.0; font_size_det = 7.0; line_h = 3.0
                             if is_tiny: font_size_mat = 7.0; font_size_det = 6.0; line_h = 2.5
                             
-                            pdf.set_font('Arial', 'B', font_size_mat)
+                            pdf.set_font('RobotoMono', 'B', font_size_mat)
                             materia_txt = "LICENCIADA" if is_licencia else clase[3]
                             lines_mat_full = pdf.multi_cell(materia_w, line_h, materia_txt, split_only=True)
                             max_lines_mat_allowed = 1 if is_short else 4
@@ -440,30 +433,30 @@ def export_pdf(tipo, valor):
                                 materia_display = materia_txt
                                 actual_lines_mat = len(lines_mat_full)
                             
-                            pdf.set_font('Arial', '', font_size_det)
+                            pdf.set_font('RobotoMono', '', font_size_det)
                             # Mostrar suplente si esta activo
                             prof_display = clase[5]
                             if len(clase) > 16 and clase[16] == 1:
                                 prof_display = clase[17]
                             det_raw = f"Prof: {prof_display}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
                             lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
-                            show_det = (actual_lines_mat + 1) * line_h <= h - 0.8 and not is_licencia
-                            show_time = show_det and (actual_lines_mat + len(lines_det) + 1) * line_h <= h - 0.8
+                            show_det = (actual_lines_mat + 1) * line_h <= materia_h_avail - 0.8 and not is_licencia
+                            show_time = show_det and (actual_lines_mat + len(lines_det) + 1) * line_h <= materia_h_avail - 0.8
                             
                             final_lines = actual_lines_mat
                             if show_det: final_lines += min(len(lines_det), 2)
                             if show_time: final_lines += 1
                             
-                            y_start = max(y + 0.4, y + (h - (final_lines * line_h)) / 2)
+                            y_start = max(y + 0.4, y + (materia_h_avail - (final_lines * line_h)) / 2)
                             pdf.set_xy(txt_x, y_start)
-                            pdf.set_font('Arial', 'B', font_size_mat)
+                            pdf.set_font('RobotoMono', 'B', font_size_mat)
                             if is_licencia: pdf.set_text_color(220, 38, 38)
                             pdf.multi_cell(materia_w, line_h, materia_display, 0, 'C')
                             pdf.set_text_color(0, 0, 0)
                             
                             if show_det:
-                                pdf.set_font('Arial', '', font_size_det)
-                                space_for_prof = h - (actual_lines_mat * line_h) - 0.8
+                                pdf.set_font('RobotoMono', '', font_size_det)
+                                space_for_prof = materia_h_avail - (actual_lines_mat * line_h) - 0.8
                                 max_lines_prof = max(1, int(space_for_prof / line_h))
                                 display_det = det_raw
                                 if len(lines_det) > max_lines_prof:
@@ -476,8 +469,8 @@ def export_pdf(tipo, valor):
                                 pdf.set_x(txt_x); pdf.multi_cell(materia_w, line_h, display_det, 0, 'C')
 
                             if show_time:
-                                pdf.set_font('Arial', '', font_size_det)
-                                if pdf.get_y() - y + line_h <= h:
+                                pdf.set_font('RobotoMono', '', font_size_det)
+                                if pdf.get_y() - y + line_h <= materia_h_avail:
                                     pdf.set_x(txt_x)
                                     pdf.cell(materia_w, line_h, f"{clase[12]} - {clase[13]}", 0, 1, 'C')
                 elif b['tipo'] == 'superposicion':
@@ -488,7 +481,7 @@ def export_pdf(tipo, valor):
                     y = margin_top + 6 + y_ini + 1
                     w = col_day_w - 2; h = (y_fin - y_ini) - 2
                     pdf.set_fill_color(220, 220, 220); pdf.rect(x, y, w, h, 'FD')
-                    pdf.set_text_color(0, 0, 0); pdf.set_font('Arial', 'B', 8)
+                    pdf.set_text_color(0, 0, 0); pdf.set_font('RobotoMono', 'B', 8)
                     pdf.set_xy(x, y + (h/2) - 2)
                     pdf.cell(w, 4, f"SUPERPOSICION", 0, 0, 'C')
 

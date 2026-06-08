@@ -685,7 +685,6 @@ function generarCalendario(filas, modo) {
                                  onclick="mostrarInfoClase('${jsonClase}', this)"
                                  onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${(clase[16] === 1 ? clase[17] : (clase[5] || '-')).replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
                                  onmouseout="hideTooltip()">
-                                <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>
                                 <div class="materia-contenido">
                                     ${modo === 'profesor' && clase[16] === 1 ? 
                                         `<div class="materia-nombre" style="color:var(--alert); font-weight:bold; display:flex; align-items:center; justify-content:center; height:100%;">LICENCIADA</div>` :
@@ -698,6 +697,7 @@ function generarCalendario(filas, modo) {
                                          </div>`
                                     }
                                 </div>
+                                <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>
 
                             </div>`;
                     });
@@ -966,6 +966,7 @@ function generarPlanillaGeneral() {
                                 <div class="materia-contenido" style="text-align:center;">
                                     <div class="materia-nombre" style="font-size:14px;">${clase[0]}° ${clase[1]}</div>
                                 </div>
+                                <div class="aula-indicador">${clase[0]}° ${clase[1]}</div>
                             </div>`;
                     });
                 } else {
@@ -987,6 +988,7 @@ function generarPlanillaGeneral() {
                             <div class="materia-contenido" style="text-align:center;">
                                 <div class="materia-nombre" style="font-size:14px;">${clase[0]}° ${clase[1]}</div>
                             </div>
+                            <div class="aula-indicador">${clase[0]}° ${clase[1]}</div>
                         </div>`;
                 });
             }
