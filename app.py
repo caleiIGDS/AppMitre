@@ -539,12 +539,24 @@ def api_horario_preceptor(nombre):
     """
     return jsonify(database.obtener_horario_preceptor(nombre))
 
+def inicializar_bd():
+    """
+    Garantiza que la base de datos exista y esté cargada con los datos más recientes.
+    Útil para Render, donde el sistema de archivos es efímero.
+    """
+    import os
+    if not os.path.exists('escuela.db'):
+        print("Base de datos no encontrada. Descargando desde Google Sheets...")
+        database.crear_tablas()
+        database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
+        database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
+        database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
+
+# Se ejecuta siempre al arrancar (incluyendo Gunicorn)
+inicializar_bd()
+
 if __name__ == '__main__':
-    # Esto garantiza que si cambias el CSV, la web se actualiza al arrancar
-    database.crear_tablas()
-    database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
-    database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
-    database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
+    # En desarrollo local, forzamos recarga opcionalmente o solo corremos
     app.run(host='0.0.0.0', port=5000, debug=True)
 
 def recargar_db(app):
