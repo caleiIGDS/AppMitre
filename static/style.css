@@ -614,11 +614,13 @@ footer a:hover {
     gap: 8px;
 }
 
-/* Multi-column support only in Fullscreen mode */
-body.is-fullscreen .class-list-light {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
+/* Multi-column support only in Fullscreen mode on wide screens */
+@media (min-width: 900px) {
+    body.is-fullscreen .class-list-light {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
 }
 
 .class-item-light {
