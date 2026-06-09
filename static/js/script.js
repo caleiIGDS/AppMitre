@@ -345,8 +345,9 @@ function renderizarDashboard(filas) {
         return list.map(f => {
             let profName = f[5];
             if (f[16] === 1) profName = f[17];
+            const jsonClase = encodeURIComponent(JSON.stringify(f));
             return `
-                <div class="class-item-light">
+                <div class="class-item-light" style="cursor:pointer;" onclick="mostrarInfoClase('${jsonClase}', this)">
                     <div class="class-time-light">${f[12]} - ${f[13]}</div>
                     <div class="class-info-light">
                         <span class="class-materia-light">${f[0]}° ${f[1]} | ${profName}</span>

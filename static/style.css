@@ -627,7 +627,7 @@ body.is-fullscreen .class-list-light {
     background: #f9fafb;
     display: grid;
     grid-template-columns: 75px 1fr auto;
-    gap: 10px;
+    gap: 20px;
     align-items: center;
 }
 
