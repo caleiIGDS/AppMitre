@@ -1,0 +1,78 @@
+===============================================================================
+PLAN DE HOSTING GRATUITO PARA APPMITRE (RENDER + CLOUDFLARE)
+===============================================================================
+
+Este plan permite hostear la aplicación sin costo mensual, utilizando tu propio 
+dominio y cumpliendo el requisito de NIC.ar (mínimo 2 Servidores de Nombres).
+
+-------------------------------------------------------------------------------
+1. CAPA DE DNS: CLOUDFLARE (GRATIS)
+-------------------------------------------------------------------------------
+Objetivo: Cumplir el requisito de "Servidores de Nombres" para tu dominio.
+
+Pasos:
+1. Regístrate en https://dash.cloudflare.com/sign-up
+2. Agrega tu dominio (ej: escuelamitre.com.ar).
+3. Cloudflare te asignará dos Nameservers (ej: ara.ns.cloudflare.com y bob.ns.cloudflare.com).
+4. Entra a tu panel de NIC.ar y delega el dominio a esos dos servidores.
+5. A partir de ahora, Cloudflare maneja los registros de tu dominio.
+
+-------------------------------------------------------------------------------
+2. CAPA DE HOSTING: RENDER.COM (GRATIS)
+-------------------------------------------------------------------------------
+Objetivo: Correr el código Python/Flask.
+
+Pasos:
+1. Crea una cuenta en https://render.com/ (conéctala con tu GitHub).
+2. Crea un "New Web Service".
+3. Selecciona el repositorio de AppMitre.
+4. Configuración recomendada:
+   - Runtime: Python
+   - Build Command: pip install -r requirements.txt
+   - Start Command: gunicorn app:app
+5. En la sección "Settings" -> "Custom Domains", agrega tu dominio.
+6. Render te dará un registro CNAME. Cópialo y pégalo en el panel de DNS de Cloudflare.
+
+-------------------------------------------------------------------------------
+3. ADAPTACIÓN DEL CÓDIGO (NO APLICADA AÚN)
+-------------------------------------------------------------------------------
+Render borra el archivo 'escuela.db' cada vez que el servidor se "duerme" 
+(luego de 15 min de inactividad). La solución es verificar si el archivo existe 
+al arrancar y reconstruirlo desde Google Sheets si falta.
+
+Fragmento de código sugerido para el final de app.py:
+(Referencia para implementación futura)
+
+```python
+import os
+
+def inicializar_bd():
+    # Comprueba si el archivo escuela.db existe. Si no, lo crea y lo carga.
+    if not os.path.exists('escuela.db'):
+        print("Base de datos no encontrada. Descargando desde Google Sheets...")
+        database.crear_tablas()
+        database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
+        database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
+        database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
+
+# Se ejecuta siempre al arrancar en el servidor
+inicializar_bd()
+```
+
+-------------------------------------------------------------------------------
+4. VENTAJAS Y DESVENTAJAS DE ESTE PLAN
+-------------------------------------------------------------------------------
+PROS:
+- Costo $0 para siempre.
+- DNS profesionales y Certificado SSL (HTTPS) incluido.
+- Sincronización automática de datos cada vez que la app "despierta".
+
+CONTRAS:
+- El primer usuario que entra después de un tiempo de inactividad tendrá que 
+  esperar entre 30 y 50 segundos a que la app arranque ("despierte").
+- Durante ese arranque, la app descargará los datos de Google Sheets, lo que 
+  asegura que los datos siempre estén frescos.
+
+===============================================================================
+Generado el: 08/06/2026
+===============================================================================

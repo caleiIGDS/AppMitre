@@ -344,7 +344,7 @@ function renderizarDashboard(filas) {
         if (list.length === 0) return `<div style="text-align:center; padding:20px; color:#5f6368;">${filterText ? 'SIN COINCIDENCIAS' : 'SIN ACTIVIDAD'}</div>`;
         return list.map(f => {
             let profName = f[5];
-            if (f[16] === 1) profName = f[17];
+            if (f[16] === 1) profName = 'SUPLENTE: ' + f[17];
             const jsonClase = encodeURIComponent(JSON.stringify(f));
             return `
                 <div class="class-item-light" style="cursor:pointer;" onclick="mostrarInfoClase('${jsonClase}', this)">
@@ -535,6 +535,59 @@ function renderizarPreceptor(data) {
     container.innerHTML = html;
 }
 
+function calcularEstilosBloques(cluster) {
+    const numClases = cluster.length;
+    let styles = new Array(numClases).fill("");
+    
+    if (numClases <= 2) {
+        let leftOcupado = false;
+        let rightOcupado = false;
+        let assignments = new Array(numClases).fill(null);
+
+        for (let i = 0; i < numClases; i++) {
+            let g = (cluster[i][14] || "").trim().toUpperCase();
+            if (g === 'A' && !leftOcupado) {
+                assignments[i] = 'left';
+                leftOcupado = true;
+            } else if (g === 'B' && !rightOcupado) {
+                assignments[i] = 'right';
+                rightOcupado = true;
+            }
+        }
+
+        for (let i = 0; i < numClases; i++) {
+            if (assignments[i] === null) {
+                if (!leftOcupado && numClases > 1) {
+                    assignments[i] = 'left';
+                    leftOcupado = true;
+                } else if (!rightOcupado && numClases > 1) {
+                    assignments[i] = 'right';
+                    rightOcupado = true;
+                } else {
+                    assignments[i] = 'full';
+                }
+            }
+        }
+
+        for (let i = 0; i < numClases; i++) {
+            if (assignments[i] === 'left') {
+                styles[i] = `width: calc(50% - 6px); left: 4px; right: auto;`;
+            } else if (assignments[i] === 'right') {
+                styles[i] = `width: calc(50% - 6px); right: 4px; left: auto;`;
+            } else {
+                styles[i] = `left: 4px; right: 4px; width: auto;`;
+            }
+        }
+    } else {
+        const anchoPct = 100 / numClases;
+        for (let i = 0; i < numClases; i++) {
+            const leftPct = anchoPct * i;
+            styles[i] = `width: calc(${anchoPct}% - 6px); left: calc(${leftPct}% + 4px); right: auto;`;
+        }
+    }
+    return styles;
+}
+
 function generarCalendario(filas, modo) {
     const contenedor = document.getElementById('contenedor-calendario');
     const timeToMin = (t) => {
@@ -620,6 +673,7 @@ function generarCalendario(filas, modo) {
                     // Logic for superposition: only divide side-by-side if ALL classes allow it (F[15] == 1)
                     const todosPermitenSuperposicion = cluster.every(c => c[15] == 1);
                     if (todosPermitenSuperposicion) { 
+                        const estilos = calcularEstilosBloques(cluster);
                         const numClases = cluster.length;
                         cluster.forEach((clase, idxInCluster) => {
                             const inicio = clase[12];
@@ -627,16 +681,14 @@ function generarCalendario(filas, modo) {
                             const top = getPosicionY(inicio) + 2;
                             const bottom = getPosicionY(fin) - 2;
                             const alto = Math.max(bottom - top, 20);
-                            const anchoPct = 100 / numClases;
-                            const leftPct = anchoPct * idxInCluster;
-                            const styleExtra = `width: calc(${anchoPct}% - 6px); left: calc(${leftPct}% + 4px);`;
+                            const styleExtra = estilos[idxInCluster];
 
                             const jsonClase = encodeURIComponent(JSON.stringify(clase));
                             html += `
                                 <div class="materia-bloque" 
                                      style="top: ${top}px; height: ${alto}px; ${styleExtra}" 
                                      onclick="mostrarInfoClase('${jsonClase}', this)"
-                                     onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${(clase[16] === 1 ? clase[17] : (clase[5] || '-')).replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
+                                     onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${(clase[16] === 1 ? 'SUPLENTE: ' + clase[17] : (clase[5] || '-')).replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
                                      onmouseout="hideTooltip()">
                                     <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>
                                     <div class="materia-contenido">
@@ -645,7 +697,7 @@ function generarCalendario(filas, modo) {
                                             `<div class="materia-nombre">${clase[3]}</div>
                                              <div class="materia-detalles">
                                                 ${(() => {
-                                                    const profName = (clase[16] === 1 && clase[17]) ? clase[17] : (clase[5] || '-');
+                                                    const profName = (clase[16] === 1 && clase[17]) ? 'SUPLENTE: ' + clase[17] : (clase[5] || '-');
                                                     return modo === 'aula' ? profName : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : profName);
                                                 })()}
                                              </div>`
@@ -663,6 +715,7 @@ function generarCalendario(filas, modo) {
                     }
                     clusterIdx.forEach(idx => procesados.add(idx));
                 } else {
+                    const estilos = calcularEstilosBloques(cluster);
                     const numClases = cluster.length;
                     cluster.forEach((clase, idxInCluster) => {
                         const inicio = clase[12];
@@ -670,21 +723,13 @@ function generarCalendario(filas, modo) {
                         const top = getPosicionY(inicio) + 2;
                         const bottom = getPosicionY(fin) - 2;
                         const alto = Math.max(bottom - top, 20);
-                        const anchoPct = 100 / numClases;
-                        const leftPct = anchoPct * idxInCluster;
-                        const styleExtra = numClases > 1 
-                            ? `width: calc(${anchoPct}% - 6px); left: calc(${leftPct}% + 4px);`
-                            : (clase[14] && clase[14].trim().toUpperCase() === 'A' 
-                                ? `width: calc(50% - 6px); left: 4px;` 
-                                : (clase[14] && clase[14].trim().toUpperCase() === 'B' 
-                                    ? `width: calc(50% - 6px); right: 4px;` 
-                                    : `left: 4px; right: 4px;`));
+                        const styleExtra = estilos[idxInCluster];
                         const jsonClase = encodeURIComponent(JSON.stringify(clase));
                         html += `
                             <div class="materia-bloque" 
                                  style="top: ${top}px; height: ${alto}px; ${styleExtra}" 
                                  onclick="mostrarInfoClase('${jsonClase}', this)"
-                                 onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${(clase[16] === 1 ? clase[17] : (clase[5] || '-')).replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
+                                 onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${(clase[16] === 1 ? 'SUPLENTE: ' + clase[17] : (clase[5] || '-')).replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
                                  onmouseout="hideTooltip()">
                                 <div class="materia-contenido">
                                     ${modo === 'profesor' && clase[16] === 1 ? 
@@ -692,7 +737,7 @@ function generarCalendario(filas, modo) {
                                         `<div class="materia-nombre">${clase[3]}</div>
                                          <div class="materia-detalles">
                                             ${(() => {
-                                                const profName = (clase[16] === 1 && clase[17]) ? clase[17] : (clase[5] || '-');
+                                                const profName = (clase[16] === 1 && clase[17]) ? 'SUPLENTE: ' + clase[17] : (clase[5] || '-');
                                                 return modo === 'aula' ? profName : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : profName);
                                             })()}
                                          </div>`
@@ -741,7 +786,7 @@ function generarTablaDetallada(filas) {
             <tr><th>Día</th><th>Inicio</th><th>Fin</th><th>Materia</th><th>Profesor</th><th>Aula</th><th>Grupo</th></tr>
         </thead><tbody>`;
     filas.forEach(f => {
-        let profName = f[16] === 1 ? f[17] : f[5];
+        let profName = f[16] === 1 ? 'SUPLENTE: ' + f[17] : f[5];
         html += `<tr>
             <td>${f[11]}</td><td>${f[12]}</td><td>${f[13]}</td>
             <td><b>${f[3]}</b></td><td>${profName}</td><td>${f[9]}</td><td>${f[14] || '-'}</td>

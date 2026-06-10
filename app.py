@@ -357,9 +357,9 @@ def export_pdf(tipo, valor):
                                 for k in range(max_lines_mat_allowed - 1):
                                     materia_display += lines_mat_full[k].strip() + "\n"
                                 last_l = lines_mat_full[max_lines_mat_allowed - 1].strip()
-                                while pdf.get_string_width(last_l + "...") > materia_w - 1.0 and len(last_l) > 5:
+                                while pdf.get_string_width(last_l) > materia_w - 1.0 and len(last_l) > 5:
                                     last_l = last_l[:-1]
-                                materia_display += last_l + "..."
+                                materia_display += last_l
                                 actual_lines_mat = max_lines_mat_allowed
                             else:
                                 materia_display = materia_txt
@@ -370,7 +370,7 @@ def export_pdf(tipo, valor):
                             prof_display = clase[5]
                             if len(clase) > 16 and clase[16] == 1:
                                 prof_display = clase[17]
-                            det_raw = f"Prof: {prof_display}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
+                            det_raw = f"{prof_display}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
                             lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
                             
                             show_det = (actual_lines_mat + 1) * line_h <= materia_h_avail - 0.3 and not is_licencia
@@ -388,7 +388,7 @@ def export_pdf(tipo, valor):
                             pdf.set_text_color(0, 0, 0)
                             
                             if show_det:
-                                pdf.set_font('RobotoMono', '', font_size_det)
+                                pdf.set_font('RobotoMono', 'I', font_size_det)
                                 space_for_prof = materia_h_avail - (actual_lines_mat * line_h) - 0.5
                                 if show_time: space_for_prof -= line_h
                                 max_lines_prof = int(space_for_prof / line_h)
@@ -397,9 +397,9 @@ def export_pdf(tipo, valor):
                                     if len(lines_det) > max_lines_prof:
                                         d_lines = [lines_det[k].strip() for k in range(max_lines_prof - 1)]
                                         last_dl = lines_det[max_lines_prof-1].strip()
-                                        while pdf.get_string_width(last_dl + "...") > materia_w - 0.8 and len(last_dl) > 5:
+                                        while pdf.get_string_width(last_dl) > materia_w - 0.8 and len(last_dl) > 5:
                                             last_dl = last_dl[:-1]
-                                        d_lines.append(last_dl + "...")
+                                        d_lines.append(last_dl)
                                         display_det = "\n".join(d_lines)
                                     pdf.set_x(txt_x)
                                     pdf.multi_cell(materia_w, line_h, display_det, 0, 'C')
@@ -425,9 +425,9 @@ def export_pdf(tipo, valor):
                                 for k in range(max_lines_mat_allowed - 1):
                                     materia_display += lines_mat_full[k].strip() + "\n"
                                 last_l = lines_mat_full[max_lines_mat_allowed - 1].strip()
-                                while pdf.get_string_width(last_l + "...") > materia_w - 1.2 and len(last_l) > 5:
+                                while pdf.get_string_width(last_l) > materia_w - 1.2 and len(last_l) > 5:
                                     last_l = last_l[:-1]
-                                materia_display += last_l + "..."
+                                materia_display += last_l
                                 actual_lines_mat = max_lines_mat_allowed
                             else:
                                 materia_display = materia_txt
@@ -438,7 +438,7 @@ def export_pdf(tipo, valor):
                             prof_display = clase[5]
                             if len(clase) > 16 and clase[16] == 1:
                                 prof_display = clase[17]
-                            det_raw = f"Prof: {prof_display}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
+                            det_raw = f"{prof_display}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
                             lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
                             show_det = (actual_lines_mat + 1) * line_h <= materia_h_avail - 0.8 and not is_licencia
                             show_time = show_det and (actual_lines_mat + len(lines_det) + 1) * line_h <= materia_h_avail - 0.8
@@ -455,16 +455,16 @@ def export_pdf(tipo, valor):
                             pdf.set_text_color(0, 0, 0)
                             
                             if show_det:
-                                pdf.set_font('RobotoMono', '', font_size_det)
+                                pdf.set_font('RobotoMono', 'I', font_size_det)
                                 space_for_prof = materia_h_avail - (actual_lines_mat * line_h) - 0.8
                                 max_lines_prof = max(1, int(space_for_prof / line_h))
                                 display_det = det_raw
                                 if len(lines_det) > max_lines_prof:
                                     d_lines = [lines_det[k].strip() for k in range(max_lines_prof-1)]
                                     last_dl = lines_det[max_lines_prof-1].strip()
-                                    while pdf.get_string_width(last_dl + "...") > materia_w - 1.2 and len(last_dl) > 5:
+                                    while pdf.get_string_width(last_dl) > materia_w - 1.2 and len(last_dl) > 5:
                                         last_dl = last_dl[:-1]
-                                    d_lines.append(last_dl + "...")
+                                    d_lines.append(last_dl)
                                     display_det = "\n".join(d_lines)
                                 pdf.set_x(txt_x); pdf.multi_cell(materia_w, line_h, display_det, 0, 'C')
 
