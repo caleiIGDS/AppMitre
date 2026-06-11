@@ -519,6 +519,18 @@ def api_preceptor(valor):
         print(f"Error preceptor: {e}")
         return jsonify(None)
 
+@app.route('/api/actualizar')
+def api_actualizar():
+    try:
+        database.crear_tablas()
+        database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
+        database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
+        database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
+        return jsonify({"status": "success", "message": "Datos actualizados correctamente"})
+    except Exception as e:
+        print(f"Error actualizando datos: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 @app.route('/api/dashboard')
 def api_dashboard():
     try:

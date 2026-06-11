@@ -54,6 +54,45 @@ body {
     gap: 30px;
 }
 
+.tech-container.header-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tech-btn-update {
+    background: transparent;
+    border: 2px solid var(--secondary);
+    color: var(--secondary);
+    padding: 10px 20px;
+    font-family: 'Roboto Mono', monospace;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-transform: uppercase;
+}
+
+.tech-btn-update:hover {
+    background: var(--secondary);
+    color: white;
+}
+
+.tech-btn-update:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.tech-btn-update.loading {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
 .tech-logo {
     height: 80px;
     border: 2px solid white;

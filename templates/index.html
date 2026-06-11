@@ -9,7 +9,7 @@
 <body>
     <div class="blueprint-bg">
         <header class="tech-header">
-            <div class="tech-container">
+            <div class="tech-container header-flex">
                 <div class="header-blueprint">
                     <img src="{{ url_for('static', filename='images/logoMitre.jpg') }}" alt="Escudo" class="tech-logo">
                     <div class="tech-titles">
@@ -17,6 +17,7 @@
                         <p class="institution">Sistema de Horarios</p>
                     </div>
                 </div>
+                <button id="btn-actualizar" class="tech-btn-update" onclick="actualizarDatos()">ACTUALIZAR HORARIOS</button>
             </div>
         </header>
 

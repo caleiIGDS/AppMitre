@@ -8,6 +8,39 @@ let currentSearch = {
     valor: null
 };
 
+function actualizarDatos() {
+    const btn = document.getElementById('btn-actualizar');
+    const originalText = btn.innerText;
+    
+    btn.disabled = true;
+    btn.innerText = "ACTUALIZANDO...";
+    btn.classList.add('loading');
+
+    fetch('/api/actualizar')
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                btn.innerText = "¡ÉXITO!";
+                btn.style.backgroundColor = "#28a745";
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+            } else {
+                alert("Error: " + data.message);
+                btn.disabled = false;
+                btn.innerText = originalText;
+                btn.classList.remove('loading');
+            }
+        })
+        .catch(err => {
+            console.error("Error al actualizar:", err);
+            alert("Error de conexión al servidor");
+            btn.disabled = false;
+            btn.innerText = originalText;
+            btn.classList.remove('loading');
+        });
+}
+
 function normalize(text) {
     if (!text) return "";
     return text.toLowerCase()
@@ -690,7 +723,6 @@ function generarCalendario(filas, modo) {
                                      onclick="mostrarInfoClase('${jsonClase}', this)"
                                      onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${(clase[16] === 1 ? 'SUPLENTE: ' + clase[17] : (clase[5] || '-')).replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
                                      onmouseout="hideTooltip()">
-                                    <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>
                                     <div class="materia-contenido">
                                         ${modo === 'profesor' && clase[16] === 1 ? 
                                             `<div class="materia-nombre" style="color:var(--alert); font-weight:bold; display:flex; align-items:center; justify-content:center; height:100%;">LICENCIADA</div>` :
@@ -703,6 +735,7 @@ function generarCalendario(filas, modo) {
                                              </div>`
                                         }
                                     </div>
+                                    <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>
                                 </div>`;
                         });
                     } else { 
