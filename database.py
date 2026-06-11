@@ -80,12 +80,24 @@ def limpiar_profesor(nombre):
 
 def limpiar_aula(aula):
     if not aula: return ""
-    # Si tiene números, nos quedamos solo con los números (ej: "B 2" -> "2")
-    numeros = re.findall(r'\d+', aula)
+    aula_limpia = eliminar_acentos(aula).upper().strip()
+    
+    # Mapeos específicos
+    if aula_limpia == 'P':
+        return 'PATIO'
+    
+    # Detectar si es un Taller (ej: "T1", "T 1", "TALLER 1")
+    es_taller = bool(re.search(r'\b(TALLER|T)\s*\d+', aula_limpia))
+    
+    numeros = re.findall(r'\d+', aula_limpia)
     if numeros:
-        return "".join(numeros)
+        numero_aula = "".join(numeros)
+        if es_taller:
+            return f"T{numero_aula}"
+        return numero_aula
+        
     # Si no tiene números, mantenemos el nombre limpio (ej: "PATIO")
-    return eliminar_acentos(aula).upper().strip()
+    return aula_limpia
 
 def corregir_horarios(inicio, fin):
     horarios_comunes = ["07:40", "09:40", "10:00", "12:00", "13:30", "15:30", "15:50", "17:50", "18:00", "20:00", "20:10", "22:10"]
