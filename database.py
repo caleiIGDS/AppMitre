@@ -118,20 +118,29 @@ def corregir_horarios(inicio, fin):
 
 
 
-def descargar_sheet(sheet_id, gid=0, skip_rows=0):
+def descargar_sheet(sheet_id, gid=0, skip_rows=0, intentos=3, demora=2):
+    import time
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
-    with urllib.request.urlopen(url) as response:
-        contenido = response.read().decode('utf-8')
-        lineas = contenido.splitlines()
-        
-        if skip_rows > 0:
-            lineas = lineas[skip_rows:]
+    for intento in range(intentos):
+        try:
+            time.sleep(demora if intento > 0 else 0.5)
+            with urllib.request.urlopen(url, timeout=15) as response:
+                contenido = response.read().decode('utf-8')
+                lineas = contenido.splitlines()
 
-        # Normalizar encabezados: minúsculas, sin acentos, espacios a _
-        encabezados = lineas[0].lower().replace(' ', '_')
-        encabezados = eliminar_acentos(encabezados)
-        lineas[0] = encabezados
-        return io.StringIO('\n'.join(lineas))
+                if skip_rows > 0:
+                    lineas = lineas[skip_rows:]
+
+                # Normalizar encabezados: minúsculas, sin acentos, espacios a _
+                encabezados = lineas[0].lower().replace(' ', '_')
+                encabezados = eliminar_acentos(encabezados)
+                lineas[0] = encabezados
+                return io.StringIO('\n'.join(lineas))
+        except Exception as e:
+            print(f"  Intento {intento + 1}/{intentos} fallido: {e}")
+            if intento == intentos - 1:
+                raise
+    return None
 
 def cargar_desde_sheets(sheet_id, gids):
     con = conectar()

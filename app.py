@@ -557,7 +557,7 @@ if __name__ == '__main__':
     database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
     database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
     database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
 
 def recargar_db(app):
     with app.app_context():

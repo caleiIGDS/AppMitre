@@ -38,9 +38,12 @@
                     </div>
                 </div>
                 <div id="tab-profesor" class="seccion-busqueda">
-                    <div class="tech-field">
-                        <input type="text" class="tech-input" placeholder="INGRESE NOMBRE..." oninput="filtrarOpciones(this, 'profesor')" onfocus="filtrarOpciones(this, 'profesor')">
-                        <div id="dropdown-profesor" class="tech-dropdown"></div>
+                    <div class="tech-field-group">
+                        <div class="tech-field">
+                            <input type="text" class="tech-input" placeholder="INGRESE NOMBRE..." oninput="filtrarOpciones(this, 'profesor')" onfocus="filtrarOpciones(this, 'profesor')">
+                            <div id="dropdown-profesor" class="tech-dropdown"></div>
+                        </div>
+                        <button class="btn-comparar" onclick="toggleComparacion()">COMPARAR</button>
                     </div>
                 </div>
 
@@ -50,6 +53,7 @@
                             <input type="text" class="tech-input" placeholder="INGRESE UBICACIÓN..." oninput="filtrarOpciones(this, 'aula')" onfocus="filtrarOpciones(this, 'aula')">
                             <div id="dropdown-aula" class="tech-dropdown"></div>
                         </div>
+                        <button class="btn-comparar" onclick="toggleComparacion()">COMPARAR</button>
                         <div class="menu-global">
                             <button class="btn-menu" onclick="toggleMenu(event, 'menu-dropdown-aula')">⋮</button>
                             <div id="menu-dropdown-aula" class="menu-dropdown">
@@ -86,9 +90,12 @@
                 </div>
 
                 <div id="tab-curso" class="seccion-busqueda">
-                    <div class="tech-field">
-                        <input type="text" class="tech-input" placeholder="INGRESE GRADO..." oninput="filtrarOpciones(this, 'curso')" onfocus="filtrarOpciones(this, 'curso')">
-                        <div id="dropdown-curso" class="tech-dropdown"></div>
+                    <div class="tech-field-group">
+                        <div class="tech-field">
+                            <input type="text" class="tech-input" placeholder="INGRESE GRADO..." oninput="filtrarOpciones(this, 'curso')" onfocus="filtrarOpciones(this, 'curso')">
+                            <div id="dropdown-curso" class="tech-dropdown"></div>
+                        </div>
+                        <button class="btn-comparar" onclick="toggleComparacion()">COMPARAR</button>
                     </div>
                 </div>
 
@@ -120,6 +127,14 @@
                     </div>
                 </div>
             </section>
+
+            <div id="comparacion-banner" class="modo-comparacion-banner" style="display:none;">
+                <div class="comp-banner-left">
+                    <span class="comp-banner-label">⚡ MODO COMPARACIÓN</span>
+                    <div id="comp-banner-items" class="comp-banner-items"></div>
+                </div>
+                <button class="btn-salir-comparacion" onclick="desactivarModoComparacion()">✕ SALIR</button>
+            </div>
 
             <div id="workspace-calendar-header" class="workspace-header" style="display: none;">
                 <h2 id="calendar-title" class="tech-title-center"></h2>
@@ -157,6 +172,6 @@
             floorMapping: {{ floor_mapping | tojson | safe }},
         };
     </script>
-    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}?v=2"></script>
 </body>
 </html>

@@ -8,6 +8,228 @@ let currentSearch = {
     valor: null
 };
 
+// ─── MODO COMPARACIÓN ───────────────────────────────────────────────────────
+const COMPARACION_COLORS = ['#1a3a5c', '#c0392b', '#27ae60', '#8e44ad', '#e67e22', '#16a085'];
+let isComparacionMode = false;
+let comparacionItems = [];
+let lastFilas = null;
+
+function toggleComparacion() {
+    if (isComparacionMode) {
+        desactivarModoComparacion();
+    } else {
+        activarModoComparacion();
+    }
+}
+
+function activarModoComparacion() {
+    if (!currentSearch.modo || !currentSearch.valor || !lastFilas) {
+        alert("Primero buscá un horario para poder comparar.");
+        return;
+    }
+    isComparacionMode = true;
+    comparacionItems = [{
+        modo: currentSearch.modo,
+        valor: currentSearch.valor,
+        filas: lastFilas,
+        color: COMPARACION_COLORS[0],
+        label: currentSearch.valor
+    }];
+    actualizarEstadoComparacion();
+    generarCalendarioComparacion(comparacionItems);
+}
+
+function desactivarModoComparacion() {
+    isComparacionMode = false;
+    comparacionItems = [];
+    lastFilas = null;
+    actualizarEstadoComparacion();
+    document.getElementById('contenedor-calendario').innerHTML = "";
+    const workspaceHeader = document.getElementById('workspace-calendar-header');
+    if (workspaceHeader) workspaceHeader.style.display = 'none';
+}
+
+function actualizarEstadoComparacion() {
+    const banner = document.getElementById('comparacion-banner');
+    const btns = document.querySelectorAll('.btn-comparar');
+
+    if (isComparacionMode) {
+        if (banner) {
+            const chips = comparacionItems.map(item =>
+                `<span class="comp-chip" style="background:${item.color};">${item.label}</span>`
+            ).join('');
+            document.getElementById('comp-banner-items').innerHTML = chips;
+            banner.style.display = 'flex';
+        }
+        btns.forEach(btn => {
+            btn.textContent = 'COMPARANDO';
+            btn.classList.add('activo');
+        });
+        const workspaceHeader = document.getElementById('workspace-calendar-header');
+        if (workspaceHeader) workspaceHeader.style.display = 'none';
+    } else {
+        if (banner) banner.style.display = 'none';
+        btns.forEach(btn => {
+            btn.textContent = 'COMPARAR';
+            btn.classList.remove('activo');
+        });
+    }
+}
+
+function generarCalendarioComparacion(items) {
+    const contenedor = document.getElementById('contenedor-calendario');
+    const COL_WIDTH = 200;
+    const N = items.length;
+    const dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+
+    const timeToMin = (t) => {
+        if (!t || typeof t !== 'string' || !t.includes(':')) return 0;
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+    };
+
+    let tiempos = new Set();
+    items.forEach(item => {
+        item.filas.forEach(f => {
+            if (f[12]) tiempos.add(f[12]);
+            if (f[13]) tiempos.add(f[13]);
+        });
+    });
+
+    if (tiempos.size === 0) {
+        contenedor.innerHTML = "<div style='padding:20px; text-align:center; color:#70757a;'>Sin horarios.</div>";
+        return;
+    }
+
+    const horariosDinamicos = Array.from(tiempos).sort((a, b) => timeToMin(a) - timeToMin(b));
+    const minMins = timeToMin(horariosDinamicos[0]) - 30;
+    const maxMins = timeToMin(horariosDinamicos[horariosDinamicos.length - 1]) + 30;
+    const HORA_MIN = Math.max(0, minMins);
+    const HORA_MAX = Math.min(1440, maxMins);
+    const ALTURA_TOTAL = Math.max((HORA_MAX - HORA_MIN) * 1.05, 450);
+
+    const getPosicionY = (horaStr) => {
+        if (!horaStr) return 0;
+        return ((timeToMin(horaStr) - HORA_MIN) / (HORA_MAX - HORA_MIN)) * ALTURA_TOTAL;
+    };
+
+    const gridCols = `60px repeat(${N * 5}, ${COL_WIDTH}px)`;
+    const gridMinWidth = 60 + N * 5 * COL_WIDTH;
+
+    let html = `<div class="comparacion-scroll-wrapper"><div class="calendario-grid" style="grid-template-columns:${gridCols}; min-width:${gridMinWidth}px;">`;
+
+    // Fila 1: cabecera-vacia + encabezados de día (cada uno span N columnas)
+    html += '<div class="cabecera-vacia"></div>';
+    dias.forEach(dia => {
+        html += `<div class="cabecera-dia cabecera-dia-grupo" style="grid-column:span ${N};">${dia}</div>`;
+    });
+
+    // Fila 2: placeholder + sub-encabezados de entidad
+    html += '<div class="cabecera-entidad-placeholder"></div>';
+    dias.forEach(() => {
+        items.forEach(item => {
+            html += `<div class="cabecera-entidad">
+                <span class="comp-color-dot" style="background:${item.color};"></span>
+                <span class="comp-entity-name" style="color:${item.color};">${item.label}</span>
+            </div>`;
+        });
+    });
+
+    // Fila 3: columna-horas + columnas de entidad por día
+    html += `<div class="columna-horas" style="height:${ALTURA_TOTAL}px; position:relative;">`;
+    horariosDinamicos.forEach(hora => {
+        html += `<div class="hora-label" style="top:${getPosicionY(hora)}px;">${hora}</div>`;
+    });
+    html += '</div>';
+
+    const renderBloqueComp = (clase, styleExtra, item) => {
+        const inicio = clase[12];
+        const fin = clase[13];
+        const top = getPosicionY(inicio) + 2;
+        const alto = Math.max(getPosicionY(fin) - 2 - top, 20);
+        const jsonClase = encodeURIComponent(JSON.stringify(clase));
+        const modo = item.modo;
+        const profName = (clase[16] === 1 && clase[17]) ? 'SUPLENTE: ' + clase[17] : (clase[5] || '-');
+        const detalleLinea = modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : profName;
+        const aulaInd = modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?');
+        const sinNumero = !(/\d/.test(clase[9])) && modo !== 'aula' ? ' sin-numero' : '';
+        return `<div class="materia-bloque"
+            style="top:${top}px; height:${alto}px; ${styleExtra} background-color:${item.color};"
+            onclick="mostrarInfoClase('${jsonClase}', this)"
+            onmouseover="showTooltip(event,'${clase[3].replace(/'/g,"\\'")}','${profName.replace(/'/g,"\\'")}','${(clase[9]||'-').replace(/'/g,"\\'")}','${inicio} - ${fin}','${clase[0]}° ${clase[1]}')"
+            onmouseout="hideTooltip()">
+            <div class="materia-contenido">
+                ${modo === 'profesor' && clase[16] === 1
+                    ? `<div class="materia-nombre" style="color:var(--alert);font-weight:bold;display:flex;align-items:center;justify-content:center;height:100%;">LICENCIADA</div>`
+                    : `<div class="materia-nombre">${clase[3]}</div><div class="materia-detalles">${detalleLinea}</div>`
+                }
+            </div>
+            <div class="aula-indicador${sinNumero}">${aulaInd}</div>
+        </div>`;
+    };
+
+    dias.forEach(dia => {
+        items.forEach((item, itemIdx) => {
+            const isLastEntity = itemIdx === N - 1;
+            const borderRight = isLastEntity
+                ? 'border-right: 2px solid var(--primary);'
+                : 'border-right: 1px dashed rgba(0,0,0,0.15);';
+
+            html += `<div class="columna-dia" style="height:${ALTURA_TOTAL}px; ${borderRight}">`;
+            horariosDinamicos.forEach(hora => {
+                html += `<div class="grid-line-horizontal" style="top:${getPosicionY(hora)}px;"></div>`;
+            });
+
+            const clasesDelDia = item.filas
+                .filter(f => f[11] === dia)
+                .sort((a, b) => timeToMin(a[12]) - timeToMin(b[12]));
+            const modo = item.modo;
+
+            let procesados = new Set();
+            for (let i = 0; i < clasesDelDia.length; i++) {
+                if (procesados.has(i)) continue;
+                let cluster = [clasesDelDia[i]];
+                let clusterIdx = [i];
+                let maxFin = timeToMin(clasesDelDia[i][13]);
+                for (let j = i + 1; j < clasesDelDia.length; j++) {
+                    if (timeToMin(clasesDelDia[j][12]) < maxFin) {
+                        cluster.push(clasesDelDia[j]);
+                        clusterIdx.push(j);
+                        maxFin = Math.max(maxFin, timeToMin(clasesDelDia[j][13]));
+                    } else { break; }
+                }
+
+                const todosTienenGrupo = cluster.every(c => c[14] && c[14].trim() !== "");
+                const haySuperposicion = cluster.length > 1 && (modo === 'aula' || modo === 'profesor' || !todosTienenGrupo);
+
+                if (haySuperposicion) {
+                    const todosPermiten = cluster.every(c => c[15] == 1);
+                    if (todosPermiten) {
+                        const estilos = calcularEstilosBloques(cluster);
+                        cluster.forEach((clase, idx) => { html += renderBloqueComp(clase, estilos[idx], item); });
+                    } else {
+                        const top = getPosicionY(cluster[0][12]);
+                        const latestEnd = cluster.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
+                        const alto = Math.max(getPosicionY(latestEnd[13]) - top, 30);
+                        const jsonD = encodeURIComponent(JSON.stringify(cluster));
+                        html += `<div class="bloque-superposicion" style="top:${top}px; height:${alto}px;" onclick="verDetalleSuperposicion('${jsonD}')">⚠️ Superposición (${cluster.length})</div>`;
+                    }
+                } else {
+                    const estilos = calcularEstilosBloques(cluster);
+                    cluster.forEach((clase, idx) => { html += renderBloqueComp(clase, estilos[idx], item); });
+                }
+                clusterIdx.forEach(idx => procesados.add(idx));
+            }
+            html += '</div>';
+        });
+    });
+
+    html += '</div></div>';
+    contenedor.innerHTML = html;
+    contenedor.style.display = 'block';
+}
+// ─── FIN MODO COMPARACIÓN ───────────────────────────────────────────────────
+
 function actualizarDatos() {
     const btn = document.getElementById('btn-actualizar');
     const originalText = btn.innerText;
@@ -233,8 +455,8 @@ function cambiarTab(evt, idTab) {
     document.querySelectorAll('.search-input, .search-input-fun, .minimal-input, .tech-input').forEach(input => input.value = "");
     document.querySelectorAll('.custom-dropdown, .custom-dropdown-fun, .minimal-dropdown, .tech-dropdown').forEach(d => d.style.display = 'none');
     
-    // Solo borramos el calendario si es una navegación manual
-    if (!window.isProgrammaticNavigation) {
+    // Solo borramos el calendario si es una navegación manual y no estamos en modo comparación
+    if (!window.isProgrammaticNavigation && !isComparacionMode) {
         document.getElementById('contenedor-calendario').innerHTML = "";
         document.getElementById('contenedor-lista').innerHTML = "";
     }
@@ -246,8 +468,10 @@ function cambiarTab(evt, idTab) {
     // Header management
     const workspaceHeader = document.getElementById('workspace-calendar-header');
     const calendarTitle = document.getElementById('calendar-title');
-    if (workspaceHeader) workspaceHeader.style.display = 'none';
-    if (calendarTitle) calendarTitle.textContent = "";
+    if (!isComparacionMode) {
+        if (workspaceHeader) workspaceHeader.style.display = 'none';
+        if (calendarTitle) calendarTitle.textContent = "";
+    }
 
     if (idTab === 'tab-envivo') {
         document.getElementById('contenedor-calendario').style.display = 'none';
@@ -416,15 +640,20 @@ function buscarEnServidor(modo, valor) {
         if (workspaceHeader) workspaceHeader.style.display = 'none';
         return;
     }
+
+    // En modo comparación, los preceptores no son comparables
+    if (isComparacionMode && modo === 'horario_preceptor') {
+        alert("Los horarios de preceptores no se pueden agregar al modo comparación.");
+        return;
+    }
+
     currentSearch.modo = modo;
     currentSearch.valor = valor;
 
-    if (workspaceHeader && calendarTitle) {
+    if (!isComparacionMode && workspaceHeader && calendarTitle) {
         workspaceHeader.style.display = 'flex';
         calendarTitle.textContent = `Horario de ${modo.replace('_', ' ')}: ${valor}`;
         if (preceptorContainer) preceptorContainer.innerHTML = "";
-        
-        // Ocultar botón PDF si es horario de preceptor
         if (exportBtn) {
             exportBtn.style.display = (modo === 'horario_preceptor') ? 'none' : 'block';
         }
@@ -435,18 +664,30 @@ function buscarEnServidor(modo, valor) {
     fetch(endpoint)
         .then(res => res.json())
         .then(filas => {
-            if (modo === 'horario_preceptor') {
-                renderizarTablaPreceptor(filas);
+            if (isComparacionMode) {
+                // Verificar si ya está en la comparación
+                const yaExiste = comparacionItems.find(i => i.modo === modo && i.valor === valor);
+                if (yaExiste) {
+                    alert(`"${valor}" ya está en la comparación.`);
+                    return;
+                }
+                const color = COMPARACION_COLORS[comparacionItems.length % COMPARACION_COLORS.length];
+                comparacionItems.push({ modo, valor, filas, color, label: valor });
+                actualizarEstadoComparacion();
+                generarCalendarioComparacion(comparacionItems);
             } else {
-                generarCalendario(filas, modo);
-                if (modo === 'curso') {
-                    fetch(`/api/preceptor/${valor}`)
-                        .then(r => r.json())
-                        .then(preceptorData => {
-                            if (preceptorData) {
-                                renderizarPreceptor(preceptorData);
-                            }
-                        });
+                lastFilas = filas;
+                if (modo === 'horario_preceptor') {
+                    renderizarTablaPreceptor(filas);
+                } else {
+                    generarCalendario(filas, modo);
+                    if (modo === 'curso') {
+                        fetch(`/api/preceptor/${valor}`)
+                            .then(r => r.json())
+                            .then(preceptorData => {
+                                if (preceptorData) renderizarPreceptor(preceptorData);
+                            });
+                    }
                 }
             }
         })
@@ -871,7 +1112,6 @@ function toggleMenu(e, id) {
     if (e) e.stopPropagation();
     const menu = document.getElementById(id);
     const isVisible = menu.style.display === "block";
-    // Close all other menus first
     document.querySelectorAll('.menu-dropdown').forEach(m => m.style.display = 'none');
     menu.style.display = isVisible ? "none" : "block";
 }
@@ -882,7 +1122,6 @@ function toggleManualMode(checkbox) {
     
     if (isManualClock) {
         controls.style.display = 'flex';
-        // Initialize manual inputs with current time/date
         const now = new Date();
         document.getElementById('manual-clock-input').value = now.toTimeString().slice(0, 5);
         document.getElementById('manual-date-input').value = now.toISOString().split('T')[0];
@@ -982,8 +1221,7 @@ function generarPlanillaGeneral() {
     const maxMins = timeToMin(horariosDinamicos[horariosDinamicos.length - 1]) + 30;
     const HORA_MIN = Math.max(0, minMins);
     const HORA_MAX = Math.min(1440, maxMins);
-    const duracionTotal = HORA_MAX - HORA_MIN;
-    const ALTURA_TOTAL = Math.max(duracionTotal * 1.05, 450); 
+    const ALTURA_TOTAL = Math.max((HORA_MAX - HORA_MIN) * 1.05, 450);
 
     const getPosicionY = (horaStr) => {
         const minutos = timeToMin(horaStr);
@@ -998,16 +1236,14 @@ function generarPlanillaGeneral() {
 
     html += `<div class="columna-horas" style="height:${ALTURA_TOTAL}px; position:relative;">`;
     horariosDinamicos.forEach(hora => {
-        const top = getPosicionY(hora);
-        html += `<div class="hora-label" style="top:${top}px;">${hora}</div>`;
+        html += `<div class="hora-label" style="top:${getPosicionY(hora)}px;">${hora}</div>`;
     });
     html += '</div>';
 
     classrooms.forEach(aula => {
         html += `<div class="columna-dia" style="height:${ALTURA_TOTAL}px;">`;
         horariosDinamicos.forEach(hora => {
-            const top = getPosicionY(hora);
-            html += `<div class="grid-line-horizontal" style="top:${top}px;"></div>`;
+            html += `<div class="grid-line-horizontal" style="top:${getPosicionY(hora)}px;"></div>`;
         });
 
         const clasesAula = filasDia.filter(f => String(f[9]) === aula).sort((a,b) => timeToMin(a[12]) - timeToMin(b[12]));
@@ -1040,19 +1276,17 @@ function generarPlanillaGeneral() {
                         const leftPct = anchoPct * idxInCluster;
                         const styleExtra = `width: calc(${anchoPct}% - 6px); left: calc(${leftPct}% + 4px);`;
                         const jsonClase = encodeURIComponent(JSON.stringify(clase));
-                        html += `
-                            <div class="materia-bloque" style="top: ${top}px; height: ${alto}px; ${styleExtra}" onclick="mostrarInfoClase('${jsonClase}', this)">
-                                <div class="materia-contenido" style="text-align:center;">
-                                    <div class="materia-nombre" style="font-size:14px;">${clase[0]}° ${clase[1]}</div>
-                                </div>
-                                <div class="aula-indicador">${clase[0]}° ${clase[1]}</div>
-                            </div>`;
+                        html += `<div class="materia-bloque" style="top: ${top}px; height: ${alto}px; ${styleExtra}" onclick="mostrarInfoClase('${jsonClase}', this)">
+                            <div class="materia-contenido" style="text-align:center;">
+                                <div class="materia-nombre" style="font-size:14px;">${clase[0]}° ${clase[1]}</div>
+                            </div>
+                            <div class="aula-indicador">${clase[0]}° ${clase[1]}</div>
+                        </div>`;
                     });
                 } else {
                     const top = getPosicionY(cluster[0][12]);
                     const latestEndClase = cluster.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
-                    const bottom = getPosicionY(latestEndClase[13]);
-                    const alto = Math.max(bottom - top, 30);
+                    const alto = Math.max(getPosicionY(latestEndClase[13]) - top, 30);
                     const jsonDetalles = encodeURIComponent(JSON.stringify(cluster));
                     html += `<div class="bloque-superposicion" style="top: ${top}px; height: ${alto}px;" onclick="verDetalleSuperposicion('${jsonDetalles}')">⚠️ Superposición (${cluster.length})</div>`;
                 }
@@ -1062,13 +1296,12 @@ function generarPlanillaGeneral() {
                     const bottom = getPosicionY(clase[13]) - 2;
                     const alto = Math.max(bottom - top, 20);
                     const jsonClase = encodeURIComponent(JSON.stringify(clase));
-                    html += `
-                        <div class="materia-bloque" style="top: ${top}px; height: ${alto}px; left:4px; right:4px;" onclick="mostrarInfoClase('${jsonClase}', this)">
-                            <div class="materia-contenido" style="text-align:center;">
-                                <div class="materia-nombre" style="font-size:14px;">${clase[0]}° ${clase[1]}</div>
-                            </div>
-                            <div class="aula-indicador">${clase[0]}° ${clase[1]}</div>
-                        </div>`;
+                    html += `<div class="materia-bloque" style="top: ${top}px; height: ${alto}px; left:4px; right:4px;" onclick="mostrarInfoClase('${jsonClase}', this)">
+                        <div class="materia-contenido" style="text-align:center;">
+                            <div class="materia-nombre" style="font-size:14px;">${clase[0]}° ${clase[1]}</div>
+                        </div>
+                        <div class="aula-indicador">${clase[0]}° ${clase[1]}</div>
+                    </div>`;
                 });
             }
             clusterIdx.forEach(idx => procesados.add(idx));

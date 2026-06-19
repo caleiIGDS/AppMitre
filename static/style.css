@@ -938,3 +938,169 @@ input:checked + .tech-slider:before {
 .menu-item input[type="checkbox"] {
     accent-color: var(--secondary);
 }
+
+/* ─── MODO COMPARACIÓN ──────────────────────────────────────────────────── */
+
+/* Botón Comparar en tabs */
+.btn-comparar {
+    background: transparent;
+    border: 2px solid var(--primary);
+    color: var(--primary);
+    padding: 8px 16px;
+    font-family: 'Roboto Mono', monospace;
+    font-weight: bold;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.btn-comparar:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-comparar.activo {
+    background: var(--secondary);
+    border-color: var(--secondary);
+    color: white;
+}
+
+/* Banner de modo comparación */
+.modo-comparacion-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--primary);
+    color: white;
+    padding: 10px 20px;
+    margin-bottom: 10px;
+    border-left: 5px solid var(--secondary);
+    gap: 15px;
+}
+
+.comp-banner-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.comp-banner-label {
+    font-family: 'Roboto Mono', monospace;
+    font-weight: bold;
+    font-size: 13px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    color: var(--secondary);
+}
+
+.comp-banner-items {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.comp-chip {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 2px;
+    color: white;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+}
+
+.btn-salir-comparacion {
+    background: transparent;
+    border: 2px solid rgba(255,255,255,0.4);
+    color: white;
+    padding: 6px 14px;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.btn-salir-comparacion:hover {
+    background: rgba(255,255,255,0.15);
+    border-color: white;
+}
+
+/* Scroll horizontal para calendario comparación */
+.comparacion-scroll-wrapper {
+    overflow-x: auto;
+    overflow-y: visible;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+}
+
+.comparacion-scroll-wrapper::-webkit-scrollbar {
+    height: 8px;
+}
+
+.comparacion-scroll-wrapper::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-top: 1px solid var(--primary);
+}
+
+.comparacion-scroll-wrapper::-webkit-scrollbar-thumb {
+    background: var(--primary);
+}
+
+.comparacion-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+    background: var(--secondary);
+}
+
+/* Encabezado de día en comparación (abarca N sub-columnas) */
+.cabecera-dia-grupo {
+    font-size: 13px;
+    letter-spacing: 1px;
+    border-bottom: 2px solid var(--primary);
+    background: var(--primary);
+    color: white;
+}
+
+/* Placeholder vacío de fila 2 de encabezado */
+.cabecera-entidad-placeholder {
+    height: 28px;
+    background: white;
+    border-right: 1px solid var(--primary);
+    border-bottom: 1px solid var(--primary);
+}
+
+/* Sub-encabezado de entidad por columna */
+.cabecera-entidad {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 0 6px;
+    background: white;
+    border-right: 1px solid rgba(0,0,0,0.1);
+    border-bottom: 1px solid var(--primary);
+    overflow: hidden;
+}
+
+.comp-color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.comp-entity-name {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 10px;
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
