@@ -482,8 +482,19 @@ footer a:hover {
     z-index: 1000;
     display: none;
 }
-.dropdown-item { padding: 10px; cursor: pointer; }
+.dropdown-item { padding: 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
 .dropdown-item:hover { background: var(--tech-bg); }
+.rol-badge {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--secondary);
+    background: rgba(255,107,0,0.1);
+    border: 1px solid var(--secondary);
+    border-radius: 3px;
+    padding: 1px 5px;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
 
 /* Missing Calendar Styles */
 .calendario-grid {

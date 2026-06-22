@@ -1,6 +1,6 @@
 from flask import Flask, render_template, jsonify, send_file
 import database
-from config import SHEET_ID, GIDS_CURSOS, GID_PRECEPTORES, GID_HORARIOS_PRECEPTORES
+from config import SHEET_ID, GIDS_CURSOS, GID_PRECEPTORES, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE
 import sqlite3
 from fpdf import FPDF
 import io
@@ -59,9 +59,10 @@ def index():
     cursos = [f"{r[0]}° {r[1]}" for r in cur.fetchall()]
     
     preceptores_horario = database.obtener_lista_preceptores_horario()
-    
+    personal = database.obtener_lista_personal()
+
     con.close()
-    return render_template('index.html', datos={'profesor': profes, 'aula': aulas, 'curso': cursos, 'horario_preceptor': preceptores_horario}, floor_mapping=FLOOR_MAPPING)
+    return render_template('index.html', datos={'profesor': profes, 'aula': aulas, 'curso': cursos, 'horario_preceptor': preceptores_horario, 'personal': personal}, floor_mapping=FLOOR_MAPPING)
 
 @app.route('/api/<tipo>/<valor>')
 def api(tipo, valor):
@@ -526,6 +527,7 @@ def api_actualizar():
         database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
         database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
         database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
+        database.cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)
         return jsonify({"status": "success", "message": "Datos actualizados correctamente"})
     except Exception as e:
         print(f"Error actualizando datos: {e}")
@@ -544,6 +546,10 @@ def api_dashboard():
         print(f"Error en dashboard: {e}")
         return jsonify([])
 
+@app.route('/api/personal/<nombre>')
+def api_personal(nombre):
+    return jsonify(database.obtener_personal_por_nombre(nombre))
+
 @app.route('/api/horario_preceptor/<nombre>')
 def api_horario_preceptor(nombre):
     """
@@ -557,4 +563,5 @@ if __name__ == '__main__':
     database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
     database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
     database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
+    database.cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)

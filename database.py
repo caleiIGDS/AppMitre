@@ -45,7 +45,20 @@ def crear_tablas():
         )
     ''')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_horario_preceptor ON horarios_preceptores(preceptor)')
-    
+
+    cur.execute('DROP TABLE IF EXISTS personal_no_docente')
+    cur.execute('''
+        CREATE TABLE personal_no_docente (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL,
+            rol TEXT NOT NULL,
+            dia TEXT NOT NULL,
+            hora_inicio TEXT,
+            hora_fin TEXT
+        )
+    ''')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_personal_no_docente ON personal_no_docente(nombre)')
+
     con.commit()
     con.close()
 
@@ -319,3 +332,61 @@ def obtener_lista_preceptores_horario():
     preceptores = [r[0] for r in cur.fetchall()]
     con.close()
     return preceptores
+
+def cargar_personal_no_docente(sheet_id, gid):
+    con = conectar()
+    cur = con.cursor()
+    print(f"Cargando personal no docente (GID {gid})...")
+    try:
+        cur.execute("DELETE FROM personal_no_docente")
+        archivo = descargar_sheet(sheet_id, gid)
+        reader = csv.DictReader(archivo)
+        dias = [
+            ("LUNES",     "lunes_inicio",     "lunes_fin"),
+            ("MARTES",    "martes_inicio",    "martes_fin"),
+            ("MIERCOLES", "miercoles_inicio", "miercoles_fin"),
+            ("JUEVES",    "jueves_inicio",    "jueves_fin"),
+            ("VIERNES",   "viernes_inicio",   "viernes_fin"),
+        ]
+        to_insert = []
+        for row in reader:
+            nombre = limpiar_profesor(row.get('nombre', ''))
+            rol = eliminar_acentos(row.get('rol', '')).upper().strip()
+            if not nombre or not rol:
+                continue
+            for dia_nombre, col_ini, col_fin in dias:
+                inicio = row.get(col_ini, '').strip()
+                fin = row.get(col_fin, '').strip()
+                if inicio and fin:
+                    to_insert.append((nombre, rol, dia_nombre, inicio, fin))
+        if to_insert:
+            cur.executemany(
+                "INSERT INTO personal_no_docente (nombre, rol, dia, hora_inicio, hora_fin) VALUES (?,?,?,?,?)",
+                to_insert
+            )
+        con.commit()
+        print("Listo personal no docente")
+    except Exception as e:
+        con.rollback()
+        print(f"Error cargando personal no docente: {e}")
+    finally:
+        con.close()
+
+def obtener_personal_por_nombre(nombre):
+    con = conectar()
+    cur = con.cursor()
+    cur.execute(
+        "SELECT nombre, rol, dia, hora_inicio, hora_fin FROM personal_no_docente WHERE nombre = ? ORDER BY dia",
+        (nombre,)
+    )
+    rows = [{'nombre': r[0], 'rol': r[1], 'dia': r[2], 'hora_inicio': r[3], 'hora_fin': r[4]} for r in cur.fetchall()]
+    con.close()
+    return rows
+
+def obtener_lista_personal():
+    con = conectar()
+    cur = con.cursor()
+    cur.execute("SELECT DISTINCT nombre, rol FROM personal_no_docente WHERE nombre != '' ORDER BY nombre")
+    personal = [{'nombre': r[0], 'rol': r[1]} for r in cur.fetchall()]
+    con.close()
+    return personal

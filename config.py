@@ -20,14 +20,20 @@ GIDS = {
     "preceptores": "813054425",
     
     # Hoja de horarios detallados de Preceptores
-    "horarios_preceptores": "576226512"
+    "horarios_preceptores": "576226512",
+
+    # Hoja de horarios de Personal No Docente
+    "personal_no_docente": "1094234359"
 }
 
 # Selección de GIDs específicos para la carga de horarios de clases
-GIDS_CURSOS = {k: v for k, v in GIDS.items() if k not in ["preceptores", "horarios_preceptores"]}
+GIDS_CURSOS = {k: v for k, v in GIDS.items() if k not in ["preceptores", "horarios_preceptores", "personal_no_docente"]}
 
 # GID específico para preceptores
 GID_PRECEPTORES = GIDS["preceptores"]
 
 # GID específico para los horarios de preceptores
 GID_HORARIOS_PRECEPTORES = GIDS["horarios_preceptores"]
+
+# GID específico para el personal no docente
+GID_PERSONAL_NO_DOCENTE = GIDS["personal_no_docente"]

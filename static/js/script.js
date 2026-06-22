@@ -263,6 +263,23 @@ function actualizarDatos() {
         });
 }
 
+function personalToFila(p) {
+    const diaMap = {
+        'LUNES': 'Lunes', 'MARTES': 'Martes', 'MIERCOLES': 'Miércoles',
+        'JUEVES': 'Jueves', 'VIERNES': 'Viernes'
+    };
+    const row = new Array(21).fill('');
+    row[3]  = p.rol;
+    row[5]  = p.nombre;
+    row[11] = diaMap[p.dia] || p.dia;
+    row[12] = p.hora_inicio;
+    row[13] = p.hora_fin;
+    row[15] = 0;
+    row[16] = 0;
+    row[20] = 'personal';
+    return row;
+}
+
 function normalize(text) {
     if (!text) return "";
     return text.toLowerCase()
@@ -276,7 +293,58 @@ function filtrarOpciones(input, modo) {
     const query = input.value;
     const normalizedQuery = normalize(query);
     const dropdown = document.getElementById(`dropdown-${modo}`);
-    
+
+    if (modo === 'profesor') {
+        const profList = rawData['profesor'] || [];
+        const personalList = rawData['personal'] || [];
+
+        // Build combined items: {valor, display, rol?}
+        const itemsMap = {};
+        profList.forEach(nombre => {
+            if (query.length === 0 || normalize(nombre).includes(normalizedQuery)) {
+                itemsMap[normalize(nombre)] = { valor: nombre, display: nombre };
+            }
+        });
+        personalList.forEach(p => {
+            const matchNombre = normalize(p.nombre).includes(normalizedQuery);
+            const matchRol = normalize(p.rol).includes(normalizedQuery);
+            if (query.length === 0 || matchNombre || matchRol) {
+                const key = normalize(p.nombre);
+                if (itemsMap[key]) {
+                    itemsMap[key].rol = p.rol;
+                } else {
+                    itemsMap[key] = { valor: p.nombre, display: p.nombre, rol: p.rol };
+                }
+            }
+        });
+
+        let items = Object.values(itemsMap).sort((a, b) => {
+            const nA = normalize(a.display), nB = normalize(b.display);
+            const sA = nA.startsWith(normalizedQuery), sB = nB.startsWith(normalizedQuery);
+            if (sA && !sB) return -1;
+            if (!sA && sB) return 1;
+            return a.display.localeCompare(b.display);
+        });
+
+        if (items.length > 0) {
+            dropdown.innerHTML = items.map(item => {
+                const badge = item.rol ? ` <span class="rol-badge">${item.rol}</span>` : '';
+                return `<div class="dropdown-item" onclick="seleccionarOpcion('${item.valor.replace(/'/g, "\\'")}', 'profesor')">${item.display}${badge}</div>`;
+            }).join('');
+            dropdown.style.display = 'block';
+        } else {
+            dropdown.style.display = 'none';
+        }
+
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter' && items.length > 0) {
+                seleccionarOpcion(items[0].valor, 'profesor');
+                input.blur();
+            }
+        };
+        return;
+    }
+
     let matches = [];
     if (query.length === 0) {
         matches = rawData[modo];
@@ -300,7 +368,6 @@ function filtrarOpciones(input, modo) {
         dropdown.style.display = 'none';
     }
 
-    // Enter key support to select first match
     input.onkeydown = (e) => {
         if (e.key === 'Enter' && matches.length > 0) {
             seleccionarOpcion(matches[0], modo);
@@ -659,6 +726,19 @@ function buscarEnServidor(modo, valor) {
         }
     }
 
+    if (modo === 'profesor' && !isComparacionMode) {
+        Promise.all([
+            fetch(`/api/profesor/${valor}`).then(r => r.json()),
+            fetch(`/api/personal/${encodeURIComponent(valor)}`).then(r => r.json())
+        ]).then(([filasClases, filasPersonal]) => {
+            const filasConvertidas = (filasPersonal || []).map(p => personalToFila(p));
+            const todasLasFilas = [...filasClases, ...filasConvertidas];
+            lastFilas = todasLasFilas;
+            generarCalendario(todasLasFilas, modo);
+        }).catch(err => console.error("Error API:", err));
+        return;
+    }
+
     const endpoint = modo === 'horario_preceptor' ? `/api/horario_preceptor/${valor}` : `/api/${modo}/${valor}`;
 
     fetch(endpoint)
@@ -956,16 +1036,20 @@ function generarCalendario(filas, modo) {
                             const bottom = getPosicionY(fin) - 2;
                             const alto = Math.max(bottom - top, 20);
                             const styleExtra = estilos[idxInCluster];
+                            const esPersonal = clase[20] === 'personal';
 
                             const jsonClase = encodeURIComponent(JSON.stringify(clase));
                             html += `
-                                <div class="materia-bloque" 
-                                     style="top: ${top}px; height: ${alto}px; ${styleExtra}" 
+                                <div class="materia-bloque${esPersonal ? ' personal-cargo-bloque' : ''}"
+                                     style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:rgba(255,107,0,0.15); border-left:3px solid var(--secondary);' : ''}"
                                      onclick="mostrarInfoClase('${jsonClase}', this)"
-                                     onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${(clase[16] === 1 ? 'SUPLENTE: ' + clase[17] : (clase[5] || '-')).replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
+                                     onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '-', '${inicio} - ${fin}', '-')"
                                      onmouseout="hideTooltip()">
                                     <div class="materia-contenido">
-                                        ${modo === 'profesor' && clase[16] === 1 ? 
+                                        ${esPersonal ?
+                                            `<div class="materia-nombre" style="color:var(--secondary);">${clase[3]}</div>
+                                             <div class="materia-detalles">${inicio} - ${fin}</div>` :
+                                            (modo === 'profesor' && clase[16] === 1 ?
                                             `<div class="materia-nombre" style="color:var(--alert); font-weight:bold; display:flex; align-items:center; justify-content:center; height:100%;">LICENCIADA</div>` :
                                             `<div class="materia-nombre">${clase[3]}</div>
                                              <div class="materia-detalles">
@@ -973,13 +1057,13 @@ function generarCalendario(filas, modo) {
                                                     const profName = (clase[16] === 1 && clase[17]) ? 'SUPLENTE: ' + clase[17] : (clase[5] || '-');
                                                     return modo === 'aula' ? profName : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : profName);
                                                 })()}
-                                             </div>`
+                                             </div>`)
                                         }
                                     </div>
-                                    <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>
+                                    ${esPersonal ? '' : `<div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>`}
                                 </div>`;
                         });
-                    } else { 
+                    } else {
                         const top = getPosicionY(cluster[0][12]);
                         const latestEndClase = cluster.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
                         const bottom = getPosicionY(latestEndClase[13]);
@@ -998,15 +1082,19 @@ function generarCalendario(filas, modo) {
                         const bottom = getPosicionY(fin) - 2;
                         const alto = Math.max(bottom - top, 20);
                         const styleExtra = estilos[idxInCluster];
+                        const esPersonal = clase[20] === 'personal';
                         const jsonClase = encodeURIComponent(JSON.stringify(clase));
                         html += `
-                            <div class="materia-bloque" 
-                                 style="top: ${top}px; height: ${alto}px; ${styleExtra}" 
+                            <div class="materia-bloque${esPersonal ? ' personal-cargo-bloque' : ''}"
+                                 style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:rgba(255,107,0,0.15); border-left:3px solid var(--secondary);' : ''}"
                                  onclick="mostrarInfoClase('${jsonClase}', this)"
-                                 onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${(clase[16] === 1 ? 'SUPLENTE: ' + clase[17] : (clase[5] || '-')).replace(/'/g, "\\'")}', '${clase[9].replace(/'/g, "\\'")}', '${inicio} - ${fin}', '${clase[0]}° ${clase[1]}')" 
+                                 onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '-', '${inicio} - ${fin}', '-')"
                                  onmouseout="hideTooltip()">
                                 <div class="materia-contenido">
-                                    ${modo === 'profesor' && clase[16] === 1 ? 
+                                    ${esPersonal ?
+                                        `<div class="materia-nombre" style="color:var(--secondary);">${clase[3]}</div>
+                                         <div class="materia-detalles">${inicio} - ${fin}</div>` :
+                                        (modo === 'profesor' && clase[16] === 1 ?
                                         `<div class="materia-nombre" style="color:var(--alert); font-weight:bold; display:flex; align-items:center; justify-content:center; height:100%;">LICENCIADA</div>` :
                                         `<div class="materia-nombre">${clase[3]}</div>
                                          <div class="materia-detalles">
@@ -1014,11 +1102,10 @@ function generarCalendario(filas, modo) {
                                                 const profName = (clase[16] === 1 && clase[17]) ? 'SUPLENTE: ' + clase[17] : (clase[5] || '-');
                                                 return modo === 'aula' ? profName : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : profName);
                                             })()}
-                                         </div>`
+                                         </div>`)
                                     }
                                 </div>
-                                <div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>
-
+                                ${esPersonal ? '' : `<div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>`}
                             </div>`;
                     });
                     clusterIdx.forEach(idx => procesados.add(idx));
