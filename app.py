@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, Response, send_file
+from flask import Flask, render_template, jsonify, send_file
 import database
 from config import SHEET_ID, GIDS_CURSOS, GID_PRECEPTORES, GID_HORARIOS_PRECEPTORES
 import sqlite3
@@ -558,10 +558,3 @@ if __name__ == '__main__':
     database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
     database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
-
-def recargar_db(app):
-    with app.app_context():
-        database.crear_tablas()
-        database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
-        database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
-        database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)

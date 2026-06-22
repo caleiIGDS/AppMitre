@@ -1062,9 +1062,11 @@ input:checked + .tech-slider:before {
 .cabecera-dia-grupo {
     font-size: 13px;
     letter-spacing: 1px;
+    background: #f3f4f6;
+    color: var(--primary);
+    font-weight: 700;
     border-bottom: 2px solid var(--primary);
-    background: var(--primary);
-    color: white;
+    border-right: 1px solid var(--primary);
 }
 
 /* Placeholder vacío de fila 2 de encabezado */

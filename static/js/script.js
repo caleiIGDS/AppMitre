@@ -1052,23 +1052,6 @@ function hideTooltip() {
     document.getElementById('calendar-tooltip').style.display = 'none';
 }
 
-function generarTablaDetallada(filas) {
-    const contenedor = document.getElementById('contenedor-lista');
-    if (filas.length === 0) return;
-    let html = `<h3>Detalle de Clases</h3><table>
-        <thead>
-            <tr><th>Día</th><th>Inicio</th><th>Fin</th><th>Materia</th><th>Profesor</th><th>Aula</th><th>Grupo</th></tr>
-        </thead><tbody>`;
-    filas.forEach(f => {
-        let profName = f[16] === 1 ? 'SUPLENTE: ' + f[17] : f[5];
-        html += `<tr>
-            <td>${f[11]}</td><td>${f[12]}</td><td>${f[13]}</td>
-            <td><b>${f[3]}</b></td><td>${profName}</td><td>${f[9]}</td><td>${f[14] || '-'}</td>
-        </tr>`;
-    });
-    html += '</tbody></table>';
-    contenedor.innerHTML = html;
-}
 
 function exportarAPDF() {
     if (isPlanillaGeneral) {

@@ -1,3 +1,4 @@
+# Utilidad one-off: limpia y asigna grupos a materias en un CSV antes de importar a Google Sheets
 import pandas as pd
 from difflib import get_close_matches
 
