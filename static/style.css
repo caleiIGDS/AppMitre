@@ -179,6 +179,8 @@ body {
 
 .tech-live-module .menu-global {
     margin-left: auto;
+    display: flex;
+    align-items: center;
 }
 
 .planilla-controls {
@@ -907,18 +909,26 @@ input:checked + .tech-slider:before {
 }
 
 .btn-menu {
-    background: none;
-    border: none;
-    font-size: 24px;
+    background: var(--secondary);
+    border: 2px solid var(--secondary);
+    color: white;
+    font-size: 18px;
     cursor: pointer;
-    color: var(--primary);
-    padding: 5px;
+    padding: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     line-height: 1;
-    transition: color 0.2s;
+    transition: all 0.2s;
+    flex-shrink: 0;
 }
 
 .btn-menu:hover {
-    color: var(--secondary);
+    background: var(--primary);
+    border-color: var(--primary);
 }
 
 .menu-dropdown {
@@ -959,16 +969,26 @@ input:checked + .tech-slider:before {
     font-size: 18px;
     font-family: 'Roboto Mono', monospace;
     cursor: pointer;
-    padding: 4px 12px;
+    padding: 0;
     flex-shrink: 0;
     transition: all 0.2s;
     line-height: 1;
-    height: 42px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.btn-slide-trigger:hover,
-.btn-slide-trigger.panel-open {
+.btn-slide-trigger:hover {
     background: var(--primary);
+    color: white;
+}
+
+.btn-slide-trigger.panel-open {
+    background: var(--secondary);
+    border-color: var(--secondary);
     color: white;
 }
 

@@ -115,14 +115,14 @@
                         </div>
 
                         <div class="menu-global">
-                            <button class="btn-menu" onclick="toggleMenu(event, 'menu-dropdown-envivo')">⋮</button>
-                            <div id="menu-dropdown-envivo" class="menu-dropdown">
-                                <label class="menu-item">
-                                    <input type="checkbox" id="manual-mode-toggle" onchange="toggleManualMode(this)">
-                                    Modo Manual
+                            <div class="slide-panel" id="slide-envivo">
+                                <label class="slide-opcion" style="display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none;">
+                                    <input type="checkbox" id="manual-mode-toggle" onchange="toggleManualMode(this)" style="accent-color:var(--secondary);">
+                                    MODO MANUAL
                                 </label>
                             </div>
-                         </div>
+                            <button class="btn-slide-trigger" id="trigger-envivo" onclick="toggleSlidePanel('envivo')">‹</button>
+                        </div>
                         <div id="manual-controls" class="sys-controls" style="display: none;">
                             <div class="sys-inputs">
                                 <input type="date" id="manual-date-input" class="tech-input-sm" oninput="setManualTime()">
@@ -168,7 +168,7 @@
     <div id="calendar-tooltip" class="calendar-tooltip"></div>
     
     <footer>
-        <p>Hecho por Calei | <a href="https://github.com/caleiIGDS/AppMitre" target="_blank">Repositorio en GitHub</a> | <a href="https://docs.google.com/spreadsheets/d/1GJxwpxXfLosqKxgIa6zyZhwjDK-89ZDavLi6nouWTsw/edit?gid=15078021#gid=15078021" target="_blank">Crudo de datos</a></p>
+        <p>Hecho por Calei | <a href="https://github.com/caleiIGDS/AppMitre" target="_blank">Repositorio en GitHub</a></p>
     </footer>
 
     <script>
