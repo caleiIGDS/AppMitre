@@ -43,7 +43,11 @@
                             <input type="text" class="tech-input" placeholder="INGRESE NOMBRE..." oninput="filtrarOpciones(this, 'profesor')" onfocus="filtrarOpciones(this, 'profesor')">
                             <div id="dropdown-profesor" class="tech-dropdown"></div>
                         </div>
-                        <button class="btn-comparar" onclick="toggleComparacion()">COMPARAR</button>
+                        <div class="opciones-chips" id="chips-profesor"></div>
+                        <div class="slide-panel" id="slide-profesor">
+                            <button class="slide-opcion" data-opcion="comparar" onclick="seleccionarOpcionSlide('comparar','profesor')">COMPARAR</button>
+                        </div>
+                        <button class="btn-slide-trigger" id="trigger-profesor" onclick="toggleSlidePanel('profesor')">‹</button>
                     </div>
                 </div>
 
@@ -53,16 +57,12 @@
                             <input type="text" class="tech-input" placeholder="INGRESE UBICACIÓN..." oninput="filtrarOpciones(this, 'aula')" onfocus="filtrarOpciones(this, 'aula')">
                             <div id="dropdown-aula" class="tech-dropdown"></div>
                         </div>
-                        <button class="btn-comparar" onclick="toggleComparacion()">COMPARAR</button>
-                        <div class="menu-global">
-                            <button class="btn-menu" onclick="toggleMenu(event, 'menu-dropdown-aula')">⋮</button>
-                            <div id="menu-dropdown-aula" class="menu-dropdown">
-                                <label class="menu-item">
-                                    <input type="checkbox" id="planilla-general-toggle" onchange="togglePlanillaGeneral(this)">
-                                    Planilla General
-                                </label>
-                            </div>
+                        <div class="opciones-chips" id="chips-aula"></div>
+                        <div class="slide-panel" id="slide-aula">
+                            <button class="slide-opcion" data-opcion="comparar" onclick="seleccionarOpcionSlide('comparar','aula')">COMPARAR</button>
+                            <button class="slide-opcion" data-opcion="planilla" onclick="seleccionarOpcionSlide('planilla','aula')">PLANILLA GENERAL</button>
                         </div>
+                        <button class="btn-slide-trigger" id="trigger-aula" onclick="toggleSlidePanel('aula')">‹</button>
                     </div>
                     
                     <div id="planilla-controls" class="planilla-controls" style="display: none;">
@@ -84,6 +84,7 @@
                                 <button class="planilla-tab-btn" onclick="setPisoPlanilla(this, 'Piso 3')">P3</button>
                                 <button class="planilla-tab-btn" onclick="setPisoPlanilla(this, 'Entrepiso 1')">E1</button>
                                 <button class="planilla-tab-btn" onclick="setPisoPlanilla(this, 'Entrepiso 2')">E2</button>
+                                <button class="planilla-tab-btn" onclick="setPisoPlanilla(this, 'Talleres')">TA</button>
                             </div>
                         </div>
                     </div>
@@ -95,7 +96,11 @@
                             <input type="text" class="tech-input" placeholder="INGRESE GRADO..." oninput="filtrarOpciones(this, 'curso')" onfocus="filtrarOpciones(this, 'curso')">
                             <div id="dropdown-curso" class="tech-dropdown"></div>
                         </div>
-                        <button class="btn-comparar" onclick="toggleComparacion()">COMPARAR</button>
+                        <div class="opciones-chips" id="chips-curso"></div>
+                        <div class="slide-panel" id="slide-curso">
+                            <button class="slide-opcion" data-opcion="comparar" onclick="seleccionarOpcionSlide('comparar','curso')">COMPARAR</button>
+                        </div>
+                        <button class="btn-slide-trigger" id="trigger-curso" onclick="toggleSlidePanel('curso')">‹</button>
                     </div>
                 </div>
 
@@ -172,6 +177,6 @@
             floorMapping: {{ floor_mapping | tojson | safe }},
         };
     </script>
-    <script src="{{ url_for('static', filename='js/script.js') }}?v=3"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}?v=5"></script>
 </body>
 </html>

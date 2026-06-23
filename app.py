@@ -32,11 +32,14 @@ def obtener_filas(tipo, valor):
         elif tipo == 'planilla':
             if '|' in valor:
                 dia, piso = valor.split('|')
-                aulas = FLOOR_MAPPING.get(piso, [])
-                if aulas:
-                    placeholders = ','.join(['?'] * len(aulas))
-                    query = f"SELECT * FROM clases WHERE dia = ? AND aula IN ({placeholders})"
-                    cur.execute(query, [dia] + aulas)
+                if piso == 'Talleres':
+                    cur.execute("SELECT * FROM clases WHERE dia = ? AND aula LIKE 'T%'", [dia])
+                else:
+                    aulas = FLOOR_MAPPING.get(piso, [])
+                    if aulas:
+                        placeholders = ','.join(['?'] * len(aulas))
+                        query = f"SELECT * FROM clases WHERE dia = ? AND aula IN ({placeholders})"
+                        cur.execute(query, [dia] + aulas)
             else:
                 return []
         
@@ -174,12 +177,18 @@ def export_pdf(tipo, valor):
     if tipo == 'curso' and '°' in valor:
         search_valor = valor.replace('°', '')
         
+    filas = obtener_filas(tipo, search_valor)
+
     if tipo == 'planilla':
         if '|' in valor:
             _, piso = valor.split('|')
-            columnas = FLOOR_MAPPING.get(piso, [])
+            if piso == 'Talleres':
+                talleres = sorted({str(f[9]) for f in filas if str(f[9]).startswith('T')},
+                                  key=lambda a: int(a[1:]) if a[1:].isdigit() else a)
+                columnas = talleres if talleres else []
+            else:
+                columnas = FLOOR_MAPPING.get(piso, [])
 
-    filas = obtener_filas(tipo, search_valor)
     cal = obtener_datos_calendario(filas, tipo, columnas)
     
     pdf = PDF(orientation='L', unit='mm', format='A4')
@@ -558,10 +567,12 @@ def api_horario_preceptor(nombre):
     return jsonify(database.obtener_horario_preceptor(nombre))
 
 if __name__ == '__main__':
-    # Esto garantiza que si cambias el CSV, la web se actualiza al arrancar
-    database.crear_tablas()
-    database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
-    database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
-    database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
-    database.cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)
+    database.init_tablas()
+    if not database.tiene_datos():
+        print("Base vacía, cargando datos desde Google Sheets...")
+        database.crear_tablas()
+        database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
+        database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
+        database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
+        database.cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)

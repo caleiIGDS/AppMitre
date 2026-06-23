@@ -62,6 +62,64 @@ def crear_tablas():
     con.commit()
     con.close()
 
+def init_tablas():
+    """Crea las tablas solo si no existen. No borra datos existentes."""
+    con = conectar()
+    cur = con.cursor()
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS clases (
+            curso TEXT, division TEXT, especialidad TEXT,
+            materia TEXT, tipo_materia TEXT,
+            profesor TEXT, dni TEXT, telefono TEXT, email TEXT,
+            aula TEXT, tipo_aula TEXT,
+            dia TEXT, hora_inicio TEXT, hora_fin TEXT, grupo TEXT,
+            superposicion INTEGER DEFAULT 0,
+            suplente_activo INTEGER DEFAULT 0,
+            prof_suplente TEXT, sup_ini TEXT, sup_fin TEXT
+        )
+    ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS preceptores (
+            curso TEXT, division TEXT, turno TEXT,
+            preceptores_manana TEXT, preceptores_tarde TEXT, preceptores_noche TEXT
+        )
+    ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS horarios_preceptores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            turno TEXT NOT NULL,
+            preceptor TEXT NOT NULL,
+            tipo TEXT NOT NULL,
+            curso TEXT NOT NULL,
+            dia TEXT NOT NULL
+        )
+    ''')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_horario_preceptor ON horarios_preceptores(preceptor)')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS personal_no_docente (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL,
+            rol TEXT NOT NULL,
+            dia TEXT NOT NULL,
+            hora_inicio TEXT,
+            hora_fin TEXT
+        )
+    ''')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_personal_no_docente ON personal_no_docente(nombre)')
+    con.commit()
+    con.close()
+
+def tiene_datos():
+    try:
+        con = conectar()
+        cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM clases")
+        count = cur.fetchone()[0]
+        con.close()
+        return count > 0
+    except Exception:
+        return False
+
 def eliminar_acentos(texto):
     if not texto: return ""
     return "".join(c for c in unicodedata.normalize('NFD', texto)

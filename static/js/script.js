@@ -51,7 +51,6 @@ function desactivarModoComparacion() {
 
 function actualizarEstadoComparacion() {
     const banner = document.getElementById('comparacion-banner');
-    const btns = document.querySelectorAll('.btn-comparar');
 
     if (isComparacionMode) {
         if (banner) {
@@ -61,18 +60,118 @@ function actualizarEstadoComparacion() {
             document.getElementById('comp-banner-items').innerHTML = chips;
             banner.style.display = 'flex';
         }
-        btns.forEach(btn => {
-            btn.textContent = 'COMPARANDO';
-            btn.classList.add('activo');
-        });
+        if (currentSearch.modo && ['profesor', 'curso', 'aula'].includes(currentSearch.modo)) {
+            _crearChip('comparar', currentSearch.modo);
+        }
         const workspaceHeader = document.getElementById('workspace-calendar-header');
         if (workspaceHeader) workspaceHeader.style.display = 'none';
     } else {
         if (banner) banner.style.display = 'none';
-        btns.forEach(btn => {
-            btn.textContent = 'COMPARAR';
-            btn.classList.remove('activo');
+        _limpiarChipsComparar();
+    }
+}
+
+function _limpiarChipsComparar() {
+    document.querySelectorAll('[id^="chip-comparar-"]').forEach(chip => {
+        const tabId = chip.id.replace('chip-comparar-', '');
+        chip.remove();
+        const panel = document.getElementById('slide-' + tabId);
+        if (panel) {
+            panel.querySelectorAll('.slide-opcion').forEach(btn => {
+                if (btn.dataset.opcion === 'comparar') btn.style.display = '';
+            });
+        }
+    });
+}
+
+function toggleSlidePanel(tabId) {
+    const panel = document.getElementById('slide-' + tabId);
+    const trigger = document.getElementById('trigger-' + tabId);
+    const isOpen = panel.classList.contains('open');
+
+    document.querySelectorAll('.slide-panel').forEach(p => p.classList.remove('open'));
+    document.querySelectorAll('.btn-slide-trigger').forEach(b => b.classList.remove('panel-open'));
+
+    if (!isOpen) {
+        panel.classList.add('open');
+        trigger.classList.add('panel-open');
+    }
+}
+
+function seleccionarOpcionSlide(opcion, tabId) {
+    const panel = document.getElementById('slide-' + tabId);
+    const trigger = document.getElementById('trigger-' + tabId);
+    panel.classList.remove('open');
+    trigger.classList.remove('panel-open');
+
+    if (opcion === 'comparar') {
+        if (!currentSearch.modo || !currentSearch.valor || !lastFilas) {
+            alert("Primero buscá un horario para poder comparar.");
+            return;
+        }
+        panel.querySelectorAll('.slide-opcion').forEach(btn => {
+            if (btn.dataset.opcion === 'comparar') btn.style.display = 'none';
         });
+        _crearChip('comparar', tabId);
+        if (!isComparacionMode) activarModoComparacion();
+    } else if (opcion === 'planilla') {
+        panel.querySelectorAll('.slide-opcion').forEach(btn => {
+            if (btn.dataset.opcion === 'planilla') btn.style.display = 'none';
+        });
+        _crearChip('planilla', tabId);
+        isPlanillaGeneral = true;
+        const controls = document.getElementById('planilla-controls');
+        const searchField = document.querySelector('#tab-aula .tech-field');
+        controls.style.display = 'block';
+        searchField.style.opacity = '0.5';
+        searchField.style.pointerEvents = 'none';
+        if (allDataCache) {
+            generarPlanillaGeneral();
+        } else {
+            fetch('/api/dashboard').then(r => r.json()).then(d => { allDataCache = d; generarPlanillaGeneral(); });
+        }
+    }
+}
+
+function _crearChip(opcion, tabId) {
+    const chipId = `chip-${opcion}-${tabId}`;
+    if (document.getElementById(chipId)) return;
+    const labels = { comparar: 'COMPARAR', planilla: 'PLANILLA' };
+    const chip = document.createElement('div');
+    chip.className = `opcion-chip ${opcion}-chip`;
+    chip.id = chipId;
+    chip.innerHTML = `${labels[opcion]} <button class="chip-close" onclick="removerChip('${opcion}','${tabId}')">✕</button>`;
+    document.getElementById('chips-' + tabId).appendChild(chip);
+}
+
+function removerChip(opcion, tabId) {
+    const chip = document.getElementById(`chip-${opcion}-${tabId}`);
+    if (chip) chip.remove();
+
+    const panel = document.getElementById('slide-' + tabId);
+    if (panel) {
+        panel.querySelectorAll('.slide-opcion').forEach(btn => {
+            if (btn.dataset.opcion === opcion) btn.style.display = '';
+        });
+    }
+
+    if (opcion === 'comparar') {
+        if (isComparacionMode) desactivarModoComparacion();
+    } else if (opcion === 'planilla') {
+        isPlanillaGeneral = false;
+        const controls = document.getElementById('planilla-controls');
+        const searchField = document.querySelector('#tab-aula .tech-field');
+        controls.style.display = 'none';
+        searchField.style.opacity = '1';
+        searchField.style.pointerEvents = 'auto';
+        const input = document.querySelector('#tab-aula .tech-input');
+        if (input.value) {
+            buscarEnServidor('aula', input.value);
+        } else {
+            document.getElementById('contenedor-calendario').innerHTML = '';
+            const workspaceHeader = document.getElementById('workspace-calendar-header');
+            if (workspaceHeader) workspaceHeader.style.display = 'none';
+        }
     }
 }
 
@@ -726,6 +825,10 @@ function buscarEnServidor(modo, valor) {
         }
     }
 
+    document.getElementById('contenedor-calendario').innerHTML = '';
+    const _lista = document.getElementById('contenedor-lista');
+    if (_lista) _lista.innerHTML = '';
+
     if (modo === 'profesor' && !isComparacionMode) {
         Promise.all([
             fetch(`/api/profesor/${valor}`).then(r => r.json()),
@@ -735,7 +838,12 @@ function buscarEnServidor(modo, valor) {
             const todasLasFilas = [...filasClases, ...filasConvertidas];
             lastFilas = todasLasFilas;
             generarCalendario(todasLasFilas, modo);
-        }).catch(err => console.error("Error API:", err));
+        }).catch(err => {
+            console.error("Error API:", err);
+            const c = document.getElementById('contenedor-calendario');
+            c.innerHTML = `<div style="padding:40px; text-align:center; color:#c0392b;"><strong>Error al buscar el horario.</strong><br>Es posible que los datos estén actualizándose. Intentá de nuevo en unos segundos.</div>`;
+            c.style.display = 'block';
+        });
         return;
     }
 
@@ -771,7 +879,12 @@ function buscarEnServidor(modo, valor) {
                 }
             }
         })
-        .catch(err => console.error("Error API:", err));
+        .catch(err => {
+            console.error("Error API:", err);
+            const c = document.getElementById('contenedor-calendario');
+            c.innerHTML = `<div style="padding:40px; text-align:center; color:#c0392b;"><strong>Error al buscar el horario.</strong><br>Es posible que los datos estén actualizándose. Intentá de nuevo en unos segundos.</div>`;
+            c.style.display = 'block';
+        });
 }
 
 function renderizarTablaPreceptor(filas) {
@@ -1041,7 +1154,7 @@ function generarCalendario(filas, modo) {
                             const jsonClase = encodeURIComponent(JSON.stringify(clase));
                             html += `
                                 <div class="materia-bloque${esPersonal ? ' personal-cargo-bloque' : ''}"
-                                     style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:rgba(255,107,0,0.15); border-left:3px solid var(--secondary);' : ''}"
+                                     style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:var(--secondary); border-left:3px solid var(--secondary);' : ''}"
                                      onclick="mostrarInfoClase('${jsonClase}', this)"
                                      onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '-', '${inicio} - ${fin}', '-')"
                                      onmouseout="hideTooltip()">
@@ -1086,7 +1199,7 @@ function generarCalendario(filas, modo) {
                         const jsonClase = encodeURIComponent(JSON.stringify(clase));
                         html += `
                             <div class="materia-bloque${esPersonal ? ' personal-cargo-bloque' : ''}"
-                                 style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:rgba(255,107,0,0.15); border-left:3px solid var(--secondary);' : ''}"
+                                 style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:var(--secondary); border-left:3px solid var(--secondary);' : ''}"
                                  onclick="mostrarInfoClase('${jsonClase}', this)"
                                  onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '-', '${inicio} - ${fin}', '-')"
                                  onmouseout="hideTooltip()">
@@ -1265,8 +1378,17 @@ function generarPlanillaGeneral() {
     if (!allDataCache) return;
     
     const contenedor = document.getElementById('contenedor-calendario');
-    const classrooms = window.APP_DATA.floorMapping[selectedFloor];
-    
+    let classrooms;
+    if (selectedFloor === 'Talleres') {
+        const aulasDelDia = [...new Set(allDataCache.filter(f => f[11] === selectedDay).map(f => String(f[9])))];
+        classrooms = aulasDelDia.filter(a => a.startsWith('T')).sort((a, b) => {
+            const na = parseInt(a.slice(1)) || 0, nb = parseInt(b.slice(1)) || 0;
+            return na - nb;
+        });
+    } else {
+        classrooms = window.APP_DATA.floorMapping[selectedFloor];
+    }
+
     const timeToMin = (t) => {
         if (!t || typeof t !== 'string' || !t.includes(':')) return 0;
         const [h, m] = t.split(':').map(Number);
@@ -1391,7 +1513,7 @@ function generarPlanillaGeneral() {
     }
 }
 
-// Close menus when clicking outside
+// Close menus and slide panels when clicking outside
 document.addEventListener('click', (e) => {
     const menus = document.querySelectorAll(".menu-dropdown");
     menus.forEach(menu => {
@@ -1399,4 +1521,8 @@ document.addEventListener('click', (e) => {
             menu.style.display = "none";
         }
     });
+    if (!e.target.closest('.slide-panel') && !e.target.closest('.btn-slide-trigger')) {
+        document.querySelectorAll('.slide-panel').forEach(p => p.classList.remove('open'));
+        document.querySelectorAll('.btn-slide-trigger').forEach(b => b.classList.remove('panel-open'));
+    }
 });
