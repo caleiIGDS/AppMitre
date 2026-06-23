@@ -23,20 +23,38 @@ function toggleComparacion() {
 }
 
 function activarModoComparacion() {
-    if (!currentSearch.modo || !currentSearch.valor || !lastFilas) {
-        alert("Primero buscá un horario para poder comparar.");
-        return;
-    }
     isComparacionMode = true;
-    comparacionItems = [{
-        modo: currentSearch.modo,
-        valor: currentSearch.valor,
-        filas: lastFilas,
-        color: COMPARACION_COLORS[0],
-        label: currentSearch.valor
-    }];
+    if (currentSearch.modo && currentSearch.valor && lastFilas) {
+        comparacionItems = [{
+            modo: currentSearch.modo,
+            valor: currentSearch.valor,
+            filas: lastFilas,
+            color: COMPARACION_COLORS[0],
+            label: currentSearch.valor
+        }];
+        generarCalendarioComparacion(comparacionItems);
+    } else {
+        comparacionItems = [];
+        _mostrarPlaceholderComparacion();
+    }
     actualizarEstadoComparacion();
-    generarCalendarioComparacion(comparacionItems);
+}
+
+function _mostrarPlaceholderComparacion() {
+    const c = document.getElementById('contenedor-calendario');
+    c.innerHTML = `<div style="padding:60px; text-align:center; color:#70757a; font-family:'Roboto Mono',monospace; letter-spacing:1px; font-size:14px;">Seleccioná un calendario para comparar.</div>`;
+    c.style.display = 'block';
+}
+
+function removerItemComparacion(idx) {
+    comparacionItems.splice(idx, 1);
+    comparacionItems.forEach((item, i) => { item.color = COMPARACION_COLORS[i % COMPARACION_COLORS.length]; });
+    actualizarEstadoComparacion();
+    if (comparacionItems.length === 0) {
+        _mostrarPlaceholderComparacion();
+    } else {
+        generarCalendarioComparacion(comparacionItems);
+    }
 }
 
 function desactivarModoComparacion() {
@@ -54,8 +72,8 @@ function actualizarEstadoComparacion() {
 
     if (isComparacionMode) {
         if (banner) {
-            const chips = comparacionItems.map(item =>
-                `<span class="comp-chip" style="background:${item.color};">${item.label}</span>`
+            const chips = comparacionItems.map((item, idx) =>
+                `<span class="comp-chip" style="background:${item.color};">${item.label}<button class="comp-chip-close" onclick="removerItemComparacion(${idx})">✕</button></span>`
             ).join('');
             document.getElementById('comp-banner-items').innerHTML = chips;
             banner.style.display = 'flex';
@@ -1154,13 +1172,13 @@ function generarCalendario(filas, modo) {
                             const jsonClase = encodeURIComponent(JSON.stringify(clase));
                             html += `
                                 <div class="materia-bloque${esPersonal ? ' personal-cargo-bloque' : ''}"
-                                     style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:var(--secondary); border-left:3px solid var(--secondary);' : ''}"
+                                     style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:#FDE8D0; border-left:3px solid #FF6B00; color:#1A365D;' : ''}"
                                      onclick="mostrarInfoClase('${jsonClase}', this)"
                                      onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '-', '${inicio} - ${fin}', '-')"
                                      onmouseout="hideTooltip()">
                                     <div class="materia-contenido">
                                         ${esPersonal ?
-                                            `<div class="materia-nombre" style="color:var(--secondary);">${clase[3]}</div>
+                                            `<div class="materia-nombre" style="color:#1A365D;">${clase[3]}</div>
                                              <div class="materia-detalles">${inicio} - ${fin}</div>` :
                                             (modo === 'profesor' && clase[16] === 1 ?
                                             `<div class="materia-nombre" style="color:var(--alert); font-weight:bold; display:flex; align-items:center; justify-content:center; height:100%;">LICENCIADA</div>` :
@@ -1199,13 +1217,13 @@ function generarCalendario(filas, modo) {
                         const jsonClase = encodeURIComponent(JSON.stringify(clase));
                         html += `
                             <div class="materia-bloque${esPersonal ? ' personal-cargo-bloque' : ''}"
-                                 style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:var(--secondary); border-left:3px solid var(--secondary);' : ''}"
+                                 style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:#FDE8D0; border-left:3px solid #FF6B00; color:#1A365D;' : ''}"
                                  onclick="mostrarInfoClase('${jsonClase}', this)"
                                  onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '-', '${inicio} - ${fin}', '-')"
                                  onmouseout="hideTooltip()">
                                 <div class="materia-contenido">
                                     ${esPersonal ?
-                                        `<div class="materia-nombre" style="color:var(--secondary);">${clase[3]}</div>
+                                        `<div class="materia-nombre" style="color:#1A365D;">${clase[3]}</div>
                                          <div class="materia-detalles">${inicio} - ${fin}</div>` :
                                         (modo === 'profesor' && clase[16] === 1 ?
                                         `<div class="materia-nombre" style="color:var(--alert); font-weight:bold; display:flex; align-items:center; justify-content:center; height:100%;">LICENCIADA</div>` :
@@ -1284,7 +1302,21 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+function generarBotonesPisos() {
+    const container = document.getElementById('planilla-tabs-pisos');
+    if (!container || !window.APP_DATA || !window.APP_DATA.floorMapping) return;
+    container.innerHTML = '';
+    Object.keys(window.APP_DATA.floorMapping).forEach((piso, index) => {
+        const btn = document.createElement('button');
+        btn.className = 'planilla-tab-btn' + (index === 0 ? ' active' : '');
+        btn.textContent = piso;
+        btn.onclick = function() { setPisoPlanilla(this, piso); };
+        container.appendChild(btn);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    generarBotonesPisos();
     const activeTab = document.querySelector('.seccion-busqueda.active');
     if (activeTab && activeTab.id === 'tab-envivo') {
         iniciarDashboard();
@@ -1378,16 +1410,7 @@ function generarPlanillaGeneral() {
     if (!allDataCache) return;
     
     const contenedor = document.getElementById('contenedor-calendario');
-    let classrooms;
-    if (selectedFloor === 'Talleres') {
-        const aulasDelDia = [...new Set(allDataCache.filter(f => f[11] === selectedDay).map(f => String(f[9])))];
-        classrooms = aulasDelDia.filter(a => a.startsWith('T')).sort((a, b) => {
-            const na = parseInt(a.slice(1)) || 0, nb = parseInt(b.slice(1)) || 0;
-            return na - nb;
-        });
-    } else {
-        classrooms = window.APP_DATA.floorMapping[selectedFloor];
-    }
+    const classrooms = window.APP_DATA.floorMapping[selectedFloor];
 
     const timeToMin = (t) => {
         if (!t || typeof t !== 'string' || !t.includes(':')) return 0;

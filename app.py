@@ -12,7 +12,9 @@ FLOOR_MAPPING = {
     "Piso 2": ["21", "22", "23", "24", "25", "26"],
     "Piso 3": ["13", "14", "15", "16", "17", "18"],
     "Entrepiso 1": ["101","102", "103", "104", "105", "106", "107", "108"],
-    "Entrepiso 2": ["301", "302", "303", "304", "305", "306"]
+    "Entrepiso 2": ["201", "202"],
+    "Entrepiso 3": ["301", "302", "303", "304", "305", "306"],
+    "Talleres": ["T1","T2","T3","T4","T5","T6","T7","T8","T9","T10","T11","T12","T13","T14","T15","T16","T17","T18","T24","T25","T26","T27","T101","T102","T103","T104","T105","T106","T107","T108","T109","T110","T111","T112","T113","T114","T115","T116"]
 }
 
 def obtener_filas(tipo, valor):
@@ -32,14 +34,11 @@ def obtener_filas(tipo, valor):
         elif tipo == 'planilla':
             if '|' in valor:
                 dia, piso = valor.split('|')
-                if piso == 'Talleres':
-                    cur.execute("SELECT * FROM clases WHERE dia = ? AND aula LIKE 'T%'", [dia])
-                else:
-                    aulas = FLOOR_MAPPING.get(piso, [])
-                    if aulas:
-                        placeholders = ','.join(['?'] * len(aulas))
-                        query = f"SELECT * FROM clases WHERE dia = ? AND aula IN ({placeholders})"
-                        cur.execute(query, [dia] + aulas)
+                aulas = FLOOR_MAPPING.get(piso, [])
+                if aulas:
+                    placeholders = ','.join(['?'] * len(aulas))
+                    query = f"SELECT * FROM clases WHERE dia = ? AND aula IN ({placeholders})"
+                    cur.execute(query, [dia] + aulas)
             else:
                 return []
         
@@ -182,12 +181,7 @@ def export_pdf(tipo, valor):
     if tipo == 'planilla':
         if '|' in valor:
             _, piso = valor.split('|')
-            if piso == 'Talleres':
-                talleres = sorted({str(f[9]) for f in filas if str(f[9]).startswith('T')},
-                                  key=lambda a: int(a[1:]) if a[1:].isdigit() else a)
-                columnas = talleres if talleres else []
-            else:
-                columnas = FLOOR_MAPPING.get(piso, [])
+            columnas = FLOOR_MAPPING.get(piso, [])
 
     cal = obtener_datos_calendario(filas, tipo, columnas)
     
