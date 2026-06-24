@@ -11,9 +11,9 @@
         <header class="tech-header">
             <div class="tech-container header-flex">
                 <div class="header-blueprint">
-                    <img src="{{ url_for('static', filename='images/logoMitre.jpg') }}" alt="Escudo" class="tech-logo">
+                    <img src="{{ url_for('static', filename=escuela_logo) }}" alt="Escudo" class="tech-logo">
                     <div class="tech-titles">
-                        <h1>EMILIO MITRE <span class="serial">V1.16</span></h1>
+                        <h1>{{ escuela_nombre }} <span class="serial">{{ escuela_version }}</span></h1>
                         <p class="institution">Sistema de Horarios</p>
                     </div>
                 </div>
@@ -169,6 +169,7 @@
         window.APP_DATA = {
             rawData: {{ datos | tojson | safe }},
             floorMapping: {{ floor_mapping | tojson | safe }},
+            dias: {{ dias | tojson | safe }},
         };
     </script>
     <script src="{{ url_for('static', filename='js/script.js') }}?v=5"></script>

@@ -1,21 +1,11 @@
 from flask import Flask, render_template, jsonify, send_file
 import database
-from config import SHEET_ID, GIDS_CURSOS, GID_PRECEPTORES, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE
+from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS
 import sqlite3
 from fpdf import FPDF
 import io
 
 app = Flask(__name__)
-
-FLOOR_MAPPING = {
-    "Piso 1": ["11", "12", "13", "14", "15", "16"],
-    "Piso 2": ["21", "22", "23", "24", "25", "26"],
-    "Piso 3": ["13", "14", "15", "16", "17", "18"],
-    "Entrepiso 1": ["101","102", "103", "104", "105", "106", "107", "108"],
-    "Entrepiso 2": ["201", "202"],
-    "Entrepiso 3": ["301", "302", "303", "304", "305", "306"],
-    "Talleres": ["T1","T2","T3","T4","T5","T6","T7","T8","T9","T10","T11","T12","T13","T14","T15","T16","T17","T18","T24","T25","T26","T27","T101","T102","T103","T104","T105","T106","T107","T108","T109","T110","T111","T112","T113","T114","T115","T116"]
-}
 
 def obtener_filas(tipo, valor):
     try:
@@ -64,7 +54,14 @@ def index():
     personal = database.obtener_lista_personal()
 
     con.close()
-    return render_template('index.html', datos={'profesor': profes, 'aula': aulas, 'curso': cursos, 'horario_preceptor': preceptores_horario, 'personal': personal}, floor_mapping=FLOOR_MAPPING)
+    return render_template('index.html',
+        datos={'profesor': profes, 'aula': aulas, 'curso': cursos, 'horario_preceptor': preceptores_horario, 'personal': personal},
+        floor_mapping=FLOOR_MAPPING,
+        dias=DIAS,
+        escuela_nombre=ESCUELA_NOMBRE,
+        escuela_logo=ESCUELA_LOGO,
+        escuela_version=ESCUELA_VERSION,
+    )
 
 @app.route('/api/<tipo>/<valor>')
 def api(tipo, valor):
@@ -204,45 +201,26 @@ def export_pdf(tipo, valor):
 
     if tipo == 'curso':
         try:
-            con = database.conectar()
-            cur = con.cursor()
-            search_valor_p = valor.replace('°', '')
-            partes = search_valor_p.split(' ')
+            partes = valor.replace('°', '').strip().split(' ')
             curso = partes[0]
             division = partes[1] if len(partes) > 1 else ""
-            cur.execute("SELECT * FROM preceptores WHERE curso = ? AND division = ?", (curso, division))
-            row = cur.fetchone()
-            con.close()
-            if row:
-                turno_curso = str(row[2] or "").strip().upper()
-                labels = {3: "T.M:", 4: "T.T:", 5: "T.N:"}
-                mapping = {"T.M": 3, "T.T": 4, "T.N": 5, "T.V": 5}
-                
-                key_principal = -1
-                for k, v in mapping.items():
-                    if turno_curso.startswith(k):
-                        key_principal = v
-                        break
-                
-                # Ancho total A4 Landscape es ~297mm. Margen aprox 15mm cada lado -> 267mm útiles.
+            data = database.obtener_preceptores_por_curso(curso, division)
+            if data:
+                slots = [
+                    ("T.M:", data["preceptores_manana"]),
+                    ("T.T:", data["preceptores_tarde"]),
+                    ("T.N:", data["preceptores_noche"]),
+                ]
+
                 ancho_util = 267
                 col_w = ancho_util / 3
-                
                 pdf.set_text_color(30, 50, 100)
-                
-                for idx in [3, 4, 5]:
-                    es_principal = (idx == key_principal)
-                    label = "PRECEPTOR PRINCIPAL" if es_principal else "Preceptor"
-                    txt = f"{label} {labels[idx]} {str(row[idx] or '').strip()}" if row[idx] else ""
-                    
-                    if es_principal:
-                        pdf.set_font('RobotoMono', 'B', 11)
-                    else:
-                        pdf.set_font('RobotoMono', 'B', 9)
-                    
-                    align = 'L' if idx == 3 else ('C' if idx == 4 else 'R')
-                    # No saltar línea hasta el último
-                    pdf.cell(col_w, 8, txt, 0, 0 if idx < 5 else 1, align)
+
+                for idx, (label_turno, nombre) in enumerate(slots):
+                    txt = f"Preceptor {label_turno} {nombre}" if nombre else ""
+                    pdf.set_font('RobotoMono', 'B', 9)
+                    align = 'L' if idx == 0 else ('C' if idx == 1 else 'R')
+                    pdf.cell(col_w, 8, txt, 0, 0 if idx < 2 else 1, align)
         except Exception as e:
             print(f"Error PDF preceptor: {e}")
 
@@ -501,24 +479,10 @@ def export_pdf(tipo, valor):
 @app.route('/api/preceptor/<valor>')
 def api_preceptor(valor):
     try:
-        search_valor = valor
-        if '°' in valor:
-            search_valor = valor.replace('°', '')
-        
-        partes = search_valor.split(' ')
+        partes = valor.replace('°', '').strip().split(' ')
         curso = partes[0]
         division = partes[1] if len(partes) > 1 else ""
-        
-        con = database.conectar()
-        cur = con.cursor()
-        cur.execute("SELECT * FROM preceptores WHERE curso = ? AND division = ?", (curso, division))
-        row = cur.fetchone()
-        con.close()
-        
-        if row:
-            cols = ["curso", "division", "turno", "preceptores_manana", "preceptores_tarde", "preceptores_noche"]
-            return jsonify(dict(zip(cols, row)))
-        return jsonify(None)
+        return jsonify(database.obtener_preceptores_por_curso(curso, division))
     except Exception as e:
         print(f"Error preceptor: {e}")
         return jsonify(None)
@@ -528,7 +492,6 @@ def api_actualizar():
     try:
         database.crear_tablas()
         database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
-        database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
         database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
         database.cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)
         return jsonify({"status": "success", "message": "Datos actualizados correctamente"})
@@ -566,7 +529,6 @@ if __name__ == '__main__':
         print("Base vacía, cargando datos desde Google Sheets...")
         database.crear_tablas()
         database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
-        database.cargar_preceptores(SHEET_ID, GID_PRECEPTORES)
         database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
         database.cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)

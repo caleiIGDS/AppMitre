@@ -197,7 +197,7 @@ function generarCalendarioComparacion(items) {
     const contenedor = document.getElementById('contenedor-calendario');
     const COL_WIDTH = 200;
     const N = items.length;
-    const dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+    const dias = window.APP_DATA.dias;
 
     const timeToMin = (t) => {
         if (!t || typeof t !== 'string' || !t.includes(':')) return 0;
@@ -316,24 +316,27 @@ function generarCalendarioComparacion(items) {
                     } else { break; }
                 }
 
-                const todosTienenGrupo = cluster.every(c => c[14] && c[14].trim() !== "");
-                const haySuperposicion = cluster.length > 1 && (modo === 'aula' || modo === 'profesor' || !todosTienenGrupo);
+                const sinLicenciadas = cluster.filter(c => c[16] != 1);
+                const clusterFinal = cluster.length > 1 && sinLicenciadas.length > 0 ? sinLicenciadas : cluster;
+
+                const todosTienenGrupo = clusterFinal.every(c => c[14] && c[14].trim() !== "");
+                const haySuperposicion = clusterFinal.length > 1 && (modo === 'aula' || modo === 'profesor' || !todosTienenGrupo);
 
                 if (haySuperposicion) {
-                    const todosPermiten = cluster.every(c => c[15] == 1);
+                    const todosPermiten = clusterFinal.every(c => c[15] == 1);
                     if (todosPermiten) {
-                        const estilos = calcularEstilosBloques(cluster);
-                        cluster.forEach((clase, idx) => { html += renderBloqueComp(clase, estilos[idx], item); });
+                        const estilos = calcularEstilosBloques(clusterFinal);
+                        clusterFinal.forEach((clase, idx) => { html += renderBloqueComp(clase, estilos[idx], item); });
                     } else {
-                        const top = getPosicionY(cluster[0][12]);
-                        const latestEnd = cluster.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
+                        const top = getPosicionY(clusterFinal[0][12]);
+                        const latestEnd = clusterFinal.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
                         const alto = Math.max(getPosicionY(latestEnd[13]) - top, 30);
-                        const jsonD = encodeURIComponent(JSON.stringify(cluster));
-                        html += `<div class="bloque-superposicion" style="top:${top}px; height:${alto}px;" onclick="verDetalleSuperposicion('${jsonD}')">⚠️ Superposición (${cluster.length})</div>`;
+                        const jsonD = encodeURIComponent(JSON.stringify(clusterFinal));
+                        html += `<div class="bloque-superposicion" style="top:${top}px; height:${alto}px;" onclick="verDetalleSuperposicion('${jsonD}')">⚠️ Superposición (${clusterFinal.length})</div>`;
                     }
                 } else {
-                    const estilos = calcularEstilosBloques(cluster);
-                    cluster.forEach((clase, idx) => { html += renderBloqueComp(clase, estilos[idx], item); });
+                    const estilos = calcularEstilosBloques(clusterFinal);
+                    clusterFinal.forEach((clase, idx) => { html += renderBloqueComp(clase, estilos[idx], item); });
                 }
                 clusterIdx.forEach(idx => procesados.add(idx));
             }
@@ -381,10 +384,9 @@ function actualizarDatos() {
 }
 
 function personalToFila(p) {
-    const diaMap = {
-        'LUNES': 'Lunes', 'MARTES': 'Martes', 'MIERCOLES': 'Miércoles',
-        'JUEVES': 'Jueves', 'VIERNES': 'Viernes'
-    };
+    const diaMap = Object.fromEntries(
+        window.APP_DATA.dias.map(d => [d.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase(), d])
+    );
     const row = new Array(21).fill('');
     row[3]  = p.rol;
     row[5]  = p.nombre;
@@ -934,7 +936,7 @@ function renderizarTablaPreceptor(filas) {
         if (!turnosEncontrados[turno]) return;
 
         const filasTurno = turnosEncontrados[turno];
-        const diasSemana = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES"];
+        const diasSemana = window.APP_DATA.dias.map(d => d.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase());
         
         // Agrupar por preceptor, curso y estado (tipo) para tener una fila por curso
         const cursosMap = {};
@@ -1089,7 +1091,7 @@ function generarCalendario(filas, modo) {
             return;
         }
 
-        const dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+        const dias = window.APP_DATA.dias;
         let tiempos = new Set();
         filas.forEach(f => {
             if (f[12]) tiempos.add(f[12]);
@@ -1151,16 +1153,19 @@ function generarCalendario(filas, modo) {
                         maxFin = Math.max(maxFin, timeToMin(clasesDelDia[j][13]));
                     } else { break; }
                 }
-                const todosTienenGrupo = cluster.every(c => c[14] && c[14].trim() !== "");
-                const haySuperposicion = cluster.length > 1 && (modo === 'aula' || modo === 'profesor' || !todosTienenGrupo);
+
+                const sinLicenciadas = cluster.filter(c => c[16] != 1);
+                const clusterFinal = cluster.length > 1 && sinLicenciadas.length > 0 ? sinLicenciadas : cluster;
+
+                const todosTienenGrupo = clusterFinal.every(c => c[14] && c[14].trim() !== "");
+                const haySuperposicion = clusterFinal.length > 1 && (modo === 'aula' || modo === 'profesor' || !todosTienenGrupo);
 
                 if (haySuperposicion) {
-                    // Logic for superposition: only divide side-by-side if ALL classes allow it (F[15] == 1)
-                    const todosPermitenSuperposicion = cluster.every(c => c[15] == 1);
-                    if (todosPermitenSuperposicion) { 
-                        const estilos = calcularEstilosBloques(cluster);
-                        const numClases = cluster.length;
-                        cluster.forEach((clase, idxInCluster) => {
+                    const todosPermitenSuperposicion = clusterFinal.every(c => c[15] == 1);
+                    if (todosPermitenSuperposicion) {
+                        const estilos = calcularEstilosBloques(clusterFinal);
+                        const numClases = clusterFinal.length;
+                        clusterFinal.forEach((clase, idxInCluster) => {
                             const inicio = clase[12];
                             const fin = clase[13];
                             const top = getPosicionY(inicio) + 2;
@@ -1195,18 +1200,18 @@ function generarCalendario(filas, modo) {
                                 </div>`;
                         });
                     } else {
-                        const top = getPosicionY(cluster[0][12]);
-                        const latestEndClase = cluster.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
+                        const top = getPosicionY(clusterFinal[0][12]);
+                        const latestEndClase = clusterFinal.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
                         const bottom = getPosicionY(latestEndClase[13]);
                         const alto = Math.max(bottom - top, 30);
-                        const jsonDetalles = encodeURIComponent(JSON.stringify(cluster));
-                        html += `<div class="bloque-superposicion" style="top: ${top}px; height: ${alto}px;" onclick="verDetalleSuperposicion('${jsonDetalles}')">⚠️ Superposición (${cluster.length})</div>`;
+                        const jsonDetalles = encodeURIComponent(JSON.stringify(clusterFinal));
+                        html += `<div class="bloque-superposicion" style="top: ${top}px; height: ${alto}px;" onclick="verDetalleSuperposicion('${jsonDetalles}')">⚠️ Superposición (${clusterFinal.length})</div>`;
                     }
                     clusterIdx.forEach(idx => procesados.add(idx));
                 } else {
-                    const estilos = calcularEstilosBloques(cluster);
-                    const numClases = cluster.length;
-                    cluster.forEach((clase, idxInCluster) => {
+                    const estilos = calcularEstilosBloques(clusterFinal);
+                    const numClases = clusterFinal.length;
+                    clusterFinal.forEach((clase, idxInCluster) => {
                         const inicio = clase[12];
                         const fin = clase[13];
                         const top = getPosicionY(inicio) + 2;
@@ -1351,7 +1356,7 @@ function toggleManualMode(checkbox) {
     cargarDatosDashboard();
 }
 
-let selectedDay = 'Lunes';
+let selectedDay = (window.APP_DATA.dias && window.APP_DATA.dias[0]) || 'Lunes';
 let selectedFloor = 'Piso 1';
 let isPlanillaGeneral = false;
 let allDataCache = null;
@@ -1475,15 +1480,18 @@ function generarPlanillaGeneral() {
                     maxFin = Math.max(maxFin, timeToMin(clasesAula[j][13]));
                 } else { break; }
             }
-            
-            const todosTienenGrupo = cluster.every(c => c[14] && c[14].trim() !== "");
-            const haySuperposicion = cluster.length > 1 && !todosTienenGrupo;
+
+            const sinLicenciadas = cluster.filter(c => c[16] != 1);
+            const clusterFinal = cluster.length > 1 && sinLicenciadas.length > 0 ? sinLicenciadas : cluster;
+
+            const todosTienenGrupo = clusterFinal.every(c => c[14] && c[14].trim() !== "");
+            const haySuperposicion = clusterFinal.length > 1 && !todosTienenGrupo;
 
             if (haySuperposicion) {
-                const todosPermitenSuperposicion = cluster.every(c => c[15] == 1);
+                const todosPermitenSuperposicion = clusterFinal.every(c => c[15] == 1);
                 if (todosPermitenSuperposicion) {
-                    const numClases = cluster.length;
-                    cluster.forEach((clase, idxInCluster) => {
+                    const numClases = clusterFinal.length;
+                    clusterFinal.forEach((clase, idxInCluster) => {
                         const top = getPosicionY(clase[12]) + 2;
                         const bottom = getPosicionY(clase[13]) - 2;
                         const alto = Math.max(bottom - top, 20);
@@ -1499,14 +1507,14 @@ function generarPlanillaGeneral() {
                         </div>`;
                     });
                 } else {
-                    const top = getPosicionY(cluster[0][12]);
-                    const latestEndClase = cluster.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
+                    const top = getPosicionY(clusterFinal[0][12]);
+                    const latestEndClase = clusterFinal.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
                     const alto = Math.max(getPosicionY(latestEndClase[13]) - top, 30);
-                    const jsonDetalles = encodeURIComponent(JSON.stringify(cluster));
-                    html += `<div class="bloque-superposicion" style="top: ${top}px; height: ${alto}px;" onclick="verDetalleSuperposicion('${jsonDetalles}')">⚠️ Superposición (${cluster.length})</div>`;
+                    const jsonDetalles = encodeURIComponent(JSON.stringify(clusterFinal));
+                    html += `<div class="bloque-superposicion" style="top: ${top}px; height: ${alto}px;" onclick="verDetalleSuperposicion('${jsonDetalles}')">⚠️ Superposición (${clusterFinal.length})</div>`;
                 }
             } else {
-                cluster.forEach((clase) => {
+                clusterFinal.forEach((clase) => {
                     const top = getPosicionY(clase[12]) + 2;
                     const bottom = getPosicionY(clase[13]) - 2;
                     const alto = Math.max(bottom - top, 20);

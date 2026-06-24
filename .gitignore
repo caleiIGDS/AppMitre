@@ -29,6 +29,7 @@ instance/
 # Data files (Generated or private)
 horarios_actualizados.csv
 datos.csv
+nombre_mapeos.json
 
 # IDEs
 .vscode/
