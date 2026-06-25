@@ -34,7 +34,7 @@ GID_PERSONAL_NO_DOCENTE = GIDS["personal_no_docente"]
 
 # Branding de la institución
 ESCUELA_NOMBRE = "EMILIO MITRE"
-ESCUELA_LOGO = "images/logoMitre.jpg"
+ESCUELA_LOGO = "images/logoMitre.svg"
 ESCUELA_VERSION = "V1.16"
 
 # Días laborales (en orden, título case con acentos)

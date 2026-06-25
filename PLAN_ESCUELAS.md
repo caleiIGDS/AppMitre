@@ -188,18 +188,6 @@ turnos, sus nombres y sus rangos horarios vienen de la config (tabla `config` en
 El renderizado de la tabla de preceptores itera sobre `config.turnos` en lugar de
 asumir MAÑANA/TARDE/VESPERTINO.
 
-### E6 — Grupos de división variables (más de A/B)
-
-La lógica de superposición en `script.js` que divide 50/50 para grupos A y B debe
-detectar cuántos grupos distintos hay en el cluster y dividir equitativamente.
-
-```javascript
-// Hoy: if (grupo === 'A') ancho = 50; left = 0;
-// Objetivo:
-const grupos = [...new Set(cluster.map(c => c.grupo))].sort();
-const anchoGrupo = 100 / grupos.length;
-const leftGrupo = grupos.indexOf(clase.grupo) * anchoGrupo;
-```
 
 ### E7 — Años escolares dinámicos desde config
 
@@ -240,5 +228,3 @@ sobre una lista fija. La UI de admin permite agregar o quitar años.
 9. E5: Turnos configurables y renderizado dinámico
 10. E7: Años escolares dinámicos desde config
 
-### Fase 4 — Flexibilidad visual
-11. E6: Grupos de división variables
