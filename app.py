@@ -1,6 +1,6 @@
 from flask import Flask, render_template, jsonify, send_file
 import database
-from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS
+from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS, TURNO_CURSOS, TURNO_DEFAULT
 import sqlite3
 from fpdf import FPDF
 import io
@@ -522,6 +522,17 @@ def api_horario_preceptor(nombre):
     Endpoint para obtener el horario individual de un preceptor.
     """
     return jsonify(database.obtener_horario_preceptor(nombre))
+
+@app.route('/api/planilla_preceptores')
+def api_planilla_preceptores():
+    filas = database.obtener_planilla_preceptores_todos()
+    for f in filas:
+        override = TURNO_CURSOS.get((str(f['curso']), str(f['division'])))
+        if override:
+            f['turno'] = override
+        elif not f['turno']:
+            f['turno'] = TURNO_DEFAULT
+    return jsonify(filas)
 
 if __name__ == '__main__':
     database.init_tablas()

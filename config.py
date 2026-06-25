@@ -50,3 +50,10 @@ FLOOR_MAPPING = {
     "Entrepiso 3": ["301", "302", "303", "304", "305", "306"],
     "Talleres": ["T1","T2","T3","T4","T5","T6","T7","T8","T9","T10","T11","T12","T13","T14","T15","T16","T17","T18","T24","T25","T26","T27","T101","T102","T103","T104","T105","T106","T107","T108","T109","T110","T111","T112","T113","T114","T115","T116"]
 }
+
+# Turno por defecto para todos los cursos cuando no hay datos en la DB
+TURNO_DEFAULT = "MAÑANA"
+
+# Overrides específicos por curso/division (sobreescribe TURNO_DEFAULT y la DB)
+# Formato: { ("curso_num", "division"): "MAÑANA" | "TARDE" | "VESPERTINO" }
+TURNO_CURSOS = {}

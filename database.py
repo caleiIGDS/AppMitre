@@ -435,3 +435,45 @@ def obtener_lista_personal():
     personal = [{'nombre': r[0], 'rol': r[1]} for r in cur.fetchall()]
     con.close()
     return personal
+
+
+def obtener_planilla_preceptores_todos():
+    con = conectar()
+    cur = con.cursor()
+
+    cur.execute("""
+        SELECT DISTINCT curso, division FROM clases
+        WHERE curso != '' AND division != ''
+        ORDER BY CAST(curso AS INTEGER), division
+    """)
+    cursos = cur.fetchall()
+
+    resultado = []
+    for (curso, division) in cursos:
+        cur.execute("""
+            SELECT turno, GROUP_CONCAT(DISTINCT preceptor) as precs
+            FROM horarios_preceptores
+            WHERE curso = ? AND division = ?
+            GROUP BY turno
+        """, (curso, division))
+        turnos = {row[0].upper(): row[1] for row in cur.fetchall()}
+
+        cur.execute("""
+            SELECT turno FROM horarios_preceptores
+            WHERE curso = ? AND division = ?
+            GROUP BY turno ORDER BY COUNT(*) DESC LIMIT 1
+        """, (curso, division))
+        row = cur.fetchone()
+        turno_principal = row[0] if row else None
+
+        resultado.append({
+            'curso': curso,
+            'division': division,
+            'turno': turno_principal,
+            'manana': turnos.get('MAÑANA', ''),
+            'tarde': turnos.get('TARDE', ''),
+            'noche': turnos.get('VESPERTINO', '')
+        })
+
+    con.close()
+    return resultado

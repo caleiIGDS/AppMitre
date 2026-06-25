@@ -148,13 +148,21 @@ function seleccionarOpcionSlide(opcion, tabId) {
         } else {
             fetch('/api/dashboard').then(r => r.json()).then(d => { allDataCache = d; generarPlanillaGeneral(); });
         }
+    } else if (opcion === 'planilla_curso') {
+        panel.querySelectorAll('.slide-opcion').forEach(btn => {
+            if (btn.dataset.opcion === 'planilla_curso') btn.style.display = 'none';
+        });
+        _crearChip('planilla_curso', tabId);
+        const sf = document.querySelector('#tab-horario_preceptor .tech-field');
+        if (sf) { sf.style.opacity = '0.5'; sf.style.pointerEvents = 'none'; }
+        mostrarPlanillaCursos();
     }
 }
 
 function _crearChip(opcion, tabId) {
     const chipId = `chip-${opcion}-${tabId}`;
     if (document.getElementById(chipId)) return;
-    const labels = { comparar: 'COMPARAR', planilla: 'PLANILLA' };
+    const labels = { comparar: 'COMPARAR', planilla: 'PLANILLA', planilla_curso: 'PLANILLA CURSOS' };
     const chip = document.createElement('div');
     chip.className = `opcion-chip ${opcion}-chip`;
     chip.id = chipId;
@@ -190,6 +198,12 @@ function removerChip(opcion, tabId) {
             const workspaceHeader = document.getElementById('workspace-calendar-header');
             if (workspaceHeader) workspaceHeader.style.display = 'none';
         }
+    } else if (opcion === 'planilla_curso') {
+        const sf = document.querySelector('#tab-horario_preceptor .tech-field');
+        if (sf) { sf.style.opacity = ''; sf.style.pointerEvents = ''; }
+        document.getElementById('contenedor-lista').innerHTML = '';
+        const wh = document.getElementById('workspace-calendar-header');
+        if (wh) wh.style.display = 'none';
     }
 }
 
@@ -905,6 +919,46 @@ function buscarEnServidor(modo, valor) {
             c.innerHTML = `<div style="padding:40px; text-align:center; color:#c0392b;"><strong>Error al buscar el horario.</strong><br>Es posible que los datos estén actualizándose. Intentá de nuevo en unos segundos.</div>`;
             c.style.display = 'block';
         });
+}
+
+function mostrarPlanillaCursos() {
+    document.getElementById('contenedor-calendario').style.display = 'none';
+    const lista = document.getElementById('contenedor-lista');
+    lista.style.display = 'block';
+    lista.innerHTML = '<div style="padding:20px;text-align:center;color:#70757a;">Cargando...</div>';
+    const wh = document.getElementById('workspace-calendar-header');
+    const ct = document.getElementById('calendar-title');
+    const eb = document.getElementById('export-pdf-btn');
+    if (wh) wh.style.display = 'flex';
+    if (ct) ct.textContent = 'Planilla de Preceptores por Curso';
+    if (eb) eb.style.display = 'none';
+    fetch('/api/planilla_preceptores')
+        .then(r => r.json())
+        .then(filas => renderizarPlanillaCursos(filas))
+        .catch(() => { lista.innerHTML = '<div style="padding:20px;color:#c0392b;">Error al cargar la planilla.</div>'; });
+}
+
+function renderizarPlanillaCursos(filas) {
+    const lista = document.getElementById('contenedor-lista');
+    if (!filas || filas.length === 0) {
+        lista.innerHTML = "<div style='padding:20px;text-align:center;'>No hay datos disponibles.</div>";
+        return;
+    }
+    const abrev = { 'MAÑANA': 'M', 'TARDE': 'T', 'VESPERTINO': 'V' };
+    const rows = filas.map(f => `<tr>
+        <td>${f.curso}° ${f.division}</td>
+        <td>${f.turno ? (abrev[f.turno.toUpperCase()] || f.turno) : ''}</td>
+        <td>${f.manana || ''}</td>
+        <td>${f.tarde || ''}</td>
+        <td>${f.noche || ''}</td>
+    </tr>`).join('');
+    lista.innerHTML = `
+        <table style="width:100%;table-layout:auto;">
+            <thead><tr>
+                <th>CURSO Y DIVISIÓN</th><th>TURNO</th><th>TM</th><th>TT</th><th>TV</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>`;
 }
 
 function renderizarTablaPreceptor(filas) {
