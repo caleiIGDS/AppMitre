@@ -1,10 +1,20 @@
 import sqlite3
 import csv
+import json
 import os
 import re
 import unicodedata
 import urllib.request
 import io
+
+def _cargar_nombre_mapeos():
+    ruta = os.path.join(os.path.dirname(__file__), 'nombre_mapeos.json')
+    if os.path.exists(ruta):
+        with open(ruta, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+_NOMBRE_MAPEOS = _cargar_nombre_mapeos()
 def conectar():
     return sqlite3.connect('escuela.db')
 
@@ -24,14 +34,6 @@ def crear_tablas():
             prof_suplente TEXT, sup_ini TEXT, sup_fin TEXT
         )
     ''')
-    cur.execute('DROP TABLE IF EXISTS preceptores')
-    cur.execute('''
-        CREATE TABLE preceptores (
-            curso TEXT, division TEXT, turno TEXT,
-            preceptores_manana TEXT, preceptores_tarde TEXT, preceptores_noche TEXT
-        )
-    ''')
-    
     # Nueva tabla para horarios individuales de preceptores
     cur.execute('DROP TABLE IF EXISTS horarios_preceptores')
     cur.execute('''
@@ -41,6 +43,7 @@ def crear_tablas():
             preceptor TEXT NOT NULL,
             tipo TEXT NOT NULL,
             curso TEXT NOT NULL,
+            division TEXT NOT NULL DEFAULT '',
             dia TEXT NOT NULL
         )
     ''')
@@ -79,18 +82,13 @@ def init_tablas():
         )
     ''')
     cur.execute('''
-        CREATE TABLE IF NOT EXISTS preceptores (
-            curso TEXT, division TEXT, turno TEXT,
-            preceptores_manana TEXT, preceptores_tarde TEXT, preceptores_noche TEXT
-        )
-    ''')
-    cur.execute('''
         CREATE TABLE IF NOT EXISTS horarios_preceptores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             turno TEXT NOT NULL,
             preceptor TEXT NOT NULL,
             tipo TEXT NOT NULL,
             curso TEXT NOT NULL,
+            division TEXT NOT NULL DEFAULT '',
             dia TEXT NOT NULL
         )
     ''')
@@ -134,20 +132,7 @@ def limpiar_profesor(nombre):
     # Normalizar espacios
     n = re.sub(r'\s+', ' ', n).strip()
     
-    # Mapeos manuales para casos muy obvios que el algoritmo no pesca
-    mapeos = {
-        "CASALE SERVIN BETTINA": "CASALE SERVINI BETTINA",
-        "CASALLE SERVINI BETINA": "CASALE SERVINI BETINA",
-        "CASALE CERVINI": "CASALE SERVINI BETINA",
-        "CASALE CERVINI BETINA": "CASALE SERVINI BETINA",
-        "CASALLE SERVINI": "CASALE SERVINI BETINA",
-        "ALONSO EVELYN": "ALONSO EVELIN",
-        "PEREYRA JESSICA": "PEREYRA JESICA",
-        "RODRIGUEZ VIRGINA": "RODRIGUEZ VIRGINIA",
-        "ZULAICA EMILSE": "ZULAICA EMILCE",
-        "SCHNEIDER ERICA": "SCHNEIDER ERIKA"
-    }
-    return mapeos.get(n, n)
+    return _NOMBRE_MAPEOS.get(n, n)
 
 def limpiar_aula(aula):
     if not aula: return ""
@@ -170,22 +155,6 @@ def limpiar_aula(aula):
     # Si no tiene números, mantenemos el nombre limpio (ej: "PATIO")
     return aula_limpia
 
-def corregir_horarios(inicio, fin):
-    horarios_comunes = ["07:40", "09:40", "10:00", "12:00", "13:30", "15:30", "15:50", "17:50", "18:00", "20:00", "20:10", "22:10"]
-    if inicio == fin:
-        try:
-            idx = horarios_comunes.index(inicio)
-            if idx + 1 < len(horarios_comunes):
-                return inicio, horarios_comunes[idx+1]
-        except ValueError:
-            pass
-        try:
-            h, m = map(int, inicio.split(':'))
-            h_fin = (h + 2) % 24
-            return inicio, f"{h_fin:02d}:{m:02d}"
-        except:
-            return inicio, fin
-    return inicio, fin
 
 
 
@@ -225,7 +194,8 @@ def cargar_desde_sheets(sheet_id, gids):
         for row in reader:
             profesor = limpiar_profesor(row.get('profesor', ''))
             aula = limpiar_aula(row.get('aula', ''))
-            inicio, fin = corregir_horarios(row.get('hora_inicio', ''), row.get('hora_fin', ''))
+            inicio = row.get('hora_inicio', '')
+            fin = row.get('hora_fin', '')
             
             superposicion_raw = row.get('superposicion', '0')
             try:
@@ -263,85 +233,61 @@ def cargar_desde_sheets(sheet_id, gids):
     con.close()
     print("Listo.")
 
-def cargar_preceptores(sheet_id, gid):
-    con = conectar()
-    cur = con.cursor()
-    print(f"Cargando preceptores con GID {gid}...")
-    try:
-        # Saltamos 1 fila porque la primera es el título "LISTADO GENERAL..."
-        archivo = descargar_sheet(sheet_id, gid, skip_rows=1)
-        reader = csv.DictReader(archivo)
-        for row in reader:
-            div_raw = str(row.get('division', '')).strip()
-            div_clean = div_raw[0] if div_raw else ""
-            datos = (
-                row.get('curso', ''), div_clean, row.get('turno', ''),
-                row.get('preceptores_manana', ''), row.get('preceptores_tarde', ''),
-                row.get('preceptores_noche', '')
-            )
-            cur.execute('INSERT INTO preceptores VALUES (?,?,?,?,?,?)', datos)
-        print("Listo preceptores")
-        con.commit()
-    except Exception as e:
-        print(f"Error cargando preceptores: {e}")
-        con.rollback()
-    finally:
-        con.close()
-
 def cargar_horarios_preceptores(sheet_id, gid):
     """
     Descarga e importa los horarios individuales de los preceptores desde Google Sheets.
-    La hoja tiene 3 bloques (MAÑANA, TARDE, VESPERTINO) en distintas columnas.
+    La hoja tiene 3 bloques (MAÑANA, TARDE, VESPERTINO) en columnas separadas por una col vacía.
+    Columnas por bloque: Preceptor | Curso | Division | LUNES | MARTES | MIERCOLES | JUEVES | VIERNES
+    Cualquier valor que no sea vacío ni "FALSO" en una celda de día cuenta como presente.
     """
     con = conectar()
     cur = con.cursor()
     print(f"Cargando horarios detallados de preceptores (GID {gid})...")
     try:
         cur.execute("DELETE FROM horarios_preceptores")
-        # Saltamos 1 fila porque la primera es la que dice "MAÑANA,,,,,,TARDE..."
-        archivo = descargar_sheet(sheet_id, gid, skip_rows=1)
+        archivo = descargar_sheet(sheet_id, gid, skip_rows=0)
         reader = csv.reader(archivo)
-        
-        # Saltamos la fila de encabezados (preceptor, estado, curso, etc.)
+
+        # Saltamos la fila de encabezados (Preceptor, Curso, Division, LUNES, ...)
         next(reader, None)
-        
+
         to_insert = []
         dias_nombres = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES']
-        
-        # Definición de los bloques y sus columnas iniciales
-        # MAÑANA: A=0, TARDE: J=9, VESPERTINO: S=18
+
+        # Estructura por bloque: Preceptor | Curso | Division | LUN | MAR | MIE | JUE | VIE
+        # + 1 columna vacía separadora → offset entre bloques = 9
         bloques = [
-            {"turno": "MAÑANA", "offset": 0},
-            {"turno": "TARDE", "offset": 9},
-            {"turno": "VESPERTINO", "offset": 18}
+            {"turno": "MAÑANA",     "offset": 0},
+            {"turno": "TARDE",      "offset": 9},
+            {"turno": "VESPERTINO", "offset": 18},
         ]
-        
+
         for row in reader:
             for bloque in bloques:
                 off = bloque["offset"]
-                # Validar que la fila tenga suficientes columnas para este bloque
                 if len(row) > off + 2:
                     preceptor = row[off].strip()
-                    tipo = row[off+1].strip()
-                    curso = row[off+2].strip()
-                    
-                    if preceptor and preceptor.upper() != "PRECEPTOR": # Solo si hay un nombre real
+                    curso     = row[off+1].strip()
+                    division  = row[off+2].strip().upper()
+
+                    if preceptor and preceptor.upper() != "PRECEPTOR":
                         for i, dia_nombre in enumerate(dias_nombres):
                             dia_idx = off + 3 + i
                             if len(row) > dia_idx:
                                 marca = row[dia_idx].strip().upper()
-                                if marca in ['X', 'TRUE', 'VERDADERO']:
+                                if marca and marca != 'FALSO':
                                     to_insert.append((
                                         bloque["turno"],
                                         preceptor,
-                                        tipo,
+                                        '',
                                         curso,
-                                        dia_nombre
+                                        division,
+                                        dia_nombre,
                                     ))
-        
+
         if to_insert:
             cur.executemany(
-                "INSERT INTO horarios_preceptores (turno, preceptor, tipo, curso, dia) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO horarios_preceptores (turno, preceptor, tipo, curso, division, dia) VALUES (?, ?, ?, ?, ?, ?)",
                 to_insert
             )
         con.commit()
@@ -390,6 +336,47 @@ def obtener_lista_preceptores_horario():
     preceptores = [r[0] for r in cur.fetchall()]
     con.close()
     return preceptores
+
+def _extraer_num_curso(s):
+    """'1ro', '1°', '1er', '2do', '7mo' → '1', '2', '7'"""
+    m = re.match(r'(\d+)', str(s).strip())
+    return m.group(1) if m else str(s).strip()
+
+def obtener_preceptores_por_curso(curso_raw, division_raw):
+    """
+    Busca en horarios_preceptores las filas que coinciden con curso y division.
+    Agrupa por turno (MAÑANA/TARDE/VESPERTINO) y devuelve un preceptor por turno.
+    """
+    num = _extraer_num_curso(curso_raw)   # "1ro" / "1°" / "1er" → "1"
+    div = division_raw.strip().upper()     # "b" → "B"
+
+    con = conectar()
+    cur = con.cursor()
+
+    cur.execute("""
+        SELECT turno, GROUP_CONCAT(DISTINCT preceptor) AS nombres
+        FROM horarios_preceptores
+        WHERE curso = ? AND UPPER(division) = ?
+        GROUP BY turno
+    """, (num, div))
+    turno_map = {row[0]: row[1] for row in cur.fetchall()}
+
+    con.close()
+
+    manana = turno_map.get("MAÑANA", "")
+    tarde  = turno_map.get("TARDE", "")
+    noche  = turno_map.get("VESPERTINO", "")
+
+    if not any([manana, tarde, noche]):
+        return None
+
+    return {
+        "curso": num,
+        "division": div,
+        "preceptores_manana": manana,
+        "preceptores_tarde": tarde,
+        "preceptores_noche": noche,
+    }
 
 def cargar_personal_no_docente(sheet_id, gid):
     con = conectar()
@@ -448,3 +435,36 @@ def obtener_lista_personal():
     personal = [{'nombre': r[0], 'rol': r[1]} for r in cur.fetchall()]
     con.close()
     return personal
+
+
+def obtener_planilla_preceptores_todos():
+    con = conectar()
+    cur = con.cursor()
+
+    cur.execute("""
+        SELECT DISTINCT curso, division FROM clases
+        WHERE curso != '' AND division != ''
+        ORDER BY CAST(curso AS INTEGER), division
+    """)
+    cursos = cur.fetchall()
+
+    resultado = []
+    for (curso, division) in cursos:
+        cur.execute("""
+            SELECT turno, GROUP_CONCAT(DISTINCT preceptor) as precs
+            FROM horarios_preceptores
+            WHERE curso = ? AND division = ?
+            GROUP BY turno
+        """, (curso, division))
+        turnos = {row[0].upper(): row[1] for row in cur.fetchall()}
+
+        resultado.append({
+            'curso': curso,
+            'division': division,
+            'manana': turnos.get('MAÑANA', ''),
+            'tarde': turnos.get('TARDE', ''),
+            'noche': turnos.get('VESPERTINO', '')
+        })
+
+    con.close()
+    return resultado

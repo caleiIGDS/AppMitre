@@ -1,5 +1,5 @@
 # config.py
-# Configuración centralizada de Google Sheets para AppMitre
+# Configuración centralizada de AppMitre
 
 # ID del documento de Google Sheets (común para todas las hojas)
 SHEET_ID = "1GJxwpxXfLosqKxgIa6zyZhwjDK-89ZDavLi6nouWTsw"
@@ -16,24 +16,44 @@ GIDS = {
     "6to": "618740516",
     "7mo": "15078021",
     
-    # Hoja de datos de Preceptores (Asignación de cursos)
-    "preceptores": "813054425",
-    
     # Hoja de horarios detallados de Preceptores
-    "horarios_preceptores": "576226512",
+    "horarios_preceptores": "1249256665",
 
     # Hoja de horarios de Personal No Docente
     "personal_no_docente": "1094234359"
 }
 
 # Selección de GIDs específicos para la carga de horarios de clases
-GIDS_CURSOS = {k: v for k, v in GIDS.items() if k not in ["preceptores", "horarios_preceptores", "personal_no_docente"]}
-
-# GID específico para preceptores
-GID_PRECEPTORES = GIDS["preceptores"]
+GIDS_CURSOS = {k: v for k, v in GIDS.items() if k not in ["horarios_preceptores", "personal_no_docente"]}
 
 # GID específico para los horarios de preceptores
 GID_HORARIOS_PRECEPTORES = GIDS["horarios_preceptores"]
 
 # GID específico para el personal no docente
 GID_PERSONAL_NO_DOCENTE = GIDS["personal_no_docente"]
+
+# Branding de la institución
+ESCUELA_NOMBRE = "EMILIO MITRE"
+ESCUELA_LOGO = "images/escudo.svg"
+ESCUELA_VERSION = "V1.16"
+
+# Días laborales (en orden, título case con acentos)
+DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
+
+# Mapeo de pisos a aulas para la Planilla General
+FLOOR_MAPPING = {
+    "Piso 1": ["11", "12", "13", "14", "15", "16"],
+    "Piso 2": ["21", "22", "23", "24", "25", "26"],
+    "Piso 3": ["13", "14", "15", "16", "17", "18"],
+    "Entrepiso 1": ["101","102", "103", "104", "105", "106", "107", "108"],
+    "Entrepiso 2": ["201", "202"],
+    "Entrepiso 3": ["301", "302", "303", "304", "305", "306"],
+    "Talleres": ["T1","T2","T3","T4","T5","T6","T7","T8","T9","T10","T11","T12","T13","T14","T15","T16","T17","T18","T24","T25","T26","T27","T101","T102","T103","T104","T105","T106","T107","T108","T109","T110","T111","T112","T113","T114","T115","T116"]
+}
+
+# Turno por defecto para todos los cursos cuando no hay datos en la DB
+TURNO_DEFAULT = "MAÑANA"
+
+# Overrides específicos por curso/division (sobreescribe TURNO_DEFAULT y la DB)
+# Formato: { ("curso_num", "division"): "MAÑANA" | "TARDE" | "VESPERTINO" }
+TURNO_CURSOS = {}
