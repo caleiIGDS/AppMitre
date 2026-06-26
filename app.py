@@ -1,9 +1,9 @@
 from flask import Flask, render_template, jsonify, send_file
 import database
 from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS, TURNO_CURSOS, TURNO_DEFAULT
-import sqlite3
 from fpdf import FPDF
 import io
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -153,21 +153,13 @@ def obtener_datos_calendario(filas, tipo, columnas=None):
 
 class PDF(FPDF):
     def header(self):
-        # Header removed as per user request
         pass
 
     def footer(self):
-        self.set_y(-15)
-        self.add_font('RobotoMono', 'I', 'static/fonts/RobotoMono-Italic.ttf')
-        self.set_font('RobotoMono', 'I', 8)
-        self.cell(0, 10, 'by Calei', 0, 0, 'L')
+        pass
 
 @app.route('/export/pdf/<tipo>/<valor>')
 def export_pdf(tipo, valor):
-    import time
-    start_time = time.time()
-    
-    # Limpiar el valor si es curso para la búsqueda en BD
     search_valor = valor
     columnas = None
     if tipo == 'curso' and '°' in valor:
@@ -188,10 +180,16 @@ def export_pdf(tipo, valor):
     pdf.add_font('RobotoMono', 'I', 'static/fonts/RobotoMono-Italic.ttf')
     pdf.add_page()
     
+    # Fecha arriba a la izquierda
+    pdf.set_font('RobotoMono', '', 8)
+    pdf.set_text_color(120, 120, 120)
+    pdf.set_xy(15, 5)
+    pdf.cell(0, 5, datetime.now().strftime("%d/%m/%Y"), 0, 0, 'L')
+
     # Nuevo Título simple y centrado
     pdf.set_font('RobotoMono', 'B', 16)
     pdf.set_text_color(0, 0, 0)
-    
+
     titulo = f"Horario Semanal de {tipo.capitalize()}: {valor}"
     if tipo == 'planilla':
         dia, piso = valor.split('|')
@@ -468,11 +466,8 @@ def export_pdf(tipo, valor):
                     pdf.cell(w, 4, f"SUPERPOSICION", 0, 0, 'C')
 
     output = io.BytesIO()
-    pdf_content = pdf.output()
-    output.write(pdf_content)
+    output.write(pdf.output())
     output.seek(0)
-    
-    print(f"Total Export PDF (fpdf2): {time.time() - start_time:.4f}s")
     filename = f"{tipo}_{valor}.pdf".replace('|', '_')
     return send_file(output, mimetype='application/pdf', as_attachment=False, download_name=filename)
 
@@ -527,11 +522,7 @@ def api_horario_preceptor(nombre):
 def api_planilla_preceptores():
     filas = database.obtener_planilla_preceptores_todos()
     for f in filas:
-        override = TURNO_CURSOS.get((str(f['curso']), str(f['division'])))
-        if override:
-            f['turno'] = override
-        elif not f['turno']:
-            f['turno'] = TURNO_DEFAULT
+        f['turno'] = TURNO_CURSOS.get((str(f['curso']), str(f['division'])), TURNO_DEFAULT)
     return jsonify(filas)
 
 if __name__ == '__main__':

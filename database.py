@@ -236,50 +236,50 @@ def cargar_desde_sheets(sheet_id, gids):
 def cargar_horarios_preceptores(sheet_id, gid):
     """
     Descarga e importa los horarios individuales de los preceptores desde Google Sheets.
-    La hoja tiene 3 bloques (MAÑANA, TARDE, VESPERTINO) en distintas columnas.
+    La hoja tiene 3 bloques (MAÑANA, TARDE, VESPERTINO) en columnas separadas por una col vacía.
+    Columnas por bloque: Preceptor | Curso | Division | LUNES | MARTES | MIERCOLES | JUEVES | VIERNES
+    Cualquier valor que no sea vacío ni "FALSO" en una celda de día cuenta como presente.
     """
     con = conectar()
     cur = con.cursor()
     print(f"Cargando horarios detallados de preceptores (GID {gid})...")
     try:
         cur.execute("DELETE FROM horarios_preceptores")
-        # Saltamos 1 fila porque la primera es la que dice "MAÑANA,,,,,,TARDE..."
-        archivo = descargar_sheet(sheet_id, gid, skip_rows=1)
+        archivo = descargar_sheet(sheet_id, gid, skip_rows=0)
         reader = csv.reader(archivo)
-        
-        # Saltamos la fila de encabezados (preceptor, estado, curso, etc.)
+
+        # Saltamos la fila de encabezados (Preceptor, Curso, Division, LUNES, ...)
         next(reader, None)
-        
+
         to_insert = []
         dias_nombres = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES']
-        
-        # Estructura por bloque: Preceptor | Estado | Curso | Division | LUN | MAR | MIER | JUE | VIE
-        # + 1 columna vacía separadora entre bloques → offset entre bloques = 10
+
+        # Estructura por bloque: Preceptor | Curso | Division | LUN | MAR | MIE | JUE | VIE
+        # + 1 columna vacía separadora → offset entre bloques = 9
         bloques = [
             {"turno": "MAÑANA",     "offset": 0},
-            {"turno": "TARDE",      "offset": 10},
-            {"turno": "VESPERTINO", "offset": 20},
+            {"turno": "TARDE",      "offset": 9},
+            {"turno": "VESPERTINO", "offset": 18},
         ]
 
         for row in reader:
             for bloque in bloques:
                 off = bloque["offset"]
-                if len(row) > off + 3:
+                if len(row) > off + 2:
                     preceptor = row[off].strip()
-                    tipo      = row[off+1].strip()
-                    curso     = row[off+2].strip()
-                    division  = row[off+3].strip().upper()
+                    curso     = row[off+1].strip()
+                    division  = row[off+2].strip().upper()
 
                     if preceptor and preceptor.upper() != "PRECEPTOR":
                         for i, dia_nombre in enumerate(dias_nombres):
-                            dia_idx = off + 4 + i
+                            dia_idx = off + 3 + i
                             if len(row) > dia_idx:
                                 marca = row[dia_idx].strip().upper()
-                                if marca in ['X', 'TRUE', 'VERDADERO']:
+                                if marca and marca != 'FALSO':
                                     to_insert.append((
                                         bloque["turno"],
                                         preceptor,
-                                        tipo,
+                                        '',
                                         curso,
                                         division,
                                         dia_nombre,
@@ -458,18 +458,9 @@ def obtener_planilla_preceptores_todos():
         """, (curso, division))
         turnos = {row[0].upper(): row[1] for row in cur.fetchall()}
 
-        cur.execute("""
-            SELECT turno FROM horarios_preceptores
-            WHERE curso = ? AND division = ?
-            GROUP BY turno ORDER BY COUNT(*) DESC LIMIT 1
-        """, (curso, division))
-        row = cur.fetchone()
-        turno_principal = row[0] if row else None
-
         resultado.append({
             'curso': curso,
             'division': division,
-            'turno': turno_principal,
             'manana': turnos.get('MAÑANA', ''),
             'tarde': turnos.get('TARDE', ''),
             'noche': turnos.get('VESPERTINO', '')

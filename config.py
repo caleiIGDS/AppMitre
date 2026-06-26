@@ -17,7 +17,7 @@ GIDS = {
     "7mo": "15078021",
     
     # Hoja de horarios detallados de Preceptores
-    "horarios_preceptores": "576226512",
+    "horarios_preceptores": "1249256665",
 
     # Hoja de horarios de Personal No Docente
     "personal_no_docente": "1094234359"
@@ -34,7 +34,7 @@ GID_PERSONAL_NO_DOCENTE = GIDS["personal_no_docente"]
 
 # Branding de la institución
 ESCUELA_NOMBRE = "EMILIO MITRE"
-ESCUELA_LOGO = "images/logoMitre.svg"
+ESCUELA_LOGO = "images/escudo.svg"
 ESCUELA_VERSION = "V1.16"
 
 # Días laborales (en orden, título case con acentos)

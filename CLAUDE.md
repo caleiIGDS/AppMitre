@@ -206,3 +206,31 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 3. **Actualizar datos:** Botón "ACTUALIZAR HORARIOS" → POST `/api/actualizar` → recarga página
 4. **Comparar docentes:** Buscar docente → panel lateral → COMPARAR → buscar otro → grid multicolor
 5. **Kiosco tiempo real:** Tab TIEMPO REAL → F11 → dashboard auto-actualizado cada 1s
+
+---
+
+## Context Rules
+
+- Lógica de normalización / pipeline de datos → leer `agent_docs/data-pipeline.md`
+- Renderizado del calendario, clustering, superposición → leer `agent_docs/calendar-engine.md`
+- Sistema de búsqueda y parsing de queries → leer `agent_docs/search-api.md`
+- Estilos, variables CSS, patrones visuales → leer `agent_docs/frontend-ui.md`
+
+## Dev Log
+
+- `dev-log/DECISIONS.md` — decisiones de arquitectura. Leer antes de "corregir" algo que parece raro.
+- `dev-log/CHANGELOG.md` — cambios que afectan contratos entre módulos.
+- `dev-log/tasks/IN-PROGRESS.md` — leer al iniciar cualquier sesión.
+- `dev-log/tasks/TODO.md` — backlog priorizado.
+- `dev-log/tasks/DONE.md` — solo leer si se pide explícitamente.
+
+## Docs Maintenance
+
+Después de cada modificación, antes de terminar la tarea, revisá:
+- ¿Cambié el pipeline de datos, normalización o schema? → actualizar `agent_docs/data-pipeline.md`
+- ¿Cambié lógica del calendario o clustering? → actualizar `agent_docs/calendar-engine.md`
+- ¿Cambié rutas, búsqueda o parsing? → actualizar `agent_docs/search-api.md`
+- ¿Cambié estilos o variables CSS? → actualizar `agent_docs/frontend-ui.md`
+- ¿Cambió un contrato entre módulos? → agregar entrada en `dev-log/CHANGELOG.md`
+- ¿Tomaste una decisión no obvia? → agregar entrada en `dev-log/DECISIONS.md`
+- Fixes menores de estilo o bugs internos → no registrar nada

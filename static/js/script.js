@@ -148,21 +148,13 @@ function seleccionarOpcionSlide(opcion, tabId) {
         } else {
             fetch('/api/dashboard').then(r => r.json()).then(d => { allDataCache = d; generarPlanillaGeneral(); });
         }
-    } else if (opcion === 'planilla_curso') {
-        panel.querySelectorAll('.slide-opcion').forEach(btn => {
-            if (btn.dataset.opcion === 'planilla_curso') btn.style.display = 'none';
-        });
-        _crearChip('planilla_curso', tabId);
-        const sf = document.querySelector('#tab-horario_preceptor .tech-field');
-        if (sf) { sf.style.opacity = '0.5'; sf.style.pointerEvents = 'none'; }
-        mostrarPlanillaCursos();
     }
 }
 
 function _crearChip(opcion, tabId) {
     const chipId = `chip-${opcion}-${tabId}`;
     if (document.getElementById(chipId)) return;
-    const labels = { comparar: 'COMPARAR', planilla: 'PLANILLA', planilla_curso: 'PLANILLA CURSOS' };
+    const labels = { comparar: 'COMPARAR', planilla: 'PLANILLA' };
     const chip = document.createElement('div');
     chip.className = `opcion-chip ${opcion}-chip`;
     chip.id = chipId;
@@ -198,12 +190,6 @@ function removerChip(opcion, tabId) {
             const workspaceHeader = document.getElementById('workspace-calendar-header');
             if (workspaceHeader) workspaceHeader.style.display = 'none';
         }
-    } else if (opcion === 'planilla_curso') {
-        const sf = document.querySelector('#tab-horario_preceptor .tech-field');
-        if (sf) { sf.style.opacity = ''; sf.style.pointerEvents = ''; }
-        document.getElementById('contenedor-lista').innerHTML = '';
-        const wh = document.getElementById('workspace-calendar-header');
-        if (wh) wh.style.display = 'none';
     }
 }
 
@@ -677,6 +663,8 @@ function cambiarTab(evt, idTab) {
         document.getElementById('contenedor-calendario').style.display = 'none';
         document.getElementById('contenedor-dashboard').style.display = 'block';
         iniciarDashboard();
+    } else if (idTab === 'tab-horario_preceptor') {
+        mostrarPlanillaCursos();
     } else {
         // Focus the input inside the active tab ONLY if not navigating from modal
         if (!window.isProgrammaticNavigation) {
@@ -834,8 +822,6 @@ function buscarEnServidor(modo, valor) {
     const workspaceHeader = document.getElementById('workspace-calendar-header');
     const calendarTitle = document.getElementById('calendar-title');
     const preceptorContainer = document.getElementById('preceptor-info-container');
-    const exportBtn = document.getElementById('export-pdf-btn');
-
     if (!valor) {
         if (workspaceHeader) workspaceHeader.style.display = 'none';
         return;
@@ -854,9 +840,6 @@ function buscarEnServidor(modo, valor) {
         workspaceHeader.style.display = 'flex';
         calendarTitle.textContent = `Horario de ${modo.replace('_', ' ')}: ${valor}`;
         if (preceptorContainer) preceptorContainer.innerHTML = "";
-        if (exportBtn) {
-            exportBtn.style.display = (modo === 'horario_preceptor') ? 'none' : 'block';
-        }
     }
 
     document.getElementById('contenedor-calendario').innerHTML = '';
@@ -927,11 +910,7 @@ function mostrarPlanillaCursos() {
     lista.style.display = 'block';
     lista.innerHTML = '<div style="padding:20px;text-align:center;color:#70757a;">Cargando...</div>';
     const wh = document.getElementById('workspace-calendar-header');
-    const ct = document.getElementById('calendar-title');
-    const eb = document.getElementById('export-pdf-btn');
-    if (wh) wh.style.display = 'flex';
-    if (ct) ct.textContent = 'Planilla de Preceptores por Curso';
-    if (eb) eb.style.display = 'none';
+    if (wh) wh.style.display = 'none';
     fetch('/api/planilla_preceptores')
         .then(r => r.json())
         .then(filas => renderizarPlanillaCursos(filas))

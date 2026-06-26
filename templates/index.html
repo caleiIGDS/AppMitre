@@ -32,16 +32,9 @@
 
             <section class="tech-search-module">
                 <div id="tab-horario_preceptor" class="seccion-busqueda">
-                    <div class="tech-field-group">
-                        <div class="tech-field">
-                            <input type="text" class="tech-input" placeholder="INGRESE PRECEPTOR..." oninput="filtrarOpciones(this, 'horario_preceptor')" onfocus="filtrarOpciones(this, 'horario_preceptor')">
-                            <div id="dropdown-horario_preceptor" class="tech-dropdown"></div>
-                        </div>
-                        <div class="opciones-chips" id="chips-horario_preceptor"></div>
-                        <div class="slide-panel" id="slide-horario_preceptor">
-                            <button class="slide-opcion" data-opcion="planilla_curso" onclick="seleccionarOpcionSlide('planilla_curso','horario_preceptor')">PLANILLA POR CURSO</button>
-                        </div>
-                        <button class="btn-slide-trigger" id="trigger-horario_preceptor" onclick="toggleSlidePanel('horario_preceptor')">‹</button>
+                    <div class="tech-field">
+                        <input type="text" class="tech-input" placeholder="INGRESE PRECEPTOR..." oninput="filtrarOpciones(this, 'horario_preceptor')">
+                        <div id="dropdown-horario_preceptor" class="tech-dropdown"></div>
                     </div>
                 </div>
                 <div id="tab-profesor" class="seccion-busqueda">
@@ -53,6 +46,7 @@
                         <div class="opciones-chips" id="chips-profesor"></div>
                         <div class="slide-panel" id="slide-profesor">
                             <button class="slide-opcion" data-opcion="comparar" onclick="seleccionarOpcionSlide('comparar','profesor')">COMPARAR</button>
+                            <button class="slide-opcion" id="slide-pdf-profesor" onclick="exportarAPDF()">GENERAR PDF</button>
                         </div>
                         <button class="btn-slide-trigger" id="trigger-profesor" onclick="toggleSlidePanel('profesor')">‹</button>
                     </div>
@@ -68,6 +62,7 @@
                         <div class="slide-panel" id="slide-aula">
                             <button class="slide-opcion" data-opcion="comparar" onclick="seleccionarOpcionSlide('comparar','aula')">COMPARAR</button>
                             <button class="slide-opcion" data-opcion="planilla" onclick="seleccionarOpcionSlide('planilla','aula')">PLANILLA GENERAL</button>
+                            <button class="slide-opcion" id="slide-pdf-aula" onclick="exportarAPDF()">GENERAR PDF</button>
                         </div>
                         <button class="btn-slide-trigger" id="trigger-aula" onclick="toggleSlidePanel('aula')">‹</button>
                     </div>
@@ -100,6 +95,7 @@
                         <div class="opciones-chips" id="chips-curso"></div>
                         <div class="slide-panel" id="slide-curso">
                             <button class="slide-opcion" data-opcion="comparar" onclick="seleccionarOpcionSlide('comparar','curso')">COMPARAR</button>
+                            <button class="slide-opcion" id="slide-pdf-curso" onclick="exportarAPDF()">GENERAR PDF</button>
                         </div>
                         <button class="btn-slide-trigger" id="trigger-curso" onclick="toggleSlidePanel('curso')">‹</button>
                     </div>
@@ -145,7 +141,6 @@
             <div id="workspace-calendar-header" class="workspace-header" style="display: none;">
                 <h2 id="calendar-title" class="tech-title-center"></h2>
                 <div id="preceptor-info-container" class="preceptor-info-container"></div>
-                <button id="export-pdf-btn" class="tech-btn-pdf" onclick="exportarAPDF()">GENERAR PDF</button>
             </div>
 
             <main class="tech-workspace">
@@ -169,7 +164,7 @@
     <div id="calendar-tooltip" class="calendar-tooltip"></div>
     
     <footer>
-        <p>Hecho por Calei | <a href="https://github.com/caleiIGDS/AppMitre" target="_blank">Repositorio en GitHub</a></p>
+        <p>Programa hecho por Calei | <a href="https://github.com/caleiIGDS/AppMitre" target="_blank">Repositorio en GitHub</a></p>
     </footer>
 
     <script>
