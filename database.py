@@ -363,11 +363,11 @@ def obtener_preceptores_por_curso(curso_raw, division_raw):
 
     con.close()
 
-    manana = turno_map.get("MAÑANA", "")
-    tarde  = turno_map.get("TARDE", "")
-    noche  = turno_map.get("VESPERTINO", "")
+    manana     = turno_map.get("MAÑANA", "")
+    tarde      = turno_map.get("TARDE", "")
+    vespertino = turno_map.get("VESPERTINO", "")
 
-    if not any([manana, tarde, noche]):
+    if not any([manana, tarde, vespertino]):
         return None
 
     return {
@@ -375,7 +375,7 @@ def obtener_preceptores_por_curso(curso_raw, division_raw):
         "division": div,
         "preceptores_manana": manana,
         "preceptores_tarde": tarde,
-        "preceptores_noche": noche,
+        "preceptores_vespertino": vespertino,
     }
 
 def cargar_personal_no_docente(sheet_id, gid):
@@ -463,7 +463,7 @@ def obtener_planilla_preceptores_todos():
             'division': division,
             'manana': turnos.get('MAÑANA', ''),
             'tarde': turnos.get('TARDE', ''),
-            'noche': turnos.get('VESPERTINO', '')
+            'vespertino': turnos.get('VESPERTINO', '')
         })
 
     con.close()

@@ -12,7 +12,7 @@ def obtener_filas(tipo, valor):
         con = database.conectar()
         cur = con.cursor()
         if tipo == 'profesor':
-            cur.execute("SELECT * FROM clases WHERE profesor = ?", (valor,))
+            cur.execute("SELECT * FROM clases WHERE profesor = ? OR (prof_suplente = ? AND suplente_activo = 1)", (valor, valor))
         elif tipo == 'aula':
             cur.execute("SELECT * FROM clases WHERE aula = ?", (valor,))
         elif tipo == 'curso':
@@ -207,7 +207,7 @@ def export_pdf(tipo, valor):
                 slots = [
                     ("T.M:", data["preceptores_manana"]),
                     ("T.T:", data["preceptores_tarde"]),
-                    ("T.N:", data["preceptores_noche"]),
+                    ("T.V:", data["preceptores_vespertino"]),
                 ]
 
                 ancho_util = 267
@@ -474,10 +474,13 @@ def export_pdf(tipo, valor):
 @app.route('/api/preceptor/<valor>')
 def api_preceptor(valor):
     try:
-        partes = valor.replace('°', '').strip().split(' ')
+        partes = valor.strip().split(' ', 1)
         curso = partes[0]
-        division = partes[1] if len(partes) > 1 else ""
-        return jsonify(database.obtener_preceptores_por_curso(curso, division))
+        division = partes[1].strip() if len(partes) > 1 else ""
+        data = database.obtener_preceptores_por_curso(curso, division)
+        if data:
+            data['turno'] = TURNO_CURSOS.get((str(curso), str(division)), TURNO_DEFAULT)
+        return jsonify(data)
     except Exception as e:
         print(f"Error preceptor: {e}")
         return jsonify(None)
@@ -531,33 +534,34 @@ def export_pdf_planilla_preceptores():
     for f in filas:
         f['turno'] = TURNO_CURSOS.get((str(f['curso']), str(f['division'])), TURNO_DEFAULT)
 
-    pdf = PDF(orientation='P', unit='mm', format='A4')
+    pdf = PDF(orientation='P', unit='mm', format='LETTER')
     pdf.add_font('RobotoMono', '', 'static/fonts/RobotoMono-Regular.ttf')
     pdf.add_font('RobotoMono', 'B', 'static/fonts/RobotoMono-Bold.ttf')
     pdf.add_page()
 
-    margin = 8
-    pdf.set_font('RobotoMono', '', 7)
+    margin = 5
+    pdf.set_font('RobotoMono', '', 8)
     pdf.set_text_color(120, 120, 120)
-    pdf.set_xy(margin, 5)
+    pdf.set_xy(margin, 3)
     pdf.cell(0, 5, datetime.now().strftime("%d/%m/%Y"), 0, 0, 'L')
 
-    pdf.set_font('RobotoMono', 'B', 13)
+    pdf.set_font('RobotoMono', 'B', 15)
     pdf.set_text_color(0, 0, 0)
-    pdf.set_xy(margin, 9)
-    pdf.cell(0, 8, 'Planilla de Preceptores', 0, 1, 'C')
+    pdf.set_xy(margin, 8)
+    pdf.cell(0, 9, 'Planilla de Preceptores', 0, 1, 'C')
     pdf.ln(2)
 
     abrev = {'MAÑANA': 'M', 'TARDE': 'T', 'VESPERTINO': 'V'}
-    # ancho útil portrait: 210 - 2*8 = 194mm; curso+division unidas
-    col_w = [28, 13, 51, 51, 51]
+    # ancho útil carta portrait: 215.9 - 2*5 = 205.9mm
+    col_w = [32, 13, 53, 53, 54]
     headers = ['CURSO', 'TURNO', 'MAÑANA', 'TARDE', 'VESPERTINO']
-    header_h = 6
-    # datos arrancan en y=25 (title 9+8=17, ln2=19, header=6 → 25)
-    # llenar hasta 297-8=289 → alto disponible = 264mm
-    row_h = (297 - margin - 25) / len(filas) if filas else 4.0
+    header_h = 7
+    # title area ≈ 3+5+8+9+2 = 27mm; header = 7mm → datos desde y≈34
+    # llenar hasta 279.4-5 = 274.4 → alto disponible = 274.4 - 34 = 240.4mm
+    row_h = (279.4 - margin - 34) / len(filas) if filas else 5.0
+    font_size = max(6, min(9, int(row_h * 2.0)))
 
-    pdf.set_font('RobotoMono', 'B', 7)
+    pdf.set_font('RobotoMono', 'B', font_size + 1)
     pdf.set_fill_color(220, 230, 245)
     pdf.set_text_color(26, 54, 93)
     pdf.set_x(margin)
@@ -565,26 +569,31 @@ def export_pdf_planilla_preceptores():
         pdf.cell(col_w[i], header_h, h, 1, 0, 'C', True)
     pdf.ln()
 
-    pdf.set_text_color(0, 0, 0)
     for idx, f in enumerate(filas):
         turno_raw = (f.get('turno') or '').upper()
         turno_abrev = abrev.get(turno_raw, turno_raw)
-        fill = idx % 2 == 0
-        pdf.set_fill_color(245, 248, 252) if fill else pdf.set_fill_color(255, 255, 255)
+        row_fill = idx % 2 == 0
         row = [
             f"{f['curso']}° {f['division']}",
             turno_abrev,
             f.get('manana') or '',
             f.get('tarde') or '',
-            f.get('noche') or '',
+            f.get('vespertino') or '',
         ]
         pdf.set_x(margin)
         for i, val in enumerate(row):
             is_active = (i == 2 and turno_raw == 'MAÑANA') or \
                         (i == 3 and turno_raw == 'TARDE') or \
                         (i == 4 and turno_raw == 'VESPERTINO')
-            pdf.set_font('RobotoMono', 'B' if is_active else '', 6)
-            pdf.cell(col_w[i], row_h, val, 1, 0, 'C', fill)
+            if is_active:
+                pdf.set_fill_color(245, 248, 252) if row_fill else pdf.set_fill_color(255, 255, 255)
+                pdf.set_text_color(26, 54, 93)
+                pdf.set_font('RobotoMono', 'B', font_size + 1)
+            else:
+                pdf.set_fill_color(245, 248, 252) if row_fill else pdf.set_fill_color(255, 255, 255)
+                pdf.set_text_color(100, 100, 100)
+                pdf.set_font('RobotoMono', '', font_size)
+            pdf.cell(col_w[i], row_h, val, 1, 0, 'C', row_fill)
         pdf.ln()
 
     output = io.BytesIO()

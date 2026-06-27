@@ -82,7 +82,9 @@ WHERE curso = ? AND UPPER(division) = ?
 GROUP BY turno
 ```
 
-Devuelve `{curso, division, preceptores_manana, preceptores_tarde, preceptores_noche}` o `null`. Se llama automáticamente después de una búsqueda por curso para mostrar el info de preceptores en el header del calendario.
+Devuelve `{curso, division, preceptores_manana, preceptores_tarde, preceptores_vespertino, turno}` o `null`. El campo `turno` ("MAÑANA"/"TARDE"/"VESPERTINO") se agrega en la ruta desde `TURNO_CURSOS`. Se llama automáticamente después de una búsqueda por curso para mostrar el info de preceptores en el header del calendario.
+
+**Parsing del valor**: usa `split(' ', 1)` para soportar divisiones multi-parte (ej: "6 4° C" → curso='6', division='4° C'). No eliminar el símbolo `°` porque es parte de la clave en `TURNO_CURSOS` y en la DB.
 
 ### `horario_preceptor` (`/api/horario_preceptor/<nombre>`)
 
@@ -197,13 +199,7 @@ for f in filas:
     f['turno'] = TURNO_CURSOS.get((str(f['curso']), str(f['division'])), TURNO_DEFAULT)
 ```
 
-`TURNO_CURSOS` en `config.py` está actualmente vacío `{}`. Todos los cursos reciben `TURNO_DEFAULT = "MAÑANA"`. Para configurar turnos por curso habría que poblarlo:
-```python
-TURNO_CURSOS = {
-    ("1", "A"): "MAÑANA",
-    ("5", "A"): "TARDE",
-}
-```
+`TURNO_CURSOS` en `config.py` está poblado con todos los cursos de 1° a 7°. Los valores posibles son `"MAÑANA"`, `"TARDE"`, `"VESPERTINO"`. Los cursos de 6° y 7° son mayormente vespertinos. La planilla JSON devuelve `{curso, division, turno, manana, tarde, vespertino}` — **el campo es `vespertino`, no `noche`**.
 
 ---
 

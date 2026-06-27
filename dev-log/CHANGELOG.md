@@ -4,6 +4,19 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-06-27] — Renombrado noche→vespertino + fix parsing preceptor + PDF carta
+
+**Tipo**: fix de contrato + bugfix  
+**Archivos**: `database.py`, `app.py`, `static/js/script.js`
+
+- Campo `preceptores_noche` renombrado a `preceptores_vespertino` en DB, API y JS. Etiqueta `T.N:` → `T.V:`.
+- `obtener_planilla_preceptores_todos()` ahora devuelve `vespertino` en vez de `noche`.
+- `api_preceptor` corregido: parsing cambiado a `split(' ', 1)` para no romper divisiones multi-parte ("6 4° C"); ahora incluye campo `turno` en el response.
+- `renderizarPreceptor` en JS: mapping actualizado a nombres completos ("MAÑANA"/"TARDE"/"VESPERTINO"); ahora identifica correctamente el preceptor principal del turno.
+- PDF planilla preceptores: cambiado a formato carta (LETTER), texto escalable, márgenes reducidos a 5mm.
+
+---
+
 ## [2026-06-25] — Baseline inicial de documentación
 
 **Tipo**: baseline  

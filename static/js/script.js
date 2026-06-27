@@ -316,7 +316,7 @@ function generarCalendarioComparacion(items) {
                     } else { break; }
                 }
 
-                const sinLicenciadas = cluster.filter(c => c[16] != 1);
+                const sinLicenciadas = cluster.filter(c => !(c[16] == 1 && c[5] === currentSearch.valor));
                 const clusterFinal = cluster.length > 1 && sinLicenciadas.length > 0 ? sinLicenciadas : cluster;
 
                 const todosTienenGrupo = clusterFinal.every(c => c[14] && c[14].trim() !== "");
@@ -924,17 +924,23 @@ function renderizarPlanillaCursos(filas) {
         return;
     }
     const abrev = { 'MAÑANA': 'M', 'TARDE': 'T', 'VESPERTINO': 'V' };
-    const rows = filas.map(f => `<tr>
+    const rows = filas.map(f => {
+        const turno = (f.turno || '').toUpperCase();
+        const tm = f.manana || '';
+        const tt = f.tarde  || '';
+        const tv = f.vespertino  || '';
+        return `<tr>
         <td>${f.curso}° ${f.division}</td>
-        <td>${f.turno ? (abrev[f.turno.toUpperCase()] || f.turno) : ''}</td>
-        <td>${f.manana || ''}</td>
-        <td>${f.tarde || ''}</td>
-        <td>${f.noche || ''}</td>
-    </tr>`).join('');
+        <td>${abrev[turno] || f.turno || ''}</td>
+        <td>${turno === 'MAÑANA'     ? `<strong>${tm}</strong>` : tm}</td>
+        <td>${turno === 'TARDE'      ? `<strong>${tt}</strong>` : tt}</td>
+        <td>${turno === 'VESPERTINO' ? `<strong>${tv}</strong>` : tv}</td>
+    </tr>`;
+    }).join('');
     lista.innerHTML = `
         <table style="width:100%;table-layout:auto;">
             <thead><tr>
-                <th>CURSO Y DIVISIÓN</th><th>TURNO</th><th>TM</th><th>TT</th><th>TV</th>
+                <th>CURSO Y DIVISIÓN</th><th>TURNO</th><th>MAÑANA</th><th>TARDE</th><th>VESPERTINO</th>
             </tr></thead>
             <tbody>${rows}</tbody>
         </table>`;
@@ -1020,28 +1026,19 @@ function renderizarPreceptor(data) {
     const labels = {
         "preceptores_manana": "T.M:",
         "preceptores_tarde": "T.T:",
-        "preceptores_noche": "T.N:"
+        "preceptores_vespertino": "T.V:"
     };
-    
-    // Mapeo del turno del curso a la columna de la DB
+
     const turnoCurso = (data.turno || "").trim().toUpperCase();
     const mapping = {
-        "T.M": "preceptores_manana",
-        "T.T": "preceptores_tarde",
-        "T.N": "preceptores_noche",
-        "T.V": "preceptores_noche"
+        "MAÑANA": "preceptores_manana",
+        "TARDE": "preceptores_tarde",
+        "VESPERTINO": "preceptores_vespertino"
     };
-
-    let keyPrincipal = null;
-    for (let k in mapping) {
-        if (turnoCurso.startsWith(k)) {
-            keyPrincipal = mapping[k];
-            break;
-        }
-    }
+    const keyPrincipal = mapping[turnoCurso] || null;
 
     let html = "";
-    ["preceptores_manana", "preceptores_tarde", "preceptores_noche"].forEach(key => {
+    ["preceptores_manana", "preceptores_tarde", "preceptores_vespertino"].forEach(key => {
         if (data[key] && data[key].trim() !== "") {
             const esPrincipal = (key === keyPrincipal);
             const label = esPrincipal ? "PRECEPTOR PRINCIPAL" : "Preceptor";
@@ -1187,7 +1184,7 @@ function generarCalendario(filas, modo) {
                     } else { break; }
                 }
 
-                const sinLicenciadas = cluster.filter(c => c[16] != 1);
+                const sinLicenciadas = cluster.filter(c => !(c[16] == 1 && c[5] === currentSearch.valor));
                 const clusterFinal = cluster.length > 1 && sinLicenciadas.length > 0 ? sinLicenciadas : cluster;
 
                 const todosTienenGrupo = clusterFinal.every(c => c[14] && c[14].trim() !== "");
@@ -1207,10 +1204,11 @@ function generarCalendario(filas, modo) {
                             const styleExtra = estilos[idxInCluster];
                             const esPersonal = clase[20] === 'personal';
 
+                            const esLicenciadaProf = modo === 'profesor' && clase[16] === 1 && clase[5] === currentSearch.valor;
                             const jsonClase = encodeURIComponent(JSON.stringify(clase));
                             html += `
                                 <div class="materia-bloque${esPersonal ? ' personal-cargo-bloque' : ''}"
-                                     style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:#FDE8D0; border-left:3px solid #FF6B00; color:#1A365D;' : ''}"
+                                     style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:#FDE8D0; border-left:3px solid #FF6B00; color:#1A365D;' : (esLicenciadaProf ? ' opacity:0.28;' : '')}"
                                      onclick="mostrarInfoClase('${jsonClase}', this)"
                                      onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '-', '${inicio} - ${fin}', '-')"
                                      onmouseout="hideTooltip()">
@@ -1218,15 +1216,13 @@ function generarCalendario(filas, modo) {
                                         ${esPersonal ?
                                             `<div class="materia-nombre" style="color:#1A365D;">${clase[3]}</div>
                                              <div class="materia-detalles">${inicio} - ${fin}</div>` :
-                                            (modo === 'profesor' && clase[16] === 1 ?
-                                            `<div class="materia-nombre" style="color:var(--alert); font-weight:bold; display:flex; align-items:center; justify-content:center; height:100%;">LICENCIADA</div>` :
                                             `<div class="materia-nombre">${clase[3]}</div>
                                              <div class="materia-detalles">
                                                 ${(() => {
                                                     const profName = (clase[16] === 1 && clase[17]) ? 'SUPLENTE: ' + clase[17] : (clase[5] || '-');
                                                     return modo === 'aula' ? profName : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : profName);
                                                 })()}
-                                             </div>`)
+                                             </div>`
                                         }
                                     </div>
                                     ${esPersonal ? '' : `<div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>`}
@@ -1252,10 +1248,11 @@ function generarCalendario(filas, modo) {
                         const alto = Math.max(bottom - top, 20);
                         const styleExtra = estilos[idxInCluster];
                         const esPersonal = clase[20] === 'personal';
+                        const esLicenciadaProf = modo === 'profesor' && clase[16] === 1 && clase[5] === currentSearch.valor;
                         const jsonClase = encodeURIComponent(JSON.stringify(clase));
                         html += `
                             <div class="materia-bloque${esPersonal ? ' personal-cargo-bloque' : ''}"
-                                 style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:#FDE8D0; border-left:3px solid #FF6B00; color:#1A365D;' : ''}"
+                                 style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:#FDE8D0; border-left:3px solid #FF6B00; color:#1A365D;' : (esLicenciadaProf ? ' opacity:0.28;' : '')}"
                                  onclick="mostrarInfoClase('${jsonClase}', this)"
                                  onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '-', '${inicio} - ${fin}', '-')"
                                  onmouseout="hideTooltip()">
@@ -1263,15 +1260,13 @@ function generarCalendario(filas, modo) {
                                     ${esPersonal ?
                                         `<div class="materia-nombre" style="color:#1A365D;">${clase[3]}</div>
                                          <div class="materia-detalles">${inicio} - ${fin}</div>` :
-                                        (modo === 'profesor' && clase[16] === 1 ?
-                                        `<div class="materia-nombre" style="color:var(--alert); font-weight:bold; display:flex; align-items:center; justify-content:center; height:100%;">LICENCIADA</div>` :
                                         `<div class="materia-nombre">${clase[3]}</div>
                                          <div class="materia-detalles">
                                             ${(() => {
                                                 const profName = (clase[16] === 1 && clase[17]) ? 'SUPLENTE: ' + clase[17] : (clase[5] || '-');
                                                 return modo === 'aula' ? profName : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : profName);
                                             })()}
-                                         </div>`)
+                                         </div>`
                                     }
                                 </div>
                                 ${esPersonal ? '' : `<div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>`}
