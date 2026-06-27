@@ -54,6 +54,76 @@ FLOOR_MAPPING = {
 # Turno por defecto para todos los cursos cuando no hay datos en la DB
 TURNO_DEFAULT = "MAÑANA"
 
-# Overrides específicos por curso/division (sobreescribe TURNO_DEFAULT y la DB)
-# Formato: { ("curso_num", "division"): "MAÑANA" | "TARDE" | "VESPERTINO" }
-TURNO_CURSOS = {}
+# Turno por curso/división — clave: (str(curso), str(division)) tal como viene de la DB
+# Valores posibles: "MAÑANA" | "TARDE" | "VESPERTINO"
+TURNO_CURSOS = {
+    # 1° Año
+    ("1", "A"): "MAÑANA",
+    ("1", "B"): "MAÑANA",
+    ("1", "C"): "MAÑANA",
+    ("1", "D"): "MAÑANA",
+    ("1", "E"): "TARDE",
+    ("1", "F"): "TARDE",
+    ("1", "G"): "TARDE",
+    ("1", "H"): "TARDE",
+    ("1", "I"): "MAÑANA",
+    ("1", "J"): "MAÑANA",
+    ("1", "K"): "TARDE",
+    # 2° Año
+    ("2", "A"): "MAÑANA",
+    ("2", "B"): "MAÑANA",
+    ("2", "C"): "MAÑANA",
+    ("2", "D"): "MAÑANA",
+    ("2", "E"): "TARDE",
+    ("2", "F"): "TARDE",
+    ("2", "G"): "TARDE",
+    ("2", "H"): "TARDE",
+    ("2", "I"): "MAÑANA",
+    ("2", "J"): "MAÑANA",
+    # 3° Año
+    ("3", "A"): "MAÑANA",
+    ("3", "B"): "MAÑANA",
+    ("3", "C"): "TARDE",
+    ("3", "D"): "TARDE",
+    ("3", "E"): "TARDE",
+    ("3", "F"): "MAÑANA",
+    ("3", "G"): "MAÑANA",
+    ("3", "H"): "MAÑANA",
+    ("3", "I"): "MAÑANA",
+    ("3", "K"): "TARDE",
+    # 4° Año
+    ("4", "1°E"): "MAÑANA",
+    ("4", "2°E"): "MAÑANA",
+    ("4", "3°E"): "TARDE",
+    ("4", "4°E"): "MAÑANA",
+    ("4", "5°C"): "MAÑANA",
+    ("4", "6°C"): "TARDE",
+    ("4", "7°C"): "TARDE",
+    ("4", "8°R"): "TARDE",
+    ("4", "9°R"): "TARDE",
+    # 5° Año
+    ("5", "1°E"): "MAÑANA",
+    ("5", "2°E"): "TARDE",
+    ("5", "3°C"): "MAÑANA",
+    ("5", "4°C"): "TARDE",
+    ("5", "5°R"): "TARDE",
+    ("5", "6°E"): "TARDE",
+    ("5", "7 C"): "TARDE",
+    ("5", "8ºR"): "TARDE",
+    # 6° Año
+    ("6", "1° E"): "TARDE",
+    ("6", "2° E"): "TARDE",
+    ("6", "3° C"): "TARDE",
+    ("6", "4° C"): "VESPERTINO",
+    ("6", "5° R"): "VESPERTINO",
+    ("6", "6ºE"): "VESPERTINO",
+    ("6", "7ºC"): "VESPERTINO",
+    ("6", "8ºR"): "VESPERTINO",
+    # 7° Año
+    ("7", "1° E"): "VESPERTINO",
+    ("7", "2°C"): "VESPERTINO",
+    ("7", "3° E"): "VESPERTINO",
+    ("7", "4° R"): "VESPERTINO",
+    ("7", "5ºC"): "VESPERTINO",
+    ("7", "6ºE"): "VESPERTINO",
+}

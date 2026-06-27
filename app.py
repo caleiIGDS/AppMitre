@@ -525,6 +525,63 @@ def api_planilla_preceptores():
         f['turno'] = TURNO_CURSOS.get((str(f['curso']), str(f['division'])), TURNO_DEFAULT)
     return jsonify(filas)
 
+@app.route('/export/pdf/planilla_preceptores')
+def export_pdf_planilla_preceptores():
+    filas = database.obtener_planilla_preceptores_todos()
+    for f in filas:
+        f['turno'] = TURNO_CURSOS.get((str(f['curso']), str(f['division'])), TURNO_DEFAULT)
+
+    pdf = PDF(orientation='P', unit='mm', format='A4')
+    pdf.add_font('RobotoMono', '', 'static/fonts/RobotoMono-Regular.ttf')
+    pdf.add_font('RobotoMono', 'B', 'static/fonts/RobotoMono-Bold.ttf')
+    pdf.add_page()
+
+    pdf.set_font('RobotoMono', '', 8)
+    pdf.set_text_color(120, 120, 120)
+    pdf.set_xy(15, 5)
+    pdf.cell(0, 5, datetime.now().strftime("%d/%m/%Y"), 0, 0, 'L')
+
+    pdf.set_font('RobotoMono', 'B', 16)
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_xy(15, 10)
+    pdf.cell(0, 10, 'Planilla de Preceptores', 0, 1, 'C')
+    pdf.ln(3)
+
+    abrev = {'MAÑANA': 'M', 'TARDE': 'T', 'VESPERTINO': 'V'}
+    col_w = [22, 18, 18, 55, 55, 55]
+    headers = ['CURSO', 'DIV', 'TURNO', 'T.M.', 'T.T.', 'T.V.']
+
+    pdf.set_font('RobotoMono', 'B', 9)
+    pdf.set_fill_color(220, 230, 245)
+    pdf.set_text_color(26, 54, 93)
+    for i, h in enumerate(headers):
+        pdf.cell(col_w[i], 8, h, 1, 0, 'C', True)
+    pdf.ln()
+
+    pdf.set_font('RobotoMono', '', 8)
+    pdf.set_text_color(0, 0, 0)
+    for idx, f in enumerate(filas):
+        turno_raw = (f.get('turno') or '').upper()
+        turno_abrev = abrev.get(turno_raw, turno_raw)
+        fill = idx % 2 == 0
+        pdf.set_fill_color(245, 248, 252) if fill else pdf.set_fill_color(255, 255, 255)
+        row = [
+            f"{f['curso']}°",
+            f['division'],
+            turno_abrev,
+            f.get('manana') or '',
+            f.get('tarde') or '',
+            f.get('noche') or '',
+        ]
+        for i, val in enumerate(row):
+            pdf.cell(col_w[i], 7, val, 1, 0, 'C', fill)
+        pdf.ln()
+
+    output = io.BytesIO()
+    output.write(pdf.output())
+    output.seek(0)
+    return send_file(output, mimetype='application/pdf', as_attachment=False, download_name='planilla_preceptores.pdf')
+
 if __name__ == '__main__':
     database.init_tablas()
     if not database.tiene_datos():

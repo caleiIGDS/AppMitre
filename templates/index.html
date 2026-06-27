@@ -32,9 +32,16 @@
 
             <section class="tech-search-module">
                 <div id="tab-horario_preceptor" class="seccion-busqueda">
-                    <div class="tech-field">
-                        <input type="text" class="tech-input" placeholder="INGRESE PRECEPTOR..." oninput="filtrarOpciones(this, 'horario_preceptor')">
-                        <div id="dropdown-horario_preceptor" class="tech-dropdown"></div>
+                    <div class="tech-field-group">
+                        <div class="tech-field">
+                            <input type="text" class="tech-input" placeholder="INGRESE PRECEPTOR..." oninput="filtrarOpciones(this, 'horario_preceptor')">
+                            <div id="dropdown-horario_preceptor" class="tech-dropdown"></div>
+                        </div>
+                        <div class="opciones-chips" id="chips-horario_preceptor"></div>
+                        <div class="slide-panel" id="slide-horario_preceptor">
+                            <button class="slide-opcion" onclick="exportarPlanillaPreceptoresPDF()">IMPRIMIR TODOS</button>
+                        </div>
+                        <button class="btn-slide-trigger" id="trigger-horario_preceptor" onclick="toggleSlidePanel('horario_preceptor')">‹</button>
                     </div>
                 </div>
                 <div id="tab-profesor" class="seccion-busqueda">

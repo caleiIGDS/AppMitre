@@ -1317,6 +1317,10 @@ function exportarAPDF() {
     }
 }
 
+function exportarPlanillaPreceptoresPDF() {
+    window.open('/export/pdf/planilla_preceptores', '_blank');
+}
+
 document.addEventListener('fullscreenchange', () => {
     if (document.fullscreenElement) {
         document.body.classList.add('is-fullscreen');
