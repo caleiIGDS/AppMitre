@@ -54,6 +54,12 @@
 - [ ] #14 — `DOCUMENTACION_DETALLADA.md` desactualizada — root  
   Menciona `corregir_horarios()` que ya no existe. Considerar fusionarla con los `agent_docs/` o eliminarla para evitar documentación contradictoria.
 
+- [ ] #16 — Título del calendario no se ve al generarse — `script.js` / `style.css`  
+  El título que debería aparecer encima del calendario no es visible cuando se genera el resultado.
+
+- [ ] #17 — Reducir margen entre `.tech-search-module` y el calendario — `style.css`  
+  Hay demasiado espacio visual entre el módulo de búsqueda y el calendario generado. Ajustar `margin-bottom` de `.tech-search-module` y/o `margin-top` del contenedor del calendario.
+
 ---
 
 ## Bloqueado

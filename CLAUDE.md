@@ -224,6 +224,8 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 - `dev-log/tasks/TODO.md` — backlog priorizado.
 - `dev-log/tasks/DONE.md` — solo leer si se pide explícitamente.
 
+**Agregar tarea:** Si el usuario pide agregar una tarea al backlog, editar directamente `dev-log/tasks/TODO.md` — leerlo, agregar la entrada con el siguiente número (#N+1), y actualizar la última línea `_Último número usado_`. Sin exploración previa, sin skills.
+
 ## Docs Maintenance
 
 Después de cada modificación, antes de terminar la tarea, revisá:
