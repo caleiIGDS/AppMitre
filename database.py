@@ -440,6 +440,17 @@ def obtener_lista_personal():
     return personal
 
 
+def obtener_personal_todos():
+    con = conectar()
+    cur = con.cursor()
+    cur.execute(
+        "SELECT nombre, rol, dia, hora_inicio, hora_fin FROM personal_no_docente ORDER BY nombre, dia"
+    )
+    rows = [{'nombre': r[0], 'rol': r[1], 'dia': r[2], 'hora_inicio': r[3], 'hora_fin': r[4]} for r in cur.fetchall()]
+    con.close()
+    return rows
+
+
 def obtener_planilla_preceptores_todos():
     con = conectar()
     cur = con.cursor()

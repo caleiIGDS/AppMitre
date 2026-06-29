@@ -514,6 +514,10 @@ def api_dashboard():
 def api_personal(nombre):
     return jsonify(database.obtener_personal_por_nombre(nombre))
 
+@app.route('/api/personal_todos')
+def api_personal_todos():
+    return jsonify(database.obtener_personal_todos())
+
 @app.route('/api/horario_preceptor/<nombre>')
 def api_horario_preceptor(nombre):
     """

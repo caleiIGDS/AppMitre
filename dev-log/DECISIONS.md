@@ -124,6 +124,23 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-06-29] — Búsqueda client-side desde caché en memoria + hash routing
+
+**Contexto**: Cada búsqueda (profesor/aula/curso/planilla) hacía un request al server. El dataset completo es chico (`/api/dashboard` = ~2.300 filas × 20 cols, más ~pocos cientos de filas de personal). En Render/PythonAnywhere free tier, los round-trips agregan latencia perceptible.
+
+**Decisión**: Descargar todo a memoria una sola vez al cargar la web (`cargarDatosIniciales()` → `_allClases` / `_allPersonal`) y resolver las búsquedas client-side con `filtrarClasesLocal()`, que **replica exactamente** la lógica de `obtener_filas()` de `app.py`. Se mantiene fallback a los endpoints `/api/*` si los datos aún no cargaron. En paralelo se agregó hash routing (`#/profesor/...`) para URLs compartibles.
+
+**Alternativa descartada**:
+- *Service Worker / offline real (PWA)*: descartado por complejidad (sincronización, invalidación) — el usuario eligió explícitamente "session cache". Si se refresca la página se necesita red de nuevo; suficiente para un kiosco siempre encendido.
+- *Clean URLs (`/profesor/...`) con catch-all en Flask*: descartado para no tocar el backend ni agregar superficie de routing server-side. El hash no requiere cambios en Flask.
+
+**Consecuencia**:
+- Hay **dos fuentes de verdad** para la lógica de filtrado: `obtener_filas()` (Python) y `filtrarClasesLocal()` (JS). Si una cambia, la otra debe seguirla, o el fallback de red devolverá resultados distintos a la caché.
+- El caché no se invalida tras `/api/actualizar` sin un F5 (mismo trade-off ya aceptado para `allDataCache`).
+- `horario_preceptor` y `preceptor` siguen yendo al server (tabla distinta); `horario_preceptor` se excluyó del hash routing para evitar una race en `contenedor-lista`.
+
+---
+
 ## [fecha desconocida] — `personalToFila()` para fusionar personal con clases
 
 **Contexto**: En la vista de profesor, se quieren mostrar los turnos del personal no docente (porteros, secretarias) junto con los horarios de clases en el mismo calendario.

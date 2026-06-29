@@ -14,6 +14,62 @@ let isComparacionMode = false;
 let comparacionItems = [];
 let lastFilas = null;
 
+// ─── CACHÉ DE DATOS EN MEMORIA ───────────────────────────────────────────────
+// El dataset es chico: se descarga una sola vez al cargar la web y las búsquedas
+// de profesor/aula/curso/planilla se resuelven client-side, sin más requests.
+let _allClases = null;     // todas las filas de la tabla `clases`
+let _allPersonal = null;   // todo el personal no docente
+let _datosPromise = null;  // evita descargas duplicadas
+
+function cargarDatosIniciales() {
+    if (_datosPromise) return _datosPromise;
+    _datosPromise = Promise.all([
+        fetch('/api/dashboard').then(r => r.json()),
+        fetch('/api/personal_todos').then(r => r.json()).catch(() => [])
+    ]).then(([clases, personal]) => {
+        _allClases = clases || [];
+        _allPersonal = personal || [];
+        // Reutilizar el mismo dataset para planilla general y dashboard
+        allDataCache = _allClases;
+        lastDashboardData = _allClases;
+        return { clases: _allClases, personal: _allPersonal };
+    }).catch(err => {
+        console.error("Error cargando datos iniciales:", err);
+        _datosPromise = null; // permitir reintento
+        return { clases: null, personal: [] };
+    });
+    return _datosPromise;
+}
+
+// Replica client-side la lógica de obtener_filas() de app.py.
+// Devuelve null si el modo no es cacheable o los datos aún no cargaron → fallback al server.
+function filtrarClasesLocal(modo, valor) {
+    if (!_allClases) return null;
+    switch (modo) {
+        case 'profesor':
+            return _allClases.filter(f => f[5] === valor || (f[16] == 1 && f[17] === valor));
+        case 'aula':
+            return _allClases.filter(f => String(f[9]) === String(valor));
+        case 'curso': {
+            // "1° A" → curso='1', division='A' (igual que el server: quita ° y separa por espacio)
+            const partes = valor.replace(/°/g, '').trim().split(/\s+/);
+            if (partes.length >= 2) {
+                return _allClases.filter(f => String(f[0]) === partes[0] && f[1] === partes[1]);
+            }
+            return _allClases.filter(f => String(f[0]) === partes[0]);
+        }
+        case 'planilla': {
+            if (!valor.includes('|')) return [];
+            const [dia, piso] = valor.split('|');
+            const aulas = (window.APP_DATA.floorMapping[piso] || []);
+            if (!aulas.length) return [];
+            return _allClases.filter(f => f[11] === dia && aulas.includes(String(f[9])));
+        }
+        default:
+            return null; // horario_preceptor / preceptor → tabla distinta, va al server
+    }
+}
+
 function toggleComparacion() {
     if (isComparacionMode) {
         desactivarModoComparacion();
@@ -638,6 +694,8 @@ function cambiarTab(evt, idTab) {
     // Reset views
     currentSearch.modo = null;
     currentSearch.valor = null;
+    // Limpiar el hash de la URL (buscarEnServidor lo vuelve a setear si hay búsqueda)
+    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
     document.querySelectorAll('.search-input, .search-input-fun, .minimal-input, .tech-input').forEach(input => input.value = "");
     document.querySelectorAll('.custom-dropdown, .custom-dropdown-fun, .minimal-dropdown, .tech-dropdown').forEach(d => d.style.display = 'none');
     
@@ -664,7 +722,9 @@ function cambiarTab(evt, idTab) {
         document.getElementById('contenedor-dashboard').style.display = 'block';
         iniciarDashboard();
     } else if (idTab === 'tab-horario_preceptor') {
-        mostrarPlanillaCursos();
+        // En deep-link (navegación programática) no cargamos la planilla:
+        // buscarEnServidor renderiza directo la tabla del preceptor (evita race en contenedor-lista)
+        if (!window.isProgrammaticNavigation) mostrarPlanillaCursos();
     } else {
         // Focus the input inside the active tab ONLY if not navigating from modal
         if (!window.isProgrammaticNavigation) {
@@ -836,6 +896,11 @@ function buscarEnServidor(modo, valor) {
     currentSearch.modo = modo;
     currentSearch.valor = valor;
 
+    // Hash routing: hacer la búsqueda compartible vía URL (solo búsquedas individuales)
+    if (!isComparacionMode && ['profesor', 'curso', 'aula', 'horario_preceptor'].includes(modo)) {
+        history.replaceState(null, '', '#/' + modo + '/' + encodeURIComponent(valor));
+    }
+
     if (!isComparacionMode && workspaceHeader && calendarTitle) {
         workspaceHeader.style.display = 'flex';
         calendarTitle.textContent = `Horario de ${modo.replace('_', ' ')}: ${valor}`;
@@ -846,21 +911,29 @@ function buscarEnServidor(modo, valor) {
     const _lista = document.getElementById('contenedor-lista');
     if (_lista) _lista.innerHTML = '';
 
+    // ── Camino rápido: resolver desde la caché en memoria, sin red ──
+    const filasLocal = filtrarClasesLocal(modo, valor);
+    if (filasLocal !== null) {
+        let filas = filasLocal;
+        if (modo === 'profesor' && !isComparacionMode) {
+            const filasPersonal = (_allPersonal || [])
+                .filter(p => p.nombre === valor)
+                .map(p => personalToFila(p));
+            filas = [...filas, ...filasPersonal];
+        }
+        procesarResultadoBusqueda(modo, valor, filas);
+        return;
+    }
+
+    // ── Fallback a red (datos aún no cargados, o modos no cacheables como preceptor) ──
     if (modo === 'profesor' && !isComparacionMode) {
         Promise.all([
             fetch(`/api/profesor/${valor}`).then(r => r.json()),
             fetch(`/api/personal/${encodeURIComponent(valor)}`).then(r => r.json())
         ]).then(([filasClases, filasPersonal]) => {
             const filasConvertidas = (filasPersonal || []).map(p => personalToFila(p));
-            const todasLasFilas = [...filasClases, ...filasConvertidas];
-            lastFilas = todasLasFilas;
-            generarCalendario(todasLasFilas, modo);
-        }).catch(err => {
-            console.error("Error API:", err);
-            const c = document.getElementById('contenedor-calendario');
-            c.innerHTML = `<div style="padding:40px; text-align:center; color:#c0392b;"><strong>Error al buscar el horario.</strong><br>Es posible que los datos estén actualizándose. Intentá de nuevo en unos segundos.</div>`;
-            c.style.display = 'block';
-        });
+            procesarResultadoBusqueda(modo, valor, [...filasClases, ...filasConvertidas]);
+        }).catch(mostrarErrorBusqueda);
         return;
     }
 
@@ -868,40 +941,44 @@ function buscarEnServidor(modo, valor) {
 
     fetch(endpoint)
         .then(res => res.json())
-        .then(filas => {
-            if (isComparacionMode) {
-                // Verificar si ya está en la comparación
-                const yaExiste = comparacionItems.find(i => i.modo === modo && i.valor === valor);
-                if (yaExiste) {
-                    alert(`"${valor}" ya está en la comparación.`);
-                    return;
-                }
-                const color = COMPARACION_COLORS[comparacionItems.length % COMPARACION_COLORS.length];
-                comparacionItems.push({ modo, valor, filas, color, label: valor });
-                actualizarEstadoComparacion();
-                generarCalendarioComparacion(comparacionItems);
-            } else {
-                lastFilas = filas;
-                if (modo === 'horario_preceptor') {
-                    renderizarTablaPreceptor(filas);
-                } else {
-                    generarCalendario(filas, modo);
-                    if (modo === 'curso') {
-                        fetch(`/api/preceptor/${valor}`)
-                            .then(r => r.json())
-                            .then(preceptorData => {
-                                if (preceptorData) renderizarPreceptor(preceptorData);
-                            });
-                    }
-                }
+        .then(filas => procesarResultadoBusqueda(modo, valor, filas))
+        .catch(mostrarErrorBusqueda);
+}
+
+// Renderiza el resultado de una búsqueda, ya venga de la caché o de la red.
+function procesarResultadoBusqueda(modo, valor, filas) {
+    if (isComparacionMode) {
+        const yaExiste = comparacionItems.find(i => i.modo === modo && i.valor === valor);
+        if (yaExiste) {
+            alert(`"${valor}" ya está en la comparación.`);
+            return;
+        }
+        const color = COMPARACION_COLORS[comparacionItems.length % COMPARACION_COLORS.length];
+        comparacionItems.push({ modo, valor, filas, color, label: valor });
+        actualizarEstadoComparacion();
+        generarCalendarioComparacion(comparacionItems);
+    } else {
+        lastFilas = filas;
+        if (modo === 'horario_preceptor') {
+            renderizarTablaPreceptor(filas);
+        } else {
+            generarCalendario(filas, modo);
+            if (modo === 'curso') {
+                fetch(`/api/preceptor/${valor}`)
+                    .then(r => r.json())
+                    .then(preceptorData => {
+                        if (preceptorData) renderizarPreceptor(preceptorData);
+                    });
             }
-        })
-        .catch(err => {
-            console.error("Error API:", err);
-            const c = document.getElementById('contenedor-calendario');
-            c.innerHTML = `<div style="padding:40px; text-align:center; color:#c0392b;"><strong>Error al buscar el horario.</strong><br>Es posible que los datos estén actualizándose. Intentá de nuevo en unos segundos.</div>`;
-            c.style.display = 'block';
-        });
+        }
+    }
+}
+
+function mostrarErrorBusqueda(err) {
+    console.error("Error API:", err);
+    const c = document.getElementById('contenedor-calendario');
+    c.innerHTML = `<div style="padding:40px; text-align:center; color:#c0392b;"><strong>Error al buscar el horario.</strong><br>Es posible que los datos estén actualizándose. Intentá de nuevo en unos segundos.</div>`;
+    c.style.display = 'block';
 }
 
 function mostrarPlanillaCursos() {
@@ -1588,3 +1665,24 @@ document.addEventListener('click', (e) => {
         document.querySelectorAll('.btn-slide-trigger').forEach(b => b.classList.remove('panel-open'));
     }
 });
+
+// ─── BOOTSTRAP: descargar datos a memoria y resolver la URL inicial (hash routing) ───
+(function init() {
+    const MODOS_VALIDOS = ['profesor', 'curso', 'aula', 'horario_preceptor'];
+    cargarDatosIniciales().then(() => {
+        const hash = location.hash; // ej: "#/profesor/MACIEL%20MARTIN"
+        if (!hash.startsWith('#/')) return;
+        const parts = hash.slice(2).split('/');
+        if (parts.length < 2) return;
+        const modo = parts[0];
+        const valor = decodeURIComponent(parts.slice(1).join('/'));
+        if (!MODOS_VALIDOS.includes(modo) || !valor) return;
+
+        // Activar la tab correspondiente sin disparar el reset/focus de navegación manual
+        const tabBtn = document.querySelector(`[onclick*="cambiarTab"][onclick*="tab-${modo}"]`);
+        window.isProgrammaticNavigation = true;
+        if (tabBtn) tabBtn.click();
+        buscarEnServidor(modo, valor);
+        window.isProgrammaticNavigation = false;
+    });
+})();

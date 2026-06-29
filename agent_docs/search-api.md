@@ -4,9 +4,27 @@
 
 ---
 
+## ⚡ Resolución client-side (desde [2026-06-29])
+
+Las búsquedas de `profesor`/`aula`/`curso`/`planilla` **ya no pegan al servidor** en el caso normal. Al cargar la web, `cargarDatosIniciales()` descarga todo a memoria:
+- `GET /api/dashboard` → `_allClases` (todas las filas de `clases`, ~2.300)
+- `GET /api/personal_todos` → `_allPersonal` (todo el personal no docente)
+
+`filtrarClasesLocal(modo, valor)` en `script.js` **replica la lógica de `obtener_filas()`** (ver queries abajo) y devuelve las filas desde la caché. Si los datos aún no cargaron (`_allClases === null`) o el modo no es cacheable (`horario_preceptor`/`preceptor`), devuelve `null` y `buscarEnServidor()` hace **fallback** a los endpoints `/api/*`.
+
+⚠️ **Dos fuentes de verdad**: `obtener_filas()` (Python) y `filtrarClasesLocal()` (JS) deben mantenerse en sync. Si cambiás el parsing/filtrado de un lado, cambialo del otro. Ver `dev-log/DECISIONS.md` [2026-06-29].
+
+`buscarEnServidor()` delega el render en `procesarResultadoBusqueda(modo, valor, filas)` (compartido entre caché y red). `allDataCache` (planilla general) y `lastDashboardData` (dashboard) se inicializan desde el mismo `_allClases`.
+
+### Hash routing (URLs compartibles)
+
+Las búsquedas `profesor`/`aula`/`curso` setean `location.hash` (ej: `#/profesor/MACIEL%20MARTIN`) via `history.replaceState`. El bloque `init()` al final de `script.js` lee el hash al cargar (tras `cargarDatosIniciales()`) y dispara la búsqueda. `cambiarTab()` limpia el hash. `horario_preceptor` está **excluido** del routing (evita race con la planilla de preceptores en `contenedor-lista`).
+
+---
+
 ## Tipos de búsqueda y sus queries SQL
 
-Todos los tipos pasan por `obtener_filas(tipo, valor)` en `app.py`.
+Todos los tipos pasan por `obtener_filas(tipo, valor)` en `app.py` **cuando van al server** (fallback). En el camino normal los resuelve `filtrarClasesLocal()` con la misma lógica.
 
 ### `profesor`
 
@@ -102,7 +120,15 @@ Usa `LIKE %nombre%` (fuzzy, no exacto). El resultado se renderiza como tabla (`r
 SELECT nombre, rol, dia, hora_inicio, hora_fin
 FROM personal_no_docente WHERE nombre = ?
 ```
-Exacto. Solo se llama desde `buscarEnServidor` cuando el modo es `profesor` (en paralelo con la búsqueda de clases).
+Exacto. Solo se usa como **fallback** cuando el modo es `profesor` y los datos aún no se cachearon. En el camino normal, el personal sale de `_allPersonal` (cacheado).
+
+### `personal_todos` (`/api/personal_todos`)
+
+```sql
+SELECT nombre, rol, dia, hora_inicio, hora_fin
+FROM personal_no_docente ORDER BY nombre, dia
+```
+Devuelve **todo** el personal no docente (mismo formato de objeto que `/api/personal/<nombre>`). Se llama una vez al cargar la web desde `cargarDatosIniciales()` para poblar `_allPersonal`.
 
 ---
 
