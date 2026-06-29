@@ -521,18 +521,19 @@ def api_horario_preceptor(nombre):
     """
     return jsonify(database.obtener_horario_preceptor(nombre))
 
-@app.route('/api/planilla_preceptores')
-def api_planilla_preceptores():
+def _planilla_preceptores_con_turnos():
     filas = database.obtener_planilla_preceptores_todos()
     for f in filas:
         f['turno'] = TURNO_CURSOS.get((str(f['curso']), str(f['division'])), TURNO_DEFAULT)
-    return jsonify(filas)
+    return filas
+
+@app.route('/api/planilla_preceptores')
+def api_planilla_preceptores():
+    return jsonify(_planilla_preceptores_con_turnos())
 
 @app.route('/export/pdf/planilla_preceptores')
 def export_pdf_planilla_preceptores():
-    filas = database.obtener_planilla_preceptores_todos()
-    for f in filas:
-        f['turno'] = TURNO_CURSOS.get((str(f['curso']), str(f['division'])), TURNO_DEFAULT)
+    filas = _planilla_preceptores_con_turnos()
 
     pdf = PDF(orientation='P', unit='mm', format='LETTER')
     pdf.add_font('RobotoMono', '', 'static/fonts/RobotoMono-Regular.ttf')
