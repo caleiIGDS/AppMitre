@@ -977,12 +977,11 @@ function renderizarTablaPreceptor(filas) {
         const filasTurno = turnosEncontrados[turno];
         const diasSemana = window.APP_DATA.dias.map(d => d.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase());
         
-        // Agrupar por preceptor, curso y estado (tipo) para tener una fila por curso
         const cursosMap = {};
         filasTurno.forEach(f => {
-            const key = `${f.preceptor}|${f.curso}|${f.tipo}`;
+            const key = `${f.preceptor}|${f.curso}|${f.division}|${f.estado}`;
             if (!cursosMap[key]) {
-                cursosMap[key] = { preceptor: f.preceptor, curso: f.curso, estado: f.tipo || '-', dias: [] };
+                cursosMap[key] = { preceptor: f.preceptor, curso: f.curso, division: f.division || '', estado: f.estado || '-', dias: [] };
             }
             cursosMap[key].dias.push(f.dia.toUpperCase());
         });
@@ -1006,7 +1005,7 @@ function renderizarTablaPreceptor(filas) {
                             ${diasSemana.map(d => `
                                 <td style="padding: 10px; text-align: center; vertical-align: middle;">
                                     ${c.dias.includes(d) 
-                                        ? `<div class="preceptor-curso-item" style="margin: 0 auto;">${c.curso}</div>` 
+                                        ? `<div class="preceptor-curso-item" style="margin: 0 auto;">${c.curso}° ${c.division}</div>`
                                         : '<span style="opacity:0.3; font-style:italic;">-</span>'}
                                 </td>
                             `).join('')}

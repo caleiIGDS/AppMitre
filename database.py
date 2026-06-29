@@ -6,6 +6,7 @@ import re
 import unicodedata
 import urllib.request
 import io
+from config import TURNO_CURSOS, TURNO_DEFAULT
 
 def _cargar_nombre_mapeos():
     ruta = os.path.join(os.path.dirname(__file__), 'nombre_mapeos.json')
@@ -301,29 +302,31 @@ def cargar_horarios_preceptores(sheet_id, gid):
             con.close()
 
 def obtener_horario_preceptor(nombre_buscado):
-    """
-    Busca el horario de un preceptor por nombre y lo ordena por turno, tipo, curso y día.
-    """
     con = conectar()
     con.row_factory = sqlite3.Row
     cur = con.cursor()
     query = """
-        SELECT turno, preceptor, tipo, curso, dia 
-        FROM horarios_preceptores 
+        SELECT turno, preceptor, tipo, curso, division, dia
+        FROM horarios_preceptores
         WHERE preceptor LIKE ?
-        ORDER BY turno, tipo, curso, 
-            CASE dia 
-                WHEN 'LUNES' THEN 1 
-                WHEN 'MARTES' THEN 2 
-                WHEN 'MIERCOLES' THEN 3 
-                WHEN 'JUEVES' THEN 4 
-                WHEN 'VIERNES' THEN 5 
-                ELSE 6 
+        ORDER BY turno, tipo, curso,
+            CASE dia
+                WHEN 'LUNES' THEN 1
+                WHEN 'MARTES' THEN 2
+                WHEN 'MIERCOLES' THEN 3
+                WHEN 'JUEVES' THEN 4
+                WHEN 'VIERNES' THEN 5
+                ELSE 6
             END
     """
     cur.execute(query, (f"%{nombre_buscado}%",))
     rows = [dict(row) for row in cur.fetchall()]
     con.close()
+
+    for row in rows:
+        turno_curso = TURNO_CURSOS.get((row['curso'], row['division']), TURNO_DEFAULT)
+        row['estado'] = 'titular' if row['turno'] == turno_curso else 'contraturno'
+
     return rows
 
 def obtener_lista_preceptores_horario():
