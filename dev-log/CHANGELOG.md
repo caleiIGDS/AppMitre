@@ -4,6 +4,35 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-07-01] — Tema HUD reemplazado por Soft (friendly)
+
+**Tipo**: cambio de UI
+**Archivos**: `static/style.css`, `static/js/script.js`, `templates/index.html`
+
+- Se **eliminó el tema HUD** (bloque de variables + reglas específicas + opción del select + entradas en `TEMAS_VALIDOS`/`TEMAS_OSCUROS`).
+- Nuevo tema **`soft`** (claro/"friendly"): sans redondeada (`ui-rounded`/Segoe UI), fondo off-white cálido sin grilla, tabs/botones tipo píldora, tarjetas flotantes con sombras suaves, `--radius: 16px`, bloques del calendario redondeados. Es tema claro → **no** lleva `data-dark`.
+- `TEMAS_VALIDOS` = `blueprint`/`swiss`/`nocturno`/`soft`; `TEMAS_OSCUROS` = `nocturno`.
+- Cache-busters: `style.css` `?v=8`→`?v=9`, `script.js` `?v=10`→`?v=11`.
+
+---
+
+## [2026-07-01] — Sistema de temas + tonos (3 UIs seleccionables)
+
+**Tipo**: feature + cambio de contrato (CSS/JS)
+**Archivos**: `static/style.css`, `static/js/script.js`, `templates/index.html`
+
+- **Nuevo contrato visual**: `<body>` lleva `data-theme` (`blueprint`|`swiss`|`nocturno`|`hud`), `data-tone` (`ambar`|`terracota`|`bronce`|`teal`|`marino`|`ciruela`) y `data-dark` (flag para temas oscuros, seteado por JS). Tema+tono persistidos en `localStorage` (`appmitre-theme`, `appmitre-tone`) — primer uso de localStorage en la app.
+- **Nuevos tokens CSS**: en `:root` → `--accent` (default ámbar `#D97A34`), `--surface`, `--border`, `--muted`, `--radius`, `--font-ui`. En **`body`** (no `:root`, por resolución de `var()` en custom properties) → `--secondary` (alias de `--accent`) y `--accent-soft`. Tokens de temas oscuros: `--text`, `--panel`, `--block-bg`. El naranja `#FF6B00` fue reemplazado.
+- El font hardcodeado `'Roboto Mono', monospace` se reemplazó por `var(--font-ui)` en todo `style.css` (Swiss lo cambia a sans).
+- **Bloques personal**: el estilo inline con hex (`#FDE8D0`/`#FF6B00`/`#1A365D`) se movió del JS a la clase CSS `.personal-cargo-bloque` para que respete el tono activo.
+- Nuevas funciones JS: `applyTheme()`, `applyTone()`, `initTheme()` (llamada en `DOMContentLoaded`); `TEMAS_VALIDOS`/`TEMAS_OSCUROS`/`TONOS_VALIDOS`.
+- Selector en el header (`.theme-switcher`): `<select>` de tema + swatches de tono. Se oculta en kiosko.
+- **Fix**: `--secondary`/`--accent-soft` movidas de `:root` a `body` — en `:root` se congelaban y el selector de tono no cambiaba el acento (solo los bloques personal).
+- Temas: se descartó "Compacto" (sidebar) y se agregaron **Nocturno** (dark) y **HUD** (panel de instrumentos).
+- Cache-busters: `style.css` `?v=6`→`?v=8`, `script.js` `?v=8`→`?v=10`.
+
+---
+
 ## [2026-06-29] — Toda la data cacheada en memoria al cargar + hash routing
 
 **Tipo**: feature + cambio de contrato (frontend)

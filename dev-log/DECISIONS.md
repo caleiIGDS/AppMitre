@@ -4,6 +4,28 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-07-01] — Sistema de temas por CSS variables + tonos curados (no picker libre)
+
+**Contexto**: El usuario no soportaba el naranja `#FF6B00` (demasiado chillón) y pidió 3 UIs seleccionables manteniendo la estética técnica.
+
+**Decisión**:
+- Theming por **atributos independientes en `<body>`**: `data-theme` (4 temas: blueprint/swiss/nocturno/hud, layout+claro/oscuro) y `data-tone` (6 acentos, color). Se eligió atributo sobre clase porque `data-theme` es un enum limpio y coexiste con `is-fullscreen` sin colisión.
+- Todo el acento pasa por `--accent`; `--secondary` quedó como **alias** (`var(--accent)`) para no tocar los 36+ usos existentes.
+- El naranja base se suavizó a ámbar `#D97A34` (tono "ambar", default).
+- **Tonos curados** (6 presets sobrios) en vez de un color picker libre: el usuario pidió explícitamente nada de rojo/azul/verde clásicos ("si es azul, que sea marino").
+- Persistencia en **`localStorage`** (primer uso en la app) + script inline anti-flash al inicio de `<body>`.
+- Temas oscuros (nocturno/hud) comparten overrides vía flag `data-dark` (seteado por JS) para no duplicar las reglas de superficie.
+
+**Gotcha resuelto (bug real del selector)**: `--secondary`/`--accent-soft` deben declararse en **`body`, no en `:root`**. Un `var()` dentro de una custom property se congela en el elemento donde se declara; en `:root` no seguía al `--accent` del tono, así que el selector "solo cambiaba los bloques personal" (que usaban `var(--accent)` directo). Movidas a `body` → se re-resuelven contra el tono activo.
+
+**Iteración de scope**: el tema "Compacto" (sidebar) se descartó por pedido del usuario y se reemplazó por dos temas oscuros (Nocturno + HUD).
+
+**Alternativas descartadas**: color picker libre (riesgo estético); themes como archivos CSS separados (más peso); tema Compacto/sidebar (descartado tras review del usuario).
+
+**Consecuencia**: Reskin casi total desde variables. Dark mode requiere overrides puntuales de colores claros hardcodeados (no todo era variable). Pendiente: `COMPARACION_COLORS` en `script.js` (paleta fija, no sigue el tono). Ver `agent_docs/frontend-ui.md` → "Temas y tonos".
+
+---
+
 ## [fecha desconocida] — Vanilla JS sin framework
 
 **Contexto**: App de consulta de horarios para una escuela técnica. El desarrollador es solo uno. La app no tiene proceso de build.

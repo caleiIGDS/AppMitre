@@ -1,15 +1,30 @@
 :root {
     --primary: #1A365D;
-    --secondary: #FF6B00;
+    /* Acento: ámbar apagado — reemplaza el naranja chillón (#FF6B00). Tono base "ambar".
+       El default vive acá; los presets lo sobrescriben en body[data-tone]. */
+    --accent: #D97A34;
     --alert: #DC2626;
     --tech-bg: #F1F5F9;
     --white: #ffffff;
     --dark: #0F172A;
     --grid-color: rgba(26, 54, 93, 0.08);
+    /* Tokens semánticos (los temas los sobrescriben) */
+    --surface: #ffffff;
+    --border: #cbd5e1;
+    --muted: #70757a;
+    --radius: 0px;
+    --font-ui: 'Roboto Mono', monospace;
 }
 
+/* IMPORTANTE: --secondary y --accent-soft se declaran en `body` (NO en :root).
+   Un var() dentro de una custom property se resuelve en el elemento donde se DECLARA.
+   Como los tonos sobrescriben --accent en `body[data-tone]`, estas derivadas deben
+   estar en `body` para re-resolverse contra el --accent del tono activo. */
 body {
-    font-family: 'Roboto Mono', monospace;
+    /* Alias legacy: los ~36 usos de var(--secondary) pasan por --accent */
+    --secondary: var(--accent);
+    --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+    font-family: var(--font-ui);
     background-color: var(--tech-bg);
     color: var(--dark);
     margin: 0;
@@ -23,7 +38,7 @@ body {
 .sys-clock, 
 .tech-btn-action, 
 .hora-label {
-    font-family: 'Roboto Mono', monospace;
+    font-family: var(--font-ui);
 }
 
 .blueprint-bg {
@@ -65,7 +80,7 @@ body {
     border: 2px solid var(--secondary);
     color: var(--secondary);
     padding: 10px 20px;
-    font-family: 'Roboto Mono', monospace;
+    font-family: var(--font-ui);
     font-weight: bold;
     font-size: 14px;
     cursor: pointer;
@@ -332,6 +347,18 @@ footer a:hover {
     z-index: 20;
 }
 
+/* Bloque de cargo personal (preceptor/no docente) — estilo por clase, no inline */
+.personal-cargo-bloque {
+    background: color-mix(in srgb, var(--accent) 18%, var(--white));
+    border-left: 3px solid var(--accent);
+    color: var(--primary);
+}
+
+.personal-cargo-bloque .materia-nombre,
+.personal-cargo-bloque .materia-detalles {
+    color: var(--primary);
+}
+
 .aula-indicador {
     background-color: rgba(0,0,0,0.15);
     height: 22px;
@@ -471,7 +498,7 @@ footer a:hover {
     font-size: 10px;
     font-weight: 700;
     color: var(--secondary);
-    background: rgba(255,107,0,0.1);
+    background: var(--accent-soft);
     border: 1px solid var(--secondary);
     border-radius: 3px;
     padding: 1px 5px;
@@ -948,7 +975,7 @@ input:checked + .tech-slider:before {
     border: 2px solid var(--primary);
     color: var(--primary);
     font-size: 18px;
-    font-family: 'Roboto Mono', monospace;
+    font-family: var(--font-ui);
     cursor: pointer;
     padding: 0;
     flex-shrink: 0;
@@ -1002,7 +1029,7 @@ input:checked + .tech-slider:before {
     background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.3);
     color: white;
-    font-family: 'Roboto Mono', monospace;
+    font-family: var(--font-ui);
     font-size: 11px;
     font-weight: bold;
     padding: 6px 12px;
@@ -1031,7 +1058,7 @@ input:checked + .tech-slider:before {
     padding: 5px 10px;
     background: var(--primary);
     color: white;
-    font-family: 'Roboto Mono', monospace;
+    font-family: var(--font-ui);
     font-size: 11px;
     font-weight: bold;
     white-space: nowrap;
@@ -1084,7 +1111,7 @@ input:checked + .tech-slider:before {
 }
 
 .comp-banner-label {
-    font-family: 'Roboto Mono', monospace;
+    font-family: var(--font-ui);
     font-weight: bold;
     font-size: 13px;
     letter-spacing: 1px;
@@ -1105,7 +1132,7 @@ input:checked + .tech-slider:before {
     padding: 3px 8px 3px 10px;
     border-radius: 2px;
     color: white;
-    font-family: 'Roboto Mono', monospace;
+    font-family: var(--font-ui);
     font-size: 11px;
     font-weight: bold;
     letter-spacing: 0.5px;
@@ -1132,7 +1159,7 @@ input:checked + .tech-slider:before {
     border: 2px solid rgba(255,255,255,0.4);
     color: white;
     padding: 6px 14px;
-    font-family: 'Roboto Mono', monospace;
+    font-family: var(--font-ui);
     font-size: 12px;
     font-weight: bold;
     cursor: pointer;
@@ -1212,10 +1239,305 @@ input:checked + .tech-slider:before {
 }
 
 .comp-entity-name {
-    font-family: 'Roboto Mono', monospace;
+    font-family: var(--font-ui);
     font-size: 10px;
     font-weight: bold;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   SISTEMA DE TEMAS Y TONOS
+   Dos ejes independientes en <body>:
+     data-theme = blueprint (default) | compacto | swiss   → layout/tipografía/forma
+     data-tone  = ambar (default) | terracota | bronce | teal | marino | ciruela  → acento
+   Todo el acento pasa por --accent (y --secondary es alias). Cambiar --accent re-skinea.
+   Los tonos aplican en cualquier tema.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Presets de tono (acento) ──────────────────────────────────────────── */
+body[data-tone="ambar"]     { --accent: #D97A34; }  /* base: el naranja domado */
+body[data-tone="terracota"] { --accent: #C15F3C; }  /* variación cálida */
+body[data-tone="bronce"]    { --accent: #B8862F; }  /* variación latón/mostaza */
+body[data-tone="teal"]      { --accent: #2C7A7B; }  /* distinto, no verde clásico */
+body[data-tone="marino"]    { --accent: #3E5C8A; }  /* azul acero marino */
+body[data-tone="ciruela"]   { --accent: #8C4A63; }  /* ciruela/vino apagado */
+
+/* ─── Selector en el header ─────────────────────────────────────────────── */
+.theme-switcher {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.theme-select {
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: white;
+    font-family: var(--font-ui);
+    font-weight: bold;
+    font-size: 12px;
+    text-transform: uppercase;
+    padding: 8px 10px;
+    cursor: pointer;
+    outline: none;
+}
+
+.theme-select option {
+    color: var(--dark);
+    background: var(--white);
+}
+
+.tone-swatches {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tone-swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.4);
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.15s, border-color 0.15s;
+}
+
+.tone-swatch:hover { transform: scale(1.15); }
+
+.tone-swatch.active {
+    border-color: white;
+    box-shadow: 0 0 0 2px var(--primary), 0 0 0 3px white;
+}
+
+.tone-swatch[data-tone="ambar"]     { background: #D97A34; }
+.tone-swatch[data-tone="terracota"] { background: #C15F3C; }
+.tone-swatch[data-tone="bronce"]    { background: #B8862F; }
+.tone-swatch[data-tone="teal"]      { background: #2C7A7B; }
+.tone-swatch[data-tone="marino"]    { background: #3E5C8A; }
+.tone-swatch[data-tone="ciruela"]   { background: #8C4A63; }
+
+/* Ocultar el selector en modo kiosko */
+body.is-fullscreen .theme-switcher { display: none; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   TEMA SWISS / EDITORIAL — sans, aire, grid limpio sin clip-path
+   ════════════════════════════════════════════════════════════════════════ */
+body[data-theme="swiss"] {
+    --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --tech-bg: #ffffff;
+    --border: #e2e8f0;
+}
+
+body[data-theme="swiss"] .blueprint-bg { background-image: none; }
+body[data-theme="swiss"] .tech-container { max-width: 1120px; padding: 32px 24px; }
+body[data-theme="swiss"] .tech-header { border-bottom-width: 1px; padding: 28px 0; }
+body[data-theme="swiss"] .tech-titles h1 { font-weight: 800; letter-spacing: -0.5px; }
+body[data-theme="swiss"] .institution { letter-spacing: 2px; }
+
+/* Tabs como texto con subrayado (sin clip-path angulado) */
+body[data-theme="swiss"] .tech-tags {
+    gap: 28px;
+    border-bottom: 1px solid var(--border);
+    margin: 24px 0;
+}
+body[data-theme="swiss"] .tech-tag {
+    clip-path: none;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    padding: 8px 2px;
+}
+body[data-theme="swiss"] .tech-tag:hover {
+    background: transparent;
+    color: var(--primary);
+}
+body[data-theme="swiss"] .tech-tag.active {
+    background: transparent;
+    color: var(--primary);
+    border-bottom-color: var(--accent);
+}
+
+/* Superficies limpias, bordes finos, sombras suaves */
+body[data-theme="swiss"] .tech-search-module,
+body[data-theme="swiss"] .dashboard-column-light,
+body[data-theme="swiss"] .tech-grid-container {
+    border-width: 1px;
+    border-color: var(--border);
+}
+body[data-theme="swiss"] .modal-contenido {
+    box-shadow: 0 24px 60px rgba(0,0,0,0.28);
+    border-width: 1px;
+    border-color: var(--border);
+    border-radius: 6px;
+}
+body[data-theme="swiss"] .materia-bloque { border-radius: 4px; }
+body[data-theme="swiss"] .dashboard-column-light h2 { letter-spacing: 1px; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   TEMA OSCURO — variables (nocturno)
+   Tokens extra: --text (texto), --panel (header/inputs), --block-bg (bloques)
+   ════════════════════════════════════════════════════════════════════════ */
+body[data-theme="nocturno"] {
+    --tech-bg: #0b1220;
+    --white: #16213a;
+    --surface: #16213a;
+    --primary: #6a8fc7;        /* azul acero: legible como texto Y como fondo/borde en oscuro */
+    --border: #2b3a5a;
+    --muted: #8fa0bd;
+    --text: #dce4f2;
+    --grid-color: rgba(120,145,190,0.06);
+    --panel: #0e1730;
+    --block-bg: #274063;
+}
+
+/* ─── Base oscura compartida (body[data-dark], seteado por JS) ───────────── */
+body[data-dark] { color: var(--text); }
+
+body[data-dark] .tech-header,
+body[data-dark] footer {
+    background: var(--panel);
+}
+
+/* Superficies claras hardcodeadas → panel oscuro */
+body[data-dark] .tech-grid-container,
+body[data-dark] .tech-data-table table,
+body[data-dark] .planilla-tab-btn,
+body[data-dark] .cabecera-entidad,
+body[data-dark] .cabecera-entidad-placeholder,
+body[data-dark] .tech-dropdown {
+    background: var(--surface);
+    color: var(--text);
+}
+
+body[data-dark] .planilla-controls,
+body[data-dark] .cabecera-dia,
+body[data-dark] .cabecera-dia-grupo,
+body[data-dark] .info-card,
+body[data-dark] .class-item-light,
+body[data-dark] .tech-input,
+body[data-dark] .tech-input-sm {
+    background: var(--panel);
+    color: var(--text);
+    border-color: var(--border);
+}
+
+body[data-dark] .tech-data-table td { border-color: var(--border); }
+body[data-dark] .tech-data-table th { color: #fff; }
+body[data-dark] .materia-bloque { background: var(--block-bg); }
+body[data-dark] .info-valor,
+body[data-dark] .clickable-valor { color: var(--text); }
+body[data-dark] .class-meta-light,
+body[data-dark] .hora-label,
+body[data-dark] .info-label { color: var(--muted); }
+body[data-dark] .planilla-tab-btn:hover,
+body[data-dark] .dropdown-item:hover {
+    background: color-mix(in srgb, var(--primary) 22%, transparent);
+}
+body[data-dark] .tech-input:focus,
+body[data-dark] .tech-input-sm:focus {
+    background: color-mix(in srgb, var(--tech-bg) 55%, #000);
+}
+
+/* ─── Nocturno: suave, esquinas redondeadas ─────────────────────────────── */
+body[data-theme="nocturno"] .tech-search-module,
+body[data-theme="nocturno"] .dashboard-column-light,
+body[data-theme="nocturno"] .tech-grid-container,
+body[data-theme="nocturno"] .modal-contenido {
+    border-radius: 8px;
+}
+body[data-theme="nocturno"] .materia-bloque { border-radius: 4px; }
+body[data-theme="nocturno"] .modal-contenido { box-shadow: 0 24px 60px rgba(0,0,0,0.6); }
+
+/* ════════════════════════════════════════════════════════════════════════
+   TEMA SOFT — "friendly": claro y cálido, sans redondeada, píldoras,
+   tarjetas flotantes con sombras suaves, esquinas bien redondeadas.
+   ════════════════════════════════════════════════════════════════════════ */
+body[data-theme="soft"] {
+    --font-ui: ui-rounded, 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+    --tech-bg: #F5F2EC;        /* off-white cálido */
+    --white: #ffffff;
+    --surface: #ffffff;
+    --border: #ececec;
+    --muted: #8a8f98;
+    --radius: 16px;
+}
+
+/* Fondo limpio, sin grilla blueprint */
+body[data-theme="soft"] .blueprint-bg {
+    background-image: none;
+    background: var(--tech-bg);
+}
+body[data-theme="soft"] .tech-container { padding: 28px 24px; }
+
+/* Header suave, sin borde de acento duro */
+body[data-theme="soft"] .tech-header { border-bottom: none; }
+body[data-theme="soft"] footer { border-top: none; }
+
+/* Tabs tipo píldora (sin clip-path) */
+body[data-theme="soft"] .tech-tags { gap: 8px; margin: 20px 0; flex-wrap: wrap; }
+body[data-theme="soft"] .tech-tag {
+    clip-path: none;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid var(--border);
+    color: var(--primary);
+    padding: 9px 18px;
+    box-shadow: 0 1px 3px rgba(20,30,50,0.06);
+}
+body[data-theme="soft"] .tech-tag:hover { background: #fff; color: var(--accent); }
+body[data-theme="soft"] .tech-tag.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+/* Tarjetas flotantes: sombra suave, radio grande, borde tenue */
+body[data-theme="soft"] .tech-search-module,
+body[data-theme="soft"] .dashboard-column-light,
+body[data-theme="soft"] .tech-grid-container,
+body[data-theme="soft"] .info-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 10px 30px rgba(20,30,50,0.08);
+}
+body[data-theme="soft"] .modal-contenido {
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    box-shadow: 0 24px 60px rgba(20,30,50,0.22);
+}
+
+/* Botones e inputs redondeados */
+body[data-theme="soft"] .tech-btn-update { border-radius: 999px; }
+body[data-theme="soft"] .tech-input,
+body[data-theme="soft"] .tech-input-sm { border-radius: 12px; }
+body[data-theme="soft"] .planilla-tab-btn { border-radius: 999px; }
+
+/* Bloques del calendario redondeados */
+body[data-theme="soft"] .materia-bloque {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(20,30,50,0.12);
+}
+body[data-theme="soft"] .aula-indicador { border-radius: 0 0 12px 12px; }
+body[data-theme="soft"] .bloque-superposicion { border-radius: 12px; }
+
+/* Ítems del dashboard como tarjetitas */
+body[data-theme="soft"] .class-item-light {
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: #fff;
+}
+body[data-theme="soft"] .class-room-light { color: var(--accent); }
+
+/* Barra de estado y chips redondeados */
+body[data-theme="soft"] .tech-status-bar { border-radius: 12px; }
+body[data-theme="soft"] .rol-badge { border-radius: 999px; }
+body[data-theme="soft"] .opcion-chip,
+body[data-theme="soft"] .comp-chip { border-radius: 999px; }

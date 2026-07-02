@@ -1337,13 +1337,13 @@ function generarCalendario(filas, modo) {
                             const jsonClase = encodeURIComponent(JSON.stringify(clase));
                             html += `
                                 <div class="materia-bloque${esPersonal ? ' personal-cargo-bloque' : ''}"
-                                     style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:#FDE8D0; border-left:3px solid #FF6B00; color:#1A365D;' : (esLicenciadaProf ? ' opacity:0.28;' : '')}"
+                                     style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? '' : (esLicenciadaProf ? ' opacity:0.28;' : '')}"
                                      onclick="mostrarInfoClase('${jsonClase}', this)"
                                      onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '-', '${inicio} - ${fin}', '-')"
                                      onmouseout="hideTooltip()">
                                     <div class="materia-contenido">
                                         ${esPersonal ?
-                                            `<div class="materia-nombre" style="color:#1A365D;">${clase[3]}</div>
+                                            `<div class="materia-nombre">${clase[3]}</div>
                                              <div class="materia-detalles">${inicio} - ${fin}</div>` :
                                             `<div class="materia-nombre">${clase[3]}</div>
                                              <div class="materia-detalles">
@@ -1381,13 +1381,13 @@ function generarCalendario(filas, modo) {
                         const jsonClase = encodeURIComponent(JSON.stringify(clase));
                         html += `
                             <div class="materia-bloque${esPersonal ? ' personal-cargo-bloque' : ''}"
-                                 style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? ' background:#FDE8D0; border-left:3px solid #FF6B00; color:#1A365D;' : (esLicenciadaProf ? ' opacity:0.28;' : '')}"
+                                 style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? '' : (esLicenciadaProf ? ' opacity:0.28;' : '')}"
                                  onclick="mostrarInfoClase('${jsonClase}', this)"
                                  onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '-', '${inicio} - ${fin}', '-')"
                                  onmouseout="hideTooltip()">
                                 <div class="materia-contenido">
                                     ${esPersonal ?
-                                        `<div class="materia-nombre" style="color:#1A365D;">${clase[3]}</div>
+                                        `<div class="materia-nombre">${clase[3]}</div>
                                          <div class="materia-detalles">${inicio} - ${fin}</div>` :
                                         `<div class="materia-nombre">${clase[3]}</div>
                                          <div class="materia-detalles">
@@ -1481,7 +1481,36 @@ function generarBotonesPisos() {
     });
 }
 
+// ─── TEMAS Y TONOS ──────────────────────────────────────────────────────────
+const TEMAS_VALIDOS = ['blueprint', 'swiss', 'nocturno', 'soft'];
+const TEMAS_OSCUROS = ['nocturno'];
+const TONOS_VALIDOS = ['ambar', 'terracota', 'bronce', 'teal', 'marino', 'ciruela'];
+
+function applyTheme(nombre) {
+    if (!TEMAS_VALIDOS.includes(nombre)) nombre = 'blueprint';
+    document.body.setAttribute('data-theme', nombre);
+    document.body.toggleAttribute('data-dark', TEMAS_OSCUROS.includes(nombre));
+    localStorage.setItem('appmitre-theme', nombre);
+    const sel = document.getElementById('theme-select');
+    if (sel) sel.value = nombre;
+}
+
+function applyTone(nombre) {
+    if (!TONOS_VALIDOS.includes(nombre)) nombre = 'ambar';
+    document.body.setAttribute('data-tone', nombre);
+    localStorage.setItem('appmitre-tone', nombre);
+    document.querySelectorAll('.tone-swatch').forEach(sw => {
+        sw.classList.toggle('active', sw.dataset.tone === nombre);
+    });
+}
+
+function initTheme() {
+    applyTheme(localStorage.getItem('appmitre-theme') || 'blueprint');
+    applyTone(localStorage.getItem('appmitre-tone') || 'ambar');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
     generarBotonesPisos();
     const activeTab = document.querySelector('.seccion-busqueda.active');
     if (activeTab && activeTab.id === 'tab-envivo') {
