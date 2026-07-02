@@ -1,7 +1,7 @@
 :root {
     --primary: #1A365D;
-    /* Acento: ámbar apagado — reemplaza el naranja chillón (#FF6B00). Tono base "ambar".
-       El default vive acá; los presets lo sobrescriben en body[data-tone]. */
+    /* Acento naranja (ámbar apagado — reemplaza el naranja chillón #FF6B00).
+       Único acento de la app; --secondary es su alias. */
     --accent: #D97A34;
     --alert: #DC2626;
     --tech-bg: #F1F5F9;
@@ -16,10 +16,7 @@
     --font-ui: 'Roboto Mono', monospace;
 }
 
-/* IMPORTANTE: --secondary y --accent-soft se declaran en `body` (NO en :root).
-   Un var() dentro de una custom property se resuelve en el elemento donde se DECLARA.
-   Como los tonos sobrescriben --accent en `body[data-tone]`, estas derivadas deben
-   estar en `body` para re-resolverse contra el --accent del tono activo. */
+/* --secondary y --accent-soft son derivadas de --accent, declaradas en `body`. */
 body {
     /* Alias legacy: los ~36 usos de var(--secondary) pasan por --accent */
     --secondary: var(--accent);
@@ -1248,137 +1245,40 @@ input:checked + .tech-slider:before {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   SISTEMA DE TEMAS Y TONOS
-   Dos ejes independientes en <body>:
-     data-theme = blueprint (default) | compacto | swiss   → layout/tipografía/forma
-     data-tone  = ambar (default) | terracota | bronce | teal | marino | ciruela  → acento
-   Todo el acento pasa por --accent (y --secondary es alias). Cambiar --accent re-skinea.
-   Los tonos aplican en cualquier tema.
+   SISTEMA DE TEMA — blueprint (claro, default) ↔ nocturno (oscuro)
+   Un solo eje en <body>: data-theme. El botón 🌙/☀ del header lo togglea.
+   El acento naranja vive en --accent (:root) y --secondary es su alias.
    ════════════════════════════════════════════════════════════════════════ */
 
-/* ─── Presets de tono (acento) ──────────────────────────────────────────── */
-body[data-tone="ambar"]     { --accent: #D97A34; }  /* base: el naranja domado */
-body[data-tone="terracota"] { --accent: #C15F3C; }  /* variación cálida */
-body[data-tone="bronce"]    { --accent: #B8862F; }  /* variación latón/mostaza */
-body[data-tone="teal"]      { --accent: #2C7A7B; }  /* distinto, no verde clásico */
-body[data-tone="marino"]    { --accent: #3E5C8A; }  /* azul acero marino */
-body[data-tone="ciruela"]   { --accent: #8C4A63; }  /* ciruela/vino apagado */
-
-/* ─── Selector en el header ─────────────────────────────────────────────── */
-.theme-switcher {
+/* ─── Acciones del header (botón tema + actualizar) ─────────────────────── */
+.header-actions {
     display: flex;
     align-items: center;
     gap: 14px;
     flex-wrap: wrap;
 }
 
-.theme-select {
+.tech-btn-tema {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
     background: transparent;
     border: 2px solid var(--accent);
-    color: white;
-    font-family: var(--font-ui);
-    font-weight: bold;
-    font-size: 12px;
-    text-transform: uppercase;
-    padding: 8px 10px;
-    cursor: pointer;
-    outline: none;
-}
-
-.theme-select option {
-    color: var(--dark);
-    background: var(--white);
-}
-
-.tone-swatches {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.tone-swatch {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    border: 2px solid rgba(255,255,255,0.4);
+    color: var(--accent);
     cursor: pointer;
     padding: 0;
-    transition: transform 0.15s, border-color 0.15s;
+    transition: background 0.15s, color 0.15s;
 }
 
-.tone-swatch:hover { transform: scale(1.15); }
-
-.tone-swatch.active {
-    border-color: white;
-    box-shadow: 0 0 0 2px var(--primary), 0 0 0 3px white;
+.tech-btn-tema:hover {
+    background: var(--accent);
+    color: #fff;
 }
 
-.tone-swatch[data-tone="ambar"]     { background: #D97A34; }
-.tone-swatch[data-tone="terracota"] { background: #C15F3C; }
-.tone-swatch[data-tone="bronce"]    { background: #B8862F; }
-.tone-swatch[data-tone="teal"]      { background: #2C7A7B; }
-.tone-swatch[data-tone="marino"]    { background: #3E5C8A; }
-.tone-swatch[data-tone="ciruela"]   { background: #8C4A63; }
-
-/* Ocultar el selector en modo kiosko */
-body.is-fullscreen .theme-switcher { display: none; }
-
-/* ════════════════════════════════════════════════════════════════════════
-   TEMA SWISS / EDITORIAL — sans, aire, grid limpio sin clip-path
-   ════════════════════════════════════════════════════════════════════════ */
-body[data-theme="swiss"] {
-    --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    --tech-bg: #ffffff;
-    --border: #e2e8f0;
-}
-
-body[data-theme="swiss"] .blueprint-bg { background-image: none; }
-body[data-theme="swiss"] .tech-container { max-width: 1120px; padding: 32px 24px; }
-body[data-theme="swiss"] .tech-header { border-bottom-width: 1px; padding: 28px 0; }
-body[data-theme="swiss"] .tech-titles h1 { font-weight: 800; letter-spacing: -0.5px; }
-body[data-theme="swiss"] .institution { letter-spacing: 2px; }
-
-/* Tabs como texto con subrayado (sin clip-path angulado) */
-body[data-theme="swiss"] .tech-tags {
-    gap: 28px;
-    border-bottom: 1px solid var(--border);
-    margin: 24px 0;
-}
-body[data-theme="swiss"] .tech-tag {
-    clip-path: none;
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    padding: 8px 2px;
-}
-body[data-theme="swiss"] .tech-tag:hover {
-    background: transparent;
-    color: var(--primary);
-}
-body[data-theme="swiss"] .tech-tag.active {
-    background: transparent;
-    color: var(--primary);
-    border-bottom-color: var(--accent);
-}
-
-/* Superficies limpias, bordes finos, sombras suaves */
-body[data-theme="swiss"] .tech-search-module,
-body[data-theme="swiss"] .dashboard-column-light,
-body[data-theme="swiss"] .tech-grid-container {
-    border-width: 1px;
-    border-color: var(--border);
-}
-body[data-theme="swiss"] .modal-contenido {
-    box-shadow: 0 24px 60px rgba(0,0,0,0.28);
-    border-width: 1px;
-    border-color: var(--border);
-    border-radius: 6px;
-}
-body[data-theme="swiss"] .materia-bloque { border-radius: 4px; }
-body[data-theme="swiss"] .dashboard-column-light h2 { letter-spacing: 1px; }
+/* Ocultar acciones del header en modo kiosko */
+body.is-fullscreen .header-actions { display: none; }
 
 /* ════════════════════════════════════════════════════════════════════════
    TEMA OSCURO — variables (nocturno)
@@ -1454,90 +1354,3 @@ body[data-theme="nocturno"] .modal-contenido {
 }
 body[data-theme="nocturno"] .materia-bloque { border-radius: 4px; }
 body[data-theme="nocturno"] .modal-contenido { box-shadow: 0 24px 60px rgba(0,0,0,0.6); }
-
-/* ════════════════════════════════════════════════════════════════════════
-   TEMA SOFT — "friendly": claro y cálido, sans redondeada, píldoras,
-   tarjetas flotantes con sombras suaves, esquinas bien redondeadas.
-   ════════════════════════════════════════════════════════════════════════ */
-body[data-theme="soft"] {
-    --font-ui: ui-rounded, 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
-    --tech-bg: #F5F2EC;        /* off-white cálido */
-    --white: #ffffff;
-    --surface: #ffffff;
-    --border: #ececec;
-    --muted: #8a8f98;
-    --radius: 16px;
-}
-
-/* Fondo limpio, sin grilla blueprint */
-body[data-theme="soft"] .blueprint-bg {
-    background-image: none;
-    background: var(--tech-bg);
-}
-body[data-theme="soft"] .tech-container { padding: 28px 24px; }
-
-/* Header suave, sin borde de acento duro */
-body[data-theme="soft"] .tech-header { border-bottom: none; }
-body[data-theme="soft"] footer { border-top: none; }
-
-/* Tabs tipo píldora (sin clip-path) */
-body[data-theme="soft"] .tech-tags { gap: 8px; margin: 20px 0; flex-wrap: wrap; }
-body[data-theme="soft"] .tech-tag {
-    clip-path: none;
-    border-radius: 999px;
-    background: #fff;
-    border: 1px solid var(--border);
-    color: var(--primary);
-    padding: 9px 18px;
-    box-shadow: 0 1px 3px rgba(20,30,50,0.06);
-}
-body[data-theme="soft"] .tech-tag:hover { background: #fff; color: var(--accent); }
-body[data-theme="soft"] .tech-tag.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-}
-
-/* Tarjetas flotantes: sombra suave, radio grande, borde tenue */
-body[data-theme="soft"] .tech-search-module,
-body[data-theme="soft"] .dashboard-column-light,
-body[data-theme="soft"] .tech-grid-container,
-body[data-theme="soft"] .info-card {
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    box-shadow: 0 10px 30px rgba(20,30,50,0.08);
-}
-body[data-theme="soft"] .modal-contenido {
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    box-shadow: 0 24px 60px rgba(20,30,50,0.22);
-}
-
-/* Botones e inputs redondeados */
-body[data-theme="soft"] .tech-btn-update { border-radius: 999px; }
-body[data-theme="soft"] .tech-input,
-body[data-theme="soft"] .tech-input-sm { border-radius: 12px; }
-body[data-theme="soft"] .planilla-tab-btn { border-radius: 999px; }
-
-/* Bloques del calendario redondeados */
-body[data-theme="soft"] .materia-bloque {
-    border: none;
-    border-radius: 12px;
-    box-shadow: 0 2px 6px rgba(20,30,50,0.12);
-}
-body[data-theme="soft"] .aula-indicador { border-radius: 0 0 12px 12px; }
-body[data-theme="soft"] .bloque-superposicion { border-radius: 12px; }
-
-/* Ítems del dashboard como tarjetitas */
-body[data-theme="soft"] .class-item-light {
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    background: #fff;
-}
-body[data-theme="soft"] .class-room-light { color: var(--accent); }
-
-/* Barra de estado y chips redondeados */
-body[data-theme="soft"] .tech-status-bar { border-radius: 12px; }
-body[data-theme="soft"] .rol-badge { border-radius: 999px; }
-body[data-theme="soft"] .opcion-chip,
-body[data-theme="soft"] .comp-chip { border-radius: 999px; }

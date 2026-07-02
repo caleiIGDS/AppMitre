@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>Sistema de Horarios</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=9">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=10">
 </head>
 <body>
     <script>
@@ -13,7 +13,6 @@
             try {
                 var t = localStorage.getItem('appmitre-theme') || 'blueprint';
                 document.body.setAttribute('data-theme', t);
-                document.body.setAttribute('data-tone', localStorage.getItem('appmitre-tone') || 'ambar');
                 if (t === 'nocturno') document.body.setAttribute('data-dark', '');
             } catch (e) {}
         })();
@@ -28,21 +27,8 @@
                         <p class="institution">Sistema de Horarios</p>
                     </div>
                 </div>
-                <div class="theme-switcher">
-                    <select id="theme-select" class="theme-select" onchange="applyTheme(this.value)" title="Estilo de interfaz">
-                        <option value="blueprint">Blueprint</option>
-                        <option value="swiss">Swiss</option>
-                        <option value="nocturno">Nocturno</option>
-                        <option value="soft">Soft</option>
-                    </select>
-                    <div class="tone-swatches" title="Tono de acento">
-                        <button class="tone-swatch" data-tone="ambar" onclick="applyTone('ambar')" title="Ámbar"></button>
-                        <button class="tone-swatch" data-tone="terracota" onclick="applyTone('terracota')" title="Terracota"></button>
-                        <button class="tone-swatch" data-tone="bronce" onclick="applyTone('bronce')" title="Bronce"></button>
-                        <button class="tone-swatch" data-tone="teal" onclick="applyTone('teal')" title="Teal"></button>
-                        <button class="tone-swatch" data-tone="marino" onclick="applyTone('marino')" title="Marino"></button>
-                        <button class="tone-swatch" data-tone="ciruela" onclick="applyTone('ciruela')" title="Ciruela"></button>
-                    </div>
+                <div class="header-actions">
+                    <button id="btn-tema" class="tech-btn-tema" onclick="toggleTheme()" title="Modo nocturno" aria-label="Cambiar tema"></button>
                     <button id="btn-actualizar" class="tech-btn-update" onclick="actualizarDatos()">ACTUALIZAR HORARIOS</button>
                 </div>
             </div>
@@ -208,6 +194,6 @@
             dias: {{ dias | tojson | safe }},
         };
     </script>
-    <script src="{{ url_for('static', filename='js/script.js') }}?v=11"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}?v=12"></script>
 </body>
 </html>

@@ -4,6 +4,20 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-07-02] — Solo blueprint + nocturno; toggle con botón (sin tonos)
+
+**Tipo**: cambio de UI + contrato (CSS/JS)
+**Archivos**: `static/style.css`, `static/js/script.js`, `templates/index.html`
+
+- Se **eliminaron los temas `swiss` y `soft`** y **todo el sistema de tonos** (`data-tone`, presets `body[data-tone]`, `.tone-swatch`, `applyTone`, `TONOS_VALIDOS`, `appmitre-tone`). Quedan solo **`blueprint`** (claro, default) y **`nocturno`** (oscuro).
+- Acento **único**: naranja/ámbar `--accent: #D97A34` en `:root` (alias `--secondary`). Ya no se sobrescribe por tono.
+- El `<select#theme-select>` + swatches se reemplazaron por un **botón `#btn-tema`** (`.tech-btn-tema`) en `.header-actions`, junto a `#btn-actualizar`, con ícono SVG **luna/sol** que togglea claro↔oscuro. Se oculta en kiosko (`body.is-fullscreen .header-actions`).
+- JS: `TEMAS_VALIDOS` = `['blueprint','nocturno']`; se quitó `TEMAS_OSCUROS` (nocturno es el único oscuro, chequeo inline). Nueva `toggleTheme()`; `applyTheme()` actualiza el ícono del botón. Se eliminaron `applyTone`/`TONOS_VALIDOS`.
+- El wrapper del header pasó de `.theme-switcher` a `.header-actions`.
+- Cache-busters: `style.css` `?v=9`→`?v=10`, `script.js` `?v=11`→`?v=12`.
+
+---
+
 ## [2026-07-01] — Tema HUD reemplazado por Soft (friendly)
 
 **Tipo**: cambio de UI

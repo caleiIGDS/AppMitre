@@ -9,7 +9,7 @@
 ```css
 :root {
     --primary:    #1A365D;   /* azul marino oscuro */
-    --accent:     #D97A34;   /* acento default (ámbar apagado); los tonos lo sobrescriben */
+    --accent:     #D97A34;   /* acento único: naranja/ámbar apagado */
     --alert:      #DC2626;   /* rojo */
     --tech-bg:    #F1F5F9;   /* gris muy claro, fondo general */
     --white:      #ffffff;
@@ -19,7 +19,7 @@
     --border:     #cbd5e1;   /* bordes finos */
     --muted:      #70757a;   /* texto secundario */
     --radius:     0px;
-    --font-ui:    'Roboto Mono', monospace;  /* fuente global (Swiss la cambia a sans) */
+    --font-ui:    'Roboto Mono', monospace;  /* fuente global */
 }
 body {
     --secondary:  var(--accent);  /* ALIAS legacy: los ~36 usos de var(--secondary) pasan por --accent */
@@ -27,15 +27,11 @@ body {
 }
 ```
 
-> **El naranja chillón `#FF6B00` fue reemplazado** por un ámbar apagado (`--accent: #D97A34`,
-> tono base "ambar"). Cambiar `--accent` re-skinea los 36+ usos de `var(--secondary)`.
+> **El naranja chillón `#FF6B00` fue reemplazado** por un ámbar apagado (`--accent: #D97A34`).
+> Cambiar `--accent` re-skinea los 36+ usos de `var(--secondary)`.
 >
-> ⚠️ **Gotcha crítico**: `--secondary` y `--accent-soft` se declaran en **`body`, no en `:root`**.
-> Un `var()` dentro de una custom property se resuelve en el elemento donde se **declara**. Si
-> `--secondary: var(--accent)` viviera en `:root`, se congelaría con el `--accent` de `:root` y
-> los tonos (que sobrescriben `--accent` en `body[data-tone]`) NO cambiarían el acento (bug real
-> que tuvo el selector). Declararlas en `body` las hace re-resolverse contra el `--accent` del tono.
-> Ver la sección **Temas y tonos** al final.
+> `--secondary` y `--accent-soft` se declaran en **`body`** (derivan de `--accent`).
+> Ver la sección **Tema (claro ↔ oscuro)** al final.
 
 ### Usos específicos por color
 
@@ -237,43 +233,40 @@ La bandera se resetea a `false` después de 10ms vía `setTimeout(..., 10)`.
 
 ---
 
-## Temas y tonos
+## Tema (claro ↔ oscuro)
 
-Dos ejes **independientes** en `<body>`, persistidos en `localStorage` (primer uso de localStorage en la app):
+Un solo eje en `<body>`, persistido en `localStorage`:
 
 | Atributo | Valores | Controla | localStorage |
 |---|---|---|---|
-| `data-theme` | `blueprint` (default) · `swiss` · `nocturno` · `soft` | layout / tipografía / forma / claro-oscuro | `appmitre-theme` |
-| `data-dark` | presente / ausente | flag seteado por JS cuando el tema es oscuro (solo `nocturno`); agrupa los overrides de superficie | (derivado del tema) |
-| `data-tone` | `ambar` (default) · `terracota` · `bronce` · `teal` · `marino` · `ciruela` | color de acento (`--accent`) | `appmitre-tone` |
+| `data-theme` | `blueprint` (default) · `nocturno` | claro / oscuro | `appmitre-theme` |
+| `data-dark` | presente / ausente | flag seteado por JS cuando el tema es `nocturno`; agrupa los overrides de superficie | (derivado del tema) |
 
-Los **tonos aplican en cualquier tema** (solo cambian `--accent`). Definidos como `body[data-tone="..."] { --accent: ...; }`.
+El acento es **único**: naranja (`--accent: #D97A34` en `:root`, alias `--secondary`). No hay sistema de tonos.
 
-### Los 4 temas
+### Los 2 temas
 
-- **Blueprint** (default): la estética industrial original con el acento suavizado.
-- **Swiss**: fuente **sans** (`--font-ui` = system-ui/Segoe UI), sin grilla blueprint, tabs de texto con subrayado (sin clip-path), bordes finos (`--border`), sombras suaves, más aire.
-- **Nocturno**: modo **oscuro** sofisticado. Fondos carbón/pizarra, texto claro, esquinas redondeadas, sombras profundas. `--primary` pasa a azul acero claro (legible como texto y como fondo en oscuro).
-- **Soft**: **"friendly"** claro y cálido. Fondo off-white cálido (sin grilla), fuente sans redondeada (`ui-rounded`/Segoe UI), tabs y botones tipo **píldora** (sin clip-path), tarjetas flotantes con sombras suaves y esquinas bien redondeadas (`--radius: 16px`), bloques del calendario redondeados.
+- **Blueprint** (default): estética industrial, grilla blueprint, tabs con clip-path, acento naranja.
+- **Nocturno**: modo **oscuro**. Fondos carbón/pizarra, texto claro, esquinas redondeadas, sombras profundas. `--primary` pasa a azul acero claro (legible como texto y como fondo en oscuro).
 
-**Tema oscuro (nocturno)**: es el único con `data-dark`; usa los overrides de superficies claras hardcodeadas vía `body[data-dark] { ... }` (seteado por `applyTheme`, pensado para reusarse si se agrega otro tema oscuro). Define sus variables (`--tech-bg`, `--surface`/`--white`, `--primary`, `--border`, `--muted`, `--text`, `--panel`, `--block-bg`). Los tokens `--text` (texto claro), `--panel` (header/inputs) y `--block-bg` (bloques) son exclusivos de temas oscuros. **No se puede sobrescribir `--dark`** en oscuro porque también se usa como fondo (status bar, slide-panel, tooltip, dropdown, reloj); por eso los textos oscuros hardcodeados (`.info-valor`, etc.) se corrigen puntualmente en `body[data-dark]`.
+**Nocturno** es el único con `data-dark`; usa los overrides de superficies claras hardcodeadas vía `body[data-dark] { ... }` (seteado por `applyTheme`). Define sus variables (`--tech-bg`, `--surface`/`--white`, `--primary`, `--border`, `--muted`, `--text`, `--panel`, `--block-bg`). Los tokens `--text` (texto claro), `--panel` (header/inputs) y `--block-bg` (bloques) son exclusivos del tema oscuro. **No se puede sobrescribir `--dark`** en oscuro porque también se usa como fondo (status bar, slide-panel, tooltip, dropdown, reloj); por eso los textos oscuros hardcodeados (`.info-valor`, etc.) se corrigen puntualmente en `body[data-dark]`.
 
 ### Flujo (JS en `script.js`)
 
-- `applyTheme(nombre)` / `applyTone(nombre)`: setean el atributo en `<body>`, guardan en `localStorage` y sincronizan el UI del selector.
-- `initTheme()`: lee `localStorage` (defaults `blueprint`/`ambar`), se llama en `DOMContentLoaded`.
-- **Anti-flash**: un script inline al inicio de `<body>` (en `index.html`) aplica los atributos guardados antes de pintar el contenido.
+- `applyTheme(nombre)`: setea `data-theme` (y `data-dark` si es oscuro) en `<body>`, guarda en `localStorage`, y actualiza el ícono/título del botón (`#btn-tema`) — 🌙 luna en claro, ☀ sol en oscuro.
+- `toggleTheme()`: alterna blueprint ↔ nocturno; es el `onclick` del botón del header.
+- `initTheme()`: lee `localStorage` (default `blueprint`), se llama en `DOMContentLoaded`.
+- **Anti-flash**: un script inline al inicio de `<body>` (en `index.html`) aplica el tema guardado antes de pintar el contenido.
 
-### Selector
+### Botón de tema
 
-En el header (`.theme-switcher`, junto a `#btn-actualizar`): un `<select#theme-select>` para el tema + swatches circulares `.tone-swatch` para el tono. Se oculta en modo kiosko (`body.is-fullscreen .theme-switcher { display:none }`).
+En el header (`.header-actions`, junto a `#btn-actualizar`): un botón `#btn-tema` (`.tech-btn-tema`) con ícono SVG luna/sol que togglea el tema. Se oculta en modo kiosko (`body.is-fullscreen .header-actions { display:none }`).
 
 ### Reglas para no romper el theming
 
 - Usar **siempre** `var(--accent)` (o `var(--secondary)`) para el acento — nunca hex de naranja hardcodeado.
 - Para tintes suaves del acento usar `var(--accent-soft)` o `color-mix(in srgb, var(--accent) N%, ...)`.
-- Para agregar un tono: agregar `body[data-tone="nuevo"] { --accent: #...; }`, el `.tone-swatch[data-tone="nuevo"]`, sumar a `TONOS_VALIDOS` en `script.js` y un `<button class="tone-swatch">` en el header.
 - Fuente: usar `var(--font-ui)`, no `'Roboto Mono'` literal.
 - `data-theme` / `data-dark` y la clase `is-fullscreen` **coexisten** en `<body>` sin conflicto (ejes distintos).
-- Para agregar un tema oscuro nuevo: sumarlo a `TEMAS_VALIDOS` **y** `TEMAS_OSCUROS` en `script.js`, definir sus variables en `body[data-theme="..."]`, y reusar los overrides compartidos de `body[data-dark]`.
-- Pendiente conocido: `COMPARACION_COLORS` en `script.js` sigue siendo una paleta fija de 6 colores (no sigue el tono).
+- Para agregar un tema oscuro nuevo: sumarlo a `TEMAS_VALIDOS` en `script.js`, marcarlo como oscuro (`data-dark`) en `applyTheme`, definir sus variables en `body[data-theme="..."]`, y reusar los overrides compartidos de `body[data-dark]`.
+- Pendiente conocido: `COMPARACION_COLORS` en `script.js` es una paleta fija de 6 colores.
