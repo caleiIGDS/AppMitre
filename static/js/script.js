@@ -17,18 +17,23 @@ let lastFilas = null;
 // ─── CACHÉ DE DATOS EN MEMORIA ───────────────────────────────────────────────
 // El dataset es chico: se descarga una sola vez al cargar la web y las búsquedas
 // de profesor/aula/curso/planilla se resuelven client-side, sin más requests.
-let _allClases = null;     // todas las filas de la tabla `clases`
-let _allPersonal = null;   // todo el personal no docente
-let _datosPromise = null;  // evita descargas duplicadas
+let _allClases = null;            // todas las filas de la tabla `clases`
+let _allPersonal = null;          // todo el personal no docente
+let _horariosPreceptores = null;  // { nombre: [filas de su horario] }
+let _planillaPreceptores = null;  // lista por curso con turnos (planilla + preceptor-por-curso)
+let _datosPromise = null;         // evita descargas duplicadas
 
 function cargarDatosIniciales() {
     if (_datosPromise) return _datosPromise;
     _datosPromise = Promise.all([
         fetch('/api/dashboard').then(r => r.json()),
-        fetch('/api/personal_todos').then(r => r.json()).catch(() => [])
-    ]).then(([clases, personal]) => {
+        fetch('/api/personal_todos').then(r => r.json()).catch(() => []),
+        fetch('/api/preceptores_data').then(r => r.json()).catch(() => ({ horarios: {}, planilla: [] }))
+    ]).then(([clases, personal, prec]) => {
         _allClases = clases || [];
         _allPersonal = personal || [];
+        _horariosPreceptores = (prec && prec.horarios) || {};
+        _planillaPreceptores = (prec && prec.planilla) || [];
         // Reutilizar el mismo dataset para planilla general y dashboard
         allDataCache = _allClases;
         lastDashboardData = _allClases;
@@ -39,6 +44,30 @@ function cargarDatosIniciales() {
         return { clases: null, personal: [] };
     });
     return _datosPromise;
+}
+
+// Deriva el preceptor-por-curso desde la planilla cacheada (reemplaza /api/preceptor/<valor>).
+// Devuelve: objeto con datos | false (cargado, sin preceptor) | null (no cargado → fallback red).
+function obtenerPreceptorLocal(valorCurso) {
+    if (!_planillaPreceptores) return null;
+    const v = String(valorCurso).trim();
+    const idx = v.indexOf(' ');
+    const cursoRaw = idx === -1 ? v : v.slice(0, idx);
+    const divRaw   = idx === -1 ? "" : v.slice(idx + 1).trim();
+    const num = (cursoRaw.match(/\d+/) || [cursoRaw])[0];
+    const div = divRaw.toUpperCase();
+    const fila = _planillaPreceptores.find(p =>
+        String(p.curso) === num && String(p.division).toUpperCase() === div
+    );
+    if (!fila || (!fila.manana && !fila.tarde && !fila.vespertino)) return false;
+    return {
+        curso: num,
+        division: div,
+        preceptores_manana: fila.manana || "",
+        preceptores_tarde: fila.tarde || "",
+        preceptores_vespertino: fila.vespertino || "",
+        turno: fila.turno,
+    };
 }
 
 // Replica client-side la lógica de obtener_filas() de app.py.
@@ -694,8 +723,13 @@ function cambiarTab(evt, idTab) {
     // Reset views
     currentSearch.modo = null;
     currentSearch.valor = null;
-    // Limpiar el hash de la URL (buscarEnServidor lo vuelve a setear si hay búsqueda)
-    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+    // Actualizar el hash al modo del tab activo (buscarEnServidor lo completa con /VALOR al buscar)
+    const TAB_A_MODO = {
+        'tab-profesor': 'profesor', 'tab-aula': 'aula', 'tab-curso': 'curso',
+        'tab-horario_preceptor': 'horario_preceptor', 'tab-envivo': 'envivo'
+    };
+    const _modoTab = TAB_A_MODO[idTab];
+    if (_modoTab) history.replaceState(null, '', '#/' + _modoTab);
     document.querySelectorAll('.search-input, .search-input-fun, .minimal-input, .tech-input').forEach(input => input.value = "");
     document.querySelectorAll('.custom-dropdown, .custom-dropdown-fun, .minimal-dropdown, .tech-dropdown').forEach(d => d.style.display = 'none');
     
@@ -925,7 +959,17 @@ function buscarEnServidor(modo, valor) {
         return;
     }
 
-    // ── Fallback a red (datos aún no cargados, o modos no cacheables como preceptor) ──
+    // ── Horario individual de preceptor desde la caché (tabla horarios_preceptores) ──
+    if (modo === 'horario_preceptor' && _horariosPreceptores) {
+        const cached = _horariosPreceptores[valor];
+        if (cached !== undefined) {
+            procesarResultadoBusqueda(modo, valor, cached);
+            return;
+        }
+        // nombre no exacto → cae al fetch (el server aplica LIKE %nombre%)
+    }
+
+    // ── Fallback a red (datos aún no cargados, o caché vacía) ──
     if (modo === 'profesor' && !isComparacionMode) {
         Promise.all([
             fetch(`/api/profesor/${valor}`).then(r => r.json()),
@@ -964,11 +1008,16 @@ function procesarResultadoBusqueda(modo, valor, filas) {
         } else {
             generarCalendario(filas, modo);
             if (modo === 'curso') {
-                fetch(`/api/preceptor/${valor}`)
-                    .then(r => r.json())
-                    .then(preceptorData => {
-                        if (preceptorData) renderizarPreceptor(preceptorData);
-                    });
+                const preceptorLocal = obtenerPreceptorLocal(valor);
+                if (preceptorLocal !== null) {
+                    if (preceptorLocal) renderizarPreceptor(preceptorLocal);
+                } else {
+                    fetch(`/api/preceptor/${valor}`)
+                        .then(r => r.json())
+                        .then(preceptorData => {
+                            if (preceptorData) renderizarPreceptor(preceptorData);
+                        });
+                }
             }
         }
     }
@@ -988,6 +1037,10 @@ function mostrarPlanillaCursos() {
     lista.innerHTML = '<div style="padding:20px;text-align:center;color:#70757a;">Cargando...</div>';
     const wh = document.getElementById('workspace-calendar-header');
     if (wh) wh.style.display = 'none';
+    if (_planillaPreceptores) {
+        renderizarPlanillaCursos(_planillaPreceptores);
+        return;
+    }
     fetch('/api/planilla_preceptores')
         .then(r => r.json())
         .then(filas => renderizarPlanillaCursos(filas))
@@ -1669,20 +1722,30 @@ document.addEventListener('click', (e) => {
 // ─── BOOTSTRAP: descargar datos a memoria y resolver la URL inicial (hash routing) ───
 (function init() {
     const MODOS_VALIDOS = ['profesor', 'curso', 'aula', 'horario_preceptor'];
+    const TAB_SOLO = {
+        'profesor': 'tab-profesor', 'aula': 'tab-aula', 'curso': 'tab-curso',
+        'horario_preceptor': 'tab-horario_preceptor', 'envivo': 'tab-envivo'
+    };
+
     cargarDatosIniciales().then(() => {
-        const hash = location.hash; // ej: "#/profesor/MACIEL%20MARTIN"
+        const hash = location.hash; // ej: "#/profesor/MACIEL%20MARTIN" o "#/aula"
         if (!hash.startsWith('#/')) return;
         const parts = hash.slice(2).split('/');
-        if (parts.length < 2) return;
         const modo = parts[0];
-        const valor = decodeURIComponent(parts.slice(1).join('/'));
-        if (!MODOS_VALIDOS.includes(modo) || !valor) return;
+        const valor = parts.length >= 2 ? decodeURIComponent(parts.slice(1).join('/')) : null;
+
+        const tabId = TAB_SOLO[modo];
+        if (!tabId) return;
 
         // Activar la tab correspondiente sin disparar el reset/focus de navegación manual
-        const tabBtn = document.querySelector(`[onclick*="cambiarTab"][onclick*="tab-${modo}"]`);
+        const tabBtn = document.querySelector(`[onclick*="cambiarTab"][onclick*="${tabId}"]`);
         window.isProgrammaticNavigation = true;
         if (tabBtn) tabBtn.click();
-        buscarEnServidor(modo, valor);
+
+        // Solo buscar si hay valor (si no, solo activar el tab)
+        if (valor && MODOS_VALIDOS.includes(modo)) {
+            buscarEnServidor(modo, valor);
+        }
         window.isProgrammaticNavigation = false;
     });
 })();

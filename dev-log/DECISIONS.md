@@ -124,20 +124,24 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
-## [2026-06-29] — Búsqueda client-side desde caché en memoria + hash routing
+## [2026-06-29] — Toda la data cacheada en memoria al cargar + hash routing
 
-**Contexto**: Cada búsqueda (profesor/aula/curso/planilla) hacía un request al server. El dataset completo es chico (`/api/dashboard` = ~2.300 filas × 20 cols, más ~pocos cientos de filas de personal). En Render/PythonAnywhere free tier, los round-trips agregan latencia perceptible.
+**Contexto**: Cada búsqueda (clases y preceptores) hacía un request al server. El dataset completo es chico (`/api/dashboard` = ~2.300 filas × 20 cols; personal ~cientos de filas; preceptores 47 horarios + 62 filas de planilla). En Render/PythonAnywhere free tier, los round-trips agregan latencia perceptible. El usuario pidió explícitamente que al abrir la web se descargue **toda** la info (clases, personal, preceptores) y de ahí en más no se toque la red.
 
-**Decisión**: Descargar todo a memoria una sola vez al cargar la web (`cargarDatosIniciales()` → `_allClases` / `_allPersonal`) y resolver las búsquedas client-side con `filtrarClasesLocal()`, que **replica exactamente** la lógica de `obtener_filas()` de `app.py`. Se mantiene fallback a los endpoints `/api/*` si los datos aún no cargaron. En paralelo se agregó hash routing (`#/profesor/...`) para URLs compartibles.
+**Decisión**: `cargarDatosIniciales()` descarga todo una sola vez al cargar (`/api/dashboard`, `/api/personal_todos`, `/api/preceptores_data`) y guarda en globals (`_allClases`, `_allPersonal`, `_horariosPreceptores`, `_planillaPreceptores`). Todas las búsquedas se resuelven client-side; solo PDF y `/api/actualizar` van a la red. Se mantiene fallback a los endpoints `/api/*` si los datos aún no cargaron. En paralelo, hash routing (`#/profesor/...`) para URLs compartibles.
+
+**Para preceptores** (tabla `horarios_preceptores`): en vez de replicar las agregaciones SQL (GROUP_CONCAT, turnos) en JS, el endpoint `/api/preceptores_data` **reusa las funciones server existentes** (`obtener_horario_preceptor`, `_planilla_preceptores_con_turnos`) y devuelve todo pre-computado, para que el cliente solo haga lookups. Esto evita una cuarta fuente de verdad de lógica SQL.
 
 **Alternativa descartada**:
-- *Service Worker / offline real (PWA)*: descartado por complejidad (sincronización, invalidación) — el usuario eligió explícitamente "session cache". Si se refresca la página se necesita red de nuevo; suficiente para un kiosco siempre encendido.
-- *Clean URLs (`/profesor/...`) con catch-all en Flask*: descartado para no tocar el backend ni agregar superficie de routing server-side. El hash no requiere cambios en Flask.
+- *Service Worker / offline real (PWA)*: descartado por complejidad — el usuario eligió "session cache". Si se refresca la página se necesita red de nuevo; suficiente para un kiosco siempre encendido.
+- *Clean URLs (`/profesor/...`) con catch-all en Flask*: descartado para no tocar el backend. El hash no requiere cambios en Flask.
+- *Cachear filas crudas de `horarios_preceptores` y replicar las agregaciones en JS*: descartado; se prefirió pre-computar en el server reusando funciones existentes.
 
 **Consecuencia**:
-- Hay **dos fuentes de verdad** para la lógica de filtrado: `obtener_filas()` (Python) y `filtrarClasesLocal()` (JS). Si una cambia, la otra debe seguirla, o el fallback de red devolverá resultados distintos a la caché.
+- Hay **dos fuentes de verdad** para el filtrado de clases: `obtener_filas()` (Python) y `filtrarClasesLocal()` (JS). Si una cambia, la otra debe seguirla. Los preceptores NO tienen este problema (el server pre-computa, el cliente solo lookupea).
 - El caché no se invalida tras `/api/actualizar` sin un F5 (mismo trade-off ya aceptado para `allDataCache`).
-- `horario_preceptor` y `preceptor` siguen yendo al server (tabla distinta); `horario_preceptor` se excluyó del hash routing para evitar una race en `contenedor-lista`.
+- **Cambio de comportamiento (mejora)**: `obtenerPreceptorLocal()` usa el turno correcto del curso (vía `_planillaPreceptores`), corrigiendo de facto el bug de la ruta `/api/preceptor/<valor>` que devolvía siempre `TURNO_DEFAULT` por buscar la clave con `°`. El "PRECEPTOR PRINCIPAL" ahora se marca según el turno real.
+- Deep-link de `horario_preceptor`: para evitar la race en `contenedor-lista` (planilla vs tabla del preceptor), `cambiarTab()` omite `mostrarPlanillaCursos()` cuando `window.isProgrammaticNavigation` está activo.
 
 ---
 

@@ -6,11 +6,19 @@
 
 ## ⚡ Resolución client-side (desde [2026-06-29])
 
-Las búsquedas de `profesor`/`aula`/`curso`/`planilla` **ya no pegan al servidor** en el caso normal. Al cargar la web, `cargarDatosIniciales()` descarga todo a memoria:
+**Ninguna búsqueda pega al servidor** en el caso normal. Al cargar la web, `cargarDatosIniciales()` descarga **todo** a memoria con 3 requests en paralelo:
 - `GET /api/dashboard` → `_allClases` (todas las filas de `clases`, ~2.300)
 - `GET /api/personal_todos` → `_allPersonal` (todo el personal no docente)
+- `GET /api/preceptores_data` → `_horariosPreceptores` (`{nombre: [filas]}`) + `_planillaPreceptores` (lista por curso con turnos)
 
-`filtrarClasesLocal(modo, valor)` en `script.js` **replica la lógica de `obtener_filas()`** (ver queries abajo) y devuelve las filas desde la caché. Si los datos aún no cargaron (`_allClases === null`) o el modo no es cacheable (`horario_preceptor`/`preceptor`), devuelve `null` y `buscarEnServidor()` hace **fallback** a los endpoints `/api/*`.
+A partir de ahí, profesor/aula/curso/planilla, horario individual de preceptor, preceptor-por-curso y la planilla de preceptores se resuelven **client-side**. Solo siguen yendo a la red: PDF export y `/api/actualizar`.
+
+Resolución client-side por modo:
+- `profesor`/`aula`/`curso`/`planilla` → `filtrarClasesLocal(modo, valor)`, que **replica la lógica de `obtener_filas()`** (ver queries abajo).
+- `horario_preceptor` → lookup directo `_horariosPreceptores[nombre]`.
+- preceptor-por-curso (tras buscar curso) → `obtenerPreceptorLocal(valor)`, que busca en `_planillaPreceptores`.
+
+Si los datos aún no cargaron, cada camino hace **fallback** a su endpoint `/api/*` original.
 
 ⚠️ **Dos fuentes de verdad**: `obtener_filas()` (Python) y `filtrarClasesLocal()` (JS) deben mantenerse en sync. Si cambiás el parsing/filtrado de un lado, cambialo del otro. Ver `dev-log/DECISIONS.md` [2026-06-29].
 
@@ -18,7 +26,9 @@ Las búsquedas de `profesor`/`aula`/`curso`/`planilla` **ya no pegan al servidor
 
 ### Hash routing (URLs compartibles)
 
-Las búsquedas `profesor`/`aula`/`curso` setean `location.hash` (ej: `#/profesor/MACIEL%20MARTIN`) via `history.replaceState`. El bloque `init()` al final de `script.js` lee el hash al cargar (tras `cargarDatosIniciales()`) y dispara la búsqueda. `cambiarTab()` limpia el hash. `horario_preceptor` está **excluido** del routing (evita race con la planilla de preceptores en `contenedor-lista`).
+Las búsquedas `profesor`/`aula`/`curso`/`horario_preceptor` setean `location.hash` (ej: `#/profesor/MACIEL%20MARTIN`, `#/horario_preceptor/PEREZ%20JUAN`) via `history.replaceState`. El bloque `init()` al final de `script.js` lee el hash al cargar (tras `cargarDatosIniciales()`) y dispara la búsqueda. `cambiarTab()` limpia el hash.
+
+**Deep-link de preceptor — cuidado con la race**: `tab-horario_preceptor` normalmente dispara `mostrarPlanillaCursos()` (fetch async que escribe en `contenedor-lista`), igual que `renderizarTablaPreceptor`. Para evitar que la planilla pise la tabla del preceptor en un deep-link, `cambiarTab()` **omite** `mostrarPlanillaCursos()` cuando `window.isProgrammaticNavigation` está activo (lo setea el `init()`): así `buscarEnServidor` renderiza directo la tabla del preceptor.
 
 ---
 
@@ -103,6 +113,8 @@ GROUP BY turno
 Devuelve `{curso, division, preceptores_manana, preceptores_tarde, preceptores_vespertino, turno}` o `null`. El campo `turno` ("MAÑANA"/"TARDE"/"VESPERTINO") se agrega en la ruta desde `TURNO_CURSOS`. Se llama automáticamente después de una búsqueda por curso para mostrar el info de preceptores en el header del calendario.
 
 **Parsing del valor**: usa `split(' ', 1)` para soportar divisiones multi-parte (ej: "6 4° C" → curso='6', division='4° C'). No eliminar el símbolo `°` porque es parte de la clave en `TURNO_CURSOS` y en la DB.
+
+⚠️ **Bug preexistente del campo `turno`**: la ruta hace `data['turno'] = TURNO_CURSOS.get((curso, division))` con `curso` **conservando el `°`** (ej: `"1°"`), pero las claves de `TURNO_CURSOS` NO tienen `°` (`('1','A')`) → el lookup nunca matchea y devuelve siempre `TURNO_DEFAULT` ("MAÑANA"). Desde [2026-06-29] el frontend usa `obtenerPreceptorLocal()` (deriva el turno de `_planillaPreceptores`, que sí computa el turno correcto con `curso` sin `°`), así que en el camino cacheado el "PRECEPTOR PRINCIPAL" se marca según el turno real del curso. El endpoint sigue con el bug (solo se usa como fallback).
 
 ### `horario_preceptor` (`/api/horario_preceptor/<nombre>`)
 

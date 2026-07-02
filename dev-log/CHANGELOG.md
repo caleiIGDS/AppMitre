@@ -4,18 +4,19 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
-## [2026-06-29] — Búsqueda client-side desde caché en memoria + hash routing
+## [2026-06-29] — Toda la data cacheada en memoria al cargar + hash routing
 
 **Tipo**: feature + cambio de contrato (frontend)
 **Archivos**: `static/js/script.js`, `app.py`, `database.py`, `templates/index.html`
 
-- **Búsqueda sin red**: al cargar la web, `cargarDatosIniciales()` descarga todo (`/api/dashboard` + nuevo `/api/personal_todos`) y lo guarda en `_allClases` / `_allPersonal`. Las búsquedas de `profesor`/`aula`/`curso`/`planilla` se resuelven 100% client-side via `filtrarClasesLocal()`, que replica la lógica de `obtener_filas()` de `app.py`. Si los datos aún no cargaron, hace fallback a los endpoints `/api/*` de siempre.
-- `buscarEnServidor()` refactorizado: la lógica de render se extrajo a `procesarResultadoBusqueda(modo, valor, filas)` (compartida entre el camino local y el de red) y `mostrarErrorBusqueda()`.
-- `allDataCache` (planilla general) y `lastDashboardData` (dashboard) ahora se inicializan desde el mismo `_allClases` para no duplicar descargas.
-- **Hash routing**: las búsquedas de `profesor`/`aula`/`curso` actualizan `location.hash` (`#/profesor/MACIEL%20MARTIN`) → URLs compartibles/bookmarkeables. Un bloque `init()` al final del script lee el hash al cargar y dispara la búsqueda. `cambiarTab()` limpia el hash. `horario_preceptor` queda excluido del routing (evita race en `contenedor-lista` con la planilla de preceptores).
-- **Nuevo endpoint** `GET /api/personal_todos` → `database.obtener_personal_todos()` (todo el personal no docente, mismo formato que `/api/personal/<nombre>`).
-- `script.js` bumpeado a `?v=6` en `index.html`.
-- **Modos que siguen yendo al server**: `preceptor`, `horario_preceptor` (tabla `horarios_preceptores`), PDF export, `/api/actualizar`.
+- **Todo sin red tras la carga inicial**: `cargarDatosIniciales()` descarga en paralelo `/api/dashboard` (→ `_allClases`), `/api/personal_todos` (→ `_allPersonal`) y `/api/preceptores_data` (→ `_horariosPreceptores` + `_planillaPreceptores`). A partir de ahí **ninguna búsqueda pega al server**: profesor/aula/curso/planilla, horario de preceptor, preceptor-por-curso y planilla de preceptores se resuelven client-side. Solo van a la red: PDF export y `/api/actualizar`.
+- Resolución client-side: `filtrarClasesLocal()` (clases, replica `obtener_filas()`), lookup `_horariosPreceptores[nombre]` (horario individual), `obtenerPreceptorLocal()` (preceptor-por-curso desde `_planillaPreceptores`), y `mostrarPlanillaCursos()` usa `_planillaPreceptores`. Todos con fallback a su endpoint `/api/*` si los datos no cargaron.
+- `buscarEnServidor()` refactorizado: render extraído a `procesarResultadoBusqueda(modo, valor, filas)` (compartido caché/red) y `mostrarErrorBusqueda()`.
+- `allDataCache` (planilla general) y `lastDashboardData` (dashboard) se inicializan desde el mismo `_allClases`.
+- **Hash routing**: `profesor`/`aula`/`curso`/`horario_preceptor` actualizan `location.hash` (`#/profesor/MACIEL%20MARTIN`) → URLs compartibles. `init()` lee el hash al cargar y dispara la búsqueda; `cambiarTab()` lo limpia. Deep-link de preceptor: `cambiarTab()` omite `mostrarPlanillaCursos()` bajo `window.isProgrammaticNavigation` (evita race en `contenedor-lista`).
+- **Nuevos endpoints**: `GET /api/personal_todos` (todo el personal no docente) y `GET /api/preceptores_data` (`{horarios: {nombre:[filas]}, planilla: [...]}`, reusa `obtener_horario_preceptor` + `_planilla_preceptores_con_turnos`).
+- **Cambio de comportamiento (mejora)**: en el camino cacheado, el "PRECEPTOR PRINCIPAL" se marca según el turno real del curso. La ruta `/api/preceptor/<valor>` tenía un bug (lookup de turno con `°` → siempre `TURNO_DEFAULT`); `obtenerPreceptorLocal()` usa el turno correcto de la planilla. Ver `agent_docs/search-api.md`.
+- `script.js` bumpeado a `?v=7` en `index.html`.
 
 ---
 

@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Currícula – Tecnicatura en Energías Renovables</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #1A365D;
+  --secondary: #FF6B00;
+  --alert: #DC2626;
+  --tech-bg: #F1F5F9;
+  --white: #ffffff;
+  --dark: #0F172A;
+  --grid-color: rgba(26,54,93,0.08);
+  --border: rgba(26,54,93,0.25);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Roboto Mono', monospace;
+  background-color: var(--tech-bg);
+  color: var(--dark);
+  min-height: 100vh;
+}
+
+.blueprint-bg {
+  min-height: 100vh;
+  background-image:
+    linear-gradient(var(--grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* HEADER */
+.tech-header {
+  background: var(--primary);
+  color: white;
+  padding: 18px 0;
+  border-bottom: 4px solid var(--secondary);
+}
+.header-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.header-left { display: flex; align-items: center; gap: 20px; }
+.header-titles h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+.header-sub {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  opacity: 0.7;
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+.serial-tag {
+  font-size: 11px;
+  color: var(--secondary);
+  border: 1px solid var(--secondary);
+  background: rgba(0,0,0,0.2);
+  padding: 2px 8px;
+  letter-spacing: 1px;
+}
+.edit-toggle-btn {
+  background: transparent;
+  border: 2px solid var(--secondary);
+  color: var(--secondary);
+  padding: 8px 18px;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+.edit-toggle-btn:hover,
+.edit-toggle-btn.active {
+  background: var(--secondary);
+  color: white;
+}
+
+/* MAIN */
+.tech-container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+
+/* YEAR TABS */
+.year-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.year-tab {
+  background: white;
+  border: 1px solid #94a3b8;
+  color: var(--primary);
+  padding: 8px 20px;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  clip-path: polygon(8% 0%, 100% 0%, 92% 100%, 0% 100%);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+.year-tab:hover { background: var(--primary); color: white; border-color: var(--primary); }
+.year-tab.active { background: var(--secondary); color: white; border-color: var(--secondary); }
+
+/* YEAR SECTION */
+.year-section { display: none; }
+.year-section.active { display: block; }
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--primary);
+  opacity: 0.6;
+  margin-bottom: 14px;
+}
+
+/* MATERIA CARDS GRID */
+.materias-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.materia-card {
+  background: white;
+  border: 2px solid var(--primary);
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+.materia-card:hover { border-color: var(--secondary); }
+.materia-card.selected { border-color: var(--secondary); }
+
+.card-header {
+  background: var(--primary);
+  color: white;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.materia-card.proyecto .card-header { background: #0F2942; }
+
+.card-nombre {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  flex: 1;
+}
+.card-horas {
+  font-size: 10px;
+  color: var(--secondary);
+  border: 1px solid var(--secondary);
+  padding: 2px 8px;
+  white-space: nowrap;
+  margin-left: 10px;
+}
+.card-body { padding: 14px 16px; }
+.card-preview {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card-cta {
+  margin-top: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* DETAIL PANEL */
+.detail-panel {
+  display: none;
+  border: 2px solid var(--primary);
+  background: white;
+  margin-top: 8px;
+  animation: fadeIn 0.2s ease;
+}
+.detail-panel.visible { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+.detail-header {
+  background: var(--primary);
+  color: white;
+  padding: 14px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 3px solid var(--secondary);
+}
+.detail-panel.proyecto-panel .detail-header { background: #0F2942; }
+.detail-h2 { font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+.detail-sub { font-size: 11px; opacity: 0.7; margin-top: 3px; }
+.close-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.4);
+  color: white;
+  padding: 5px 12px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+.close-btn:hover { background: rgba(255,255,255,0.1); }
+
+.detail-body { padding: 20px; }
+
+/* BLOCK SECTIONS */
+.block-section {
+  border: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.block-title {
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 14px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.block-body { padding: 14px; }
+
+/* HABILIDADES */
+.habilidades-wrap { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.hab-chip {
+  background: rgba(26,54,93,0.07);
+  border: 1px solid var(--border);
+  color: var(--primary);
+  padding: 4px 12px;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hab-remove {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--alert);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+  font-weight: 700;
+}
+.edit-mode .hab-remove { display: inline; }
+.hab-add-btn {
+  display: none;
+  background: transparent;
+  border: 1px dashed var(--secondary);
+  color: var(--secondary);
+  padding: 4px 12px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+.hab-add-btn:hover { background: var(--secondary); color: white; }
+.edit-mode .hab-add-btn { display: inline-block; }
+
+/* ACCORDION */
+.accordion-item { border: 1px solid var(--border); margin-bottom: 8px; }
+.accordion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--primary);
+  background: #f8fafc;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.accordion-header:hover { background: #edf2f7; }
+.acc-arrow { transition: transform 0.2s; font-size: 10px; }
+.accordion-header.open .acc-arrow { transform: rotate(90deg); }
+.accordion-body {
+  display: none;
+  padding: 14px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #334155;
+  border-top: 1px solid var(--border);
+}
+.accordion-body.open { display: block; }
+
+/* EDITABLE TEXT */
+[contenteditable="true"] {
+  outline: none;
+  border-bottom: 1px dashed var(--secondary);
+  min-width: 40px;
+  padding-bottom: 1px;
+}
+[contenteditable="true"]:focus {
+  background: rgba(255,107,0,0.05);
+}
+
+/* ADD UNIDAD BTN */
+.add-unidad-btn {
+  display: none;
+  background: transparent;
+  border: 1px dashed var(--primary);
+  color: var(--primary);
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  width: 100%;
+  text-align: left;
+  margin-top: 8px;
+  transition: all 0.2s;
+}
+.add-unidad-btn:hover { background: var(--primary); color: white; }
+.edit-mode .add-unidad-btn { display: block; }
+
+/* RECURSOS */
+.recurso-placeholder { font-size: 12px; color: #94a3b8; font-style: italic; }
+.recursos-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.recurso-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+  background: #f8fafc;
+}
+.recurso-remove {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--alert);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+}
+.edit-mode .recurso-remove { display: inline; }
+.add-recurso-btn {
+  display: none;
+  background: transparent;
+  border: 1px dashed var(--secondary);
+  color: var(--secondary);
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+.add-recurso-btn:hover { background: var(--secondary); color: white; }
+.edit-mode .add-recurso-btn { display: inline-block; }
+
+/* STATUS BAR */
+.status-bar {
+  background: var(--primary);
+  color: rgba(255,255,255,0.6);
+  font-size: 10px;
+  padding: 5px 24px;
+  letter-spacing: 1px;
+  display: flex;
+  justify-content: space-between;
+}
+.status-bar .edit-indicator { color: var(--secondary); font-weight: 700; }
+
+footer {
+  text-align: center;
+  padding: 20px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+</style>
+</head>
+<body class="blueprint-bg">
+
+<div class="tech-header">
+  <div class="header-inner">
+    <div class="header-left">
+      <div class="header-titles">
+        <div style="display:flex;align-items:center;gap:12px">
+          <h1>Currícula</h1>
+          <span class="serial-tag">TER · 4°–7°</span>
+        </div>
+        <div class="header-sub">Tecnicatura en Energías Renovables · Emilio Mitre</div>
+      </div>
+    </div>
+    <button class="edit-toggle-btn" id="editToggle" onclick="toggleEditMode()">[ EDITAR ]</button>
+  </div>
+</div>
+
+<div class="status-bar">
+  <span>PLAN · EXP. N° 5811-1.197.309/11 · DGCyE BUENOS AIRES</span>
+  <span id="editStatus"></span>
+</div>
+
+<div class="tech-container">
+
+  <div class="year-tabs">
+    <button class="year-tab active" onclick="showYear('4to',this)">4° AÑO</button>
+    <button class="year-tab" onclick="showYear('5to',this)">5° AÑO</button>
+    <button class="year-tab" onclick="showYear('6to',this)">6° AÑO</button>
+    <button class="year-tab" onclick="showYear('7mo',this)">7° AÑO</button>
+  </div>
+
+  <!-- ====== 4TO ====== -->
+  <div class="year-section active" id="year-4to">
+    <div class="section-label">// Formación técnica específica · 4° año</div>
+    <div class="materias-grid">
+      <div class="materia-card" onclick="toggleDetail('det-tec4',this)">
+        <div class="card-header">
+          <div class="card-nombre">Tecnología de las Energías Renovables</div>
+          <div class="card-horas">144 hs</div>
+        </div>
+        <div class="card-body">
+          <div class="card-preview">Energía solar térmica y fotovoltaica. Módulos, colectores, baterías, inversores y generadores autónomos.</div>
+          <div class="card-cta">▶ VER MATERIA</div>
+        </div>
+      </div>
+      <div class="materia-card proyecto" onclick="toggleDetail('det-proy4',this)">
+        <div class="card-header">
+          <div class="card-nombre">Proyecto, Diseño e Instalaciones de Energías Renovables</div>
+          <div class="card-horas">144 hs</div>
+        </div>
+        <div class="card-body">
+          <div class="card-preview">Diseño de instalaciones fotovoltaicas. Factibilidad, documentación técnica, Gantt y cómputo de materiales.</div>
+          <div class="card-cta">▶ VER MATERIA</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TECNOLOGÍA 4TO -->
+    <div class="detail-panel" id="det-tec4">
+      <div class="detail-header">
+        <div>
+          <div class="detail-h2">Tecnología de las Energías Renovables</div>
+          <div class="detail-sub">4° Año · 144 horas reloj · Formación Técnica Específica</div>
+        </div>
+        <button class="close-btn" onclick="closeDetail('det-tec4')">✕ CERRAR</button>
+      </div>
+      <div class="detail-body">
+
+        <div class="block-section">
+          <div class="block-title">
+            <span>// Habilidades que vas a desarrollar</span>
+          </div>
+          <div class="block-body">
+            <div class="habilidades-wrap" id="hab-tec4">
+              <span class="hab-chip">Calcular irradiación solar<button class="hab-remove" onclick="removeChip(this)" title="Eliminar">×</button></span>
+              <span class="hab-chip">Orientar e inclinar colectores<button class="hab-remove" onclick="removeChip(this)" title="Eliminar">×</button></span>
+              <span class="hab-chip">Dimensionar colector de placa plana<button class="hab-remove" onclick="removeChip(this)" title="Eliminar">×</button></span>
+              <span class="hab-chip">Calcular banco de baterías<button class="hab-remove" onclick="removeChip(this)" title="Eliminar">×</button></span>
+              <span class="hab-chip">Dimensionar módulos fotovoltaicos<button class="hab-remove" onclick="removeChip(this)" title="Eliminar">×</button></span>
+              <span class="hab-chip">Calcular potencia de módulos FV<button class="hab-remove" onclick="removeChip(this)" title="Eliminar">×</button></span>
+              <span class="hab-chip">Seleccionar inversores y reguladores<button class="hab-remove" onclick="removeChip(this)" title="Eliminar">×</button></span>
+              <span class="hab-chip">Aplicar protección eléctrica en sistemas solares<button class="hab-remove" onclick="removeChip(this)" title="Eliminar">×</button></span>
+              <button class="hab-add-btn" onclick="addHabilidad('hab-tec4')">+ AGREGAR</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="block-section">
+          <div class="block-title"><span>// Contenidos</span></div>
+          <div class="block-body">
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Energía Solar Térmica <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Radiación solar. Irradiación sobre una superficie. Estaciones del año y asoleamiento. El colector solar: clasificación y generalidades. Colector de placa plana: elementos constitutivos, estudio energético, rendimiento. Orientación e inclinación de los colectores. Determinación de sombras. Fluido caloportador. Cálculo de tuberías. Almacenamiento: acumulador de agua caliente sanitaria. Intercambiadores de calor. Aislación térmica. Circulación por termosifón y forzada.</span></div>
+            </div>
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Efecto Fotovoltaico <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Electricidad fotovoltaica. Celdas solares: características, tipos y usos. Módulos fotovoltaicos: elementos constitutivos, rendimiento. Orientación e inclinación. Determinación de sombras. Generadores solares eléctricos autónomos. Reguladores de carga. Conversores. Inversores. Baterías de uso solar: tipos, características y usos. Cálculo de la capacidad de baterías y potencia de módulos FV. Aislación eléctrica. Protección y seguridad eléctrica.</span></div>
+            </div>
+            <button class="add-unidad-btn" onclick="addUnidad(this)">+ AGREGAR UNIDAD</button>
+          </div>
+        </div>
+
+        <div class="block-section">
+          <div class="block-title"><span>// Recursos</span></div>
+          <div class="block-body">
+            <div class="recursos-list" id="rec-tec4">
+              <p class="recurso-placeholder">Sin recursos cargados.</p>
+            </div>
+            <button class="add-recurso-btn" style="margin-top:10px" onclick="addRecurso('rec-tec4')">+ AGREGAR RECURSO</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- PROYECTO 4TO -->
+    <div class="detail-panel proyecto-panel" id="det-proy4">
+      <div class="detail-header">
+        <div>
+          <div class="detail-h2">Proyecto, Diseño e Instalaciones</div>
+          <div class="detail-sub">4° Año · 144 horas reloj · Formación Técnica Específica</div>
+        </div>
+        <button class="close-btn" onclick="closeDetail('det-proy4')">✕ CERRAR</button>
+      </div>
+      <div class="detail-body">
+
+        <div class="block-section">
+          <div class="block-title"><span>// Habilidades que vas a desarrollar</span></div>
+          <div class="block-body">
+            <div class="habilidades-wrap" id="hab-proy4">
+              <span class="hab-chip">Analizar factibilidad de proyectos<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Gestionar financiamiento<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Obtener permisos técnicos<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Diseñar instalación fotovoltaica<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Usar cartografía y estaciones meteorológicas<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Predecir producción energética<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Elaborar diagrama de Gantt<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Calcular cómputo de materiales<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <button class="hab-add-btn" onclick="addHabilidad('hab-proy4')">+ AGREGAR</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="block-section">
+          <div class="block-title"><span>// Contenidos</span></div>
+          <div class="block-body">
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Gestión y Factibilidad <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Financiación del proyecto. Aspectos técnicos. Análisis de factibilidad. Obtención de permisos necesarios. Nuevas modalidades, estructuras, emplazamiento y variables técnicas en instalación de generación fotovoltaica. Consideraciones climáticas y de zonas geográficas.</span></div>
+            </div>
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Diseño y Documentación <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Cartografía y estaciones meteorológicas. Potencial solar. Selección de emplazamientos. Predicción de producción energética. Sistemas eléctricos, de control, regulación y automatismos. Normas técnicas nacionales e internacionales. Documentación técnica. Diagrama de Gantt. Cómputo de materiales.</span></div>
+            </div>
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Sistemas y Seguridad <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Sistemas de acumulación de energía eléctrica. Entrega a la red del excedente energético domiciliario. Seguridad y medio ambiente. Software específico.</span></div>
+            </div>
+            <button class="add-unidad-btn" onclick="addUnidad(this)">+ AGREGAR UNIDAD</button>
+          </div>
+        </div>
+
+        <div class="block-section">
+          <div class="block-title"><span>// Recursos</span></div>
+          <div class="block-body">
+            <div class="recursos-list" id="rec-proy4"><p class="recurso-placeholder">Sin recursos cargados.</p></div>
+            <button class="add-recurso-btn" style="margin-top:10px" onclick="addRecurso('rec-proy4')">+ AGREGAR RECURSO</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== 5TO ====== -->
+  <div class="year-section" id="year-5to">
+    <div class="section-label">// Formación técnica específica · 5° año</div>
+    <div class="materias-grid">
+      <div class="materia-card" onclick="toggleDetail('det-tec5',this)">
+        <div class="card-header">
+          <div class="card-nombre">Tecnología de las Energías Renovables</div>
+          <div class="card-horas">144 hs</div>
+        </div>
+        <div class="card-body">
+          <div class="card-preview">Energía eólica. Aerogeneradores, tipos, curvas características, dimensionamiento de aspas y sistemas de seguridad.</div>
+          <div class="card-cta">▶ VER MATERIA</div>
+        </div>
+      </div>
+      <div class="materia-card proyecto" onclick="toggleDetail('det-proy5',this)">
+        <div class="card-header">
+          <div class="card-nombre">Proyecto, Diseño e Instalaciones de Energías Renovables</div>
+          <div class="card-horas">144 hs</div>
+        </div>
+        <div class="card-body">
+          <div class="card-preview">Diseño de instalaciones eólicas. Selección de emplazamientos, predicción de producción y análisis aerodinámico.</div>
+          <div class="card-cta">▶ VER MATERIA</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-panel" id="det-tec5">
+      <div class="detail-header">
+        <div><div class="detail-h2">Tecnología de las Energías Renovables</div><div class="detail-sub">5° Año · 144 horas reloj · Formación Técnica Específica</div></div>
+        <button class="close-btn" onclick="closeDetail('det-tec5')">✕ CERRAR</button>
+      </div>
+      <div class="detail-body">
+        <div class="block-section">
+          <div class="block-title"><span>// Habilidades que vas a desarrollar</span></div>
+          <div class="block-body">
+            <div class="habilidades-wrap" id="hab-tec5">
+              <span class="hab-chip">Evaluar recursos eólicos de una zona<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Dimensionar aerogenerador<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Calcular y dimensionar aspas<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Calcular capacidad de baterías eólicas<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Interpretar curvas características de aerogeneradores<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Diseñar estructuras de soporte y anclaje<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Aplicar sistemas de seguridad eólica<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <button class="hab-add-btn" onclick="addHabilidad('hab-tec5')">+ AGREGAR</button>
+            </div>
+          </div>
+        </div>
+        <div class="block-section">
+          <div class="block-title"><span>// Contenidos</span></div>
+          <div class="block-body">
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Fundamentos de la Energía Eólica <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Conocimientos básicos de viento. Conceptos básicos sobre la energía eólica. Evolución histórica del aprovechamiento del viento. Conceptos de meteorología en energía eólica. Aprovechamiento del viento. Ventajas y desventajas. Métodos teóricos de estimación de producción. Métodos avanzados de cálculo y simulación de los recursos eólicos. Producción de sonido y sombras. Diseño de parques de energía eólica.</span></div>
+            </div>
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Aerogeneradores y Sistemas <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Tipos de aerogeneradores, diferencias, ventajas y desventajas, rectificación, reductores, frenos, sistemas de orientación, tableros de control, curvas características, rendimiento. Sistemas auxiliares. Cálculo de la capacidad de las baterías. Cálculo y dimensionamiento de aspas.</span></div>
+            </div>
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Instalación y Seguridad <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Elementos de montaje y sujeción. Estructuras para soporte y anclaje. Sistemas de seguridad. Instalaciones eólicas aisladas de la red. Energía eólica y medio ambiente. Impacto ambiental. Normas de seguridad y protección eléctrica. Manejo de documentación técnica.</span></div>
+            </div>
+            <button class="add-unidad-btn" onclick="addUnidad(this)">+ AGREGAR UNIDAD</button>
+          </div>
+        </div>
+        <div class="block-section">
+          <div class="block-title"><span>// Recursos</span></div>
+          <div class="block-body">
+            <div class="recursos-list" id="rec-tec5"><p class="recurso-placeholder">Sin recursos cargados.</p></div>
+            <button class="add-recurso-btn" style="margin-top:10px" onclick="addRecurso('rec-tec5')">+ AGREGAR RECURSO</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-panel proyecto-panel" id="det-proy5">
+      <div class="detail-header">
+        <div><div class="detail-h2">Proyecto, Diseño e Instalaciones</div><div class="detail-sub">5° Año · 144 horas reloj · Formación Técnica Específica</div></div>
+        <button class="close-btn" onclick="closeDetail('det-proy5')">✕ CERRAR</button>
+      </div>
+      <div class="detail-body">
+        <div class="block-section">
+          <div class="block-title"><span>// Habilidades que vas a desarrollar</span></div>
+          <div class="block-body">
+            <div class="habilidades-wrap" id="hab-proy5">
+              <span class="hab-chip">Diseñar instalación eólica completa<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Predecir velocidad de viento y producción<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Seleccionar emplazamientos eólicos<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Realizar análisis aerodinámico<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Gestionar sistemas de control y automatismos<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Elaborar Gantt del proyecto eólico<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <button class="hab-add-btn" onclick="addHabilidad('hab-proy5')">+ AGREGAR</button>
+            </div>
+          </div>
+        </div>
+        <div class="block-section">
+          <div class="block-title"><span>// Contenidos</span></div>
+          <div class="block-body">
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Gestión y Factibilidad <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Financiación del proyecto. Análisis de factibilidad. Obtención de permisos. Nuevas modalidades en instalaciones eólicas. Cartografía y estaciones meteorológicas. Potencial eólico. Selección de emplazamientos.</span></div>
+            </div>
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Diseño y Ejecución <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Predicción de velocidad de viento y producción energética. I+D en sistemas de aerogeneradores. Análisis aerodinámico y mecánico del aerogenerador. Sistemas eléctricos de control, regulación y automatismos. Normas técnicas nacionales e internacionales. Documentación técnica. Diagrama de Gantt. Cómputo de materiales. Acumulación de energía. Seguridad y medio ambiente. Software específico.</span></div>
+            </div>
+            <button class="add-unidad-btn" onclick="addUnidad(this)">+ AGREGAR UNIDAD</button>
+          </div>
+        </div>
+        <div class="block-section">
+          <div class="block-title"><span>// Recursos</span></div>
+          <div class="block-body">
+            <div class="recursos-list" id="rec-proy5"><p class="recurso-placeholder">Sin recursos cargados.</p></div>
+            <button class="add-recurso-btn" style="margin-top:10px" onclick="addRecurso('rec-proy5')">+ AGREGAR RECURSO</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== 6TO ====== -->
+  <div class="year-section" id="year-6to">
+    <div class="section-label">// Formación técnica específica · 6° año</div>
+    <div class="materias-grid">
+      <div class="materia-card" onclick="toggleDetail('det-tec6',this)">
+        <div class="card-header">
+          <div class="card-nombre">Tecnología de la Energía Renovable</div>
+          <div class="card-horas">144 hs</div>
+        </div>
+        <div class="card-body">
+          <div class="card-preview">Biomasa e hidrógeno. Producción, conversión, almacenamiento y pilas de combustible.</div>
+          <div class="card-cta">▶ VER MATERIA</div>
+        </div>
+      </div>
+      <div class="materia-card proyecto" onclick="toggleDetail('det-proy6',this)">
+        <div class="card-header">
+          <div class="card-nombre">Proyecto, Diseño e Instalaciones en Energías Renovables</div>
+          <div class="card-horas">144 hs</div>
+        </div>
+        <div class="card-body">
+          <div class="card-preview">Proyectos de instalaciones de biomasa e hidrógeno. Sistemas de control, normativa y documentación.</div>
+          <div class="card-cta">▶ VER MATERIA</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-panel" id="det-tec6">
+      <div class="detail-header">
+        <div><div class="detail-h2">Tecnología de la Energía Renovable</div><div class="detail-sub">6° Año · 144 horas reloj · Formación Técnica Específica</div></div>
+        <button class="close-btn" onclick="closeDetail('det-tec6')">✕ CERRAR</button>
+      </div>
+      <div class="detail-body">
+        <div class="block-section">
+          <div class="block-title"><span>// Habilidades que vas a desarrollar</span></div>
+          <div class="block-body">
+            <div class="habilidades-wrap" id="hab-tec6">
+              <span class="hab-chip">Clasificar tipos de biomasa<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Calcular producción energética por biomasa<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Evaluar procesos de conversión de biomasa<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Comprender producción de hidrógeno por electrólisis<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Evaluar tipos de pilas de combustible<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Analizar almacenamiento de hidrógeno<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <button class="hab-add-btn" onclick="addHabilidad('hab-tec6')">+ AGREGAR</button>
+            </div>
+          </div>
+        </div>
+        <div class="block-section">
+          <div class="block-title"><span>// Contenidos</span></div>
+          <div class="block-body">
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Biomasa <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Biomasa: introducción, tipos, ventajas y desventajas. Procesos de conversión: producción de energía térmica, eléctrica, biocombustible y gases combustibles. Seguridad básica: prevención, control de riesgos y recomendaciones. Normativa y reglamentación.</span></div>
+            </div>
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Hidrógeno <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Propiedades físico-químicas del hidrógeno. Tecnologías del hidrógeno. Producción: electrólisis (fundamentos, tipos de electrolizadores, componentes). Obtención a partir de biomasa: gasificación, pirólisis, métodos biológicos. Combustibles fósiles: reformado a partir de gas natural.</span></div>
+            </div>
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Almacenamiento y Pilas de Combustible <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Almacenamiento: sólido (nanotubos, hidruros metálicos), gas comprimido, líquido criogénico. Sistemas de distribución. Pilas de combustible: tipos, características y aplicaciones. Motores de combustión de hidrógeno. Seguridad, normativa y reglamentación.</span></div>
+            </div>
+            <button class="add-unidad-btn" onclick="addUnidad(this)">+ AGREGAR UNIDAD</button>
+          </div>
+        </div>
+        <div class="block-section">
+          <div class="block-title"><span>// Recursos</span></div>
+          <div class="block-body">
+            <div class="recursos-list" id="rec-tec6"><p class="recurso-placeholder">Sin recursos cargados.</p></div>
+            <button class="add-recurso-btn" style="margin-top:10px" onclick="addRecurso('rec-tec6')">+ AGREGAR RECURSO</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-panel proyecto-panel" id="det-proy6">
+      <div class="detail-header">
+        <div><div class="detail-h2">Proyecto, Diseño e Instalaciones</div><div class="detail-sub">6° Año · 144 horas reloj · Formación Técnica Específica</div></div>
+        <button class="close-btn" onclick="closeDetail('det-proy6')">✕ CERRAR</button>
+      </div>
+      <div class="detail-body">
+        <div class="block-section">
+          <div class="block-title"><span>// Habilidades que vas a desarrollar</span></div>
+          <div class="block-body">
+            <div class="habilidades-wrap" id="hab-proy6">
+              <span class="hab-chip">Diseñar instalación de biomasa<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Proyectar sistema de producción de hidrógeno<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Predecir producción energética por biomasa<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Aplicar normas nacionales e internacionales<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Confeccionar documentación técnica completa<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <button class="hab-add-btn" onclick="addHabilidad('hab-proy6')">+ AGREGAR</button>
+            </div>
+          </div>
+        </div>
+        <div class="block-section">
+          <div class="block-title"><span>// Contenidos</span></div>
+          <div class="block-body">
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Instalaciones de Biomasa <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Financiación del proyecto. Análisis de factibilidad. Nuevas modalidades en instalaciones de biomasa. Selección de emplazamientos. Predicción de producción energética. I+D en sistemas de generación por biomasa. Consideraciones climáticas. Sistemas de control, regulación y automatismos. Normas técnicas. Documentación técnica. Estrategia de puesta en marcha. Acumulación de energía. Condiciones de seguridad.</span></div>
+            </div>
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Instalaciones de Hidrógeno <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Hidrógeno: sistemas de producción. Predicción de producción energética. I+D en generación por hidrógeno. Sistemas de control, regulación y automatismos. Normas técnicas nacionales e internacionales. Documentación técnica. Estrategia de puesta en marcha. Almacenamiento de hidrógeno. Condiciones de seguridad.</span></div>
+            </div>
+            <button class="add-unidad-btn" onclick="addUnidad(this)">+ AGREGAR UNIDAD</button>
+          </div>
+        </div>
+        <div class="block-section">
+          <div class="block-title"><span>// Recursos</span></div>
+          <div class="block-body">
+            <div class="recursos-list" id="rec-proy6"><p class="recurso-placeholder">Sin recursos cargados.</p></div>
+            <button class="add-recurso-btn" style="margin-top:10px" onclick="addRecurso('rec-proy6')">+ AGREGAR RECURSO</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== 7MO ====== -->
+  <div class="year-section" id="year-7mo">
+    <div class="section-label">// Formación técnica específica · 7° año</div>
+    <div class="materias-grid">
+      <div class="materia-card" onclick="toggleDetail('det-elab7',this)">
+        <div class="card-header">
+          <div class="card-nombre">Elaboración de Proyecto Aplicado a las Energías Renovables</div>
+          <div class="card-horas">144 hs</div>
+        </div>
+        <div class="card-body">
+          <div class="card-preview">Proyecto final integrador basado en situaciones problemáticas reales del sector energético.</div>
+          <div class="card-cta">▶ VER MATERIA</div>
+        </div>
+      </div>
+      <div class="materia-card proyecto" onclick="toggleDetail('det-ejec7',this)">
+        <div class="card-header">
+          <div class="card-nombre">Ejecución del Proyecto Aplicado a las Energías Renovables</div>
+          <div class="card-horas">216 hs</div>
+        </div>
+        <div class="card-body">
+          <div class="card-preview">Ejecución del proyecto integrador de sistemas de energías renovables. Proyecto final de la tecnicatura.</div>
+          <div class="card-cta">▶ VER MATERIA</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-panel" id="det-elab7">
+      <div class="detail-header">
+        <div><div class="detail-h2">Elaboración de Proyecto Aplicado</div><div class="detail-sub">7° Año · 144 horas reloj · Formación Técnica Específica</div></div>
+        <button class="close-btn" onclick="closeDetail('det-elab7')">✕ CERRAR</button>
+      </div>
+      <div class="detail-body">
+        <div class="block-section">
+          <div class="block-title"><span>// Habilidades que vas a desarrollar</span></div>
+          <div class="block-body">
+            <div class="habilidades-wrap" id="hab-elab7">
+              <span class="hab-chip">Identificar problemáticas reales del sector<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Formular proyecto integrador completo<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Integrar conocimientos de todos los años<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Elaborar propuesta técnica fundamentada<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <button class="hab-add-btn" onclick="addHabilidad('hab-elab7')">+ AGREGAR</button>
+            </div>
+          </div>
+        </div>
+        <div class="block-section">
+          <div class="block-title"><span>// Contenidos</span></div>
+          <div class="block-body">
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Proyecto Integrador <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Realización de un proyecto final integrador, basado en situaciones problemáticas reales del sector energético. Integra y aplica los conocimientos adquiridos a lo largo de todo el ciclo superior de la tecnicatura.</span></div>
+            </div>
+            <button class="add-unidad-btn" onclick="addUnidad(this)">+ AGREGAR UNIDAD</button>
+          </div>
+        </div>
+        <div class="block-section">
+          <div class="block-title"><span>// Recursos</span></div>
+          <div class="block-body">
+            <div class="recursos-list" id="rec-elab7"><p class="recurso-placeholder">Sin recursos cargados.</p></div>
+            <button class="add-recurso-btn" style="margin-top:10px" onclick="addRecurso('rec-elab7')">+ AGREGAR RECURSO</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-panel proyecto-panel" id="det-ejec7">
+      <div class="detail-header">
+        <div><div class="detail-h2">Ejecución del Proyecto Aplicado</div><div class="detail-sub">7° Año · 216 horas reloj · Formación Técnica Específica</div></div>
+        <button class="close-btn" onclick="closeDetail('det-ejec7')">✕ CERRAR</button>
+      </div>
+      <div class="detail-body">
+        <div class="block-section">
+          <div class="block-title"><span>// Habilidades que vas a desarrollar</span></div>
+          <div class="block-body">
+            <div class="habilidades-wrap" id="hab-ejec7">
+              <span class="hab-chip">Ejecutar proyecto de sistema energético<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Gestionar todas las etapas del proyecto<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Resolver imprevistos técnicos en campo<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Documentar la ejecución completa<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <span class="hab-chip">Presentar y defender el proyecto<button class="hab-remove" onclick="removeChip(this)">×</button></span>
+              <button class="hab-add-btn" onclick="addHabilidad('hab-ejec7')">+ AGREGAR</button>
+            </div>
+          </div>
+        </div>
+        <div class="block-section">
+          <div class="block-title"><span>// Contenidos</span></div>
+          <div class="block-body">
+            <div class="accordion-item">
+              <button class="accordion-header" onclick="toggleAcc(this)">Ejecución del Proyecto Integrador <span class="acc-arrow">▶</span></button>
+              <div class="accordion-body"><span contenteditable="false">Ejecución de proyectos de sistemas de energías renovables (proyecto integrador). Módulo de mayor carga horaria de la tecnicatura (216 horas reloj). El alumno lleva a la práctica todo lo aprendido en los años anteriores.</span></div>
+            </div>
+            <button class="add-unidad-btn" onclick="addUnidad(this)">+ AGREGAR UNIDAD</button>
+          </div>
+        </div>
+        <div class="block-section">
+          <div class="block-title"><span>// Recursos</span></div>
+          <div class="block-body">
+            <div class="recursos-list" id="rec-ejec7"><p class="recurso-placeholder">Sin recursos cargados.</p></div>
+            <button class="add-recurso-btn" style="margin-top:10px" onclick="addRecurso('rec-ejec7')">+ AGREGAR RECURSO</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Tecnicatura en Energías Renovables · Exp. N° 5811-1.197.309/11 · DGCyE Buenos Aires Provincia
+</footer>
+
+<script>
+var editMode = false;
+
+function toggleEditMode() {
+  editMode = !editMode;
+  var btn = document.getElementById('editToggle');
+  var status = document.getElementById('editStatus');
+  if (editMode) {
+    document.body.classList.add('edit-mode');
+    btn.classList.add('active');
+    btn.textContent = '[ GUARDAR ]';
+    status.innerHTML = '<span class="edit-indicator">● MODO EDICIÓN ACTIVO</span>';
+    document.querySelectorAll('.accordion-body span[contenteditable]').forEach(function(el) {
+      el.contentEditable = 'true';
+    });
+  } else {
+    document.body.classList.remove('edit-mode');
+    btn.classList.remove('active');
+    btn.textContent = '[ EDITAR ]';
+    status.innerHTML = '';
+    document.querySelectorAll('.accordion-body span[contenteditable]').forEach(function(el) {
+      el.contentEditable = 'false';
+    });
+  }
+}
+
+function showYear(year, btn) {
+  document.querySelectorAll('.year-section').forEach(function(s) { s.classList.remove('active'); });
+  document.querySelectorAll('.year-tab').forEach(function(b) { b.classList.remove('active'); });
+  document.getElementById('year-' + year).classList.add('active');
+  btn.classList.add('active');
+  document.querySelectorAll('.detail-panel').forEach(function(p) { p.classList.remove('visible'); });
+  document.querySelectorAll('.materia-card').forEach(function(c) { c.classList.remove('selected'); });
+}
+
+function toggleDetail(id, card) {
+  var panel = document.getElementById(id);
+  var wasVisible = panel.classList.contains('visible');
+  var year = card.closest('.year-section');
+  year.querySelectorAll('.detail-panel').forEach(function(p) { p.classList.remove('visible'); });
+  year.querySelectorAll('.materia-card').forEach(function(c) { c.classList.remove('selected'); });
+  if (!wasVisible) {
+    panel.classList.add('visible');
+    card.classList.add('selected');
+    setTimeout(function() { panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 50);
+  }
+}
+
+function closeDetail(id) {
+  document.getElementById(id).classList.remove('visible');
+  document.querySelectorAll('.materia-card').forEach(function(c) { c.classList.remove('selected'); });
+}
+
+function toggleAcc(header) {
+  var body = header.nextElementSibling;
+  var open = body.classList.contains('open');
+  var parent = header.closest('.block-body');
+  parent.querySelectorAll('.accordion-body').forEach(function(b) { b.classList.remove('open'); });
+  parent.querySelectorAll('.accordion-header').forEach(function(h) { h.classList.remove('open'); });
+  if (!open) { body.classList.add('open'); header.classList.add('open'); }
+}
+
+function removeChip(btn) {
+  btn.parentElement.remove();
+}
+
+function addHabilidad(containerId) {
+  var text = prompt('Nueva habilidad:');
+  if (!text || !text.trim()) return;
+  var wrap = document.getElementById(containerId);
+  var addBtn = wrap.querySelector('.hab-add-btn');
+  var chip = document.createElement('span');
+  chip.className = 'hab-chip';
+  chip.innerHTML = text.trim() + '<button class="hab-remove" onclick="removeChip(this)" title="Eliminar">×</button>';
+  wrap.insertBefore(chip, addBtn);
+}
+
+function addUnidad(btn) {
+  var titulo = prompt('Nombre de la unidad:');
+  if (!titulo || !titulo.trim()) return;
+  var contenido = prompt('Contenido de la unidad (podés editarlo después):') || '';
+  var item = document.createElement('div');
+  item.className = 'accordion-item';
+  item.innerHTML = '<button class="accordion-header" onclick="toggleAcc(this)">' + titulo.trim() + ' <span class="acc-arrow">▶</span></button><div class="accordion-body"><span contenteditable="' + (editMode ? 'true' : 'false') + '">' + (contenido.trim() || 'Editar contenido aquí...') + '</span></div>';
+  btn.parentElement.insertBefore(item, btn);
+}
+
+function addRecurso(containerId) {
+  var lista = document.getElementById(containerId);
+  var placeholder = lista.querySelector('.recurso-placeholder');
+  var label = prompt('Nombre del recurso:');
+  if (!label || !label.trim()) return;
+  var url = prompt('URL (opcional):') || '#';
+  if (placeholder) placeholder.remove();
+  var item = document.createElement('div');
+  item.className = 'recurso-item';
+  item.innerHTML = '<a href="' + url + '" target="_blank" style="color:var(--primary);text-decoration:none;font-size:11px;font-weight:600;">' + label.trim() + '</a><button class="recurso-remove" onclick="this.parentElement.remove()" title="Eliminar">×</button>';
+  lista.appendChild(item);
+}
+</script>
+</body>
+</html>

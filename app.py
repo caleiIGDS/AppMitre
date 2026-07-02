@@ -535,6 +535,18 @@ def _planilla_preceptores_con_turnos():
 def api_planilla_preceptores():
     return jsonify(_planilla_preceptores_con_turnos())
 
+@app.route('/api/preceptores_data')
+def api_preceptores_data():
+    # Todo lo de preceptores en una sola respuesta para cachear en el cliente:
+    # - horarios: {nombre: horario individual} (reusa la lógica LIKE + estado/turno)
+    # - planilla: lista por curso con turnos (sirve también para el preceptor-por-curso)
+    nombres = database.obtener_lista_preceptores_horario()
+    horarios = {n: database.obtener_horario_preceptor(n) for n in nombres}
+    return jsonify({
+        'horarios': horarios,
+        'planilla': _planilla_preceptores_con_turnos(),
+    })
+
 @app.route('/export/pdf/planilla_preceptores')
 def export_pdf_planilla_preceptores():
     filas = _planilla_preceptores_con_turnos()
