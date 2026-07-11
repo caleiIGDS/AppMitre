@@ -56,6 +56,7 @@ Google Sheets (CSV export por año: 1ro–7mo + preceptores + personal)
 | `/api/dashboard` | GET | Todas las clases (el JS filtra por hora actual) |
 | `/api/actualizar` | POST | Borra y reconstruye `escuela.db` desde Sheets |
 | `/export/pdf/<tipo>/<valor>` | GET | Genera y devuelve PDF (landscape A4, fpdf2) |
+| `/export/pdf/cursos/<seleccion>` | GET | PDF multipágina de cursos: `todos` o lista `1° A,2° B` |
 
 **Lógica de búsqueda en `/api/<tipo>/<valor>`:**
 - `profesor` → `WHERE profesor = ?`

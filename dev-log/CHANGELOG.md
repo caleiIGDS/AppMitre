@@ -4,6 +4,19 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-07-11] — Impresión múltiple de cursos en un solo PDF
+
+**Tipo**: feature + endpoint nuevo
+**Archivos**: `app.py`, `static/js/script.js`, `static/style.css`, `templates/index.html`
+
+- **Nuevo endpoint** `GET /export/pdf/cursos/<seleccion>`: genera un solo PDF con una página landscape A4 por curso. `seleccion` = `todos` | lista separada por comas de valores `"1° A"` (en el orden recibido). Selección vacía → 400. No colisiona con `/export/pdf/<tipo>/<valor>` (Werkzeug prioriza el segmento estático `cursos`).
+- **Refactor en `app.py`**: el dibujo de una página se extrajo de `export_pdf` a `dibujar_pagina_horario(pdf, tipo, valor)` + `_crear_pdf_horario()` (creación del PDF + fuentes). `export_pdf` mantiene URL, filename y comportamiento idénticos.
+- **UI nueva**: botón IMPRIMIR VARIOS en el slide-panel de CURSOS → modal selector (`abrirModalImprimirCursos()`, reusa `abrirModal`): botón TODOS, una fila por año (label `N°` togglea el año, chips por división), footer con contador + GENERAR PDF. Estado en Set global `cursosSeleccionadosPDF`. Si la selección está completa manda `todos`.
+- Clases CSS nuevas `.print-cursos-*` (solo tokens → nocturno gratis).
+- Cache-busters: `style.css` `?v=10`→`?v=11`, `script.js` `?v=12`→`?v=13`.
+
+---
+
 ## [2026-07-02] — Solo blueprint + nocturno; toggle con botón (sin tonos)
 
 **Tipo**: cambio de UI + contrato (CSS/JS)

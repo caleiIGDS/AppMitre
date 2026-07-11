@@ -1445,6 +1445,93 @@ function exportarPlanillaPreceptoresPDF() {
     window.open('/export/pdf/planilla_preceptores', '_blank');
 }
 
+/* --- Impresión múltiple de cursos --- */
+let cursosSeleccionadosPDF = new Set();
+
+function abrirModalImprimirCursos() {
+    document.getElementById('slide-curso').classList.remove('open');
+    document.getElementById('trigger-curso').classList.remove('panel-open');
+
+    cursosSeleccionadosPDF = new Set();
+
+    const cursos = rawData['curso'] || [];
+    const porAnio = {};
+    cursos.forEach(c => {
+        const anio = c.split('°')[0].trim();
+        if (!porAnio[anio]) porAnio[anio] = [];
+        porAnio[anio].push(c);
+    });
+
+    let html = `<div class="print-cursos-selector">
+        <button class="print-todos-btn" id="print-btn-todos" onclick="togglePrintTodos()">SELECCIONAR TODOS</button>
+        <div class="print-cursos-filas">`;
+    Object.keys(porAnio).forEach(anio => {
+        html += `<div class="print-cursos-fila">
+            <button class="print-anio-btn" data-anio="${anio}" onclick="togglePrintAnio('${anio}')">TODO ${anio}°</button>
+            <div class="print-cursos-chips">
+                ${porAnio[anio].map(c => `<button class="print-curso-chip" data-curso="${c}" onclick="togglePrintCurso('${c}')">${c.replace('° ', '°')}</button>`).join('')}
+            </div>
+        </div>`;
+    });
+    html += `</div>
+        <div class="print-cursos-footer">
+            <span id="print-contador" class="print-contador">Seleccionados: 0</span>
+            <button class="print-generar-btn" id="print-generar-btn" onclick="generarPDFCursosSeleccionados()" disabled>GENERAR PDF</button>
+        </div>
+    </div>`;
+
+    abrirModal('IMPRIMIR HORARIOS', html);
+}
+
+function togglePrintCurso(valor) {
+    if (cursosSeleccionadosPDF.has(valor)) cursosSeleccionadosPDF.delete(valor);
+    else cursosSeleccionadosPDF.add(valor);
+    actualizarSeleccionImpresion();
+}
+
+function togglePrintAnio(anio) {
+    const cursosAnio = (rawData['curso'] || []).filter(c => c.split('°')[0].trim() === anio);
+    const todosMarcados = cursosAnio.length > 0 && cursosAnio.every(c => cursosSeleccionadosPDF.has(c));
+    cursosAnio.forEach(c => todosMarcados ? cursosSeleccionadosPDF.delete(c) : cursosSeleccionadosPDF.add(c));
+    actualizarSeleccionImpresion();
+}
+
+function togglePrintTodos() {
+    const cursos = rawData['curso'] || [];
+    if (cursosSeleccionadosPDF.size === cursos.length) cursosSeleccionadosPDF.clear();
+    else cursos.forEach(c => cursosSeleccionadosPDF.add(c));
+    actualizarSeleccionImpresion();
+}
+
+function actualizarSeleccionImpresion() {
+    const cursos = rawData['curso'] || [];
+    document.querySelectorAll('.print-curso-chip').forEach(chip => {
+        chip.classList.toggle('selected', cursosSeleccionadosPDF.has(chip.dataset.curso));
+    });
+    document.querySelectorAll('.print-anio-btn').forEach(btn => {
+        const cursosAnio = cursos.filter(c => c.split('°')[0].trim() === btn.dataset.anio);
+        btn.classList.toggle('selected', cursosAnio.length > 0 && cursosAnio.every(c => cursosSeleccionadosPDF.has(c)));
+    });
+    const btnTodos = document.getElementById('print-btn-todos');
+    if (btnTodos) btnTodos.classList.toggle('selected', cursos.length > 0 && cursosSeleccionadosPDF.size === cursos.length);
+    const contador = document.getElementById('print-contador');
+    if (contador) contador.textContent = `Seleccionados: ${cursosSeleccionadosPDF.size}`;
+    const btnGenerar = document.getElementById('print-generar-btn');
+    if (btnGenerar) btnGenerar.disabled = cursosSeleccionadosPDF.size === 0;
+}
+
+function generarPDFCursosSeleccionados() {
+    const cursos = rawData['curso'] || [];
+    if (cursosSeleccionadosPDF.size === 0) return;
+    if (cursosSeleccionadosPDF.size === cursos.length) {
+        window.open('/export/pdf/cursos/todos', '_blank');
+    } else {
+        const lista = cursos.filter(c => cursosSeleccionadosPDF.has(c));
+        window.open('/export/pdf/cursos/' + encodeURIComponent(lista.join(',')), '_blank');
+    }
+    cerrarModal();
+}
+
 document.addEventListener('fullscreenchange', () => {
     if (document.fullscreenElement) {
         document.body.classList.add('is-fullscreen');

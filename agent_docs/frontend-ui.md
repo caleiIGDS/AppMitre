@@ -176,14 +176,19 @@ El tab "TIEMPO REAL" y su contenido sí son visibles (`.tech-live-module`, `.sys
 
 ---
 
-## PDF (`/export/pdf/<tipo>/<valor>`)
+## PDF (`/export/pdf/<tipo>/<valor>` y `/export/pdf/cursos/<seleccion>`)
 
 ### Características técnicas
 
-- Orientación: landscape A4 (297×210mm, área útil ≈267×155mm)
+- Orientación: landscape A4 (297×210mm). Grid de 267mm de ancho; el alto es dinámico: arranca donde terminó el encabezado (`pdf.get_y()`, ~25mm con preceptores, ~17mm sin) y termina en y=199mm. `_crear_pdf_horario()` desactiva el auto page break de fpdf (el grid pasa el trigger de y=190 y fpdf insertaría páginas en blanco)
 - Fuente: Roboto Mono embedded (Regular, Bold, Italic)
 - Sin header (`class PDF(FPDF): def header(self): pass`)
 - Footer: "by Calei" en itálica
+- El dibujo de una página vive en `dibujar_pagina_horario(pdf, tipo, valor)` (`app.py`); `/export/pdf/cursos/<seleccion>` la llama en loop para generar un PDF multipágina (una página por curso)
+
+### Selector de impresión múltiple (IMPRIMIR VARIOS)
+
+Botón IMPRIMIR VARIOS en el slide-panel de CURSOS → `abrirModalImprimirCursos()` reusa el modal genérico (`abrirModal`) con clases `.print-cursos-*`: botón TODOS, una fila por año (botón-label `N°` que togglea el año entero + chips por división) y footer con contador + GENERAR PDF. Estado en el Set global `cursosSeleccionadosPDF` (se resetea al abrir); `actualizarSeleccionImpresion()` sincroniza clases `.selected` y el disabled del botón. Los estilos usan solo tokens (`--surface`, `--border`, `--secondary`, `--muted`) → tema nocturno sin reglas extra (solo `border-radius`).
 
 ### Diferencia por tipo
 

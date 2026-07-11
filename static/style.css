@@ -1354,3 +1354,139 @@ body[data-theme="nocturno"] .modal-contenido {
 }
 body[data-theme="nocturno"] .materia-bloque { border-radius: 4px; }
 body[data-theme="nocturno"] .modal-contenido { box-shadow: 0 24px 60px rgba(0,0,0,0.6); }
+
+/* ─── Selector de impresión múltiple de cursos (modal) ──────────────────── */
+.modal-contenido:has(.print-cursos-selector) {
+    max-width: 640px;
+}
+
+.print-cursos-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.print-todos-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--primary);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.print-todos-btn:hover {
+    border-color: var(--secondary);
+}
+
+.print-todos-btn.selected {
+    background: var(--primary);
+    border-color: var(--secondary);
+    color: #fff;
+}
+
+.print-cursos-filas {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.print-cursos-fila {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.print-anio-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--primary);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 0;
+    width: 66px;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.print-anio-btn:hover {
+    border-color: var(--secondary);
+}
+
+.print-anio-btn.selected {
+    background: var(--primary);
+    border-color: var(--secondary);
+    color: #fff;
+}
+
+.print-cursos-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.print-curso-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: inherit;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.print-curso-chip:hover {
+    border-color: var(--secondary);
+}
+
+.print-curso-chip.selected {
+    background: var(--primary);
+    border-color: var(--secondary);
+    color: #fff;
+}
+
+.print-cursos-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+}
+
+.print-contador {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+}
+
+.print-generar-btn {
+    background: var(--secondary);
+    border: 1px solid var(--secondary);
+    color: #fff;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.print-generar-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+body[data-theme="nocturno"] .print-todos-btn,
+body[data-theme="nocturno"] .print-anio-btn,
+body[data-theme="nocturno"] .print-curso-chip,
+body[data-theme="nocturno"] .print-generar-btn {
+    border-radius: 4px;
+}

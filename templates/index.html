@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>Sistema de Horarios</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=10">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=11">
 </head>
 <body>
     <script>
@@ -116,6 +116,7 @@
                         <div class="slide-panel" id="slide-curso">
                             <button class="slide-opcion" data-opcion="comparar" onclick="seleccionarOpcionSlide('comparar','curso')">COMPARAR</button>
                             <button class="slide-opcion" id="slide-pdf-curso" onclick="exportarAPDF()">GENERAR PDF</button>
+                            <button class="slide-opcion" onclick="abrirModalImprimirCursos()">IMPRIMIR VARIOS</button>
                         </div>
                         <button class="btn-slide-trigger" id="trigger-curso" onclick="toggleSlidePanel('curso')">‹</button>
                     </div>
@@ -194,6 +195,6 @@
             dias: {{ dias | tojson | safe }},
         };
     </script>
-    <script src="{{ url_for('static', filename='js/script.js') }}?v=12"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}?v=13"></script>
 </body>
 </html>

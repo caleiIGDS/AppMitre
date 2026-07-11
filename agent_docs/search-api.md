@@ -142,6 +142,19 @@ FROM personal_no_docente ORDER BY nombre, dia
 ```
 Devuelve **todo** el personal no docente (mismo formato de objeto que `/api/personal/<nombre>`). Se llama una vez al cargar la web desde `cargarDatosIniciales()` para poblar `_allPersonal`.
 
+### `cursos` — PDF múltiple (`/export/pdf/cursos/<seleccion>`)
+
+Genera **un solo PDF con una página landscape A4 por curso**. `seleccion` puede ser:
+- `todos` → todos los cursos (`SELECT DISTINCT curso, division FROM clases WHERE curso != '' ORDER BY curso, division`, misma query que `index()`).
+- Lista separada por comas de valores estilo `"1° A"` (ej: `1° A,2° B`), en el orden recibido. Cada valor pasa por el mismo camino que `/export/pdf/curso/<valor>`.
+- Vacía/solo espacios → `400`.
+
+No colisiona con `/export/pdf/<tipo>/<valor>`: Werkzeug prioriza el segmento estático `cursos` sobre el convertidor `<tipo>`.
+
+**Refactor asociado**: el dibujo de una página de calendario se extrajo de `export_pdf` a `dibujar_pagina_horario(pdf, tipo, valor)` (+ `_crear_pdf_horario()` que crea el PDF y registra las fuentes). Ambas rutas de export lo reusan.
+
+En el frontend, el selector es un modal (botón IMPRIMIR VARIOS en el slide-panel de CURSOS → `abrirModalImprimirCursos()`); si la selección está completa manda `todos`, si no la lista en el orden de `rawData['curso']`.
+
 ---
 
 ## `window.APP_DATA` — contrato entre Flask y el JS

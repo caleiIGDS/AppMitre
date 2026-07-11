@@ -158,8 +158,17 @@ class PDF(FPDF):
     def footer(self):
         pass
 
-@app.route('/export/pdf/<tipo>/<valor>')
-def export_pdf(tipo, valor):
+def _crear_pdf_horario():
+    pdf = PDF(orientation='L', unit='mm', format='A4')
+    # El grid llega hasta y=199, pasando el trigger del auto page break (190):
+    # sin esto fpdf insertaría páginas en blanco al dibujar los bloques de abajo
+    pdf.set_auto_page_break(False)
+    pdf.add_font('RobotoMono', '', 'static/fonts/RobotoMono-Regular.ttf')
+    pdf.add_font('RobotoMono', 'B', 'static/fonts/RobotoMono-Bold.ttf')
+    pdf.add_font('RobotoMono', 'I', 'static/fonts/RobotoMono-Italic.ttf')
+    return pdf
+
+def dibujar_pagina_horario(pdf, tipo, valor):
     search_valor = valor
     columnas = None
     if tipo == 'curso' and '°' in valor:
@@ -173,11 +182,7 @@ def export_pdf(tipo, valor):
             columnas = FLOOR_MAPPING.get(piso, [])
 
     cal = obtener_datos_calendario(filas, tipo, columnas)
-    
-    pdf = PDF(orientation='L', unit='mm', format='A4')
-    pdf.add_font('RobotoMono', '', 'static/fonts/RobotoMono-Regular.ttf')
-    pdf.add_font('RobotoMono', 'B', 'static/fonts/RobotoMono-Bold.ttf')
-    pdf.add_font('RobotoMono', 'I', 'static/fonts/RobotoMono-Italic.ttf')
+
     pdf.add_page()
     
     # Fecha arriba a la izquierda
@@ -195,6 +200,9 @@ def export_pdf(tipo, valor):
         dia, piso = valor.split('|')
         titulo = f"Planilla General: {piso} - {dia}"
 
+    # La celda de la fecha (w=0, ln=0) deja el cursor en el margen derecho;
+    # volver al margen izquierdo para que el título se centre en la página
+    pdf.set_x(pdf.l_margin)
     pdf.cell(0, 10, titulo, 0, 1, 'C')
 
     if tipo == 'curso':
@@ -222,11 +230,13 @@ def export_pdf(tipo, valor):
         except Exception as e:
             print(f"Error PDF preceptor: {e}")
 
-    pdf.ln(5)
+    pdf.ln(2)
 
     if cal:
-        # Configuración del Grid
-        margin_left = 15; margin_top = 30; width = 267; height = 140
+        # Configuración del Grid: arranca donde terminó el encabezado y
+        # se extiende hasta y=199 (borde inferior con ~11mm de margen)
+        margin_left = 15; margin_top = pdf.get_y(); width = 267
+        height = 199 - (margin_top + 6)
         col_hour_w = 15; col_day_w = (width - col_hour_w) / len(cal['columnas'])
         
         # Dibujar Cabecera Días / Aulas
@@ -465,11 +475,39 @@ def export_pdf(tipo, valor):
                     pdf.set_xy(x, y + (h/2) - 2)
                     pdf.cell(w, 4, f"SUPERPOSICION", 0, 0, 'C')
 
+@app.route('/export/pdf/<tipo>/<valor>')
+def export_pdf(tipo, valor):
+    pdf = _crear_pdf_horario()
+    dibujar_pagina_horario(pdf, tipo, valor)
+
     output = io.BytesIO()
     output.write(pdf.output())
     output.seek(0)
     filename = f"{tipo}_{valor}.pdf".replace('|', '_')
     return send_file(output, mimetype='application/pdf', as_attachment=False, download_name=filename)
+
+@app.route('/export/pdf/cursos/<seleccion>')
+def export_pdf_cursos(seleccion):
+    if seleccion == 'todos':
+        con = database.conectar()
+        cur = con.cursor()
+        cur.execute("SELECT DISTINCT curso, division FROM clases WHERE curso != '' ORDER BY curso, division")
+        cursos = [f"{r[0]}° {r[1]}" for r in cur.fetchall()]
+        con.close()
+    else:
+        cursos = [c.strip() for c in seleccion.split(',') if c.strip()]
+
+    if not cursos:
+        return "Sin cursos seleccionados", 400
+
+    pdf = _crear_pdf_horario()
+    for valor in cursos:
+        dibujar_pagina_horario(pdf, 'curso', valor)
+
+    output = io.BytesIO()
+    output.write(pdf.output())
+    output.seek(0)
+    return send_file(output, mimetype='application/pdf', as_attachment=False, download_name="horarios_cursos.pdf")
 
 @app.route('/api/preceptor/<valor>')
 def api_preceptor(valor):

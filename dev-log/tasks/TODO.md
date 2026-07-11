@@ -2,16 +2,6 @@
 
 ---
 
-## Alta prioridad
-
-- [ ] #1 — Auto-inicialización de DB bajo gunicorn — `app.py`  
-  La lógica de `init_tablas()` + `tiene_datos()` + carga inicial está en el bloque `__main__`, que gunicorn no ejecuta. En producción (Render), después de un cold restart la DB está vacía y todas las rutas fallan. Solución: mover la inicialización a una función que se llame al importar el módulo (fuera de `__main__`). Ver `PLAN_HOSTING_GRATIS.txt`.
-
-- [ ] #2 — `/api/actualizar` debería ser POST, no GET — `app.py`  
-  Una operación destructiva (borra y recarga toda la DB) expuesta como GET puede ser disparada accidentalmente por cualquiera que conozca la URL. Cambiar a `methods=['POST']` y actualizar el `fetch` en `script.js`.
-
----
-
 ## Media prioridad
 
 - [ ] #3 — API devuelve objetos con claves nombradas (E3 PLAN_ESCUELAS) — `app.py` + `script.js`  
@@ -60,6 +50,12 @@
 - [ ] #17 — Reducir margen entre `.tech-search-module` y el calendario — `style.css`  
   Hay demasiado espacio visual entre el módulo de búsqueda y el calendario generado. Ajustar `margin-bottom` de `.tech-search-module` y/o `margin-top` del contenedor del calendario.
 
+- [ ] #18 — Íconos de UI como imágenes locales en vez de SVG/emoji inline — `static/js/script.js` + `templates/index.html` (+ `static/images/`)  
+  Poner el ícono del **botón de tema** (`#btn-tema`) en una imagen local (ej: `static/images/luna.svg` / `sol.svg`) en vez de las constantes SVG inline `ICONO_LUNA` / `ICONO_SOL` en `script.js`. Revisar y aplicar lo mismo a los otros íconos inline/emoji del proyecto:
+  - `script.js`: `⚠️` de superposición (líneas ~420, ~708, ~1366, ~1705), `✕` de cierre de chips (~161, ~246).
+  - `index.html`: `⚡` del banner MODO COMPARACIÓN (~155), `✕ SALIR` (~158), `‹` de los `.btn-slide-trigger` (5 usos).
+  - El logo ya es imagen local (`escuela_logo`) — usar ese patrón (`url_for('static', ...)`). Definir tamaño/color vía CSS y contemplar el tema oscuro (los SVG actuales usan `currentColor`).
+
 ---
 
 ## Bloqueado
@@ -69,4 +65,4 @@
 
 ---
 
-_Último número usado: #15. Próxima tarea nueva: #16_
+_Último número usado: #18. Próxima tarea nueva: #19_
