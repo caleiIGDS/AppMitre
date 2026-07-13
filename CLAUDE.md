@@ -212,6 +212,7 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 
 ## Context Rules
 
+- Formato/contrato del Google Sheet (encabezados, layout de preceptores, plantilla para otras escuelas) → leer `PLANTILLA_SHEET.md`
 - Lógica de normalización / pipeline de datos → leer `agent_docs/data-pipeline.md`
 - Renderizado del calendario, clustering, superposición → leer `agent_docs/calendar-engine.md`
 - Sistema de búsqueda y parsing de queries → leer `agent_docs/search-api.md`
@@ -236,4 +237,5 @@ Después de cada modificación, antes de terminar la tarea, revisá:
 - ¿Cambié estilos o variables CSS? → actualizar `agent_docs/frontend-ui.md`
 - ¿Cambió un contrato entre módulos? → agregar entrada en `dev-log/CHANGELOG.md`
 - ¿Tomaste una decisión no obvia? → agregar entrada en `dev-log/DECISIONS.md`
+- ¿Creaste, moviste o eliminaste un documento (`.md` de referencia)? → actualizar la referencia en `CLAUDE.md` (Context Rules o la sección que corresponda)
 - Fixes menores de estilo o bugs internos → no registrar nada

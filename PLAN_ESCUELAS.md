@@ -9,24 +9,28 @@ configuración que determina cuántos cursos existen, qué turnos hay, qué hora
 qué pisos, etc. Esa configuración se gestiona desde una página de administración en
 la propia UI — sin tocar código ni archivos del servidor.
 
+**Decisión [2026-07-13]**: la **estructura** del sheet es **fija por contrato**,
+documentada en `PLANTILLA_SHEET.md`. Una escuela nueva copia la plantilla estándar y
+carga sus datos — la app no adapta su parser a sheets con otro formato. Los parsers
+de `database.py` se mantienen tal cual: clases y personal leen por nombre de encabezado
+(`csv.DictReader`), preceptores por posición. Ver `dev-log/DECISIONS.md`.
+
 ---
 
 ## Diagnóstico: qué está acoplado hoy y dónde
 
 ### Capa de datos (Google Sheets → BD)
 
-**Problema 1 — Parser por índice de columna**
-`database.py` accede a las columnas del CSV por posición numérica (columna 0, 1, 2...).
-Si el sheet tiene las columnas en otro orden o agrega una nueva, los datos se corrompen
-silenciosamente. Hay que pasar a acceso por nombre de encabezado.
+**~~Problema 1 — Parser por índice de columna~~ (ya no existe — verificado 2026-07-13)**
+`cargar_desde_sheets()` y `cargar_personal_no_docente()` ya usan `csv.DictReader` con
+encabezados normalizados: el orden de columnas es libre, el contrato son los nombres
+de encabezado (fijados en `PLANTILLA_SHEET.md`). Riesgo residual aceptado: un
+encabezado renombrado carga esa columna vacía sin error.
 
-**Problema 2 — Parser de preceptores acoplado al layout del sheet**
-`cargar_horarios_preceptores()` asume un layout muy específico: 3 bloques de exactamente
-10 columnas cada uno (MAÑANA offset 0, TARDE offset 10, VESPERTINO offset 20).
-El sheet de preceptores del Mitre fue construido así, pero si el formato cambia o
-si otra escuela organiza su sheet distinto, el parser falla. Lo correcto: el sheet de
-preceptores debe respetar un formato estándar definido por la app (ej: columnas
-nombradas con encabezados claros), y la app parsea por nombre, no por offset.
+**~~Problema 2 — Parser de preceptores acoplado al layout del sheet~~ (aceptado — decisión 2026-07-13)**
+`cargar_horarios_preceptores()` asume el layout por bloques (MAÑANA/TARDE/VESPERTINO
+por offset). Ese layout pasa a ser parte de la plantilla estándar que toda escuela
+debe respetar tal cual.
 
 **Problema 3 — Mapeos de nombres de profesores hardcodeados**
 `limpiar_profesor()` en `database.py` tiene correcciones de typos específicas de
@@ -139,22 +143,11 @@ CREATE TABLE config (
 El backend lee de esta tabla al arrancar y expone un endpoint `GET /api/config` que
 sirve la config al frontend como parte de `window.APP_DATA.config`.
 
-### E2 — Parser de CSV por nombre de columna (no por índice)
+### ~~E2 — Parser de CSV por nombre de columna~~ (ya implementado / descartado como tarea)
 
-En `database.py`, reemplazar el acceso posicional al CSV por un dict keyed por el
-encabezado normalizado. El sheet puede tener las columnas en cualquier orden — la app
-las encuentra por nombre.
-
-```python
-# Hoy:
-fila_tupla = (linea[0], linea[1], linea[2], ...)
-
-# Objetivo:
-row = dict(zip(encabezados, linea))
-fila_tupla = (row.get('curso'), row.get('division'), row.get('especialidad'), ...)
-```
-
-Columnas extra en el sheet se ignoran. Columnas faltantes se tratan como vacías.
+Verificado 2026-07-13: `cargar_desde_sheets()` ya usa `csv.DictReader` — el parsing de
+clases y personal es por nombre de encabezado. No queda trabajo pendiente; el contrato
+de encabezados está documentado en `PLANTILLA_SHEET.md`.
 
 ### E3 — API devuelve objetos en lugar de arrays
 
@@ -174,12 +167,10 @@ La API debe devolver objetos:
 En `script.js` reemplazar `c[5]` → `c.profesor`, `c[9]` → `c.aula`, etc.
 Es el refactor de mayor esfuerzo pero la mayor ganancia en robustez y legibilidad.
 
-### E4 — Parser de preceptores con formato estándar
+### ~~E4 — Parser de preceptores con formato estándar~~ (descartado — decisión 2026-07-13)
 
-El sheet de preceptores debe seguir un formato tabular estándar con encabezados
-nombrados (no bloques de columnas por offset). La app define el formato esperado;
-el sheet se adapta. El parser deja de asumir posiciones fijas y lee por nombre de
-columna como en E2.
+Ya no es necesario: el layout por bloques (MAÑANA/TARDE/VESPERTINO por offset) es
+parte de la plantilla estándar. El parser actual se mantiene sin cambios.
 
 ### E5 — Turnos configurables y renderizado dinámico
 
@@ -206,6 +197,9 @@ sobre una lista fija. La UI de admin permite agregar o quitar años.
   no asumen nada del Mitre en su lógica central.
 - La detección de superposiciones es portable (solo necesita extenderse para E6).
 - El mecanismo de carga desde Google Sheets es reutilizable; solo cambian los IDs.
+- Los parsers de `database.py`: clases y personal ya leen por nombre de encabezado
+  (`csv.DictReader`); el de preceptores queda posicional por decisión 2026-07-13
+  (estructura fija por contrato — ver `PLANTILLA_SHEET.md`).
 
 ---
 
@@ -218,13 +212,16 @@ sobre una lista fija. La UI de admin permite agregar o quitar años.
 - Removida `corregir_horarios()` — datos de horario deben venir correctos del sheet
 - Removida inferencia de turno por hora — el turno será config explícita (E5)
 
-### Fase 2 — Robustez del parser
-5. E2: Parser de CSV por nombre de columna
-6. E4: Parser de preceptores con formato estándar
-7. E3: API devuelve objetos (requiere actualizar script.js en paralelo)
+### Fase 2 — Contrato de datos
+5. ✅ Plantilla estándar del sheet documentada → `PLANTILLA_SHEET.md` (2026-07-13):
+   pestañas, encabezados de clases, layout posicional de preceptores y formato de
+   personal no docente
+6. E3: API devuelve objetos (requiere actualizar script.js en paralelo) — TODO #3
+7. ~~E2 y E4~~ descartados (decisión 2026-07-13): estructura fija por contrato.
+   E2 ya estaba implementado (DictReader); el parser posicional de preceptores queda
 
 ### Fase 3 — Configuración desde la UI
-8. E1: Página de administración + tabla `config` en BD
-9. E5: Turnos configurables y renderizado dinámico
-10. E7: Años escolares dinámicos desde config
+8. E1: Página de administración + tabla `config` en BD — TODO #9
+9. E5: Turnos configurables y renderizado dinámico — TODO #11
+10. E7: Años escolares dinámicos desde config — TODO #10
 

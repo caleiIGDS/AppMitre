@@ -4,6 +4,23 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-07-13] — Estructura del Google Sheet fija por contrato (se descartan E2 y E4)
+
+**Contexto**: `PLAN_ESCUELAS.md` proponía parsers por nombre de encabezado (E2 para clases, E4 para preceptores) para tolerar sheets con columnas reordenadas o insertadas. Al revisar el plan multi-escuela se definió el alcance real: la app no va a soportar sheets con formatos variables.
+
+**Decisión**: La web asume una **estructura fija** del Google Sheet, definida por contrato en `PLANTILLA_SHEET.md`: una escuela nueva **copia la plantilla estándar** y carga sus datos. Los parsers actuales de `database.py` se mantienen tal cual.
+
+**Precisión (verificada en código el 2026-07-13)**: E2 ya estaba resuelto de facto — `cargar_desde_sheets()` y `cargar_personal_no_docente()` usan `csv.DictReader` con encabezados normalizados (el orden de columnas es libre; el contrato son los **nombres** de encabezado). El único parser posicional es el de preceptores (bloques por offset 0/9/18), y queda así.
+
+**Alternativa descartada**: Validación de encabezados/estructura al cargar (error claro si falta una columna). Menos frágil ante ediciones accidentales del sheet, pero se prefirió no agregar complejidad: el formato queda fijado por plantilla documentada.
+
+**Consecuencia**:
+- E2 y E4 se eliminan de `PLAN_ESCUELAS.md`; la tarea #4 del backlog se descartó.
+- La Fase 2 queda reducida a E3 (API con objetos, TODO #3) + la plantilla estándar documentada (`PLANTILLA_SHEET.md`, TODO #19 — hecha el 2026-07-13).
+- **Riesgo aceptado**: mover columnas en el sheet de preceptores, o renombrar un encabezado en clases/personal, corrompe o vacía datos silenciosamente. La protección es la plantilla documentada, no el código.
+
+---
+
 ## [2026-07-01] — Sistema de temas por CSS variables + tonos curados (no picker libre)
 
 **Contexto**: El usuario no soportaba el naranja `#FF6B00` (demasiado chillón) y pidió 3 UIs seleccionables manteniendo la estética técnica.

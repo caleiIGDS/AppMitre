@@ -1,6 +1,7 @@
 # Pipeline de Datos — AppMitre
 
 > Complementa `CLAUDE.md`. Leer ese primero para contexto general.
+> El formato que debe respetar el Google Sheet (contrato para otras escuelas) está en `PLANTILLA_SHEET.md`.
 
 ---
 
@@ -133,17 +134,17 @@ Ambos campos llegan del CSV como strings y pueden tener valores tipo checkbox de
 La hoja tiene un layout en 3 bloques horizontales yuxtapuestos (no una tabla estándar):
 
 ```
-[fila ignorada: "MAÑANA,,,,,,,,,,TARDE,,,,,,,,,,VESPERTINO..."]
-[headers: Preceptor|Estado|Curso|Div|Lun|Mar|Mie|Jue|Vie | <sep> | Preceptor|Estado|Curso|Div|Lun|Mar|Mie|Jue|Vie | ...]
+[fila ignorada: "MAÑANA,,,,,,,,,TARDE,,,,,,,,,VESPERTINO..."]
+[headers: Preceptor|Curso|Div|Lun|Mar|Mie|Jue|Vie | <sep> | Preceptor|Curso|Div|Lun|Mar|Mie|Jue|Vie | ...]
 [datos fila 1 ...]
 ```
 
 - `skip_rows=0` (default). `next(reader, None)` descarta la fila de labels ("MAÑANA/TARDE/VESPERTINO").
 - La fila de cabecera (Preceptor|Curso|...) se filtra con el guard `preceptor.upper() != "PRECEPTOR"`.
 - Bloques: `MAÑANA` en offset 0, `TARDE` en offset 9, `VESPERTINO` en offset 18 (8 cols de datos + 1 col separadora vacía = paso 9).
-- Una celda con `"X"`, `"TRUE"` o `"VERDADERO"` en la columna de día marca que el preceptor está presente ese día.
+- Celda de día: **cualquier valor no vacío distinto de `"FALSO"`** (case-insensitive) marca presencia — sirven los checkboxes de Google Sheets (`VERDADERO`/`FALSO`).
 
-**Fragilidad**: si el sheet de preceptores agrega o mueve columnas, los offsets 0/10/20 quedan mal. Documentado en `PLAN_ESCUELAS.md` como E4.
+**Fragilidad (riesgo aceptado)**: si el sheet de preceptores agrega o mueve columnas, los offsets 0/9/18 quedan mal y los datos se corrompen silenciosamente. Por decisión 2026-07-13 el layout es fijo por contrato (E4 descartado) — el formato exacto está en `PLANTILLA_SHEET.md`.
 
 ---
 
