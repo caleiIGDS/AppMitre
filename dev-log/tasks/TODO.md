@@ -4,9 +4,6 @@
 
 ## Media prioridad
 
-- [ ] #3 — API devuelve objetos con claves nombradas (E3 PLAN_ESCUELAS) — `app.py` + `script.js`  
-  Actualmente el frontend accede a `f[0]`, `f[5]`, `f[9]`, etc. (índice numérico). Cambiar la API para devolver `{curso, division, materia, profesor, aula, ...}` y actualizar las ~60+ referencias en `script.js`. Es el mayor refactor pendiente. Ver `agent_docs/search-api.md` para la tabla de índices.
-
 - [ ] #5 — `TURNO_CURSOS` en config: poblar con datos reales — `config.py`  
   Actualmente vacío `{}`. Todos los cursos muestran turno "MAÑANA" por default en la planilla de preceptores. Necesita configuración real.
 
@@ -58,7 +55,7 @@
 ## Bloqueado
 
 - [ ] #15 — Multi-escuela (Fase 2 y 3 de PLAN_ESCUELAS)  
-  **Bloqueado por**: requiere #9 (página admin) completado primero. Pre-requisitos restantes: #3 (API con objetos), #11 (turnos configurables), #10 (años dinámicos). La plantilla estándar del sheet ya existe (`PLANTILLA_SHEET.md`, ex #19). E2/E4 ya no aplican — la estructura del sheet es fija por contrato (decisión 2026-07-13).
+  **Bloqueado por**: requiere #9 (página admin) completado primero. Pre-requisitos restantes: #11 (turnos configurables), #10 (años dinámicos). Ya completados: plantilla estándar (`PLANTILLA_SHEET.md`, ex #19) y API con objetos (ex #3, 2026-07-13). E2/E4 ya no aplican — la estructura del sheet es fija por contrato (decisión 2026-07-13).
 
 ---
 

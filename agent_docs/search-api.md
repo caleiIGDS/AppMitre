@@ -47,16 +47,19 @@ El valor llega ya normalizado (sin acentos, mayúsculas) porque el autocompletad
 1. `GET /api/profesor/{valor}` → clases de docentes
 2. `GET /api/personal/{valor}` → filas de personal no docente
 
-Los resultados se fusionan en el cliente. Las filas de personal se convierten al formato de array-21 de clases mediante `personalToFila()`:
+Los resultados se fusionan en el cliente. Las filas de personal se convierten al formato de objeto de clases mediante `personalToFila()`:
 ```js
-row[3]  = p.rol         // "materia" = rol (ej: "PORTERO")
-row[5]  = p.nombre      // "profesor" = nombre
-row[11] = dia (mapeado a title case)
-row[12] = hora_inicio
-row[13] = hora_fin
-row[20] = 'personal'    // marker para distinguirlos en el renderizado
+{
+  materia: p.rol,          // ej: "PORTERO"
+  profesor: p.nombre,
+  dia,                     // mapeado a title case
+  hora_inicio: p.hora_inicio,
+  hora_fin: p.hora_fin,
+  tipo: 'personal'         // marker para distinguirlos en el renderizado
+  // resto de claves de una fila de clases: vacías / 0
+}
 ```
-El marker `row[20] === 'personal'` se usa en `generarCalendario` para aplicar estilos distintos (fondo naranja claro).
+El marker `clase.tipo === 'personal'` se usa en `generarCalendario` para aplicar estilos distintos (fondo naranja claro).
 
 ### `aula`
 
@@ -254,32 +257,17 @@ for f in filas:
 
 ---
 
-## Acceso a filas por índice numérico (deuda técnica)
+## Formato de fila: objetos con claves nombradas (desde [2026-07-13])
 
-El frontend accede a todos los campos de una clase como `f[N]` donde N es la posición en el SELECT *:
+La API devuelve cada clase como **objeto JSON** cuyas claves son las columnas de la tabla `clases` (`sqlite3.Row` → `dict` en `obtener_filas()` y `/api/dashboard`):
 
-| Índice | Campo |
-|---|---|
-| 0 | curso |
-| 1 | division |
-| 2 | especialidad |
-| 3 | materia |
-| 4 | tipo_materia |
-| 5 | profesor |
-| 6 | dni |
-| 7 | telefono |
-| 8 | email |
-| 9 | aula |
-| 10 | tipo_aula |
-| 11 | dia |
-| 12 | hora_inicio |
-| 13 | hora_fin |
-| 14 | grupo |
-| 15 | superposicion |
-| 16 | suplente_activo |
-| 17 | prof_suplente |
-| 18 | sup_ini |
-| 19 | sup_fin |
-| 20 | (solo en personalToFila) marker 'personal' |
+```
+{curso, division, especialidad, materia, tipo_materia, profesor, dni, telefono, email,
+ aula, tipo_aula, dia, hora_inicio, hora_fin, grupo, superposicion, suplente_activo,
+ prof_suplente, sup_ini, sup_fin}
+```
 
-Cambiar el orden de columnas en la tabla o el SELECT rompe todo el frontend silenciosamente. Documentado como E3 en `PLAN_ESCUELAS.md`.
+- El frontend accede por clave (`f.profesor`, `f.aula`, `f.hora_inicio`, ...). No queda ningún acceso por índice a filas de clases.
+- El código del PDF en `app.py` (`obtener_datos_calendario`, `dibujar_pagina_horario`) consume el mismo formato.
+- Las filas sintéticas de `personalToFila()` agregan la clave extra `tipo: 'personal'`.
+- Agregar una columna a la tabla `clases` la expone automáticamente en la API sin romper el frontend (E3 de `PLAN_ESCUELAS.md`, completado 2026-07-13).

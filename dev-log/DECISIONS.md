@@ -101,6 +101,8 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 **Consecuencia**: Cambiar el orden de columnas en la tabla rompería todo el frontend silenciosamente. Documentado como E3 en `PLAN_ESCUELAS.md` y como TODO #3 en el backlog.
 
+**Resuelto [2026-07-13]**: la API devuelve objetos con claves nombradas y el frontend accede por clave. Ver `dev-log/CHANGELOG.md` [2026-07-13].
+
 ---
 
 ## [fecha desconocida] — Layout de preceptores con bloques de columnas por offset
@@ -193,3 +195,5 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 **Alternativa descartada**: Cambiar la API para devolver objetos con claves nombradas (E3 en `PLAN_ESCUELAS.md`), que haría innecesario este workaround.
 
 **Consecuencia**: El workaround funciona pero es frágil — si la tabla `clases` agrega columnas, el índice 20 de `personalToFila` puede colisionar.
+
+**Resuelto [2026-07-13]**: con E3 completado, `personalToFila()` devuelve un objeto con claves nombradas y marker `tipo: 'personal'` — ya no hay índices que colisionen.

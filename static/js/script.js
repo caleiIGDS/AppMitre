@@ -76,23 +76,23 @@ function filtrarClasesLocal(modo, valor) {
     if (!_allClases) return null;
     switch (modo) {
         case 'profesor':
-            return _allClases.filter(f => f[5] === valor || (f[16] == 1 && f[17] === valor));
+            return _allClases.filter(f => f.profesor === valor || (f.suplente_activo == 1 && f.prof_suplente === valor));
         case 'aula':
-            return _allClases.filter(f => String(f[9]) === String(valor));
+            return _allClases.filter(f => String(f.aula) === String(valor));
         case 'curso': {
             // "1° A" → curso='1', division='A' (igual que el server: quita ° y separa por espacio)
             const partes = valor.replace(/°/g, '').trim().split(/\s+/);
             if (partes.length >= 2) {
-                return _allClases.filter(f => String(f[0]) === partes[0] && f[1] === partes[1]);
+                return _allClases.filter(f => String(f.curso) === partes[0] && f.division === partes[1]);
             }
-            return _allClases.filter(f => String(f[0]) === partes[0]);
+            return _allClases.filter(f => String(f.curso) === partes[0]);
         }
         case 'planilla': {
             if (!valor.includes('|')) return [];
             const [dia, piso] = valor.split('|');
             const aulas = (window.APP_DATA.floorMapping[piso] || []);
             if (!aulas.length) return [];
-            return _allClases.filter(f => f[11] === dia && aulas.includes(String(f[9])));
+            return _allClases.filter(f => f.dia === dia && aulas.includes(String(f.aula)));
         }
         default:
             return null; // horario_preceptor / preceptor → tabla distinta, va al server
@@ -293,8 +293,8 @@ function generarCalendarioComparacion(items) {
     let tiempos = new Set();
     items.forEach(item => {
         item.filas.forEach(f => {
-            if (f[12]) tiempos.add(f[12]);
-            if (f[13]) tiempos.add(f[13]);
+            if (f.hora_inicio) tiempos.add(f.hora_inicio);
+            if (f.hora_fin) tiempos.add(f.hora_fin);
         });
     });
 
@@ -345,25 +345,25 @@ function generarCalendarioComparacion(items) {
     html += '</div>';
 
     const renderBloqueComp = (clase, styleExtra, item) => {
-        const inicio = clase[12];
-        const fin = clase[13];
+        const inicio = clase.hora_inicio;
+        const fin = clase.hora_fin;
         const top = getPosicionY(inicio) + 2;
         const alto = Math.max(getPosicionY(fin) - 2 - top, 20);
         const jsonClase = encodeURIComponent(JSON.stringify(clase));
         const modo = item.modo;
-        const profName = (clase[16] === 1 && clase[17]) ? 'SUPLENTE: ' + clase[17] : (clase[5] || '-');
-        const detalleLinea = modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : profName;
-        const aulaInd = modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?');
-        const sinNumero = !(/\d/.test(clase[9])) && modo !== 'aula' ? ' sin-numero' : '';
+        const profName = (clase.suplente_activo === 1 && clase.prof_suplente) ? 'SUPLENTE: ' + clase.prof_suplente : (clase.profesor || '-');
+        const detalleLinea = modo === 'profesor' ? `${clase.curso}° ${clase.division}` : profName;
+        const aulaInd = modo === 'aula' ? `${clase.curso}° ${clase.division}` : (clase.aula || '?');
+        const sinNumero = !(/\d/.test(clase.aula)) && modo !== 'aula' ? ' sin-numero' : '';
         return `<div class="materia-bloque"
             style="top:${top}px; height:${alto}px; ${styleExtra} background-color:${item.color};"
             onclick="mostrarInfoClase('${jsonClase}', this)"
-            onmouseover="showTooltip(event,'${clase[3].replace(/'/g,"\\'")}','${profName.replace(/'/g,"\\'")}','${(clase[9]||'-').replace(/'/g,"\\'")}','${inicio} - ${fin}','${clase[0]}° ${clase[1]}')"
+            onmouseover="showTooltip(event,'${clase.materia.replace(/'/g,"\\'")}','${profName.replace(/'/g,"\\'")}','${(clase.aula||'-').replace(/'/g,"\\'")}','${inicio} - ${fin}','${clase.curso}° ${clase.division}')"
             onmouseout="hideTooltip()">
             <div class="materia-contenido">
-                ${modo === 'profesor' && clase[16] === 1
+                ${modo === 'profesor' && clase.suplente_activo === 1
                     ? `<div class="materia-nombre" style="color:var(--alert);font-weight:bold;display:flex;align-items:center;justify-content:center;height:100%;">LICENCIADA</div>`
-                    : `<div class="materia-nombre">${clase[3]}</div><div class="materia-detalles">${detalleLinea}</div>`
+                    : `<div class="materia-nombre">${clase.materia}</div><div class="materia-detalles">${detalleLinea}</div>`
                 }
             </div>
             <div class="aula-indicador${sinNumero}">${aulaInd}</div>
@@ -383,8 +383,8 @@ function generarCalendarioComparacion(items) {
             });
 
             const clasesDelDia = item.filas
-                .filter(f => f[11] === dia)
-                .sort((a, b) => timeToMin(a[12]) - timeToMin(b[12]));
+                .filter(f => f.dia === dia)
+                .sort((a, b) => timeToMin(a.hora_inicio) - timeToMin(b.hora_inicio));
             const modo = item.modo;
 
             let procesados = new Set();
@@ -392,30 +392,30 @@ function generarCalendarioComparacion(items) {
                 if (procesados.has(i)) continue;
                 let cluster = [clasesDelDia[i]];
                 let clusterIdx = [i];
-                let maxFin = timeToMin(clasesDelDia[i][13]);
+                let maxFin = timeToMin(clasesDelDia[i].hora_fin);
                 for (let j = i + 1; j < clasesDelDia.length; j++) {
-                    if (timeToMin(clasesDelDia[j][12]) < maxFin) {
+                    if (timeToMin(clasesDelDia[j].hora_inicio) < maxFin) {
                         cluster.push(clasesDelDia[j]);
                         clusterIdx.push(j);
-                        maxFin = Math.max(maxFin, timeToMin(clasesDelDia[j][13]));
+                        maxFin = Math.max(maxFin, timeToMin(clasesDelDia[j].hora_fin));
                     } else { break; }
                 }
 
-                const sinLicenciadas = cluster.filter(c => !(c[16] == 1 && c[5] === currentSearch.valor));
+                const sinLicenciadas = cluster.filter(c => !(c.suplente_activo == 1 && c.profesor === currentSearch.valor));
                 const clusterFinal = cluster.length > 1 && sinLicenciadas.length > 0 ? sinLicenciadas : cluster;
 
-                const todosTienenGrupo = clusterFinal.every(c => c[14] && c[14].trim() !== "");
+                const todosTienenGrupo = clusterFinal.every(c => c.grupo && c.grupo.trim() !== "");
                 const haySuperposicion = clusterFinal.length > 1 && (modo === 'aula' || modo === 'profesor' || !todosTienenGrupo);
 
                 if (haySuperposicion) {
-                    const todosPermiten = clusterFinal.every(c => c[15] == 1);
+                    const todosPermiten = clusterFinal.every(c => c.superposicion == 1);
                     if (todosPermiten) {
                         const estilos = calcularEstilosBloques(clusterFinal);
                         clusterFinal.forEach((clase, idx) => { html += renderBloqueComp(clase, estilos[idx], item); });
                     } else {
-                        const top = getPosicionY(clusterFinal[0][12]);
-                        const latestEnd = clusterFinal.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
-                        const alto = Math.max(getPosicionY(latestEnd[13]) - top, 30);
+                        const top = getPosicionY(clusterFinal[0].hora_inicio);
+                        const latestEnd = clusterFinal.reduce((max, c) => timeToMin(c.hora_fin) > timeToMin(max.hora_fin) ? c : max);
+                        const alto = Math.max(getPosicionY(latestEnd.hora_fin) - top, 30);
                         const jsonD = encodeURIComponent(JSON.stringify(clusterFinal));
                         html += `<div class="bloque-superposicion" style="top:${top}px; height:${alto}px;" onclick="verDetalleSuperposicion('${jsonD}')">⚠️ Superposición (${clusterFinal.length})</div>`;
                     }
@@ -472,16 +472,19 @@ function personalToFila(p) {
     const diaMap = Object.fromEntries(
         window.APP_DATA.dias.map(d => [d.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase(), d])
     );
-    const row = new Array(21).fill('');
-    row[3]  = p.rol;
-    row[5]  = p.nombre;
-    row[11] = diaMap[p.dia] || p.dia;
-    row[12] = p.hora_inicio;
-    row[13] = p.hora_fin;
-    row[15] = 0;
-    row[16] = 0;
-    row[20] = 'personal';
-    return row;
+    // Imita el objeto de una fila de `clases` para reusar el renderizado del calendario.
+    // `tipo: 'personal'` es el marker que distingue estos bloques.
+    return {
+        curso: '', division: '', especialidad: '',
+        materia: p.rol, tipo_materia: '',
+        profesor: p.nombre, dni: '', telefono: '', email: '',
+        aula: '', tipo_aula: '',
+        dia: diaMap[p.dia] || p.dia,
+        hora_inicio: p.hora_inicio, hora_fin: p.hora_fin,
+        grupo: '', superposicion: 0, suplente_activo: 0,
+        prof_suplente: '', sup_ini: '', sup_fin: '',
+        tipo: 'personal'
+    };
 }
 
 function normalize(text) {
@@ -657,30 +660,30 @@ function mostrarInfoClase(json, element) {
     if (element) element.classList.add('selected');
 
     const c = JSON.parse(decodeURIComponent(json));
-    let cursoDisplay = `${c[0]}° ${c[1]}`;
-    if (c[14] && c[14].trim() !== '') { // Check if group exists and is not empty
-        cursoDisplay += ` (Grupo: ${c[14]})`;
+    let cursoDisplay = `${c.curso}° ${c.division}`;
+    if (c.grupo && c.grupo.trim() !== '') { // Check if group exists and is not empty
+        cursoDisplay += ` (Grupo: ${c.grupo})`;
     }
 
     let profesorLabel = "Profesor";
-    let profesorValor = c[5];
-    if (c[16] === 1) {
+    let profesorValor = c.profesor;
+    if (c.suplente_activo === 1) {
         profesorLabel = "Suplente";
-        profesorValor = `${c[17]} (desde ${c[18]} hasta ${c[19]})`;
+        profesorValor = `${c.prof_suplente} (desde ${c.sup_ini} hasta ${c.sup_fin})`;
     }
 
     const html = `
         <div class="info-card">
             <div class="info-label">Materia</div>
-            <div class="info-valor">${c[3]}</div>
+            <div class="info-valor">${c.materia}</div>
             <div class="info-label">${profesorLabel}</div>
-            <div class="clickable-valor" onclick="navegarDesdeModal('profesor', '${c[5].replace(/'/g, "\\'")}')">${profesorValor}</div>
+            <div class="clickable-valor" onclick="navegarDesdeModal('profesor', '${c.profesor.replace(/'/g, "\\'")}')">${profesorValor}</div>
             <div class="info-label">Curso</div>
-            <div class="clickable-valor" onclick="navegarDesdeModal('curso', '${c[0]} ${c[1]}')">${cursoDisplay}</div>
+            <div class="clickable-valor" onclick="navegarDesdeModal('curso', '${c.curso} ${c.division}')">${cursoDisplay}</div>
             <div class="info-label">Aula</div>
-            <div class="clickable-valor" onclick="navegarDesdeModal('aula', '${(c[9] || '-').replace(/'/g, "\\'")}')">${c[9] || '-'}</div>
+            <div class="clickable-valor" onclick="navegarDesdeModal('aula', '${(c.aula || '-').replace(/'/g, "\\'")}')">${c.aula || '-'}</div>
             <div class="info-label">Horario</div>
-            <div class="info-valor">${c[12]} - ${c[13]} (${c[11]})</div>
+            <div class="info-valor">${c.hora_inicio} - ${c.hora_fin} (${c.dia})</div>
         </div>
     `;
     abrirModal('Información de la Clase', html);
@@ -693,15 +696,15 @@ function verDetalleSuperposicion(json) {
         html += `
             <div class="info-card overlap">
                 <div class="info-label">Materia</div>
-                <div class="info-valor">${c[3]}</div>
+                <div class="info-valor">${c.materia}</div>
                 <div class="info-label">Profesor</div>
-                <div class="clickable-valor" onclick="navegarDesdeModal('profesor', '${c[5].replace(/'/g, "\\'")}')">${c[5]}</div>
+                <div class="clickable-valor" onclick="navegarDesdeModal('profesor', '${c.profesor.replace(/'/g, "\\'")}')">${c.profesor}</div>
                 <div class="info-label">Curso</div>
-                <div class="clickable-valor" onclick="navegarDesdeModal('curso', '${c[0]} ${c[1]}')">${c[0]}° ${c[1]}</div>
+                <div class="clickable-valor" onclick="navegarDesdeModal('curso', '${c.curso} ${c.division}')">${c.curso}° ${c.division}</div>
                 <div class="info-label">Aula</div>
-                <div class="clickable-valor" onclick="navegarDesdeModal('aula', '${(c[9] || '-').replace(/'/g, "\\'")}')">${c[9] || '-'}</div>
+                <div class="clickable-valor" onclick="navegarDesdeModal('aula', '${(c.aula || '-').replace(/'/g, "\\'")}')">${c.aula || '-'}</div>
                 <div class="info-label">Horario</div>
-                <div class="info-valor">${c[12]} - ${c[13]}</div>
+                <div class="info-valor">${c.hora_inicio} - ${c.hora_fin}</div>
             </div>
         `;
     });
@@ -855,19 +858,19 @@ function renderizarDashboard(filas) {
     let upcoming = [];
 
     filas.forEach(f => {
-        if (f[11] !== currentDay) return;
-        
+        if (f.dia !== currentDay) return;
+
         // Aplicar filtro si existe texto
         if (filterText) {
-            const curso = normalize(`${f[0]} ${f[1]}`);
-            const prof = normalize(f[16] === 1 ? f[17] : f[5]);
+            const curso = normalize(`${f.curso} ${f.division}`);
+            const prof = normalize(f.suplente_activo === 1 ? f.prof_suplente : f.profesor);
             if (!curso.includes(filterText) && !prof.includes(filterText)) {
                 return;
             }
         }
 
-        const start = timeToMin(f[12]);
-        const end = timeToMin(f[13]);
+        const start = timeToMin(f.hora_inicio);
+        const end = timeToMin(f.hora_fin);
 
         if (currentTime >= start && currentTime <= end) {
             inProgress.push(f);
@@ -876,23 +879,23 @@ function renderizarDashboard(filas) {
         }
     });
 
-    inProgress.sort((a, b) => timeToMin(a[12]) - timeToMin(b[12]));
-    upcoming.sort((a, b) => timeToMin(a[12]) - timeToMin(b[12]));
+    inProgress.sort((a, b) => timeToMin(a.hora_inicio) - timeToMin(b.hora_inicio));
+    upcoming.sort((a, b) => timeToMin(a.hora_inicio) - timeToMin(b.hora_inicio));
 
     const renderList = (list) => {
         if (list.length === 0) return `<div style="text-align:center; padding:20px; color:#5f6368;">${filterText ? 'SIN COINCIDENCIAS' : 'SIN ACTIVIDAD'}</div>`;
         return list.map(f => {
-            let profName = f[5];
-            if (f[16] === 1) profName = 'SUPLENTE: ' + f[17];
+            let profName = f.profesor;
+            if (f.suplente_activo === 1) profName = 'SUPLENTE: ' + f.prof_suplente;
             const jsonClase = encodeURIComponent(JSON.stringify(f));
             return `
                 <div class="class-item-light" style="cursor:pointer;" onclick="mostrarInfoClase('${jsonClase}', this)">
-                    <div class="class-time-light">${f[12]} - ${f[13]}</div>
+                    <div class="class-time-light">${f.hora_inicio} - ${f.hora_fin}</div>
                     <div class="class-info-light">
-                        <span class="class-materia-light">${f[0]}° ${f[1]} | ${profName}</span>
-                        <span class="class-meta-light">${f[3]}</span>
+                        <span class="class-materia-light">${f.curso}° ${f.division} | ${profName}</span>
+                        <span class="class-meta-light">${f.materia}</span>
                     </div>
-                    <div class="class-room-light">${f[9] || '-'}</div>
+                    <div class="class-room-light">${f.aula || '-'}</div>
                 </div>
             `;
         }).join('');
@@ -1191,7 +1194,7 @@ function calcularEstilosBloques(cluster) {
         let assignments = new Array(numClases).fill(null);
 
         for (let i = 0; i < numClases; i++) {
-            let g = (cluster[i][14] || "").trim().toUpperCase();
+            let g = (cluster[i].grupo || "").trim().toUpperCase();
             if (g === 'A' && !leftOcupado) {
                 assignments[i] = 'left';
                 leftOcupado = true;
@@ -1253,8 +1256,8 @@ function generarCalendario(filas, modo) {
         const dias = window.APP_DATA.dias;
         let tiempos = new Set();
         filas.forEach(f => {
-            if (f[12]) tiempos.add(f[12]);
-            if (f[13]) tiempos.add(f[13]);
+            if (f.hora_inicio) tiempos.add(f.hora_inicio);
+            if (f.hora_fin) tiempos.add(f.hora_fin);
         });
         
         if (tiempos.size === 0) {
@@ -1297,70 +1300,70 @@ function generarCalendario(filas, modo) {
                 html += `<div class="grid-line-horizontal" style="top:${top}px;"></div>`;
             });
 
-            const clasesDelDia = filas.filter(f => f[11] === dia).sort((a,b) => timeToMin(a[12]) - timeToMin(b[12]));
+            const clasesDelDia = filas.filter(f => f.dia === dia).sort((a,b) => timeToMin(a.hora_inicio) - timeToMin(b.hora_inicio));
             let procesados = new Set();
             for (let i = 0; i < clasesDelDia.length; i++) {
                 if (procesados.has(i)) continue;
                 let cluster = [clasesDelDia[i]];
                 let clusterIdx = [i];
-                let maxFin = timeToMin(clasesDelDia[i][13]);
+                let maxFin = timeToMin(clasesDelDia[i].hora_fin);
                 for (let j = i + 1; j < clasesDelDia.length; j++) {
-                    let inicioJ = timeToMin(clasesDelDia[j][12]);
+                    let inicioJ = timeToMin(clasesDelDia[j].hora_inicio);
                     if (inicioJ < maxFin) {
                         cluster.push(clasesDelDia[j]);
                         clusterIdx.push(j);
-                        maxFin = Math.max(maxFin, timeToMin(clasesDelDia[j][13]));
+                        maxFin = Math.max(maxFin, timeToMin(clasesDelDia[j].hora_fin));
                     } else { break; }
                 }
 
-                const sinLicenciadas = cluster.filter(c => !(c[16] == 1 && c[5] === currentSearch.valor));
+                const sinLicenciadas = cluster.filter(c => !(c.suplente_activo == 1 && c.profesor === currentSearch.valor));
                 const clusterFinal = cluster.length > 1 && sinLicenciadas.length > 0 ? sinLicenciadas : cluster;
 
-                const todosTienenGrupo = clusterFinal.every(c => c[14] && c[14].trim() !== "");
+                const todosTienenGrupo = clusterFinal.every(c => c.grupo && c.grupo.trim() !== "");
                 const haySuperposicion = clusterFinal.length > 1 && (modo === 'aula' || modo === 'profesor' || !todosTienenGrupo);
 
                 if (haySuperposicion) {
-                    const todosPermitenSuperposicion = clusterFinal.every(c => c[15] == 1);
+                    const todosPermitenSuperposicion = clusterFinal.every(c => c.superposicion == 1);
                     if (todosPermitenSuperposicion) {
                         const estilos = calcularEstilosBloques(clusterFinal);
                         const numClases = clusterFinal.length;
                         clusterFinal.forEach((clase, idxInCluster) => {
-                            const inicio = clase[12];
-                            const fin = clase[13];
+                            const inicio = clase.hora_inicio;
+                            const fin = clase.hora_fin;
                             const top = getPosicionY(inicio) + 2;
                             const bottom = getPosicionY(fin) - 2;
                             const alto = Math.max(bottom - top, 20);
                             const styleExtra = estilos[idxInCluster];
-                            const esPersonal = clase[20] === 'personal';
+                            const esPersonal = clase.tipo === 'personal';
 
-                            const esLicenciadaProf = modo === 'profesor' && clase[16] === 1 && clase[5] === currentSearch.valor;
+                            const esLicenciadaProf = modo === 'profesor' && clase.suplente_activo === 1 && clase.profesor === currentSearch.valor;
                             const jsonClase = encodeURIComponent(JSON.stringify(clase));
                             html += `
                                 <div class="materia-bloque${esPersonal ? ' personal-cargo-bloque' : ''}"
                                      style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? '' : (esLicenciadaProf ? ' opacity:0.28;' : '')}"
                                      onclick="mostrarInfoClase('${jsonClase}', this)"
-                                     onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '-', '${inicio} - ${fin}', '-')"
+                                     onmouseover="showTooltip(event, '${clase.materia.replace(/'/g, "\\'")}', '${clase.profesor.replace(/'/g, "\\'")}', '-', '${inicio} - ${fin}', '-')"
                                      onmouseout="hideTooltip()">
                                     <div class="materia-contenido">
                                         ${esPersonal ?
-                                            `<div class="materia-nombre">${clase[3]}</div>
+                                            `<div class="materia-nombre">${clase.materia}</div>
                                              <div class="materia-detalles">${inicio} - ${fin}</div>` :
-                                            `<div class="materia-nombre">${clase[3]}</div>
+                                            `<div class="materia-nombre">${clase.materia}</div>
                                              <div class="materia-detalles">
                                                 ${(() => {
-                                                    const profName = (clase[16] === 1 && clase[17]) ? 'SUPLENTE: ' + clase[17] : (clase[5] || '-');
-                                                    return modo === 'aula' ? profName : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : profName);
+                                                    const profName = (clase.suplente_activo === 1 && clase.prof_suplente) ? 'SUPLENTE: ' + clase.prof_suplente : (clase.profesor || '-');
+                                                    return modo === 'aula' ? profName : (modo === 'profesor' ? `${clase.curso}° ${clase.division}` : profName);
                                                 })()}
                                              </div>`
                                         }
                                     </div>
-                                    ${esPersonal ? '' : `<div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>`}
+                                    ${esPersonal ? '' : `<div class="aula-indicador${!(/\d/g.test(clase.aula)) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase.curso}° ${clase.division}` : (clase.aula || '?')}</div>`}
                                 </div>`;
                         });
                     } else {
-                        const top = getPosicionY(clusterFinal[0][12]);
-                        const latestEndClase = clusterFinal.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
-                        const bottom = getPosicionY(latestEndClase[13]);
+                        const top = getPosicionY(clusterFinal[0].hora_inicio);
+                        const latestEndClase = clusterFinal.reduce((max, c) => timeToMin(c.hora_fin) > timeToMin(max.hora_fin) ? c : max);
+                        const bottom = getPosicionY(latestEndClase.hora_fin);
                         const alto = Math.max(bottom - top, 30);
                         const jsonDetalles = encodeURIComponent(JSON.stringify(clusterFinal));
                         html += `<div class="bloque-superposicion" style="top: ${top}px; height: ${alto}px;" onclick="verDetalleSuperposicion('${jsonDetalles}')">⚠️ Superposición (${clusterFinal.length})</div>`;
@@ -1370,35 +1373,35 @@ function generarCalendario(filas, modo) {
                     const estilos = calcularEstilosBloques(clusterFinal);
                     const numClases = clusterFinal.length;
                     clusterFinal.forEach((clase, idxInCluster) => {
-                        const inicio = clase[12];
-                        const fin = clase[13];
+                        const inicio = clase.hora_inicio;
+                        const fin = clase.hora_fin;
                         const top = getPosicionY(inicio) + 2;
                         const bottom = getPosicionY(fin) - 2;
                         const alto = Math.max(bottom - top, 20);
                         const styleExtra = estilos[idxInCluster];
-                        const esPersonal = clase[20] === 'personal';
-                        const esLicenciadaProf = modo === 'profesor' && clase[16] === 1 && clase[5] === currentSearch.valor;
+                        const esPersonal = clase.tipo === 'personal';
+                        const esLicenciadaProf = modo === 'profesor' && clase.suplente_activo === 1 && clase.profesor === currentSearch.valor;
                         const jsonClase = encodeURIComponent(JSON.stringify(clase));
                         html += `
                             <div class="materia-bloque${esPersonal ? ' personal-cargo-bloque' : ''}"
                                  style="top: ${top}px; height: ${alto}px; ${styleExtra}${esPersonal ? '' : (esLicenciadaProf ? ' opacity:0.28;' : '')}"
                                  onclick="mostrarInfoClase('${jsonClase}', this)"
-                                 onmouseover="showTooltip(event, '${clase[3].replace(/'/g, "\\'")}', '${clase[5].replace(/'/g, "\\'")}', '-', '${inicio} - ${fin}', '-')"
+                                 onmouseover="showTooltip(event, '${clase.materia.replace(/'/g, "\\'")}', '${clase.profesor.replace(/'/g, "\\'")}', '-', '${inicio} - ${fin}', '-')"
                                  onmouseout="hideTooltip()">
                                 <div class="materia-contenido">
                                     ${esPersonal ?
-                                        `<div class="materia-nombre">${clase[3]}</div>
+                                        `<div class="materia-nombre">${clase.materia}</div>
                                          <div class="materia-detalles">${inicio} - ${fin}</div>` :
-                                        `<div class="materia-nombre">${clase[3]}</div>
+                                        `<div class="materia-nombre">${clase.materia}</div>
                                          <div class="materia-detalles">
                                             ${(() => {
-                                                const profName = (clase[16] === 1 && clase[17]) ? 'SUPLENTE: ' + clase[17] : (clase[5] || '-');
-                                                return modo === 'aula' ? profName : (modo === 'profesor' ? `${clase[0]}° ${clase[1]}` : profName);
+                                                const profName = (clase.suplente_activo === 1 && clase.prof_suplente) ? 'SUPLENTE: ' + clase.prof_suplente : (clase.profesor || '-');
+                                                return modo === 'aula' ? profName : (modo === 'profesor' ? `${clase.curso}° ${clase.division}` : profName);
                                             })()}
                                          </div>`
                                     }
                                 </div>
-                                ${esPersonal ? '' : `<div class="aula-indicador${!(/\d/g.test(clase[9])) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase[0]}° ${clase[1]}` : (clase[9] || '?')}</div>`}
+                                ${esPersonal ? '' : `<div class="aula-indicador${!(/\d/g.test(clase.aula)) && !(modo == "aula") ? ' sin-numero' : ''}">${modo === 'aula' ? `${clase.curso}° ${clase.division}` : (clase.aula || '?')}</div>`}
                             </div>`;
                     });
                     clusterIdx.forEach(idx => procesados.add(idx));
@@ -1701,7 +1704,7 @@ function generarPlanillaGeneral() {
         return h * 60 + m;
     };
 
-    const filasDia = allDataCache.filter(f => f[11] === selectedDay && classrooms.includes(String(f[9])));
+    const filasDia = allDataCache.filter(f => f.dia === selectedDay && classrooms.includes(String(f.aula)));
     
     if (filasDia.length === 0) {
         contenedor.innerHTML = `<div style='padding:20px; text-align:center; color:#70757a;'>No hay clases para ${selectedFloor} el ${selectedDay}.</div>`;
@@ -1710,8 +1713,8 @@ function generarPlanillaGeneral() {
 
     let tiempos = new Set();
     filasDia.forEach(f => {
-        if (f[12]) tiempos.add(f[12]);
-        if (f[13]) tiempos.add(f[13]);
+        if (f.hora_inicio) tiempos.add(f.hora_inicio);
+        if (f.hora_fin) tiempos.add(f.hora_fin);
     });
     
     const horariosDinamicos = Array.from(tiempos).sort((a, b) => timeToMin(a) - timeToMin(b));
@@ -1744,34 +1747,34 @@ function generarPlanillaGeneral() {
             html += `<div class="grid-line-horizontal" style="top:${getPosicionY(hora)}px;"></div>`;
         });
 
-        const clasesAula = filasDia.filter(f => String(f[9]) === aula).sort((a,b) => timeToMin(a[12]) - timeToMin(b[12]));
+        const clasesAula = filasDia.filter(f => String(f.aula) === aula).sort((a,b) => timeToMin(a.hora_inicio) - timeToMin(b.hora_inicio));
         let procesados = new Set();
         for (let i = 0; i < clasesAula.length; i++) {
             if (procesados.has(i)) continue;
             let cluster = [clasesAula[i]];
             let clusterIdx = [i];
-            let maxFin = timeToMin(clasesAula[i][13]);
+            let maxFin = timeToMin(clasesAula[i].hora_fin);
             for (let j = i + 1; j < clasesAula.length; j++) {
-                if (timeToMin(clasesAula[j][12]) < maxFin) {
+                if (timeToMin(clasesAula[j].hora_inicio) < maxFin) {
                     cluster.push(clasesAula[j]);
                     clusterIdx.push(j);
-                    maxFin = Math.max(maxFin, timeToMin(clasesAula[j][13]));
+                    maxFin = Math.max(maxFin, timeToMin(clasesAula[j].hora_fin));
                 } else { break; }
             }
 
-            const sinLicenciadas = cluster.filter(c => c[16] != 1);
+            const sinLicenciadas = cluster.filter(c => c.suplente_activo != 1);
             const clusterFinal = cluster.length > 1 && sinLicenciadas.length > 0 ? sinLicenciadas : cluster;
 
-            const todosTienenGrupo = clusterFinal.every(c => c[14] && c[14].trim() !== "");
+            const todosTienenGrupo = clusterFinal.every(c => c.grupo && c.grupo.trim() !== "");
             const haySuperposicion = clusterFinal.length > 1 && !todosTienenGrupo;
 
             if (haySuperposicion) {
-                const todosPermitenSuperposicion = clusterFinal.every(c => c[15] == 1);
+                const todosPermitenSuperposicion = clusterFinal.every(c => c.superposicion == 1);
                 if (todosPermitenSuperposicion) {
                     const numClases = clusterFinal.length;
                     clusterFinal.forEach((clase, idxInCluster) => {
-                        const top = getPosicionY(clase[12]) + 2;
-                        const bottom = getPosicionY(clase[13]) - 2;
+                        const top = getPosicionY(clase.hora_inicio) + 2;
+                        const bottom = getPosicionY(clase.hora_fin) - 2;
                         const alto = Math.max(bottom - top, 20);
                         const anchoPct = 100 / numClases;
                         const leftPct = anchoPct * idxInCluster;
@@ -1779,29 +1782,29 @@ function generarPlanillaGeneral() {
                         const jsonClase = encodeURIComponent(JSON.stringify(clase));
                         html += `<div class="materia-bloque" style="top: ${top}px; height: ${alto}px; ${styleExtra}" onclick="mostrarInfoClase('${jsonClase}', this)">
                             <div class="materia-contenido" style="text-align:center;">
-                                <div class="materia-nombre" style="font-size:14px;">${clase[0]}° ${clase[1]}</div>
+                                <div class="materia-nombre" style="font-size:14px;">${clase.curso}° ${clase.division}</div>
                             </div>
-                            <div class="aula-indicador">${clase[0]}° ${clase[1]}</div>
+                            <div class="aula-indicador">${clase.curso}° ${clase.division}</div>
                         </div>`;
                     });
                 } else {
-                    const top = getPosicionY(clusterFinal[0][12]);
-                    const latestEndClase = clusterFinal.reduce((max, c) => timeToMin(c[13]) > timeToMin(max[13]) ? c : max);
-                    const alto = Math.max(getPosicionY(latestEndClase[13]) - top, 30);
+                    const top = getPosicionY(clusterFinal[0].hora_inicio);
+                    const latestEndClase = clusterFinal.reduce((max, c) => timeToMin(c.hora_fin) > timeToMin(max.hora_fin) ? c : max);
+                    const alto = Math.max(getPosicionY(latestEndClase.hora_fin) - top, 30);
                     const jsonDetalles = encodeURIComponent(JSON.stringify(clusterFinal));
                     html += `<div class="bloque-superposicion" style="top: ${top}px; height: ${alto}px;" onclick="verDetalleSuperposicion('${jsonDetalles}')">⚠️ Superposición (${clusterFinal.length})</div>`;
                 }
             } else {
                 clusterFinal.forEach((clase) => {
-                    const top = getPosicionY(clase[12]) + 2;
-                    const bottom = getPosicionY(clase[13]) - 2;
+                    const top = getPosicionY(clase.hora_inicio) + 2;
+                    const bottom = getPosicionY(clase.hora_fin) - 2;
                     const alto = Math.max(bottom - top, 20);
                     const jsonClase = encodeURIComponent(JSON.stringify(clase));
                     html += `<div class="materia-bloque" style="top: ${top}px; height: ${alto}px; left:4px; right:4px;" onclick="mostrarInfoClase('${jsonClase}', this)">
                         <div class="materia-contenido" style="text-align:center;">
-                            <div class="materia-nombre" style="font-size:14px;">${clase[0]}° ${clase[1]}</div>
+                            <div class="materia-nombre" style="font-size:14px;">${clase.curso}° ${clase.division}</div>
                         </div>
-                        <div class="aula-indicador">${clase[0]}° ${clase[1]}</div>
+                        <div class="aula-indicador">${clase.curso}° ${clase.division}</div>
                     </div>`;
                 });
             }

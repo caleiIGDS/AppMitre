@@ -4,6 +4,19 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-07-13] — API devuelve objetos con claves nombradas (E3)
+
+**Tipo**: cambio de contrato API ↔ frontend
+**Archivos**: `app.py`, `static/js/script.js`, `templates/index.html`
+
+- `/api/<tipo>/<valor>` y `/api/dashboard` devuelven cada clase como **objeto JSON** `{curso, division, especialidad, materia, tipo_materia, profesor, dni, telefono, email, aula, tipo_aula, dia, hora_inicio, hora_fin, grupo, superposicion, suplente_activo, prof_suplente, sup_ini, sup_fin}` (claves = columnas de la tabla `clases`, vía `sqlite3.Row`) en vez de array de 20 posiciones.
+- `script.js`: todas las referencias `f[N]` migradas a `f.campo` (~99 en calendario, comparación, planilla, dashboard, modal, tooltip y `filtrarClasesLocal`). `personalToFila()` ahora devuelve un objeto que imita una fila de clases, con marker `tipo: 'personal'` (antes `row[20]`).
+- `app.py`: `obtener_datos_calendario()` y `dibujar_pagina_horario()` (PDF) consumen el mismo formato de dicts.
+- **Breaking para clientes cacheados**: JS viejo + API nueva no son compatibles → cache-buster `script.js` `?v=13`→`?v=14`.
+- Sin cambios de comportamiento visible. Columnas nuevas en `clases` ahora se exponen automáticamente sin romper el frontend (era el objetivo de E3).
+
+---
+
 ## [2026-07-11] — Impresión múltiple de cursos en un solo PDF
 
 **Tipo**: feature + endpoint nuevo

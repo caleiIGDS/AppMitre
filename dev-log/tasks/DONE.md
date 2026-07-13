@@ -40,5 +40,8 @@ Documentado en `PLAN_HOSTING_GRATIS.txt`. Gunicorn configurado como start comman
 ## [fecha desconocida] — Fase 1 PLAN_ESCUELAS: eliminar hardcodes evidentes
 `config.py` centraliza branding, días y FLOOR_MAPPING. `nombre_mapeos.json` externo. `window.APP_DATA.dias` como fuente única. Eliminación de `corregir_horarios()` e inferencia de turno por hora.
 
+## [2026-07-13] — #3 API devuelve objetos con claves nombradas (E3 PLAN_ESCUELAS)
+`obtener_filas()` y `/api/dashboard` devuelven dicts (`sqlite3.Row`); `script.js` migrado completo (~99 refs `f[N]` → `f.campo` en calendario, comparación, planilla, dashboard, modal, tooltip y `filtrarClasesLocal`); `personalToFila()` devuelve objeto con marker `tipo: 'personal'`; código PDF de `app.py` (`obtener_datos_calendario` + `dibujar_pagina_horario`) actualizado. Cache-buster `script.js` `?v=13`→`?v=14`. Verificado en runtime: API (curso/profesor/planilla/suplente/casos vacíos), 4 PDFs, y render client-side (calendario, licencia, personal, dashboard) vía Edge headless.
+
 ## [2026-07-13] — #19 Plantilla estándar del Google Sheet documentada
 `PLANTILLA_SHEET.md` en el root: pestañas requeridas, encabezados de clases (parsing por nombre, orden libre), layout posicional de preceptores (bloques offset 0/9/18), formato de personal no docente, config del lado de la app y checklist para una escuela nueva. Derivado del código real de `database.py`. Al escribirla se detectó que E2 (parser por nombre de columna) ya estaba implementado con `csv.DictReader` — el plan estaba desactualizado; se corrigieron `PLAN_ESCUELAS.md`, `dev-log/DECISIONS.md` y `agent_docs/data-pipeline.md` (offsets y regla de marca de día).

@@ -70,11 +70,9 @@ menos 6 funciones del JS. No hay fuente única. Si una escuela quisiera incluir 
 habría que cambiar 6 lugares. Solución: vienen de `window.APP_DATA.config` (que proviene
 de la config guardada en BD/server).
 
-**Problema 6 — Acceso a datos por índice numérico**
-El frontend accede a cada campo de una clase como `c[0]` (curso), `c[5]` (profesor),
-`c[9]` (aula), `c[11]` (día), etc. Hay decenas de estas referencias en script.js.
-Si el esquema de la BD cambia aunque sea un campo, la UI rompe silenciosamente.
-La API debe devolver objetos JSON con claves nombradas.
+**~~Problema 6 — Acceso a datos por índice numérico~~ (resuelto 2026-07-13 — E3)**
+La API devuelve objetos JSON con claves nombradas y `script.js` accede por clave
+(`c.profesor`, `c.aula`, ...). Ver `dev-log/CHANGELOG.md` [2026-07-13].
 
 **Problema 7 — Turnos asumidos (solo MAÑANA/TARDE/VESPERTINO)**
 `renderizarTablaPreceptor()` asume exactamente 3 turnos en ese orden. La lógica de
@@ -149,23 +147,14 @@ Verificado 2026-07-13: `cargar_desde_sheets()` ya usa `csv.DictReader` — el pa
 clases y personal es por nombre de encabezado. No queda trabajo pendiente; el contrato
 de encabezados está documentado en `PLANTILLA_SHEET.md`.
 
-### E3 — API devuelve objetos en lugar de arrays
+### ✅ E3 — API devuelve objetos en lugar de arrays (completado 2026-07-13)
 
-Actualmente la API devuelve cada clase como array de 20 elementos. El frontend los
-accede por índice (`c[5]` = profesor). Si el esquema cambia, rompe silenciosamente.
-
-La API debe devolver objetos:
-```json
-{
-  "curso": "4", "division": "A", "materia": "MATEMATICA",
-  "profesor": "GARCIA JUAN", "aula": "14", "dia": "Lunes",
-  "hora_inicio": "07:40", "hora_fin": "09:40",
-  "grupo": "A", "superposicion": 0, "suplente_activo": 0, "prof_suplente": ""
-}
-```
-
-En `script.js` reemplazar `c[5]` → `c.profesor`, `c[9]` → `c.aula`, etc.
-Es el refactor de mayor esfuerzo pero la mayor ganancia en robustez y legibilidad.
+La API devuelve cada clase como objeto `{curso, division, materia, profesor, aula,
+dia, hora_inicio, hora_fin, grupo, superposicion, suplente_activo, prof_suplente, ...}`
+(claves = columnas de la tabla `clases`, vía `sqlite3.Row`). `script.js` accede por
+clave en todas las vistas; el código PDF de `app.py` consume el mismo formato;
+`personalToFila()` devuelve un objeto con marker `tipo: 'personal'`.
+Ver `dev-log/CHANGELOG.md` [2026-07-13] y `agent_docs/search-api.md`.
 
 ### ~~E4 — Parser de preceptores con formato estándar~~ (descartado — decisión 2026-07-13)
 
@@ -216,7 +205,7 @@ sobre una lista fija. La UI de admin permite agregar o quitar años.
 5. ✅ Plantilla estándar del sheet documentada → `PLANTILLA_SHEET.md` (2026-07-13):
    pestañas, encabezados de clases, layout posicional de preceptores y formato de
    personal no docente
-6. E3: API devuelve objetos (requiere actualizar script.js en paralelo) — TODO #3
+6. ✅ E3: API devuelve objetos con claves nombradas (completado 2026-07-13)
 7. ~~E2 y E4~~ descartados (decisión 2026-07-13): estructura fija por contrato.
    E2 ya estaba implementado (DictReader); el parser posicional de preceptores queda
 

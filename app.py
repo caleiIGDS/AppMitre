@@ -1,4 +1,5 @@
 from flask import Flask, render_template, jsonify, send_file
+import sqlite3
 import database
 from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS, TURNO_CURSOS, TURNO_DEFAULT
 from fpdf import FPDF
@@ -10,6 +11,7 @@ app = Flask(__name__)
 def obtener_filas(tipo, valor):
     try:
         con = database.conectar()
+        con.row_factory = sqlite3.Row
         cur = con.cursor()
         if tipo == 'profesor':
             cur.execute("SELECT * FROM clases WHERE profesor = ? OR (prof_suplente = ? AND suplente_activo = 1)", (valor, valor))
@@ -32,7 +34,7 @@ def obtener_filas(tipo, valor):
             else:
                 return []
         
-        filas = [list(row) for row in cur.fetchall()]
+        filas = [dict(row) for row in cur.fetchall()]
         con.close()
         return filas
     except Exception as e:
@@ -89,8 +91,8 @@ def obtener_datos_calendario(filas, tipo, columnas=None):
     
     tiempos = set()
     for f in filas:
-        if f[12]: tiempos.add(f[12])
-        if f[13]: tiempos.add(f[13])
+        if f['hora_inicio']: tiempos.add(f['hora_inicio'])
+        if f['hora_fin']: tiempos.add(f['hora_fin'])
     
     if not tiempos:
         return None
@@ -111,9 +113,9 @@ def obtener_datos_calendario(filas, tipo, columnas=None):
 
     for col in columnas:
         if tipo == 'planilla':
-            clases_col = sorted([f for f in filas if str(f[9]) == col], key=lambda x: time_to_min(x[12]))
+            clases_col = sorted([f for f in filas if str(f['aula']) == col], key=lambda x: time_to_min(x['hora_inicio']))
         else:
-            clases_col = sorted([f for f in filas if f[11] == col], key=lambda x: time_to_min(x[12]))
+            clases_col = sorted([f for f in filas if f['dia'] == col], key=lambda x: time_to_min(x['hora_inicio']))
             
         bloques = []
         procesados = set()
@@ -121,19 +123,19 @@ def obtener_datos_calendario(filas, tipo, columnas=None):
         for i in range(len(clases_col)):
             if i in procesados: continue
             cluster = [clases_col[i]]; cluster_idx = [i]
-            max_fin = time_to_min(clases_col[i][13])
+            max_fin = time_to_min(clases_col[i]['hora_fin'])
             for j in range(i + 1, len(clases_col)):
-                if time_to_min(clases_col[j][12]) < max_fin:
+                if time_to_min(clases_col[j]['hora_inicio']) < max_fin:
                     cluster.append(clases_col[j]); cluster_idx.append(j)
-                    max_fin = max(max_fin, time_to_min(clases_col[j][13]))
+                    max_fin = max(max_fin, time_to_min(clases_col[j]['hora_fin']))
                 else: break
-            
-            todos_tienen_grupo = all(c[14] and str(c[14]).strip() != "" for c in cluster)
+
+            todos_tienen_grupo = all(c['grupo'] and str(c['grupo']).strip() != "" for c in cluster)
             hay_superposicion = len(cluster) > 1 and (tipo not in ['curso', 'planilla'] or not todos_tienen_grupo)
 
             if hay_superposicion:
-                # Logic for superposition: only divide side-by-side if ALL classes allow it (F[15] == 1)
-                todos_permiten = all(c[15] == 1 for c in cluster)
+                # Logic for superposition: only divide side-by-side if ALL classes allow it (superposicion == 1)
+                todos_permiten = all(c['superposicion'] == 1 for c in cluster)
                 if todos_permiten:
                     for idx, clase in enumerate(cluster):
                         bloques.append({'tipo': 'materia', 'ancho': 100/len(cluster), 'left': (100/len(cluster))*idx, 'clase': clase})
@@ -143,7 +145,7 @@ def obtener_datos_calendario(filas, tipo, columnas=None):
                 for idx, clase in enumerate(cluster):
                     ancho = 100/len(cluster); left = ancho*idx
                     if len(cluster) == 1:
-                        grupo = str(clase[14]).strip().upper() if clase[14] else ""
+                        grupo = str(clase['grupo']).strip().upper() if clase['grupo'] else ""
                         if grupo == 'A': ancho = 50; left = 0
                         elif grupo == 'B': ancho = 50; left = 50
                     bloques.append({'tipo': 'materia', 'ancho': ancho, 'left': left, 'clase': clase})
@@ -281,8 +283,8 @@ def dibujar_pagina_horario(pdf, tipo, valor):
             for b in cal['bloques_por_columna'][col_name]:
                 if b['tipo'] == 'materia':
                     clase = b['clase']
-                    y_ini = ((time_to_min(clase[12]) - cal['hora_min']) / duracion) * height
-                    y_fin = ((time_to_min(clase[13]) - cal['hora_min']) / duracion) * height
+                    y_ini = ((time_to_min(clase['hora_inicio']) - cal['hora_min']) / duracion) * height
+                    y_fin = ((time_to_min(clase['hora_fin']) - cal['hora_min']) / duracion) * height
                     
                     x = margin_left + col_hour_w + (d_idx * col_day_w) + (b['left'] * col_day_w / 100) + 0.5
                     y = margin_top + 6 + y_ini + 0.5
@@ -301,8 +303,8 @@ def dibujar_pagina_horario(pdf, tipo, valor):
                     pdf.rect(x, y + h - ind_h, w, ind_h, 'FD')
                     
                     # Formatear curso y división
-                    curso_num = str(clase[0])
-                    division = str(clase[1])
+                    curso_num = str(clase['curso'])
+                    division = str(clase['division'])
                     try:
                         is_high_course = int(curso_num) >= 4
                     except:
@@ -310,7 +312,7 @@ def dibujar_pagina_horario(pdf, tipo, valor):
                     
                     div_display = f"{division}°" if is_high_course else division
                     
-                    ind_txt = str(clase[9] or '?')
+                    ind_txt = str(clase['aula'] or '?')
                     if tipo == 'aula' or tipo == 'planilla': ind_txt = f"{curso_num}° {div_display}"
                     
                     pdf.set_text_color(0, 0, 0)
@@ -324,7 +326,7 @@ def dibujar_pagina_horario(pdf, tipo, valor):
                     materia_h_avail = h - ind_h
                     
                     if materia_w > 2:
-                        is_licencia = tipo == 'profesor' and len(clase) > 16 and clase[16] == 1
+                        is_licencia = tipo == 'profesor' and clase.get('suplente_activo') == 1
                         is_narrow = materia_w < 20
                         
                         if is_narrow:
@@ -338,7 +340,7 @@ def dibujar_pagina_horario(pdf, tipo, valor):
                                 font_size_mat = 6.0; font_size_det = 5.0; line_h = 2.2
 
                             pdf.set_font('RobotoMono', 'B', font_size_mat)
-                            materia_txt = "LICENCIADA" if is_licencia else clase[3]
+                            materia_txt = "LICENCIADA" if is_licencia else clase['materia']
                             lines_mat_full = pdf.multi_cell(materia_w, line_h, materia_txt, split_only=True)
                             
                             max_lines_mat_allowed = 1 if is_short else 3
@@ -357,9 +359,9 @@ def dibujar_pagina_horario(pdf, tipo, valor):
                             
                             pdf.set_font('RobotoMono', '', font_size_det)
                             # Mostrar suplente si esta activo
-                            prof_display = clase[5]
-                            if len(clase) > 16 and clase[16] == 1:
-                                prof_display = clase[17]
+                            prof_display = clase['profesor']
+                            if clase.get('suplente_activo') == 1:
+                                prof_display = clase['prof_suplente']
                             det_raw = f"{prof_display}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
                             lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
                             
@@ -398,7 +400,7 @@ def dibujar_pagina_horario(pdf, tipo, valor):
                                 pdf.set_font('RobotoMono', '', font_size_det)
                                 if pdf.get_y() - y + line_h <= materia_h_avail:
                                     pdf.set_x(txt_x)
-                                    pdf.cell(materia_w, line_h, f"{clase[12]} - {clase[13]}", 0, 1, 'C')
+                                    pdf.cell(materia_w, line_h, f"{clase['hora_inicio']} - {clase['hora_fin']}", 0, 1, 'C')
                         else:
                             is_short = materia_h_avail < 20; is_tiny = materia_h_avail < 12
                             font_size_mat = 9.5; font_size_det = 8.0; line_h = 3.8
@@ -406,7 +408,7 @@ def dibujar_pagina_horario(pdf, tipo, valor):
                             if is_tiny: font_size_mat = 7.0; font_size_det = 6.0; line_h = 2.5
                             
                             pdf.set_font('RobotoMono', 'B', font_size_mat)
-                            materia_txt = "LICENCIADA" if is_licencia else clase[3]
+                            materia_txt = "LICENCIADA" if is_licencia else clase['materia']
                             lines_mat_full = pdf.multi_cell(materia_w, line_h, materia_txt, split_only=True)
                             max_lines_mat_allowed = 1 if is_short else 4
                             
@@ -425,9 +427,9 @@ def dibujar_pagina_horario(pdf, tipo, valor):
                             
                             pdf.set_font('RobotoMono', '', font_size_det)
                             # Mostrar suplente si esta activo
-                            prof_display = clase[5]
-                            if len(clase) > 16 and clase[16] == 1:
-                                prof_display = clase[17]
+                            prof_display = clase['profesor']
+                            if clase.get('suplente_activo') == 1:
+                                prof_display = clase['prof_suplente']
                             det_raw = f"{prof_display}" if tipo != 'profesor' else f"Curso: {curso_num}° {div_display}"
                             lines_det = pdf.multi_cell(materia_w, line_h, det_raw, split_only=True)
                             show_det = (actual_lines_mat + 1) * line_h <= materia_h_avail - 0.8 and not is_licencia
@@ -462,11 +464,11 @@ def dibujar_pagina_horario(pdf, tipo, valor):
                                 pdf.set_font('RobotoMono', '', font_size_det)
                                 if pdf.get_y() - y + line_h <= materia_h_avail:
                                     pdf.set_x(txt_x)
-                                    pdf.cell(materia_w, line_h, f"{clase[12]} - {clase[13]}", 0, 1, 'C')
+                                    pdf.cell(materia_w, line_h, f"{clase['hora_inicio']} - {clase['hora_fin']}", 0, 1, 'C')
                 elif b['tipo'] == 'superposicion':
-                    y_ini = ((time_to_min(b['clases'][0][12]) - cal['hora_min']) / duracion) * height
-                    latest = max(b['clases'], key=lambda x: time_to_min(x[13]))
-                    y_fin = ((time_to_min(latest[13]) - cal['hora_min']) / duracion) * height
+                    y_ini = ((time_to_min(b['clases'][0]['hora_inicio']) - cal['hora_min']) / duracion) * height
+                    latest = max(b['clases'], key=lambda x: time_to_min(x['hora_fin']))
+                    y_fin = ((time_to_min(latest['hora_fin']) - cal['hora_min']) / duracion) * height
                     x = margin_left + col_hour_w + (d_idx * col_day_w) + 1
                     y = margin_top + 6 + y_ini + 1
                     w = col_day_w - 2; h = (y_fin - y_ini) - 2
@@ -539,9 +541,10 @@ def api_actualizar():
 def api_dashboard():
     try:
         con = database.conectar()
+        con.row_factory = sqlite3.Row
         cur = con.cursor()
         cur.execute("SELECT * FROM clases")
-        filas = [list(row) for row in cur.fetchall()]
+        filas = [dict(row) for row in cur.fetchall()]
         con.close()
         return jsonify(filas)
     except Exception as e:
