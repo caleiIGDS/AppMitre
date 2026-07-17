@@ -1,12 +1,18 @@
 from flask import Flask, render_template, jsonify, send_file
 import sqlite3
 import database
+import gestion
 from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS, TURNO_CURSOS, TURNO_DEFAULT
 from fpdf import FPDF
 import io
 from datetime import datetime
 
 app = Flask(__name__)
+
+# Sistema de Gestión de Conocimiento (/gestion) — módulo independiente con DB propia.
+# init_db() en import para que también corra bajo gunicorn/WSGI (no solo en __main__).
+app.register_blueprint(gestion.bp)
+gestion.init_db()
 
 def obtener_filas(tipo, valor):
     try:

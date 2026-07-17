@@ -4,6 +4,19 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-07-17] — Nuevo módulo: Sistema de Gestión de Conocimiento (`/gestion`)
+
+**Tipo**: módulo nuevo (blueprint + DB propia); sin cambios de contrato en horarios
+**Archivos**: `gestion.py` (nuevo), `templates/gestion/*` (nuevos), `static/gestion.css` (nuevo), `app.py`, `templates/index.html`, `static/style.css`
+
+- **Nuevo blueprint `gestion`** con prefix `/gestion`: CRUD server-rendered (Jinja, sin JS) para recursos, conjuntos, actividades y proyectos, con relaciones M2M navegables en ambas direcciones y búsqueda por `?q=`. Ver `agent_docs/gestion-conocimiento.md`.
+- **Nueva DB `gestion.db`** (SQLite, separada de `escuela.db`): 4 tablas de entidades + 4 M2M. No la toca `/api/actualizar` ni la carga desde Sheets. Seed automático la primera vez (ejemplo del banco de ensayo solar).
+- `app.py`: solo agrega `import gestion`, `app.register_blueprint(gestion.bp)` y `gestion.init_db()` en import (corre también bajo gunicorn). Nada del sistema de horarios cambió.
+- `templates/index.html`: link `GESTIÓN ›` en `.header-actions` (clase nueva `a.tech-btn-gestion` al final de `style.css`); `base.html` de gestión tiene el link de vuelta `‹ SISTEMA DE HORARIOS`.
+- Cache-buster: `style.css` `?v=11`→`?v=12`.
+
+---
+
 ## [2026-07-13] — API devuelve objetos con claves nombradas (E3)
 
 **Tipo**: cambio de contrato API ↔ frontend

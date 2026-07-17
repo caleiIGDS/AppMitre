@@ -4,6 +4,8 @@
 
 **AppMitre** es un sistema de gestión y visualización de horarios para la **Escuela Técnica Emilio Mitre**. Permite consultar los horarios de clases organizados por curso (1°–7°), profesor, aula y preceptor. Incluye un dashboard en tiempo real ("En Vivo") para uso en pantallas de kiosco y exportación a PDF.
 
+Además incluye un módulo independiente al mismo nivel: el **Sistema de Gestión de Conocimiento** (`/gestion`) — memoria técnica de la escuela (recursos, conjuntos, actividades, proyectos y sus relaciones), con DB propia (`gestion.db`). Ver `agent_docs/gestion-conocimiento.md`.
+
 **Usuarios principales:** alumnos, docentes, preceptores y administración.  
 **Stack:** Flask + SQLite + Vanilla JS (sin frameworks). Sin tests, sin linter, sin build step.
 
@@ -41,6 +43,7 @@ Google Sheets (CSV export por año: 1ro–7mo + preceptores + personal)
 | `static/js/script.js` | Toda la lógica frontend (~1500 líneas) |
 | `static/style.css` | Tema blueprint/industrial con CSS variables |
 | `nombre_mapeos.json` | Correcciones manuales de nombres de docentes |
+| `gestion.py` | Sistema de Gestión de Conocimiento (`/gestion`): blueprint + `gestion.db` + templates en `templates/gestion/` |
 
 ---
 
@@ -217,6 +220,7 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 - Renderizado del calendario, clustering, superposición → leer `agent_docs/calendar-engine.md`
 - Sistema de búsqueda y parsing de queries → leer `agent_docs/search-api.md`
 - Estilos, variables CSS, patrones visuales → leer `agent_docs/frontend-ui.md`
+- Sistema de Gestión de Conocimiento (`/gestion`, `gestion.py`, `gestion.db`) → leer `agent_docs/gestion-conocimiento.md`
 
 ## Dev Log
 

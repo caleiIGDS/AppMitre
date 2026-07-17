@@ -4,7 +4,21 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
-## [2026-07-13] — Estructura del Google Sheet fija por contrato (se descartan E2 y E4)
+## [2026-07-17] — Gestión de Conocimiento con el stack existente y DB separada (no Next.js/Supabase)
+
+**Contexto**: El documento de diseño del Sistema de Gestión de Conocimiento venía con un prompt que pedía Next.js + Supabase + Tailwind. Pero el pedido real fue integrarlo **dentro de AppMitre** como módulo al mismo nivel que horarios, sin tocar lo existente.
+
+**Decisión**:
+- **Stack existente** (Flask + SQLite + Jinja): un solo deploy, cero build step, consistente con la decisión "Vanilla JS sin framework". El módulo es server-rendered clásico (forms + redirects, sin JS propio) en vez de SPA — para CRUD simple es menos código y menos superficie de bugs.
+- **DB separada `gestion.db`**: `escuela.db` es un caché efímero que `/api/actualizar` borra y regenera desde Sheets; los datos de gestión son la única fuente de verdad propia de la app y no pueden vivir en una DB que se dropea. Blueprint aislado en `gestion.py` para que ambos sistemas no compartan nada más que `config.py` (branding).
+- **Templates genéricos manejados por config** (`ENTIDADES` en `gestion.py`): un solo trío lista/form/detalle para las 4 entidades, en vez de 12 templates.
+
+**Alternativas descartadas**:
+- *Next.js + Supabase (el stack del prompt)*: segunda app, segundo deploy, dependencia de servicio externo — contradice el pedido de integrarlo en la app actual.
+- *Tablas de gestión dentro de `escuela.db`*: `/api/actualizar` las borraría (o habría que hacer el drop selectivo, acoplando los módulos).
+- *Modo oscuro / temas en gestión*: `gestion.css` es standalone y no participa del sistema `data-theme`; se puede sumar después si se usa.
+
+**Consecuencia**: En hosting con filesystem efímero (Render) `gestion.db` se pierde en cada restart — en PythonAnywhere (hosting actual) persiste. Si el módulo prospera, evaluar backup del archivo o export a Sheets. Sin auth: cualquiera puede crear/editar/borrar (mismo riesgo aceptado que `/api/actualizar`).
 
 **Contexto**: `PLAN_ESCUELAS.md` proponía parsers por nombre de encabezado (E2 para clases, E4 para preceptores) para tolerar sheets con columnas reordenadas o insertadas. Al revisar el plan multi-escuela se definió el alcance real: la app no va a soportar sheets con formatos variables.
 

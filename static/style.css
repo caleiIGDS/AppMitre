@@ -1490,3 +1490,11 @@ body[data-theme="nocturno"] .print-curso-chip,
 body[data-theme="nocturno"] .print-generar-btn {
     border-radius: 4px;
 }
+
+/* Link al Sistema de Gestión de Conocimiento (/gestion) en el header.
+   Reusa el estilo de .tech-btn-update pero como <a>. */
+a.tech-btn-gestion {
+    display: inline-block;
+    text-decoration: none;
+    line-height: normal;
+}

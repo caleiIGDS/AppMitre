@@ -1,0 +1,63 @@
+{% extends 'gestion/base.html' %}
+{% block titulo %}{{ 'Editar' if fila else 'Crear' }} {{ cfg.singular }}{% endblock %}
+{% block contenido %}
+<div class="g-toolbar">
+    <h2>{{ 'EDITAR' if fila else 'CREAR' }} {{ cfg.singular | upper }}</h2>
+</div>
+
+{% if error %}<div class="g-error">{{ error }}</div>{% endif %}
+
+<form method="post" class="g-form">
+    {% for c in cfg.campos %}
+    <div class="g-field">
+        <label for="campo-{{ c.nombre }}">{{ c.label | upper }}{% if c.requerido %} *{% endif %}</label>
+        {% if c.tipo == 'textarea' %}
+        <textarea id="campo-{{ c.nombre }}" name="{{ c.nombre }}" rows="4">{{ valores[c.nombre] or '' }}</textarea>
+        {% elif c.tipo == 'select' %}
+        <select id="campo-{{ c.nombre }}" name="{{ c.nombre }}">
+            {% set actual = valores[c.nombre] or c.opciones[0] %}
+            {% for op in c.opciones %}
+            <option value="{{ op }}" {{ 'selected' if op == actual }}>{{ op }}</option>
+            {% endfor %}
+        </select>
+        {% else %}
+        <input id="campo-{{ c.nombre }}" type="{{ c.tipo }}" name="{{ c.nombre }}"
+               value="{{ valores[c.nombre] or '' }}" {% if c.requerido %}required{% endif %}
+               {% if c.tipo == 'url' %}placeholder="https://drive.google.com/..."{% endif %}>
+        {% endif %}
+        {% if c.ayuda %}<span class="g-help">{{ c.ayuda }}</span>{% endif %}
+    </div>
+    {% endfor %}
+
+    {% for rel in cfg.relaciones %}
+    <fieldset class="g-rel">
+        <legend>{{ rel.label | upper }}</legend>
+        {% if opciones[rel.campo] %}
+        <div class="g-checks">
+            {% for it in opciones[rel.campo] %}
+            <label class="g-check">
+                <input type="checkbox" name="{{ rel.campo }}" value="{{ it['id'] }}"
+                       {{ 'checked' if it['id'] in seleccion[rel.campo] }}>
+                {{ it['nombre'] }}
+            </label>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="g-help">
+            Todavía no hay {{ rel.label | lower }} para elegir.
+            <a class="g-link" href="{{ url_for('gestion.nuevo', slug=rel.slug_ajeno) }}">Crear uno primero</a>.
+        </p>
+        {% endif %}
+    </fieldset>
+    {% endfor %}
+
+    <div class="g-form-actions">
+        <button type="submit" class="g-btn">GUARDAR</button>
+        {% if fila %}
+        <a class="g-btn-outline-dark" href="{{ url_for('gestion.detalle', slug=slug, id=fila['id']) }}">CANCELAR</a>
+        {% else %}
+        <a class="g-btn-outline-dark" href="{{ url_for('gestion.lista', slug=slug) }}">CANCELAR</a>
+        {% endif %}
+    </div>
+</form>
+{% endblock %}
