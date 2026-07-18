@@ -2,19 +2,6 @@
 
 ---
 
-## Media prioridad
-
-- [ ] #5 — `TURNO_CURSOS` en config: poblar con datos reales — `config.py`  
-  Actualmente vacío `{}`. Todos los cursos muestran turno "MAÑANA" por default en la planilla de preceptores. Necesita configuración real.
-
-- [ ] #6 — Invalidar `allDataCache` al actualizar la DB — `script.js`  
-  Cuando el usuario hace "ACTUALIZAR HORARIOS", `allDataCache` queda obsoleto pero no se limpia. La Planilla General mostraría datos viejos hasta F5. Solución: `allDataCache = null` en el callback de éxito de `actualizarDatos()`.
-
-- [ ] #7 — `FLOOR_MAPPING` tiene aulas solapadas entre pisos — `config.py`  
-  "Piso 1" y "Piso 3" comparten aulas "13","14","15","16". Verificar con la escuela si es intencional (ej: el "Piso 3" es en realidad un tercer sector del piso 1) o si es un error de configuración.
-
----
-
 ## Baja prioridad / ideas
 
 - [ ] #8 — Refactorizar `script.js` en módulos separados — `static/js/`  
@@ -34,9 +21,6 @@
 
 - [ ] #13 — Tooltip en modo comparación — `script.js`  
   El tooltip (`showTooltip`) en modo comparación pasa algunos valores hardcodeados (`'-'` para aula y curso). Mejorar para que muestre info correcta según el modo de comparación.
-
-- [ ] #14 — `DOCUMENTACION_DETALLADA.md` desactualizada — root  
-  Menciona `corregir_horarios()` que ya no existe. Considerar fusionarla con los `agent_docs/` o eliminarla para evitar documentación contradictoria.
 
 - [ ] #16 — Título del calendario no se ve al generarse — `script.js` / `style.css`  
   El título que debería aparecer encima del calendario no es visible cuando se genera el resultado.

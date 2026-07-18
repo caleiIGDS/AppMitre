@@ -18,8 +18,9 @@ en Google Drive; acá solo se guardan links (`drive_url`).
 - **`static/gestion.css`** — hoja standalone (paleta blueprint copiada, no importa
   `style.css` para que los dos sistemas no se pisen). Sin modo oscuro.
 - Integración: `app.py` hace `app.register_blueprint(gestion.bp)` + `gestion.init_db()`
-  en import (funciona bajo gunicorn/WSGI). `templates/index.html` tiene el link
-  `GESTIÓN ›` en el header (`a.tech-btn-gestion`), y `base.html` el link de vuelta.
+  en import (funciona bajo gunicorn/WSGI). No hay link visible desde el SPA principal:
+  `/gestion` es deliberadamente "oculto", se accede escribiendo la URL (decisión
+  2026-07-17, ver `dev-log/DECISIONS.md`). `base.html` sí tiene el link de vuelta al SPA.
 
 ## Modelo de datos (gestion.db)
 

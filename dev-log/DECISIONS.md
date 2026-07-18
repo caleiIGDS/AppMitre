@@ -4,6 +4,16 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-07-17] — `/gestion` sin link visible en el SPA (acceso solo por URL)
+
+**Contexto**: El header del SPA tenía un botón `GESTIÓN ›` junto a "ACTUALIZAR HORARIOS". El usuario pidió ocultarlo: gestión es una herramienta interna, no para alumnos/docentes que consultan horarios.
+
+**Decisión**: Se eliminó el link del header (`index.html`) y su CSS (`a.tech-btn-gestion`). `/gestion` queda accesible únicamente escribiendo la URL. No re-agregar un acceso visible sin consultar.
+
+**Consecuencia**: Es ocultamiento, no seguridad — quien conozca la URL entra igual (sin auth, riesgo ya aceptado). El link de vuelta al SPA desde gestión (`base.html`) se mantiene.
+
+---
+
 ## [2026-07-17] — Gestión de Conocimiento con el stack existente y DB separada (no Next.js/Supabase)
 
 **Contexto**: El documento de diseño del Sistema de Gestión de Conocimiento venía con un prompt que pedía Next.js + Supabase + Tailwind. Pero el pedido real fue integrarlo **dentro de AppMitre** como módulo al mismo nivel que horarios, sin tocar lo existente.

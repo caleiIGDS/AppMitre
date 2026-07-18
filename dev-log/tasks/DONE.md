@@ -4,6 +4,18 @@ _Solo leer si se pide explícitamente._
 
 ---
 
+## [2026-07-17] — #5: `TURNO_CURSOS` poblado con datos reales
+`config.py` tiene el turno de todos los cursos 1°–7° (MAÑANA/TARDE/VESPERTINO); 6° 4-8 y todo 7° son vespertinos. Verificado y movido de TODO en esta fecha (ya estaba completo de antes).
+
+## [2026-07-17] — #6: cache obsoleto tras "ACTUALIZAR HORARIOS" (obsoleta)
+El escenario descripto ya no puede ocurrir: `actualizarDatos()` hace `location.reload()` en el callback de éxito, lo que reconstruye `allDataCache` completo. No hizo falta el `allDataCache = null` propuesto.
+
+## [2026-07-17] — #7: aulas solapadas en `FLOOR_MAPPING` (resuelta)
+"Piso 3" ahora tiene aulas propias ("31","32","33","35","36"); ya no comparte "13"–"16" con "Piso 1". Verificado en `config.py` y movido de TODO.
+
+## [2026-07-17] — #14: `DOCUMENTACION_DETALLADA.md` desactualizada (resuelta)
+El archivo ya no existe en el repo — se eliminó, que era una de las dos opciones de la tarea. Los `agent_docs/` quedan como única documentación técnica.
+
 ## [fecha desconocida] — Calendario semanal por curso / profesor / aula
 Generación de grid CSS con bloques absolutos. Clustering de solapamientos. Modal de detalle con navegación interna. Tooltip en hover.
 
