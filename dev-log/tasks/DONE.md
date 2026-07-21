@@ -4,6 +4,15 @@ _Solo leer si se pide explícitamente._
 
 ---
 
+## [2026-07-19] — Login provisorio con contraseña compartida en `/gestion`
+Todo el blueprint detrás de `bp.before_request` + sesión Flask: rutas `/gestion/login` y `/gestion/salir`, template `login.html`, botón SALIR en el header. Clave vía env var `GESTION_CLAVE` (default público `mitre2026`), `SECRET_KEY` en `app.py`. Verificado en runtime (redirects con `next`, clave incorrecta/correcta, anti open-redirect, salir, SPA y API intactos). Seguridad completa diferida → TODO #20.
+
+## [2026-07-19] — Inventario físico de renovables importado a `/gestion/recursos`
+`importar_inventario.py` (nuevo): sheet "Inventario renovable 2026" → tabla `recursos` (81 insertados + 2 actualizados, upsert por nombre normalizado). Columnas nuevas `cantidad`/`utilidad`/`fecha_revision` con migración aditiva en `init_db()`; estado nuevo "Sin revisar". Ver CHANGELOG y DECISIONS 2026-07-19.
+
+## [2026-07-17] — Módulo Sistema de Gestión de Conocimiento (`/gestion`)
+Blueprint server-rendered (Jinja, sin JS propio) con DB propia `gestion.db`: CRUD de recursos, conjuntos, actividades y proyectos con relaciones M2M navegables, búsqueda `?q=`, seed de ejemplo. Ver `agent_docs/gestion-conocimiento.md`.
+
 ## [2026-07-17] — #5: `TURNO_CURSOS` poblado con datos reales
 `config.py` tiene el turno de todos los cursos 1°–7° (MAÑANA/TARDE/VESPERTINO); 6° 4-8 y todo 7° son vespertinos. Verificado y movido de TODO en esta fecha (ya estaba completo de antes).
 

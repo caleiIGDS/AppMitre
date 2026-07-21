@@ -1,0 +1,68 @@
+{% extends 'gestion/base.html' %}
+{% block titulo %}Préstamos{% endblock %}
+{% block contenido %}
+<div class="g-toolbar">
+    <h2>PRÉSTAMOS <span class="g-count">{{ activos | length }}</span></h2>
+    <form method="get" class="g-search" action="{{ url_for('gestion.prestamos_lista') }}">
+        <input type="text" name="q" value="{{ q }}" placeholder="BUSCAR POR PERSONA O DESTINO...">
+        <button type="submit">BUSCAR</button>
+        {% if q %}<a class="g-link" href="{{ url_for('gestion.prestamos_lista') }}">limpiar</a>{% endif %}
+    </form>
+    <a class="g-btn" href="{{ url_for('gestion.prestamo_nuevo') }}">+ REGISTRAR RETIRO</a>
+</div>
+
+<h3 class="g-section-title">EN PRÉSTAMO</h3>
+{% if activos %}
+<div class="g-table-wrap">
+    <table class="g-table">
+        <thead>
+            <tr><th>PERSONA</th><th>SE LLEVÓ</th><th>DESTINO</th><th>SALIDA</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for p in activos %}
+            <tr>
+                <td><a class="g-item-link" href="{{ url_for('gestion.prestamo_detalle', id=p['id']) }}">{{ p['persona'] }}</a></td>
+                <td>{{ resumen.get(p['id'], '—') }}</td>
+                <td>{{ p['destino'] }}</td>
+                <td>{{ p['fecha_salida'] }}</td>
+                <td class="g-td-actions">
+                    <a class="g-link" href="{{ url_for('gestion.prestamo_detalle', id=p['id']) }}">Ver</a>
+                    <form method="post" class="g-inline-form" action="{{ url_for('gestion.prestamo_devolver', id=p['id']) }}">
+                        <button type="submit" class="g-btn g-btn-mini">✔ DEVOLVIÓ</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="g-help g-section-empty">No hay nada prestado en este momento.</p>
+{% endif %}
+
+<h3 class="g-section-title">HISTORIAL <span class="g-count">{{ devueltos | length }}</span></h3>
+{% if devueltos %}
+<div class="g-table-wrap">
+    <table class="g-table">
+        <thead>
+            <tr><th>PERSONA</th><th>SE LLEVÓ</th><th>SALIDA</th><th>DEVOLUCIÓN</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for p in devueltos %}
+            <tr>
+                <td><a class="g-item-link" href="{{ url_for('gestion.prestamo_detalle', id=p['id']) }}">{{ p['persona'] }}</a></td>
+                <td>{{ resumen.get(p['id'], '—') }}</td>
+                <td>{{ p['fecha_salida'] }}</td>
+                <td>{{ p['fecha_devolucion'] }}</td>
+                <td class="g-td-actions">
+                    <a class="g-link" href="{{ url_for('gestion.prestamo_detalle', id=p['id']) }}">Ver</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="g-help g-section-empty">{% if q %}Sin devoluciones que coincidan con "{{ q }}".{% else %}Todavía no hay devoluciones registradas.{% endif %}</p>
+{% endif %}
+{% endblock %}

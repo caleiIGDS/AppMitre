@@ -19,8 +19,13 @@
         </div>
         <p class="g-card-desc">{{ t.descripcion }}</p>
         <div class="g-card-actions">
+            {% if t.slug == 'prestamos' %}
+            <a class="g-btn" href="{{ url_for('gestion.prestamos_lista') }}">VER {{ t.plural | upper }}</a>
+            <a class="g-btn-outline-dark" href="{{ url_for('gestion.prestamo_nuevo') }}">+ REGISTRAR RETIRO</a>
+            {% else %}
             <a class="g-btn" href="{{ url_for('gestion.lista', slug=t.slug) }}">VER {{ t.plural | upper }}</a>
             <a class="g-btn-outline-dark" href="{{ url_for('gestion.nuevo', slug=t.slug) }}">+ CREAR {{ t.singular | upper }}</a>
+            {% endif %}
         </div>
     </div>
     {% endfor %}

@@ -34,6 +34,17 @@
   - `index.html`: `⚡` del banner MODO COMPARACIÓN (~155), `✕ SALIR` (~158), `‹` de los `.btn-slide-trigger` (5 usos).
   - El logo ya es imagen local (`escuela_logo`) — usar ese patrón (`url_for('static', ...)`). Definir tamaño/color vía CSS y contemplar el tema oscuro (los SVG actuales usan `currentColor`).
 
+- [ ] #20 — Seguridad completa de `/gestion` (hoy: contraseña compartida provisoria) — `gestion.py` / `app.py` / hosting  
+  Setear `GESTION_CLAVE` y `SECRET_KEY` como env vars en el hosting (los defaults del repo son públicos: clave conocida y cookie forjable), agregar CSRF a los forms, límite de intentos de login, y evaluar usuarios individuales con auditoría. Ver DECISIONS 2026-07-19.
+
+- [ ] #21 — Búsqueda de recursos más flexible: columna `otros_nombres` + generación con IA — `gestion.py` / `static/gestion.css` / script nuevo  
+  Muchas herramientas se conocen por varios nombres (Multímetro = tester = polímetro). Plan:
+  1. Columna nueva `otros_nombres` (TEXT) en `recursos` — se edita en el form del recurso (no tabla aparte), migración vía `_migrar()`.
+  2. Búsqueda (`lista()`) matchea nombre + descripcion + **otros_nombres**, y **normaliza acentos** (hoy `LIKE` es literal: "multimetro" sin tilde no encuentra "Multímetro"). Ver búsqueda más "perdonadora" abajo.
+  3. Script offline `generar_alias.py` que llena `otros_nombres` con IA (Claude) una sola vez, corriendo en la PC del dev — producción **no** necesita API key. Salida editable a mano. Costo: centavos, una vez.
+  4. Opcional a futuro: botón "sugerir otros nombres" por recurso (eso sí requeriría la key en el hosting).
+  Búsqueda tolerante a typos (sin IA): normalizar acentos + comparar por similitud (`difflib.SequenceMatcher` o distancia de edición) además del substring. Ver notas de diseño en la conversación.
+
 ---
 
 ## Bloqueado
@@ -43,6 +54,6 @@
 
 ---
 
-_Último número usado: #19. Próxima tarea nueva: #20_
+_Último número usado: #21. Próxima tarea nueva: #22_
 
 _#4 (parser de preceptores por nombre de columna) descartada el 2026-07-13 — ver `dev-log/DECISIONS.md`: estructura del sheet fija por contrato._

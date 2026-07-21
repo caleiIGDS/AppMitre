@@ -4,6 +4,50 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-07-21] — Préstamos: nunca se borra al devolver; ruta propia en vez de sumar a `ENTIDADES`
+
+**Contexto**: El usuario quiere anotar fácilmente quién se lleva qué recursos (y cuántos) y poder marcarlos como devueltos, pero que la devolución **no borre el registro** — el historial de movimientos internos debe quedar permanente en la base, aunque sea "por el día".
+
+**Decisión**:
+- **`prestamos` con `fecha_devolucion` en vez de borrar o mover a otra tabla**: devolver es un `UPDATE`, no un `DELETE`. `fecha_devolucion = ''` = sigue afuera; con fecha = devuelto. Un solo lugar de verdad, sin tabla de "historial" separada que sincronizar.
+- **Ruta propia (`/gestion/prestamos*`), no una entidad más en `ENTIDADES`**: el trío genérico lista/form/detalle asume una fila = un registro con campos planos. Préstamos tiene una relación 1-a-N con cantidad (`prestamo_items`) y un ciclo de estado (prestado→devuelto→reabrir) que el genérico no contempla — forzarlo ahí habría complicado el config declarativo para un solo caso especial.
+- **No se descuenta stock de `recursos.cantidad`**: cantidad sigue siendo "cuánto hay en total"; "cuánto está afuera ahora" se calcula por consulta sobre `prestamo_items` sin devolver. Evita mantener dos números que se pueden desincronizar (stock físico vs. contador de préstamos).
+- **Desambiguación por `[#id]` en el datalist del form**: el inventario real importado tiene nombres repetidos (dos "Formon", dos "Medidor de energia solar" — sets físicos distintos). El form muestra `"Nombre [#id]"` en las opciones; si se tipea el nombre a mano sin el sufijo y hay más de un candidato, error pidiendo elegir de la lista en vez de adivinar cuál.
+- **`eliminar` (borra la fila entera) se mantiene solo como escape hatch** para cargas mal hechas, no es el flujo normal — el flujo normal siempre es devolver, nunca eliminar.
+
+**Alternativa descartada**: sumar `prestamos` a `ENTIDADES` reusando `lista.html`/`form.html`/`detalle.html`. Habría requerido meter ítems-con-cantidad y el estado prestado/devuelto dentro de una config pensada para entidades planas — más complejidad en el genérico que las 3 vistas específicas que se hicieron.
+
+**Consecuencia**: `/gestion/prestamos/<id>` y `/gestion/<slug>/<id>` compiten por la misma forma de URL; se depende de que Werkzeug prioriza rutas estáticas sobre el converter `<slug>` (verificado en runtime, ver `agent_docs/gestion-conocimiento.md`). Si en el futuro se agrega alguna entidad nueva a `ENTIDADES` con slug `"prestamos"`, colisionaría — no hacerlo.
+
+---
+
+## [2026-07-19] — Inventario físico: el sheet es carga inicial, `gestion.db` sigue siendo la fuente de verdad
+
+**Contexto**: El usuario quiso volcar el inventario físico del laboratorio de renovables (sheet "Inventario renovable 2026", de caleiescuela@gmail.com) a `/gestion/recursos`, partiendo de un prompt de MVP que proponía Next.js + Google Sheets API con el sheet como fuente de verdad editable desde la web. El write-back web→sheet quedó explícitamente diferido.
+
+**Decisión**:
+- Sin write-back no se puede tener "sheet como fuente de verdad" + edición web a la vez (cada re-import pisaría las ediciones). Se eligió: **el sheet es carga de datos puntual** (`importar_inventario.py`, re-ejecutable, upsert por nombre normalizado) y `gestion.db` sigue siendo la fuente de verdad.
+- Se mantuvo el stack Flask (misma lógica que la decisión 2026-07-17 "no Next.js"): los campos nuevos (`cantidad`, `utilidad`, `fecha_revision`) entraron por la config declarativa sin tocar templates.
+- **Mapeo de estados** del sheet al vocabulario de la app: `Funcional`/`Funcional -` → `Disponible`, `Reparar` → `En reparación`, `nc` → `Sin revisar` (estado nuevo). Las observaciones ("Desafilada", "1 bien 1 muy mal") quedan en `descripcion`.
+- Filas duplicadas del sheet (dos "Formon", dos "Medidor de energia solar") se importan como recursos separados: representan sets físicos distintos.
+- `fecha_revision` guarda la fecha textual del sheet ("24/4") sin inventarle año.
+
+**Consecuencia**: El import matchea contra las filas preexistentes (actualizó Multímetro y Pinza amperométrica del seed conservando sus id y relaciones M2M). El sheet del link que pasó el usuario (`1KGmaWiLMO...`) no era accesible (401); se usó "Inventario renovable 2026" (`12dNx9m9UCzP...`), encontrado por Drive y con las columnas exactas descritas — si el del link difiere, re-correr el script apuntando al otro ID. Cuando se implemente el write-back habrá que revisar esta decisión.
+
+---
+
+## [2026-07-19] — Contraseña compartida provisoria para todo `/gestion`
+
+**Contexto**: `/gestion` estaba "oculto por URL, riesgo aceptado" (decisión 2026-07-17, abajo). El usuario pidió una traba mínima para que nadie entre mientras desarrolla el módulo, explícitamente sin buscar seguridad completa todavía.
+
+**Decisión**: Login con contraseña compartida para todo el blueprint: `bp.before_request` exige `session['gestion_ok']` y redirige a `/gestion/login`. La clave viene de la env var `GESTION_CLAVE` (default público en `gestion.py`); `app.secret_key` viene de `SECRET_KEY` (default de dev en `app.py`). Se protege el módulo entero, no solo `/recursos` — mismo mecanismo, menos código.
+
+**Alternativa descartada**: Flask-Login con tabla de usuarios — sobredimensionado para el objetivo, y `gestion.db` es efímera en Render (los usuarios se perderían en cada restart; la env var no depende del disco).
+
+**Consecuencia**: Cubre curiosos con la URL. Pendiente para "hacerlo 100% seguro": setear `GESTION_CLAVE` y `SECRET_KEY` en el hosting (con los defaults públicos cualquiera que lea el repo conoce la clave y puede forjar la cookie), CSRF en los forms, límite de intentos. El resto de la app (horarios, `/api/actualizar`) sigue sin auth. Esto reemplaza el "sin auth, riesgo aceptado" de la decisión 2026-07-17; el ocultamiento del link se mantiene.
+
+---
+
 ## [2026-07-17] — `/gestion` sin link visible en el SPA (acceso solo por URL)
 
 **Contexto**: El header del SPA tenía un botón `GESTIÓN ›` junto a "ACTUALIZAR HORARIOS". El usuario pidió ocultarlo: gestión es una herramienta interna, no para alumnos/docentes que consultan horarios.

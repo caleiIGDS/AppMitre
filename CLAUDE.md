@@ -243,3 +243,12 @@ Después de cada modificación, antes de terminar la tarea, revisá:
 - ¿Tomaste una decisión no obvia? → agregar entrada en `dev-log/DECISIONS.md`
 - ¿Creaste, moviste o eliminaste un documento (`.md` de referencia)? → actualizar la referencia en `CLAUDE.md` (Context Rules o la sección que corresponda)
 - Fixes menores de estilo o bugs internos → no registrar nada
+
+## Fin de sesión
+
+Si el usuario pide "terminar/cerrar la sesión": repasar todo lo hecho en la sesión y guardar lo que falte en los `.md` antes de despedirse:
+1. Pasar el checklist de **Docs Maintenance** (arriba) sobre los cambios de la sesión.
+2. Mover el trabajo terminado a `dev-log/tasks/DONE.md` (newest-first, arriba).
+3. Registrar pendientes nuevos que hayan surgido como tareas en `TODO.md` (numeradas, actualizar `_Último número usado_`).
+4. Si quedó algo a medias, dejarlo asentado en `IN-PROGRESS.md` con estado y próximo paso; si no, verificar que quede vacío.
+5. No commitear salvo pedido explícito.

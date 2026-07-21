@@ -4,6 +4,44 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-07-21] — Registro de préstamos/retiros internos de recursos
+
+**Tipo**: tablas nuevas en `gestion.db` + rutas/templates nuevos (sin tocar `ENTIDADES`)
+**Archivos**: `gestion.py`, `templates/gestion/prestamos_lista.html` (nuevo), `templates/gestion/prestamos_form.html` (nuevo), `templates/gestion/prestamos_detalle.html` (nuevo), `templates/gestion/base.html`, `templates/gestion/home.html`, `static/gestion.css`
+**Cambios**:
+- Tablas nuevas `prestamos` (persona, destino, notas, fecha_salida, fecha_devolucion) y `prestamo_items` (prestamo_id, recurso_id, cantidad). Se crean vía `SCHEMA` (`CREATE TABLE IF NOT EXISTS`, no rompe DBs existentes).
+- Rutas nuevas bajo `/gestion/prestamos*` (fuera de la config declarativa `ENTIDADES`, porque el ciclo prestado→devuelto y los ítems con cantidad no encajan en el trío genérico lista/form/detalle): listado (activos + historial), alta con hasta 8 filas de ítems, detalle, devolver, reabrir, eliminar.
+- **Devolver nunca borra la fila** — solo setea `fecha_devolucion`. El historial completo queda en `gestion.db` indefinidamente (pedido explícito: "que quede registro... por más que sea por el día").
+- El detalle de cada recurso (`/gestion/recursos/<id>`) suma una sección "Historial de préstamos" con todos sus movimientos.
+- `nav_entidades` y las cards del home tratan `slug == 'prestamos'` como caso especial (usan los endpoints propios `prestamos_lista`/`prestamo_nuevo`, no los genéricos `lista`/`nuevo`, porque `prestamos` no está en `ENTIDADES`).
+- Cache-buster `gestion.css` `?v=2`→`?v=3`.
+
+---
+
+## [2026-07-19] — `recursos` con campos de inventario + import desde el sheet
+
+**Tipo**: schema de `gestion.db` + script nuevo
+**Archivos**: `gestion.py`, `importar_inventario.py` (nuevo)
+**Cambios**:
+- Tabla `recursos` suma 3 columnas: `cantidad` (TEXT), `utilidad` (TEXT: Básico/Secundario/Alto valor), `fecha_revision` (TEXT, fecha del último control, formato libre tipo "24/4").
+- `init_db()` ahora migra DBs existentes (`_migrar()`: `ALTER TABLE` aditivo si faltan columnas) — corre solo al iniciar la app.
+- `ESTADOS_RECURSO` suma `"Sin revisar"` (para ítems "nc" del inventario físico).
+- Listado de recursos cambia columnas: NOMBRE, CANT., UBICACIÓN, ESTADO, UTILIDAD (TIPO sale del listado; sigue en form/detalle).
+- `importar_inventario.py` (nuevo, root): importa el sheet "Inventario renovable 2026" a `recursos` vía CSV export público. Re-ejecutable sin duplicar (matchea por nombre normalizado). Se corrió una vez: 81 insertados + 2 actualizados (86 recursos totales).
+
+---
+
+## [2026-07-19] — Login provisorio con contraseña compartida en `/gestion`
+
+**Tipo**: contrato app.py ↔ gestion.py + env vars nuevas
+**Archivos**: `gestion.py`, `app.py`, `templates/gestion/login.html` (nuevo), `templates/gestion/base.html`, `static/gestion.css`
+**Cambios**:
+- `app.secret_key` ahora se setea en `app.py` (env var `SECRET_KEY`, con default de dev) — requerido por la sesión del login de gestión.
+- Rutas nuevas `/gestion/login` (GET/POST) y `/gestion/salir`; el resto del blueprint redirige a login si no hay sesión (`bp.before_request`).
+- Env var nueva `GESTION_CLAVE` (contraseña compartida; default público en `gestion.py` — setear en el hosting).
+
+---
+
 ## [2026-07-17] — Nuevo módulo: Sistema de Gestión de Conocimiento (`/gestion`)
 
 **Tipo**: módulo nuevo (blueprint + DB propia); sin cambios de contrato en horarios

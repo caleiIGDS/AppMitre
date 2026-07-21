@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block titulo %}Sistema de Gestión{% endblock %} — {{ escuela_nombre }}</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=3">
 </head>
 <body>
     <div class="g-bg">
@@ -18,7 +18,12 @@
                         <p>Sistema de Gestión de Conocimiento</p>
                     </div>
                 </div>
-                <a class="g-btn-outline" href="/">‹ SISTEMA DE HORARIOS</a>
+                <div class="g-header-actions">
+                    <a class="g-btn-outline" href="/">‹ SISTEMA DE HORARIOS</a>
+                    {% if session.get('gestion_ok') %}
+                    <a class="g-btn-outline" href="{{ url_for('gestion.salir') }}">SALIR</a>
+                    {% endif %}
+                </div>
             </div>
         </header>
 
@@ -26,7 +31,11 @@
             <nav class="g-nav">
                 <a href="{{ url_for('gestion.home') }}" class="g-nav-tag {{ 'active' if activo == 'home' }}">INICIO</a>
                 {% for slug, plural in nav_entidades %}
+                {% if slug == 'prestamos' %}
+                <a href="{{ url_for('gestion.prestamos_lista') }}" class="g-nav-tag {{ 'active' if activo == slug }}">{{ plural | upper }}</a>
+                {% else %}
                 <a href="{{ url_for('gestion.lista', slug=slug) }}" class="g-nav-tag {{ 'active' if activo == slug }}">{{ plural | upper }}</a>
+                {% endif %}
                 {% endfor %}
             </nav>
 

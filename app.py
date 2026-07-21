@@ -1,4 +1,5 @@
 from flask import Flask, render_template, jsonify, send_file
+import os
 import sqlite3
 import database
 import gestion
@@ -8,6 +9,11 @@ import io
 from datetime import datetime
 
 app = Flask(__name__)
+
+# Firma la cookie de sesión (la usa el login de /gestion). El default solo evita
+# romper el arranque local: en el hosting setear SECRET_KEY como env var, porque
+# con el default público cualquiera puede forjar la sesión.
+app.secret_key = os.environ.get('SECRET_KEY', 'appmitre-dev-cambiar-en-hosting')
 
 # Sistema de Gestión de Conocimiento (/gestion) — módulo independiente con DB propia.
 # init_db() en import para que también corra bajo gunicorn/WSGI (no solo en __main__).

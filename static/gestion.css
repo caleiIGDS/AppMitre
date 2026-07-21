@@ -60,6 +60,12 @@ body {
     padding-bottom: 6px;
 }
 
+.g-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .g-brand {
     display: flex;
     align-items: center;
@@ -409,6 +415,47 @@ body {
     padding: 2px 8px;
     background: rgba(26, 54, 93, 0.06);
 }
+
+.g-badge-out {
+    border-color: var(--g-accent);
+    color: var(--g-accent);
+    background: rgba(217, 122, 52, 0.08);
+}
+
+.g-section-title {
+    margin: 28px 0 12px;
+    color: var(--g-primary);
+    letter-spacing: 2px;
+    font-size: 16px;
+}
+
+.g-section-empty { margin: 0 0 20px; }
+
+.g-inline-form { display: inline; margin: 0; }
+
+.g-btn-mini {
+    padding: 5px 10px;
+    font-size: 11px;
+}
+
+.g-item-row {
+    display: grid;
+    grid-template-columns: 1fr 90px;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.g-item-row input {
+    font-family: var(--g-font);
+    font-size: 14px;
+    padding: 8px 10px;
+    border: 2px solid var(--g-border);
+    background: var(--g-surface);
+    outline: none;
+    width: 100%;
+}
+
+.g-item-row input:focus { border-color: var(--g-accent); }
 
 .g-empty {
     background: var(--g-surface);

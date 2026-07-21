@@ -8,8 +8,11 @@
 # Relaciones M2M: conjunto_recursos, actividad_recursos, actividad_conjuntos, proyecto_recursos.
 
 import os
+import re
 import sqlite3
-from flask import Blueprint, render_template, request, redirect, url_for, abort
+import unicodedata
+from datetime import datetime
+from flask import Blueprint, render_template, request, redirect, url_for, abort, session
 
 from config import ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION
 
@@ -17,8 +20,47 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gestion.db')
 
 bp = Blueprint('gestion', __name__, url_prefix='/gestion')
 
-ESTADOS_RECURSO = ["Disponible", "En uso", "En reparación", "De baja"]
+# --- Acceso con contraseña compartida (provisorio) ---------------------------
+# Traba mínima mientras el módulo está en desarrollo: una sola clave para todo
+# /gestion, guardada en la sesión. En el hosting se cambia con la env var
+# GESTION_CLAVE; el default de abajo es público (el repo lo es), así que solo
+# frena curiosos. Sin usuarios, sin CSRF, sin límite de intentos.
+CLAVE = os.environ.get('GESTION_CLAVE', 'mitre2026')
+
+
+@bp.before_request
+def _requiere_clave():
+    if request.endpoint == 'gestion.login' or session.get('gestion_ok'):
+        return
+    return redirect(url_for('gestion.login', next=request.path))
+
+
+@bp.route('/login', methods=['GET', 'POST'])
+def login():
+    error = None
+    if request.method == 'POST':
+        if request.form.get('clave', '') == CLAVE:
+            session['gestion_ok'] = True
+            destino = request.form.get('next', '')
+            # Solo volver a rutas del propio módulo (evita open redirect).
+            if not destino.startswith('/gestion'):
+                destino = url_for('gestion.home')
+            return redirect(destino)
+        error = 'Contraseña incorrecta.'
+    return render_template('gestion/login.html', error=error,
+                           next=request.values.get('next', ''), activo=None)
+
+
+@bp.route('/salir')
+def salir():
+    session.pop('gestion_ok', None)
+    return redirect(url_for('gestion.login'))
+
+
+ESTADOS_RECURSO = ["Disponible", "En uso", "En reparación", "De baja", "Sin revisar"]
 ESTADOS_PROYECTO = ["Activo", "Pausado", "Terminado"]
+# "" primero: permite dejar la utilidad sin definir (recursos previos al inventario).
+UTILIDADES_RECURSO = ["", "Básico", "Secundario", "Alto valor"]
 
 # Configuración declarativa de cada entidad: campos del form, columnas del listado
 # y relaciones M2M editables desde su formulario. Los campos de relación usan el
@@ -32,12 +74,15 @@ ENTIDADES = {
         'campos': [
             {'nombre': 'nombre', 'label': 'Nombre', 'tipo': 'text', 'requerido': True},
             {'nombre': 'tipo', 'label': 'Tipo', 'tipo': 'text', 'ayuda': 'Ej: Instrumento, Equipo, Estructura, Material'},
+            {'nombre': 'cantidad', 'label': 'Cantidad', 'tipo': 'number'},
             {'nombre': 'descripcion', 'label': 'Descripción', 'tipo': 'textarea'},
-            {'nombre': 'ubicacion', 'label': 'Ubicación', 'tipo': 'text', 'ayuda': 'Ej: Taller de Electricidad, Pañol'},
+            {'nombre': 'ubicacion', 'label': 'Ubicación', 'tipo': 'text', 'ayuda': 'Ej: Taller de Electricidad, Pañol, A2'},
             {'nombre': 'estado', 'label': 'Estado', 'tipo': 'select', 'opciones': ESTADOS_RECURSO},
+            {'nombre': 'utilidad', 'label': 'Utilidad', 'tipo': 'select', 'opciones': UTILIDADES_RECURSO, 'ayuda': 'Importancia del recurso dentro del inventario'},
+            {'nombre': 'fecha_revision', 'label': 'Última revisión', 'tipo': 'text', 'ayuda': 'Fecha del último control de inventario (ej: 24/4)'},
             {'nombre': 'drive_url', 'label': 'Carpeta de Drive (link)', 'tipo': 'url', 'ayuda': 'Fotos, planos y documentos viven en Drive; acá solo va el link'},
         ],
-        'columnas': [('nombre', 'NOMBRE'), ('tipo', 'TIPO'), ('ubicacion', 'UBICACIÓN'), ('estado', 'ESTADO')],
+        'columnas': [('nombre', 'NOMBRE'), ('cantidad', 'CANT.'), ('ubicacion', 'UBICACIÓN'), ('estado', 'ESTADO'), ('utilidad', 'UTILIDAD')],
         'relaciones': [],
     },
     'conjuntos': {
@@ -115,7 +160,10 @@ CREATE TABLE IF NOT EXISTS recursos (
     descripcion TEXT DEFAULT '',
     ubicacion TEXT DEFAULT '',
     estado TEXT DEFAULT 'Disponible',
-    drive_url TEXT DEFAULT ''
+    drive_url TEXT DEFAULT '',
+    cantidad TEXT DEFAULT '',
+    utilidad TEXT DEFAULT '',
+    fecha_revision TEXT DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS conjuntos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -162,7 +210,28 @@ CREATE TABLE IF NOT EXISTS proyecto_recursos (
     recurso_id INTEGER NOT NULL,
     UNIQUE(proyecto_id, recurso_id)
 );
+CREATE TABLE IF NOT EXISTS prestamos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    persona TEXT NOT NULL,
+    destino TEXT DEFAULT '',
+    notas TEXT DEFAULT '',
+    fecha_salida TEXT NOT NULL,
+    fecha_devolucion TEXT DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS prestamo_items (
+    prestamo_id INTEGER NOT NULL,
+    recurso_id INTEGER NOT NULL,
+    cantidad TEXT DEFAULT '1',
+    UNIQUE(prestamo_id, recurso_id)
+);
 """
+
+
+def _norm(texto):
+    """Minúsculas, sin acentos, espacios colapsados — para comparar nombres."""
+    texto = unicodedata.normalize('NFD', texto)
+    texto = ''.join(c for c in texto if unicodedata.category(c) != 'Mn')
+    return ' '.join(texto.lower().split())
 
 
 def conectar():
@@ -172,14 +241,23 @@ def conectar():
 
 
 def init_db():
-    """Crea las tablas si no existen y carga datos de ejemplo la primera vez."""
+    """Crea las tablas si no existen, migra columnas nuevas y carga datos de ejemplo la primera vez."""
     con = conectar()
     cur = con.cursor()
     cur.executescript(SCHEMA)
+    _migrar(cur)
     if cur.execute("SELECT COUNT(*) FROM recursos").fetchone()[0] == 0:
         _seed(cur)
     con.commit()
     con.close()
+
+
+def _migrar(cur):
+    """Suma columnas nuevas a una gestion.db creada con un schema anterior (solo ALTER aditivo)."""
+    existentes = {c[1] for c in cur.execute("PRAGMA table_info(recursos)").fetchall()}
+    for columna in ('cantidad', 'utilidad', 'fecha_revision'):
+        if columna not in existentes:
+            cur.execute(f"ALTER TABLE recursos ADD COLUMN {columna} TEXT DEFAULT ''")
 
 
 def _seed(cur):
@@ -293,6 +371,14 @@ def _secciones_detalle(slug, id, cur):
                 "SELECT a.id, a.nombre FROM actividades a JOIN actividad_recursos r ON r.actividad_id = a.id WHERE r.recurso_id = ? ORDER BY a.nombre COLLATE NOCASE")
         agregar('Proyectos relacionados', 'proyectos',
                 "SELECT p.id, p.nombre FROM proyectos p JOIN proyecto_recursos r ON r.proyecto_id = p.id WHERE r.recurso_id = ? ORDER BY p.nombre COLLATE NOCASE")
+        # slug 'prestamos' no está en ENTIDADES, pero url_for('gestion.detalle', slug='prestamos', id=N)
+        # genera /gestion/prestamos/N, que el routing despacha a prestamo_detalle (la ruta
+        # estática tiene prioridad sobre /<slug>/<id>) — el template genérico no cambia.
+        agregar('Historial de préstamos', 'prestamos',
+                "SELECT p.id, p.persona || ' — ' || p.fecha_salida || "
+                "(CASE WHEN p.fecha_devolucion = '' THEN ' · EN PRÉSTAMO' ELSE '' END) AS nombre "
+                "FROM prestamos p JOIN prestamo_items i ON i.prestamo_id = p.id "
+                "WHERE i.recurso_id = ? ORDER BY p.fecha_salida DESC, p.id DESC")
     elif slug == 'conjuntos':
         agregar('Recursos incluidos', 'recursos',
                 "SELECT x.id, x.nombre FROM recursos x JOIN conjunto_recursos r ON r.recurso_id = x.id WHERE r.conjunto_id = ? ORDER BY x.nombre COLLATE NOCASE")
@@ -315,7 +401,7 @@ def _contexto_base():
         'escuela_nombre': ESCUELA_NOMBRE,
         'escuela_logo': ESCUELA_LOGO,
         'escuela_version': ESCUELA_VERSION,
-        'nav_entidades': [(slug, e['plural']) for slug, e in ENTIDADES.items()],
+        'nav_entidades': [(slug, e['plural']) for slug, e in ENTIDADES.items()] + [('prestamos', 'Préstamos')],
     }
 
 
@@ -328,6 +414,10 @@ def home():
         total = cur.execute(f"SELECT COUNT(*) FROM {e['tabla']}").fetchone()[0]
         tarjetas.append({'slug': slug, 'plural': e['plural'], 'singular': e['singular'],
                          'descripcion': e['descripcion'], 'total': total})
+    activos = cur.execute("SELECT COUNT(*) FROM prestamos WHERE fecha_devolucion = ''").fetchone()[0]
+    tarjetas.append({'slug': 'prestamos', 'plural': 'Préstamos', 'singular': 'Préstamo',
+                     'descripcion': 'Retiros internos de recursos: quién se llevó qué, cuánto y cuándo lo devolvió. Todo queda en el historial. El contador muestra lo que sigue afuera.',
+                     'total': activos})
     con.close()
     return render_template('gestion/home.html', tarjetas=tarjetas, activo='home')
 
@@ -421,3 +511,172 @@ def eliminar(slug, id):
     con.commit()
     con.close()
     return redirect(url_for('gestion.lista', slug=slug))
+
+
+# --- Préstamos / retiros internos --------------------------------------------
+# Registro de movimientos: quién se lleva qué recursos, en qué cantidad, y cuándo
+# los devuelve. La devolución NO borra nada: fecha_devolucion vacía = sigue afuera.
+# Rutas propias (no entran en la config declarativa: tienen ítems con cantidad y
+# ciclo prestado→devuelto). Las URLs /gestion/prestamos* son estáticas y tienen
+# prioridad sobre /<slug>, así nav/home pueden seguir usando url_for genérico.
+# No se descuenta stock de recursos.cantidad: lo prestado se calcula por consulta.
+
+PRESTAMO_FILAS_FORM = 8  # filas de ítems disponibles en el form de retiro
+
+
+def _ahora():
+    return datetime.now().strftime('%Y-%m-%d %H:%M')
+
+
+def _resumen_items(cur, ids):
+    """prestamo_id → '2× Multímetro, 1× Caladora' (para el listado)."""
+    if not ids:
+        return {}
+    marcas = ','.join('?' * len(ids))
+    resumen = {}
+    filas = cur.execute(
+        f"SELECT i.prestamo_id, i.cantidad, COALESCE(r.nombre, '(recurso eliminado)') AS nombre "
+        f"FROM prestamo_items i LEFT JOIN recursos r ON r.id = i.recurso_id "
+        f"WHERE i.prestamo_id IN ({marcas}) ORDER BY nombre COLLATE NOCASE", list(ids)).fetchall()
+    for f in filas:
+        resumen.setdefault(f['prestamo_id'], []).append(f"{f['cantidad']}× {f['nombre']}")
+    return {pid: ', '.join(partes) for pid, partes in resumen.items()}
+
+
+def _parsear_items_prestamo(recursos):
+    """Lee las filas recurso_N/cantidad_N del form. Devuelve ([(recurso_id, cantidad)], errores).
+    El recurso se resuelve por el sufijo "[#id]" que agrega el datalist, o por nombre
+    exacto (sin acentos) si lo tipearon a mano. Filas repetidas suman cantidades."""
+    por_id = {r['id'] for r in recursos}
+    por_nombre = {}
+    for r in recursos:
+        por_nombre.setdefault(_norm(r['nombre']), []).append(r['id'])
+    items, errores = {}, []
+    for n in range(1, PRESTAMO_FILAS_FORM + 1):
+        texto = request.form.get(f'recurso_{n}', '').strip()
+        if not texto:
+            continue
+        cantidad = request.form.get(f'cantidad_{n}', '').strip() or '1'
+        if not cantidad.isdigit() or int(cantidad) < 1:
+            errores.append(f'Cantidad inválida para "{texto}".')
+            continue
+        m = re.search(r'\[#(\d+)\]\s*$', texto)
+        if m and int(m.group(1)) in por_id:
+            rid = int(m.group(1))
+        else:
+            candidatos = por_nombre.get(_norm(re.sub(r'\[#\d+\]\s*$', '', texto)), [])
+            if len(candidatos) == 1:
+                rid = candidatos[0]
+            elif not candidatos:
+                errores.append(f'No existe el recurso "{texto}" — elegilo de la lista.')
+                continue
+            else:
+                errores.append(f'Hay varios recursos llamados "{texto}" — elegilo de la lista, que incluye el número.')
+                continue
+        items[rid] = items.get(rid, 0) + int(cantidad)
+    return list(items.items()), errores
+
+
+@bp.route('/prestamos')
+def prestamos_lista():
+    q = request.args.get('q', '').strip()
+    con = conectar()
+    cur = con.cursor()
+    sql = "SELECT * FROM prestamos"
+    params = []
+    if q:
+        like = f"%{q}%"
+        sql += " WHERE persona LIKE ? OR destino LIKE ? OR notas LIKE ?"
+        params = [like, like, like]
+    sql += " ORDER BY fecha_salida DESC, id DESC"
+    filas = cur.execute(sql, params).fetchall()
+    resumen = _resumen_items(cur, [f['id'] for f in filas])
+    con.close()
+    activos = [f for f in filas if not f['fecha_devolucion']]
+    devueltos = [f for f in filas if f['fecha_devolucion']]
+    return render_template('gestion/prestamos_lista.html', activos=activos, devueltos=devueltos,
+                           resumen=resumen, q=q, activo='prestamos')
+
+
+@bp.route('/prestamos/nuevo', methods=['GET', 'POST'])
+def prestamo_nuevo():
+    con = conectar()
+    cur = con.cursor()
+    recursos = cur.execute("SELECT id, nombre, ubicacion FROM recursos ORDER BY nombre COLLATE NOCASE").fetchall()
+    error = None
+    if request.method == 'POST':
+        persona = request.form.get('persona', '').strip()
+        items, errores = _parsear_items_prestamo(recursos)
+        if not persona:
+            error = 'Falta quién retira.'
+        elif errores:
+            error = ' '.join(errores)
+        elif not items:
+            error = 'Cargá al menos un recurso.'
+        else:
+            cur.execute("INSERT INTO prestamos (persona, destino, notas, fecha_salida, fecha_devolucion) VALUES (?,?,?,?,'')",
+                        (persona, request.form.get('destino', '').strip(),
+                         request.form.get('notas', '').strip(), _ahora()))
+            pid = cur.lastrowid
+            for rid, cantidad in items:
+                cur.execute("INSERT INTO prestamo_items (prestamo_id, recurso_id, cantidad) VALUES (?,?,?)",
+                            (pid, rid, str(cantidad)))
+            con.commit()
+            con.close()
+            return redirect(url_for('gestion.prestamo_detalle', id=pid))
+    con.close()
+    return render_template('gestion/prestamos_form.html', recursos=recursos,
+                           filas=range(1, PRESTAMO_FILAS_FORM + 1), valores=request.form,
+                           error=error, activo='prestamos')
+
+
+@bp.route('/prestamos/<int:id>')
+def prestamo_detalle(id):
+    con = conectar()
+    cur = con.cursor()
+    fila = cur.execute("SELECT * FROM prestamos WHERE id = ?", (id,)).fetchone()
+    if fila is None:
+        con.close()
+        abort(404)
+    items = cur.execute(
+        "SELECT i.cantidad, i.recurso_id, r.nombre, r.ubicacion FROM prestamo_items i "
+        "LEFT JOIN recursos r ON r.id = i.recurso_id WHERE i.prestamo_id = ? "
+        "ORDER BY r.nombre COLLATE NOCASE", (id,)).fetchall()
+    con.close()
+    return render_template('gestion/prestamos_detalle.html', fila=fila, items=items, activo='prestamos')
+
+
+@bp.route('/prestamos/<int:id>/devolver', methods=['POST'])
+def prestamo_devolver(id):
+    con = conectar()
+    cur = con.cursor()
+    cur.execute("UPDATE prestamos SET fecha_devolucion = ? WHERE id = ? AND fecha_devolucion = ''",
+                (_ahora(), id))
+    con.commit()
+    con.close()
+    if request.form.get('volver') == 'detalle':
+        return redirect(url_for('gestion.prestamo_detalle', id=id))
+    return redirect(url_for('gestion.prestamos_lista'))
+
+
+@bp.route('/prestamos/<int:id>/reabrir', methods=['POST'])
+def prestamo_reabrir(id):
+    """Deshace una devolución marcada por error (vuelve a figurar como prestado)."""
+    con = conectar()
+    cur = con.cursor()
+    cur.execute("UPDATE prestamos SET fecha_devolucion = '' WHERE id = ?", (id,))
+    con.commit()
+    con.close()
+    return redirect(url_for('gestion.prestamo_detalle', id=id))
+
+
+@bp.route('/prestamos/<int:id>/eliminar', methods=['POST'])
+def prestamo_eliminar(id):
+    """Solo para registros mal cargados — la devolución normal usa /devolver."""
+    con = conectar()
+    cur = con.cursor()
+    cur.execute("DELETE FROM prestamos WHERE id = ?", (id,))
+    cur.execute("DELETE FROM prestamo_items WHERE prestamo_id = ?", (id,))
+    con.commit()
+    con.close()
+    return redirect(url_for('gestion.prestamos_lista'))

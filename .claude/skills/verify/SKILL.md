@@ -38,6 +38,9 @@ Para un caso de suplente: filtrar dashboard por `suplente_activo -eq 1`.
 
 ## Gotchas
 
+- ⚠️ Suele haber un `python app.py` del usuario ya corriendo en el puerto 5000 (a veces con otro install de Python). En Windows ambos procesos pueden bindear el puerto **sin error** y el viejo se queda con el tráfico → parece que los cambios "no aplican". Verificar con `Get-NetTCPConnection -LocalPort 5000` y levantar la instancia de prueba en otro puerto: `python -c "import app; app.app.run(host='127.0.0.1', port=5001)"`. No matar el server del usuario.
+- ⚠️ En Git Bash, curl con datos POST cuyo valor empieza con `/` (ej: `-d "next=/gestion/x"`) sufre la conversión de paths de MSYS y llega mangleado al server (`next=C:/Program Files/Git/...`). Prefijar con `MSYS2_ARG_CONV_EXCL="*"` o usar el test_client de Flask.
+
 - Los flujos de click (modo comparación, Planilla General, modal) no se llegan con `--dump-dom`; requieren Playwright o prueba manual — reportarlos como no manejados si aplica.
 - `/api/actualizar` borra y recarga la DB desde Google Sheets — no dispararlo como parte de una verificación.
 - Deprecation warnings de fpdf2 en stdout son preexistentes, no errores.

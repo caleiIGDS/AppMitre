@@ -1,0 +1,73 @@
+{% extends 'gestion/base.html' %}
+{% block titulo %}Préstamo — {{ fila['persona'] }}{% endblock %}
+{% block contenido %}
+<div class="g-toolbar">
+    <div>
+        <span class="g-breadcrumb">
+            <a class="g-link" href="{{ url_for('gestion.prestamos_lista') }}">PRÉSTAMOS</a> /
+        </span>
+        <h2>{{ fila['persona'] }}</h2>
+    </div>
+    <div class="g-toolbar-actions">
+        {% if not fila['fecha_devolucion'] %}
+        <form method="post" action="{{ url_for('gestion.prestamo_devolver', id=fila['id']) }}">
+            <input type="hidden" name="volver" value="detalle">
+            <button type="submit" class="g-btn">✔ REGISTRAR DEVOLUCIÓN</button>
+        </form>
+        {% else %}
+        <form method="post" action="{{ url_for('gestion.prestamo_reabrir', id=fila['id']) }}"
+              onsubmit="return confirm('¿Volver a marcar este préstamo como NO devuelto?');">
+            <button type="submit" class="g-btn-outline-dark">REABRIR</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('gestion.prestamo_eliminar', id=fila['id']) }}"
+              onsubmit="return confirm('¿Eliminar este registro del historial? Solo para cargas erróneas — la devolución normal usa el otro botón.');">
+            <button type="submit" class="g-btn-danger">ELIMINAR</button>
+        </form>
+    </div>
+</div>
+
+<div class="g-detail">
+    <dl class="g-props">
+        <div class="g-prop">
+            <dt>ESTADO</dt>
+            <dd>
+                {% if fila['fecha_devolucion'] %}
+                <span class="g-badge">DEVUELTO</span>
+                {% else %}
+                <span class="g-badge g-badge-out">EN PRÉSTAMO</span>
+                {% endif %}
+            </dd>
+        </div>
+        <div class="g-prop"><dt>SALIDA</dt><dd>{{ fila['fecha_salida'] }}</dd></div>
+        {% if fila['fecha_devolucion'] %}
+        <div class="g-prop"><dt>DEVOLUCIÓN</dt><dd>{{ fila['fecha_devolucion'] }}</dd></div>
+        {% endif %}
+        {% if fila['destino'] %}
+        <div class="g-prop"><dt>DESTINO / USO</dt><dd>{{ fila['destino'] }}</dd></div>
+        {% endif %}
+        {% if fila['notas'] %}
+        <div class="g-prop"><dt>NOTAS</dt><dd class="g-pre">{{ fila['notas'] }}</dd></div>
+        {% endif %}
+    </dl>
+
+    <div class="g-relations">
+        <div class="g-relation-box">
+            <h4>RECURSOS RETIRADOS</h4>
+            <ul>
+                {% for it in items %}
+                <li>
+                    <strong>{{ it['cantidad'] }}×</strong>
+                    {% if it['nombre'] %}
+                    <a class="g-item-link" href="{{ url_for('gestion.detalle', slug='recursos', id=it['recurso_id']) }}">{{ it['nombre'] }}</a>
+                    {% if it['ubicacion'] %}<span class="g-help">({{ it['ubicacion'] }})</span>{% endif %}
+                    {% else %}
+                    (recurso eliminado)
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
