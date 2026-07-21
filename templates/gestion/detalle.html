@@ -9,6 +9,9 @@
         <h2>{{ fila['nombre'] }}</h2>
     </div>
     <div class="g-toolbar-actions">
+        {% if slug == 'recursos' %}
+        <a class="g-btn" href="{{ url_for('gestion.prestamo_nuevo', recurso=fila['id']) }}">📤 REGISTRAR RETIRO</a>
+        {% endif %}
         {% if fila['drive_url'] %}
         <a class="g-btn" href="{{ fila['drive_url'] }}" target="_blank" rel="noopener">📁 CARPETA EN DRIVE</a>
         {% endif %}

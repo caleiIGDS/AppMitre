@@ -8,7 +8,8 @@ en Google Drive; acá solo se guardan links (`drive_url`).
 ## Arquitectura
 
 - **`gestion.py`** — todo el módulo: blueprint Flask (`bp`, prefix `/gestion`), schema,
-  seed y rutas. Server-rendered con Jinja (sin JS propio), a diferencia del SPA de horarios.
+  seed y rutas. Server-rendered con Jinja. El único JS propio es `static/gestion.js`
+  (búsqueda en vivo del listado — ver abajo); el resto es HTML puro con forms + redirects.
 - **`gestion.db`** — SQLite propia, separada de `escuela.db`. **No** se regenera desde
   Sheets y `/api/actualizar` no la toca. Es la única DB con datos propios de la app
   (en hosting efímero tipo Render se pierde en cada restart; en PythonAnywhere persiste).
@@ -19,6 +20,9 @@ en Google Drive; acá solo se guardan links (`drive_url`).
   ítems con cantidad y un ciclo prestado→devuelto que el trío genérico no modela).
 - **`static/gestion.css`** — hoja standalone (paleta blueprint copiada, no importa
   `style.css` para que los dos sistemas no se pisen). Sin modo oscuro.
+- **`static/gestion.js`** — único JS del módulo: búsqueda en vivo del listado (filtrado
+  local, ~35 líneas vanilla, sin build step). Cargado en `base.html` con `defer`;
+  no hace nada fuera de las páginas de listado (guarda por existencia de elementos).
 - Integración: `app.py` hace `app.register_blueprint(gestion.bp)` + `gestion.init_db()`
   en import (funciona bajo gunicorn/WSGI). No hay link visible desde el SPA principal:
   `/gestion` es deliberadamente "oculto", se accede escribiendo la URL (decisión
@@ -37,7 +41,7 @@ M2M (con `UNIQUE` por par): `conjunto_recursos`, `actividad_recursos`,
 `actividad_conjuntos`, `proyecto_recursos`.
 
 | `prestamos` | id, persona, destino, notas, fecha_salida, fecha_devolucion |
-| `prestamo_items` | prestamo_id, recurso_id, cantidad (M2M con cantidad, `UNIQUE(prestamo_id, recurso_id)`) |
+| `prestamo_items` | prestamo_id, recurso_id, cantidad, cantidad_devuelta (M2M con cantidad, `UNIQUE(prestamo_id, recurso_id)`) |
 
 Estados: recursos = Disponible / En uso / En reparación / De baja / Sin revisar;
 proyectos = Activo / Pausado / Terminado.
@@ -88,6 +92,16 @@ entidad el filtrado en Python es despreciable; si alguna tabla creciera a miles 
 reconsiderar (índice, FTS). Aplica a las 4 entidades genéricas; los préstamos usan su propio
 `LIKE` en SQL. Decisión 2026-07-21 (ver `dev-log/DECISIONS.md`).
 
+**Búsqueda en vivo (client-side, `static/gestion.js`)**: además del filtrado server-side,
+el listado filtra en el navegador mientras se escribe, sin recargar ni ir al servidor. La
+ruta emite por fila un atributo `data-buscar` con el texto ya normalizado por Python
+(`_norm(nombre + descripcion)`), y el JS filtra por substring normalizado (repite la misma
+normalización de acentos/mayúsculas). Es progressive enhancement: sin JS, el form sigue
+haciendo la búsqueda difusa server-side. Con JS, el botón BUSCAR se oculta y Enter no recarga.
+La capa en vivo **no** tiene la tolerancia difusa a typos (solo substring) — a propósito: al
+ver los resultados achicarse letra por letra uno corrige el typo solo; el fuzzy server-side
+queda como respaldo. Decisión 2026-07-21 (ver `dev-log/DECISIONS.md`).
+
 Relaciones mostradas en detalle (`_secciones_detalle`): recurso → conjuntos que lo
 incluyen / actividades que lo usan / proyectos relacionados / **historial de préstamos**;
 conjunto → recursos incluidos / actividades que lo usan; actividad → conjuntos + recursos
@@ -100,11 +114,13 @@ Registro de quién se lleva qué recursos, cuánto y cuándo lo devuelve. Rutas 
 
 | Ruta | Método | Descripción |
 |------|--------|-------------|
-| `/gestion/prestamos` | GET | Listado dividido en "en préstamo" (`fecha_devolucion=''`) e "historial" (`?q=` busca en persona/destino/notas) |
-| `/gestion/prestamos/nuevo` | GET/POST | Form con hasta `PRESTAMO_FILAS_FORM` (8) filas de ítems (`recurso_N` + `cantidad_N`) |
-| `/gestion/prestamos/<id>` | GET | Detalle: persona, destino, notas, fechas, ítems retirados |
-| `/gestion/prestamos/<id>/devolver` | POST | Setea `fecha_devolucion` — **nunca borra la fila** |
-| `/gestion/prestamos/<id>/reabrir` | POST | Deshace una devolución cargada por error |
+| `/gestion/prestamos` | GET | Listado dividido en "en préstamo" (`fecha_devolucion=''`) e "historial" (`?q=` busca en persona/destino/notas). En activos la columna "se llevó" muestra lo **pendiente**, no lo retirado |
+| `/gestion/prestamos/nuevo` | GET/POST | Form con hasta `PRESTAMO_FILAS_FORM` (8) filas de ítems (`recurso_N` + `cantidad_N`). `?recurso=<id>` (GET) precarga la fila 1 — lo usa el botón "REGISTRAR RETIRO" de la ficha del recurso |
+| `/gestion/prestamos/<id>` | GET | Detalle: persona, destino, notas, fechas, e ítems con prestado/devuelto/pendiente y controles de devolución por ítem |
+| `/gestion/prestamos/<id>/devolver` | POST | **Devolver TODO**: marca cada ítem entero (`cantidad_devuelta = cantidad`) y setea `fecha_devolucion`. Atajo — **nunca borra la fila** |
+| `/gestion/prestamos/<id>/devolver_item` | POST | Devuelve parte (o el resto) de un ítem (`recurso_id` + `cantidad` opcional; vacía = todo lo pendiente). Al cubrirse todo lo pendiente, el préstamo se cierra solo |
+| `/gestion/prestamos/<id>/reabrir` | POST | Deshace la devolución completa: resetea todos los ítems a 0 y limpia `fecha_devolucion` |
+| `/gestion/prestamos/<id>/reabrir_item` | POST | Deshace la devolución de un ítem puntual (vuelve a 0); si eso deja algo pendiente, reabre el préstamo |
 | `/gestion/prestamos/<id>/eliminar` | POST | Borra el registro entero — solo para cargas mal hechas, no es el flujo normal |
 
 **Resolución de recursos en el form**: el `<input>` de cada fila usa un `<datalist>` con
@@ -116,7 +132,18 @@ de la lista). Filas repetidas para el mismo recurso suman cantidades.
 
 **No se descuenta stock**: `recursos.cantidad` no cambia al prestar/devolver — es
 "cuánto hay en total", no "cuánto está libre ahora mismo". Lo prestado se calcula por
-consulta (`prestamo_items` sin devolver), no se mantiene como contador aparte.
+consulta (`cantidad − cantidad_devuelta` sobre `prestamo_items`), no se mantiene como
+contador aparte.
+
+**Devolución por ítem (parcial en cantidad)**: cada `prestamo_items` guarda cuánto se
+devolvió en `cantidad_devuelta` (0 = sigue afuera entero). Un ítem está devuelto cuando
+`cantidad_devuelta == cantidad`; se puede devolver de a partes (ej: 1 de 3). `fecha_devolucion`
+del préstamo **sigue siendo la fuente de verdad de "cerrado"**: `_recalcular_estado()` la
+setea sola cuando no queda nada pendiente en ningún ítem, y la limpia si vuelve a haber algo
+afuera (por un `reabrir_item`). Así la lista (activos/historial) y el contador del home no
+cambian de lógica. Un préstamo con algo devuelto pero no todo figura como "EN PRÉSTAMO ·
+parcial". La migración `cantidad_devuelta` es aditiva (`ALTER TABLE` en `_migrar`, arranca en
+`'0'` para préstamos previos).
 
 **Routing de `/gestion/prestamos*` vs `/gestion/<slug>*`**: son rutas estáticas
 (`/gestion/prestamos`, `/gestion/prestamos/<id>`, etc.) que compiten con las dinámicas

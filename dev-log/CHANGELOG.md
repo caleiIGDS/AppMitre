@@ -4,6 +4,31 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-07-21] — Préstamos: devolución por ítem (parcial) + registrar retiro desde la ficha del recurso
+
+**Tipo**: columna nueva en `gestion.db` + rutas nuevas (dentro del módulo gestión)
+**Archivos**: `gestion.py`, `templates/gestion/prestamos_detalle.html`, `templates/gestion/detalle.html`, `static/gestion.css`, `templates/gestion/base.html`
+**Cambios**:
+- Columna nueva `prestamo_items.cantidad_devuelta` (`TEXT DEFAULT '0'`). Migración aditiva en `_migrar` (`ALTER TABLE`, no rompe DBs existentes; préstamos previos arrancan en `'0'`).
+- Rutas nuevas `POST /gestion/prestamos/<id>/devolver_item` y `/reabrir_item`: devolver/deshacer por ítem, con cantidad parcial (ej: 1 de 3). `_recalcular_estado()` cierra o reabre el préstamo solo según el pendiente total — `fecha_devolucion` sigue siendo la fuente de verdad de "devuelto".
+- `devolver` (existente) ahora es "devolver TODO": marca cada ítem entero además de setear `fecha_devolucion`. `reabrir` resetea todos los ítems a 0.
+- `prestamo_nuevo` acepta `?recurso=<id>` (GET) para precargar la fila 1 — nuevo botón "REGISTRAR RETIRO" en la ficha del recurso (`detalle.html`, solo `slug == 'recursos'`).
+- En la lista de préstamos, la columna "se llevó" de los activos muestra lo **pendiente** (no lo retirado). `_resumen_items(..., solo_pendiente=True)`.
+- Cache-buster: `gestion.css` `?v=4`→`?v=5`.
+
+---
+
+## [2026-07-21] — Búsqueda en vivo en el listado de `/gestion`
+
+**Tipo**: nuevo asset + comportamiento client-side (dentro del módulo gestión; sin cambios de contrato)
+**Archivos**: `static/gestion.js` (nuevo), `templates/gestion/base.html`, `templates/gestion/lista.html`, `static/gestion.css`, `gestion.py`
+**Cambios**:
+- Primer JS propio de `/gestion`: `gestion.js` filtra el listado en el navegador mientras se escribe (local, sin recargar ni ir al server). Progressive enhancement — sin JS, el form sigue haciendo la búsqueda difusa server-side.
+- `lista()` emite un atributo `data-buscar` por fila (texto normalizado por Python) para que el JS filtre por substring normalizado (perdona acentos/mayúsculas). Ver DECISIONS 2026-07-21 y `agent_docs/gestion-conocimiento.md`.
+- Cache-buster: `gestion.css` `?v=3`→`?v=4`; `gestion.js` nuevo con `?v=1`.
+
+---
+
 ## [2026-07-21] — Registro de préstamos/retiros internos de recursos
 
 **Tipo**: tablas nuevas en `gestion.db` + rutas/templates nuevos (sin tocar `ENTIDADES`)

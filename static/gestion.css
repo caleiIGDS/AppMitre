@@ -397,6 +397,10 @@ body {
 
 .g-table tbody tr:hover { background: #f8fafc; }
 
+/* Búsqueda en vivo (gestion.js): filas ocultas y mensaje de sin resultados. */
+.g-table tbody tr[hidden] { display: none; }
+.g-sin-resultados { margin-top: 14px; }
+
 .g-td-actions {
     white-space: nowrap;
     text-align: right;
@@ -629,6 +633,54 @@ body {
 }
 
 .g-relation-box li { font-size: 14px; }
+
+/* ---------- Ítems de préstamo con devolución por ítem ---------- */
+.g-items-devol { gap: 12px; }
+
+.g-item-devol {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed var(--g-border);
+}
+
+.g-item-devol:last-child { padding-bottom: 0; border-bottom: none; }
+
+.g-item-devol-info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+}
+
+.g-item-devol-nombre { font-weight: 600; }
+
+.g-item-devol-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.g-devol-form {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.g-devol-cant {
+    width: 64px;
+    font-family: var(--g-font);
+    font-size: 13px;
+    padding: 4px 6px;
+    border: 2px solid var(--g-border);
+    background: var(--g-surface);
+    outline: none;
+}
+
+.g-devol-cant:focus { border-color: var(--g-accent); }
 
 /* ---------- Footer ---------- */
 .g-footer {

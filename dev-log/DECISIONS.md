@@ -4,6 +4,36 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-07-21] — Préstamos: devolución por ítem con `cantidad_devuelta`, y `fecha_devolucion` derivada
+
+**Contexto**: La devolución era todo-o-nada a nivel préstamo (`fecha_devolucion` en la fila `prestamos`). El usuario quiere devolver de a partes: marcar que volvió un ítem puntual, e incluso una fracción de su cantidad (ej: se llevó 3 multímetros, devuelve 1). También poder arrancar un retiro desde la ficha del recurso, no solo desde el form vacío.
+
+**Decisión**:
+- **Cantidad devuelta por ítem, no una tabla de eventos**: se suma una columna `cantidad_devuelta` a `prestamo_items` (acumulado devuelto por ítem). Un ítem está devuelto cuando `cantidad_devuelta == cantidad`. Más simple que un log de movimientos de devolución (que daría historial fino pero es sobre-ingeniería para el caso: "cuánto falta" es lo único que se consulta).
+- **`fecha_devolucion` sigue siendo la fuente de verdad de "cerrado", pero derivada**: en vez de que el usuario la setee, `_recalcular_estado()` la pone sola cuando el pendiente total llega a 0 y la limpia si vuelve a haber algo afuera. Así la lista (activos/historial), el contador del home y el badge no cambian de lógica — todo lo que ya leía `fecha_devolucion` sigue igual. Se evita un segundo indicador de estado que se pueda desincronizar del detalle por ítem.
+- **`devolver` (todo) se mantiene como atajo**: marca cada ítem entero + cierra. Es el flujo más común (se devuelve todo junto) y es el botón de la lista. La devolución parcial vive en el detalle.
+- **Registrar retiro desde la ficha del recurso vía `?recurso=<id>`**: en vez de un endpoint nuevo, `prestamo_nuevo` acepta un query param que precarga la fila 1 del form existente (reusa el sufijo `[#id]` del datalist). Un solo lugar donde se crea el préstamo.
+
+**Alternativa descartada**: tabla `prestamo_devoluciones` (una fila por evento de devolución, con fecha y cantidad). Daría un historial de devoluciones parciales con timestamps, pero nadie pidió ese detalle y complica todas las consultas de "cuánto falta". Si en el futuro se necesita auditar cada devolución parcial, es el camino a retomar.
+
+**Consecuencia**: `cantidad_devuelta` arranca en `'0'` para préstamos previos (migración aditiva) — quedan consistentes: 0 devuelto, `fecha_devolucion` intacta. `reabrir` (todo) y `reabrir_item` resetean a 0; una devolución parcial marcada por error se deshace por ítem sin perder el resto.
+
+---
+
+## [2026-07-21] — Búsqueda en vivo en `/gestion`: filtrado local en el navegador (primer JS del módulo)
+
+**Contexto**: La búsqueda recargaba la página entera contra el servidor en cada consulta. El usuario preguntó si conviene "descargar todo y buscar local para evitar tiempos innecesarios". `/gestion` se había hecho a propósito sin JS propio (decisión 2026-07-17).
+
+**Decisión**: Búsqueda en vivo del lado del cliente (`static/gestion.js`, ~35 líneas vanilla, sin build step). El listado ya trae todas las filas; la ruta emite `data-buscar` por fila (texto normalizado por Python) y el JS filtra por substring mientras se escribe. Instantáneo, sin round-trips. Esto **introduce el primer JS propio de `/gestion`**, revisando el "sin JS" de 2026-07-17: pedir búsqueda en vivo implica JS sí o sí (Python no corre en el navegador), y es el mismo patrón que ya usa el SPA de horarios (backend Python + JS vanilla). No es migrar de stack.
+
+**Alternativas descartadas**:
+- *Servir un fragmento HTML por fetch (server-side en vivo)*: mantendría la lógica difusa exacta, pero suma un round-trip por tecla — más notorio en hosting lento, justo lo que se quería evitar.
+- *Portar la búsqueda difusa (difflib) a JS*: duplicaría lógica (dos implementaciones a mantener) para tolerar typos, cosa que el filtrado en vivo compensa solo (ves los resultados achicarse y corregís el typo).
+
+**Consecuencia**: Progressive enhancement — sin JS, el form sigue haciendo la búsqueda difusa server-side de `lista()`; con JS, filtra local, oculta el botón BUSCAR y evita la recarga. La capa en vivo perdona acentos/mayúsculas (misma normalización que Python) pero **no** typos (solo substring); el fuzzy server-side queda de respaldo (Enter con JS apagado, o URLs `?q=`). La normalización se hace una vez en Python (`data-buscar`), así el JS no duplica las reglas de acentos, solo las aplica a la query.
+
+---
+
 ## [2026-07-21] — Búsqueda de `/gestion` tolerante con `difflib`, no FTS ni embeddings
 
 **Contexto**: El `LIKE` literal de `lista()` no perdonaba acentos ("multimetro" no encontraba "Multímetro"), typos ("destronillador"), ni mayúsculas. El usuario pidió una búsqueda "que perdone un poco".

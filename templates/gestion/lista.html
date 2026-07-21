@@ -22,7 +22,7 @@
         </thead>
         <tbody>
             {% for fila in filas %}
-            <tr>
+            <tr data-buscar="{{ buscar[fila['id']] }}">
                 {% for campo, label in cfg.columnas %}
                 <td>
                     {% if loop.first %}

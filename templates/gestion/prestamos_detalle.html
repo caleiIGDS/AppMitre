@@ -12,7 +12,7 @@
         {% if not fila['fecha_devolucion'] %}
         <form method="post" action="{{ url_for('gestion.prestamo_devolver', id=fila['id']) }}">
             <input type="hidden" name="volver" value="detalle">
-            <button type="submit" class="g-btn">✔ REGISTRAR DEVOLUCIÓN</button>
+            <button type="submit" class="g-btn">✔ DEVOLVER TODO</button>
         </form>
         {% else %}
         <form method="post" action="{{ url_for('gestion.prestamo_reabrir', id=fila['id']) }}"
@@ -36,6 +36,9 @@
                 <span class="g-badge">DEVUELTO</span>
                 {% else %}
                 <span class="g-badge g-badge-out">EN PRÉSTAMO</span>
+                {% if items | selectattr('devuelta') | list | length %}
+                <span class="g-help">· parcial, faltan {{ pendiente_total }}</span>
+                {% endif %}
                 {% endif %}
             </dd>
         </div>
@@ -54,16 +57,44 @@
     <div class="g-relations">
         <div class="g-relation-box">
             <h4>RECURSOS RETIRADOS</h4>
-            <ul>
+            <ul class="g-items-devol">
                 {% for it in items %}
-                <li>
-                    <strong>{{ it['cantidad'] }}×</strong>
-                    {% if it['nombre'] %}
-                    <a class="g-item-link" href="{{ url_for('gestion.detalle', slug='recursos', id=it['recurso_id']) }}">{{ it['nombre'] }}</a>
-                    {% if it['ubicacion'] %}<span class="g-help">({{ it['ubicacion'] }})</span>{% endif %}
-                    {% else %}
-                    (recurso eliminado)
-                    {% endif %}
+                <li class="g-item-devol">
+                    <div class="g-item-devol-info">
+                        <span class="g-item-devol-nombre">
+                            {% if it['nombre'] %}
+                            <a class="g-item-link" href="{{ url_for('gestion.detalle', slug='recursos', id=it['recurso_id']) }}">{{ it['nombre'] }}</a>
+                            {% if it['ubicacion'] %}<span class="g-help">({{ it['ubicacion'] }})</span>{% endif %}
+                            {% else %}
+                            <span class="g-help">(recurso eliminado)</span>
+                            {% endif %}
+                        </span>
+                        {% if it['pendiente'] == 0 %}
+                        <span class="g-badge">✔ DEVUELTO ({{ it['cantidad'] }})</span>
+                        {% else %}
+                        <span class="g-badge g-badge-out">FALTAN {{ it['pendiente'] }}</span>
+                        <span class="g-help">de {{ it['cantidad'] }}{% if it['devuelta'] %} · {{ it['devuelta'] }} devuelto{% endif %}</span>
+                        {% endif %}
+                    </div>
+                    <div class="g-item-devol-actions">
+                        {% if it['pendiente'] > 0 %}
+                        <form method="post" class="g-inline-form g-devol-form" action="{{ url_for('gestion.prestamo_devolver_item', id=fila['id']) }}">
+                            <input type="hidden" name="recurso_id" value="{{ it['recurso_id'] }}">
+                            {% if it['cantidad'] > 1 %}
+                            <input type="number" name="cantidad" min="1" max="{{ it['pendiente'] }}"
+                                   value="{{ it['pendiente'] }}" class="g-devol-cant" aria-label="Cantidad a devolver">
+                            {% endif %}
+                            <button type="submit" class="g-btn g-btn-mini">✔ DEVOLVER</button>
+                        </form>
+                        {% endif %}
+                        {% if it['devuelta'] > 0 %}
+                        <form method="post" class="g-inline-form" action="{{ url_for('gestion.prestamo_reabrir_item', id=fila['id']) }}"
+                              onsubmit="return confirm('¿Deshacer la devolución de este ítem? Vuelve a figurar afuera entero.');">
+                            <input type="hidden" name="recurso_id" value="{{ it['recurso_id'] }}">
+                            <button type="submit" class="g-btn-outline-dark g-btn-mini">DESHACER</button>
+                        </form>
+                        {% endif %}
+                    </div>
                 </li>
                 {% endfor %}
             </ul>

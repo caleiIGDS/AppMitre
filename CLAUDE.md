@@ -234,11 +234,12 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 
 ## Docs Maintenance
 
-Después de cada modificación, antes de terminar la tarea, revisá:
-- ¿Cambié el pipeline de datos, normalización o schema? → actualizar `agent_docs/data-pipeline.md`
+Actualizar la doc **es parte de la tarea, no un paso opcional**: siempre que un cambio caiga en alguno de estos casos, reflejalo en el `.md` que corresponde **antes de terminar y antes de commitear** (no lo dejes para después). Si tocaste código de un módulo que tiene doc en `agent_docs/`, esa doc se actualiza sí o sí.
+- ¿Cambié el pipeline de datos, normalización o schema de `escuela.db`? → actualizar `agent_docs/data-pipeline.md`
 - ¿Cambié lógica del calendario o clustering? → actualizar `agent_docs/calendar-engine.md`
-- ¿Cambié rutas, búsqueda o parsing? → actualizar `agent_docs/search-api.md`
-- ¿Cambié estilos o variables CSS? → actualizar `agent_docs/frontend-ui.md`
+- ¿Cambié rutas, búsqueda o parsing del SPA de horarios (`app.py` / `script.js`)? → actualizar `agent_docs/search-api.md`
+- ¿Cambié estilos o variables CSS del SPA? → actualizar `agent_docs/frontend-ui.md`
+- ¿Cambié algo del módulo de Gestión (`/gestion`, `gestion.py`, rutas/búsqueda/schema de `gestion.db`, templates de `gestion/`, `gestion.css`, o JS propio del módulo)? → actualizar `agent_docs/gestion-conocimiento.md`
 - ¿Cambió un contrato entre módulos? → agregar entrada en `dev-log/CHANGELOG.md`
 - ¿Tomaste una decisión no obvia? → agregar entrada en `dev-log/DECISIONS.md`
 - ¿Creaste, moviste o eliminaste un documento (`.md` de referencia)? → actualizar la referencia en `CLAUDE.md` (Context Rules o la sección que corresponda)

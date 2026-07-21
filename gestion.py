@@ -223,6 +223,7 @@ CREATE TABLE IF NOT EXISTS prestamo_items (
     prestamo_id INTEGER NOT NULL,
     recurso_id INTEGER NOT NULL,
     cantidad TEXT DEFAULT '1',
+    cantidad_devuelta TEXT DEFAULT '0',
     UNIQUE(prestamo_id, recurso_id)
 );
 """
@@ -290,6 +291,10 @@ def _migrar(cur):
     for columna in ('cantidad', 'utilidad', 'fecha_revision'):
         if columna not in existentes:
             cur.execute(f"ALTER TABLE recursos ADD COLUMN {columna} TEXT DEFAULT ''")
+    # Devolución por ítem: cuánto de cada ítem ya volvió (0 = sigue afuera entero).
+    cols_items = {c[1] for c in cur.execute("PRAGMA table_info(prestamo_items)").fetchall()}
+    if 'cantidad_devuelta' not in cols_items:
+        cur.execute("ALTER TABLE prestamo_items ADD COLUMN cantidad_devuelta TEXT DEFAULT '0'")
 
 
 def _seed(cur):
@@ -474,7 +479,10 @@ def lista(slug):
                 puntuadas.append((puntaje, fila))
         puntuadas.sort(key=lambda par: (-par[0], _norm(par[1]['nombre'])))
         filas = [fila for _, fila in puntuadas]
-    return render_template('gestion/lista.html', cfg=cfg, slug=slug, filas=filas, q=q, activo=slug)
+    # Texto de búsqueda ya normalizado por fila, para el filtrado en vivo del navegador
+    # (data-buscar). Mismo alcance que la búsqueda del server: nombre + descripcion.
+    buscar = {fila['id']: _norm(f"{fila['nombre']} {fila['descripcion'] or ''}") for fila in filas}
+    return render_template('gestion/lista.html', cfg=cfg, slug=slug, filas=filas, q=q, activo=slug, buscar=buscar)
 
 
 @bp.route('/<slug>/nuevo', methods=['GET', 'POST'])
@@ -566,18 +574,50 @@ def _ahora():
     return datetime.now().strftime('%Y-%m-%d %H:%M')
 
 
-def _resumen_items(cur, ids):
-    """prestamo_id → '2× Multímetro, 1× Caladora' (para el listado)."""
+def _int(texto):
+    """Entero desde texto de la DB/form; 0 si está vacío o no es número."""
+    try:
+        return int(str(texto).strip())
+    except (TypeError, ValueError):
+        return 0
+
+
+def _recalcular_estado(cur, id):
+    """Cierra el préstamo (setea fecha_devolucion) cuando no queda nada pendiente, y lo
+    reabre (la limpia) si vuelve a haber algo afuera. fecha_devolucion sigue siendo la
+    fuente de verdad de 'devuelto' para la lista y el contador del home."""
+    filas = cur.execute(
+        "SELECT cantidad, cantidad_devuelta FROM prestamo_items WHERE prestamo_id = ?", (id,)).fetchall()
+    pendiente = sum(max(0, _int(f['cantidad']) - _int(f['cantidad_devuelta'])) for f in filas)
+    actual = cur.execute("SELECT fecha_devolucion FROM prestamos WHERE id = ?", (id,)).fetchone()
+    if actual is None:
+        return
+    cerrado = bool(actual['fecha_devolucion'])
+    if filas and pendiente == 0 and not cerrado:
+        cur.execute("UPDATE prestamos SET fecha_devolucion = ? WHERE id = ?", (_ahora(), id))
+    elif pendiente > 0 and cerrado:
+        cur.execute("UPDATE prestamos SET fecha_devolucion = '' WHERE id = ?", (id,))
+
+
+def _resumen_items(cur, ids, solo_pendiente=False):
+    """prestamo_id → '2× Multímetro, 1× Caladora' (para el listado).
+    Con solo_pendiente=True muestra sólo lo que falta devolver (cantidad − devuelta),
+    útil en la lista de préstamos activos; si no, muestra lo retirado tal cual."""
     if not ids:
         return {}
     marcas = ','.join('?' * len(ids))
     resumen = {}
     filas = cur.execute(
-        f"SELECT i.prestamo_id, i.cantidad, COALESCE(r.nombre, '(recurso eliminado)') AS nombre "
+        f"SELECT i.prestamo_id, i.cantidad, i.cantidad_devuelta, COALESCE(r.nombre, '(recurso eliminado)') AS nombre "
         f"FROM prestamo_items i LEFT JOIN recursos r ON r.id = i.recurso_id "
         f"WHERE i.prestamo_id IN ({marcas}) ORDER BY nombre COLLATE NOCASE", list(ids)).fetchall()
     for f in filas:
-        resumen.setdefault(f['prestamo_id'], []).append(f"{f['cantidad']}× {f['nombre']}")
+        cant = _int(f['cantidad'])
+        if solo_pendiente:
+            cant -= _int(f['cantidad_devuelta'])
+            if cant <= 0:
+                continue
+        resumen.setdefault(f['prestamo_id'], []).append(f"{cant}× {f['nombre']}")
     return {pid: ', '.join(partes) for pid, partes in resumen.items()}
 
 
@@ -628,10 +668,12 @@ def prestamos_lista():
         params = [like, like, like]
     sql += " ORDER BY fecha_salida DESC, id DESC"
     filas = cur.execute(sql, params).fetchall()
-    resumen = _resumen_items(cur, [f['id'] for f in filas])
-    con.close()
     activos = [f for f in filas if not f['fecha_devolucion']]
     devueltos = [f for f in filas if f['fecha_devolucion']]
+    # Activos: mostramos lo que falta devolver; historial: lo retirado tal cual.
+    resumen = _resumen_items(cur, [f['id'] for f in activos], solo_pendiente=True)
+    resumen.update(_resumen_items(cur, [f['id'] for f in devueltos]))
+    con.close()
     return render_template('gestion/prestamos_lista.html', activos=activos, devueltos=devueltos,
                            resumen=resumen, q=q, activo='prestamos')
 
@@ -663,8 +705,16 @@ def prestamo_nuevo():
             con.close()
             return redirect(url_for('gestion.prestamo_detalle', id=pid))
     con.close()
+    # Retiro iniciado desde la ficha de un recurso (/gestion/recursos/<id>): ?recurso=<id>
+    # precarga la primera fila con ese recurso (usa el mismo sufijo "[#id]" del datalist).
+    valores = request.form
+    pre = request.args.get('recurso', '')
+    if request.method == 'GET' and pre:
+        r = next((x for x in recursos if str(x['id']) == pre), None)
+        if r:
+            valores = {'recurso_1': f"{r['nombre']} [#{r['id']}]", 'cantidad_1': '1'}
     return render_template('gestion/prestamos_form.html', recursos=recursos,
-                           filas=range(1, PRESTAMO_FILAS_FORM + 1), valores=request.form,
+                           filas=range(1, PRESTAMO_FILAS_FORM + 1), valores=valores,
                            error=error, activo='prestamos')
 
 
@@ -676,18 +726,29 @@ def prestamo_detalle(id):
     if fila is None:
         con.close()
         abort(404)
-    items = cur.execute(
-        "SELECT i.cantidad, i.recurso_id, r.nombre, r.ubicacion FROM prestamo_items i "
+    filas_items = cur.execute(
+        "SELECT i.cantidad, i.cantidad_devuelta, i.recurso_id, r.nombre, r.ubicacion FROM prestamo_items i "
         "LEFT JOIN recursos r ON r.id = i.recurso_id WHERE i.prestamo_id = ? "
         "ORDER BY r.nombre COLLATE NOCASE", (id,)).fetchall()
     con.close()
-    return render_template('gestion/prestamos_detalle.html', fila=fila, items=items, activo='prestamos')
+    items = []
+    for it in filas_items:
+        cantidad, devuelta = _int(it['cantidad']), _int(it['cantidad_devuelta'])
+        items.append({'recurso_id': it['recurso_id'], 'nombre': it['nombre'], 'ubicacion': it['ubicacion'],
+                      'cantidad': cantidad, 'devuelta': devuelta, 'pendiente': max(0, cantidad - devuelta)})
+    pendiente_total = sum(it['pendiente'] for it in items)
+    return render_template('gestion/prestamos_detalle.html', fila=fila, items=items,
+                           pendiente_total=pendiente_total, activo='prestamos')
 
 
 @bp.route('/prestamos/<int:id>/devolver', methods=['POST'])
 def prestamo_devolver(id):
+    """Devolver TODO de una: marca cada ítem entero y cierra el préstamo. Atajo del
+    botón 'devolvió' de la lista y de 'devolver todo' del detalle. Las devoluciones
+    parciales por ítem van por /devolver_item."""
     con = conectar()
     cur = con.cursor()
+    cur.execute("UPDATE prestamo_items SET cantidad_devuelta = cantidad WHERE prestamo_id = ?", (id,))
     cur.execute("UPDATE prestamos SET fecha_devolucion = ? WHERE id = ? AND fecha_devolucion = ''",
                 (_ahora(), id))
     con.commit()
@@ -697,12 +758,53 @@ def prestamo_devolver(id):
     return redirect(url_for('gestion.prestamos_lista'))
 
 
-@bp.route('/prestamos/<int:id>/reabrir', methods=['POST'])
-def prestamo_reabrir(id):
-    """Deshace una devolución marcada por error (vuelve a figurar como prestado)."""
+@bp.route('/prestamos/<int:id>/devolver_item', methods=['POST'])
+def prestamo_devolver_item(id):
+    """Devuelve parte (o el resto) de un ítem del préstamo. `cantidad` vacía = todo lo
+    pendiente de ese ítem. Al cubrirse todo lo pendiente del préstamo, se cierra solo."""
     con = conectar()
     cur = con.cursor()
+    recurso_id = request.form.get('recurso_id', '')
+    item = cur.execute(
+        "SELECT cantidad, cantidad_devuelta FROM prestamo_items WHERE prestamo_id = ? AND recurso_id = ?",
+        (id, recurso_id)).fetchone()
+    if item is not None:
+        pendiente = max(0, _int(item['cantidad']) - _int(item['cantidad_devuelta']))
+        pedido = request.form.get('cantidad', '').strip()
+        cuanto = _int(pedido) if pedido else pendiente
+        cuanto = max(1, min(cuanto, pendiente)) if pendiente else 0
+        if cuanto:
+            nueva = _int(item['cantidad_devuelta']) + cuanto
+            cur.execute("UPDATE prestamo_items SET cantidad_devuelta = ? WHERE prestamo_id = ? AND recurso_id = ?",
+                        (str(nueva), id, recurso_id))
+            _recalcular_estado(cur, id)
+            con.commit()
+    con.close()
+    return redirect(url_for('gestion.prestamo_detalle', id=id))
+
+
+@bp.route('/prestamos/<int:id>/reabrir', methods=['POST'])
+def prestamo_reabrir(id):
+    """Deshace una devolución marcada por error (todo el préstamo vuelve a figurar afuera)."""
+    con = conectar()
+    cur = con.cursor()
+    cur.execute("UPDATE prestamo_items SET cantidad_devuelta = '0' WHERE prestamo_id = ?", (id,))
     cur.execute("UPDATE prestamos SET fecha_devolucion = '' WHERE id = ?", (id,))
+    con.commit()
+    con.close()
+    return redirect(url_for('gestion.prestamo_detalle', id=id))
+
+
+@bp.route('/prestamos/<int:id>/reabrir_item', methods=['POST'])
+def prestamo_reabrir_item(id):
+    """Deshace la devolución de un ítem puntual: vuelve a figurar afuera entero. Si con
+    eso el préstamo vuelve a tener algo pendiente, se reabre (se limpia fecha_devolucion)."""
+    con = conectar()
+    cur = con.cursor()
+    recurso_id = request.form.get('recurso_id', '')
+    cur.execute("UPDATE prestamo_items SET cantidad_devuelta = '0' WHERE prestamo_id = ? AND recurso_id = ?",
+                (id, recurso_id))
+    _recalcular_estado(cur, id)
     con.commit()
     con.close()
     return redirect(url_for('gestion.prestamo_detalle', id=id))
