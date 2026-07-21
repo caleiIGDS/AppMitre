@@ -4,6 +4,20 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-07-21] — Búsqueda de `/gestion` tolerante con `difflib`, no FTS ni embeddings
+
+**Contexto**: El `LIKE` literal de `lista()` no perdonaba acentos ("multimetro" no encontraba "Multímetro"), typos ("destronillador"), ni mayúsculas. El usuario pidió una búsqueda "que perdone un poco".
+
+**Decisión**: Filtrar en Python en vez de en SQL. `lista()` trae todas las filas y las puntúa con `_puntaje_busqueda()`: normaliza acentos/mayúsculas (`_norm`) y tolera typos por similitud (`difflib.SequenceMatcher`, librería estándar). Substring normalizado gana siempre; la similitud difusa entra solo con 3+ caracteres y umbral 0.6. Es el "nivel 1 + 2" de las tres opciones que se evaluaron.
+
+**Alternativas descartadas**:
+- *SQLite FTS5 / trigramas*: más maquinaria (tabla virtual, sincronización) para un beneficio que `difflib` ya da con las decenas de filas actuales.
+- *Búsqueda semántica (embeddings)*: resuelve sinónimos que no se parecen ("tester" = multímetro), pero es sobre-ingeniería acá — necesita dependencia pesada o llamada por búsqueda, y ese caso lo cubre mejor la futura columna `otros_nombres` (tarea #21) sin costo por query.
+
+**Consecuencia**: El filtrado en Python es O(filas) por búsqueda — despreciable con ~decenas de recursos, pero si alguna entidad creciera a miles habría que pasar a un índice o FTS. Aplica a las 4 entidades genéricas; los préstamos siguen con `LIKE` en SQL (buscan en persona/destino/notas, otro caso). La similitud difusa puede meter algo de ruido en la cola de resultados (queda siempre después de las coincidencias exactas) — es el precio de "que perdone".
+
+---
+
 ## [2026-07-21] — Préstamos: nunca se borra al devolver; ruta propia en vez de sumar a `ENTIDADES`
 
 **Contexto**: El usuario quiere anotar fácilmente quién se lleva qué recursos (y cuántos) y poder marcarlos como devueltos, pero que la devolución **no borre el registro** — el historial de movimientos internos debe quedar permanente en la base, aunque sea "por el día".

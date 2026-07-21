@@ -37,13 +37,12 @@
 - [ ] #20 — Seguridad completa de `/gestion` (hoy: contraseña compartida provisoria) — `gestion.py` / `app.py` / hosting  
   Setear `GESTION_CLAVE` y `SECRET_KEY` como env vars en el hosting (los defaults del repo son públicos: clave conocida y cookie forjable), agregar CSRF a los forms, límite de intentos de login, y evaluar usuarios individuales con auditoría. Ver DECISIONS 2026-07-19.
 
-- [ ] #21 — Búsqueda de recursos más flexible: columna `otros_nombres` + generación con IA — `gestion.py` / `static/gestion.css` / script nuevo  
-  Muchas herramientas se conocen por varios nombres (Multímetro = tester = polímetro). Plan:
-  1. Columna nueva `otros_nombres` (TEXT) en `recursos` — se edita en el form del recurso (no tabla aparte), migración vía `_migrar()`.
-  2. Búsqueda (`lista()`) matchea nombre + descripcion + **otros_nombres**, y **normaliza acentos** (hoy `LIKE` es literal: "multimetro" sin tilde no encuentra "Multímetro"). Ver búsqueda más "perdonadora" abajo.
-  3. Script offline `generar_alias.py` que llena `otros_nombres` con IA (Claude) una sola vez, corriendo en la PC del dev — producción **no** necesita API key. Salida editable a mano. Costo: centavos, una vez.
-  4. Opcional a futuro: botón "sugerir otros nombres" por recurso (eso sí requeriría la key en el hosting).
-  Búsqueda tolerante a typos (sin IA): normalizar acentos + comparar por similitud (`difflib.SequenceMatcher` o distancia de edición) además del substring. Ver notas de diseño en la conversación.
+- [ ] #21 — Búsqueda de recursos por sinónimos: columna `otros_nombres` + generación con IA — `gestion.py` / `static/gestion.css` / script nuevo  
+  Muchas herramientas se conocen por varios nombres (Multímetro = tester = polímetro). Falta:
+  1. Columna nueva `otros_nombres` (TEXT) en `recursos` — se edita en el form del recurso (no tabla aparte), migración vía `_migrar()`. Sumarla también a `_puntaje_busqueda()`.
+  2. Script offline `generar_alias.py` que llena `otros_nombres` con IA (Claude) una sola vez, corriendo en la PC del dev — producción **no** necesita API key. Salida editable a mano. Costo: centavos, una vez.
+  3. Opcional a futuro: botón "sugerir otros nombres" por recurso (eso sí requeriría la key en el hosting).
+  **Ya hecho (2026-07-21)**: búsqueda tolerante sin IA — `_puntaje_busqueda()` normaliza acentos/mayúsculas y perdona typos por similitud (`difflib`). Resuelve acentos y typos; falta solo la parte de sinónimos que no se parecen ("tester"), que es lo que aporta `otros_nombres`.
 
 ---
 

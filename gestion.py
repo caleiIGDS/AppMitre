@@ -7,6 +7,7 @@
 # Entidades: recursos, conjuntos (agrupaciones de recursos), actividades, proyectos.
 # Relaciones M2M: conjunto_recursos, actividad_recursos, actividad_conjuntos, proyecto_recursos.
 
+import difflib
 import os
 import re
 import sqlite3
@@ -234,6 +235,37 @@ def _norm(texto):
     return ' '.join(texto.lower().split())
 
 
+# Búsqueda "que perdona": en vez del LIKE literal, normaliza acentos/mayúsculas y
+# tolera typos por similitud (difflib, sin dependencias). El substring normalizado
+# siempre gana; la similitud difusa solo entra para queries de 3+ caracteres (con
+# menos daría demasiado ruido). Umbral elegido a ojo — subir = más estricto.
+UMBRAL_SIMILITUD = 0.6
+
+
+def _puntaje_busqueda(q_norm, *textos):
+    """Qué tan bien `q_norm` (ya normalizado) matchea los textos dados.
+    Devuelve un puntaje mayor = mejor, o None si no llega al umbral. Los que
+    contienen la query como substring puntúan por encima de los difusos."""
+    difuso = len(q_norm) >= 3  # perdonar typos solo tiene sentido con 3+ caracteres
+    substring = False
+    mejor = 0.0
+    for texto in textos:
+        if not texto:
+            continue
+        t_norm = _norm(texto)
+        if q_norm in t_norm:
+            substring = True
+        if difuso:
+            mejor = max(mejor, difflib.SequenceMatcher(None, q_norm, t_norm).ratio())
+            for palabra in t_norm.split():
+                mejor = max(mejor, difflib.SequenceMatcher(None, q_norm, palabra).ratio())
+    if substring:
+        return 1.0 + mejor  # substring exacto siempre primero; desempata por similitud
+    if difuso and mejor >= UMBRAL_SIMILITUD:
+        return mejor
+    return None
+
+
 def conectar():
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
@@ -428,14 +460,20 @@ def lista(slug):
     q = request.args.get('q', '').strip()
     con = conectar()
     cur = con.cursor()
-    if q:
-        like = f"%{q}%"
-        filas = cur.execute(
-            f"SELECT * FROM {cfg['tabla']} WHERE nombre LIKE ? OR descripcion LIKE ? ORDER BY nombre COLLATE NOCASE",
-            (like, like)).fetchall()
-    else:
-        filas = cur.execute(f"SELECT * FROM {cfg['tabla']} ORDER BY nombre COLLATE NOCASE").fetchall()
+    filas = cur.execute(f"SELECT * FROM {cfg['tabla']} ORDER BY nombre COLLATE NOCASE").fetchall()
     con.close()
+    if q:
+        # Búsqueda tolerante (ver _puntaje_busqueda): acentos/mayúsculas no importan
+        # y se perdonan typos. Se filtra y ordena en Python — con esta cantidad de
+        # filas el costo es despreciable frente a la comodidad de que "perdone".
+        q_norm = _norm(q)
+        puntuadas = []
+        for fila in filas:
+            puntaje = _puntaje_busqueda(q_norm, fila['nombre'], fila['descripcion'])
+            if puntaje is not None:
+                puntuadas.append((puntaje, fila))
+        puntuadas.sort(key=lambda par: (-par[0], _norm(par[1]['nombre'])))
+        filas = [fila for _, fila in puntuadas]
     return render_template('gestion/lista.html', cfg=cfg, slug=slug, filas=filas, q=q, activo=slug)
 
 

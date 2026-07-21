@@ -68,13 +68,25 @@ automáticamente en DBs existentes (así entraron cantidad/utilidad/fecha_revisi
 | `/gestion/login` | GET/POST | Form de contraseña; con clave OK setea `session['gestion_ok']` y redirige a `?next=` (solo si empieza con `/gestion`, anti open-redirect) |
 | `/gestion/salir` | GET | Borra la sesión y vuelve al login (botón SALIR en el header) |
 | `/gestion/` | GET | Home: cards con contadores + explicación de relaciones |
-| `/gestion/<slug>` | GET | Listado (`?q=` busca en nombre + descripcion, LIKE) |
+| `/gestion/<slug>` | GET | Listado (`?q=` búsqueda tolerante en nombre + descripcion — ver abajo) |
 | `/gestion/<slug>/nuevo` | GET/POST | Alta (valida nombre no vacío server-side) |
 | `/gestion/<slug>/<id>` | GET | Detalle: campos + relaciones en ambas direcciones |
 | `/gestion/<slug>/<id>/editar` | GET/POST | Edición (sincroniza M2M: delete + insert) |
 | `/gestion/<slug>/<id>/eliminar` | POST | Borra fila + sus filas M2M (confirm en el browser) |
 
 `slug` ∈ {recursos, conjuntos, actividades, proyectos}; otro valor → 404.
+
+## Búsqueda tolerante (`?q=` en `lista()`)
+
+No es el `LIKE` literal de SQL: `lista()` trae todas las filas y las filtra/ordena en
+Python con `_puntaje_busqueda()`. Perdona **acentos y mayúsculas** (normaliza con `_norm`)
+y **typos** (similitud difusa vía `difflib.SequenceMatcher`, sin dependencias). Reglas:
+substring normalizado siempre puntúa por encima de los difusos; la similitud difusa solo
+entra para queries de 3+ caracteres, con umbral `UMBRAL_SIMILITUD` (0.6). Compara la query
+contra el nombre, cada palabra del nombre, y la descripción. Con ~decenas de filas por
+entidad el filtrado en Python es despreciable; si alguna tabla creciera a miles habría que
+reconsiderar (índice, FTS). Aplica a las 4 entidades genéricas; los préstamos usan su propio
+`LIKE` en SQL. Decisión 2026-07-21 (ver `dev-log/DECISIONS.md`).
 
 Relaciones mostradas en detalle (`_secciones_detalle`): recurso → conjuntos que lo
 incluyen / actividades que lo usan / proyectos relacionados / **historial de préstamos**;
