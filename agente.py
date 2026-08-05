@@ -30,35 +30,64 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gestion.db')
 bp = Blueprint('agente', __name__, url_prefix='/gestion/agente')
 
 # ============================================================================
-# Configuración del LLM (agnóstico del proveedor)
+# Configuración del LLM (agnóstico del proveedor) — Lee en tiempo de request
 # ============================================================================
 
-AGENTE_PROVIDER = os.environ.get('AGENTE_PROVIDER', 'anthropic').lower()
-AGENTE_MODEL = os.environ.get('AGENTE_MODEL', '')
-AGENTE_API_KEY = os.environ.get('AGENTE_API_KEY', '')
-AGENTE_API_BASE = os.environ.get('AGENTE_API_BASE', '')  # Para Ollama o APIs custom
+_config_cache = None
 
-# Defaults por proveedor
-if AGENTE_PROVIDER == 'anthropic':
-    if not AGENTE_API_KEY:
-        AGENTE_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
-    if not AGENTE_MODEL:
-        AGENTE_MODEL = 'claude-haiku-4-5-20251001'
-elif AGENTE_PROVIDER == 'groq':
-    if not AGENTE_API_KEY:
-        AGENTE_API_KEY = os.environ.get('GROQ_API_KEY', '')
-    if not AGENTE_MODEL:
-        AGENTE_MODEL = 'mixtral-8x7b-32768'
-elif AGENTE_PROVIDER == 'ollama':
-    if not AGENTE_API_BASE:
-        AGENTE_API_BASE = 'http://localhost:11434'
-    if not AGENTE_MODEL:
-        AGENTE_MODEL = 'mistral'
-elif AGENTE_PROVIDER == 'openai':
-    if not AGENTE_API_KEY:
-        AGENTE_API_KEY = os.environ.get('OPENAI_API_KEY', '')
-    if not AGENTE_MODEL:
-        AGENTE_MODEL = 'gpt-3.5-turbo'
+def _get_config():
+    """Lee la configuración del LLM en tiempo de request (lazy loading)."""
+    global _config_cache
+    if _config_cache is not None:
+        return _config_cache
+
+    provider = os.environ.get('AGENTE_PROVIDER', 'anthropic').lower()
+    model = os.environ.get('AGENTE_MODEL', '')
+    api_key = os.environ.get('AGENTE_API_KEY', '')
+    api_base = os.environ.get('AGENTE_API_BASE', '')
+
+    # Defaults por proveedor
+    if provider == 'anthropic':
+        if not api_key:
+            api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+        if not model:
+            model = 'claude-haiku-4-5-20251001'
+    elif provider == 'groq':
+        if not api_key:
+            api_key = os.environ.get('GROQ_API_KEY', '')
+        if not model:
+            model = 'mixtral-8x7b-32768'
+    elif provider == 'ollama':
+        if not api_base:
+            api_base = 'http://localhost:11434'
+        if not model:
+            model = 'mistral'
+    elif provider == 'openai':
+        if not api_key:
+            api_key = os.environ.get('OPENAI_API_KEY', '')
+        if not model:
+            model = 'gpt-3.5-turbo'
+
+    _config_cache = {
+        'provider': provider,
+        'model': model,
+        'api_key': api_key,
+        'api_base': api_base
+    }
+    return _config_cache
+
+# Variables globales por compatibilidad
+def _get_agente_provider():
+    return _get_config()['provider']
+
+def _get_agente_model():
+    return _get_config()['model']
+
+def _get_agente_api_key():
+    return _get_config()['api_key']
+
+def _get_agente_api_base():
+    return _get_config()['api_base']
 
 # Gate de sesión: requiere haber iniciado sesión en /gestion
 @bp.before_request
@@ -975,32 +1004,37 @@ def ejecutar_tool(tool_name, tool_input):
 
 def _crear_cliente_llm():
     """Crea un cliente para el LLM configurado."""
-    if AGENTE_PROVIDER == 'anthropic':
+    config = _get_config()
+    provider = config['provider']
+    api_key = config['api_key']
+    api_base = config['api_base']
+
+    if provider == 'anthropic':
         from anthropic import Anthropic
-        if not AGENTE_API_KEY:
+        if not api_key:
             raise ValueError("Error: AGENTE_API_KEY o ANTHROPIC_API_KEY no está configurada.")
-        return Anthropic(api_key=AGENTE_API_KEY)
+        return Anthropic(api_key=api_key)
 
-    elif AGENTE_PROVIDER == 'groq':
+    elif provider == 'groq':
         from groq import Groq
-        if not AGENTE_API_KEY:
+        if not api_key:
             raise ValueError("Error: AGENTE_API_KEY o GROQ_API_KEY no está configurada.")
-        return Groq(api_key=AGENTE_API_KEY)
+        return Groq(api_key=api_key)
 
-    elif AGENTE_PROVIDER == 'openai':
+    elif provider == 'openai':
         from openai import OpenAI
-        if not AGENTE_API_KEY:
+        if not api_key:
             raise ValueError("Error: AGENTE_API_KEY o OPENAI_API_KEY no está configurada.")
-        return OpenAI(api_key=AGENTE_API_KEY)
+        return OpenAI(api_key=api_key)
 
-    elif AGENTE_PROVIDER == 'ollama':
+    elif provider == 'ollama':
         from openai import OpenAI  # Ollama es compatible con OpenAI API
-        if not AGENTE_API_BASE:
+        if not api_base:
             raise ValueError("Error: AGENTE_API_BASE no está configurada (default: http://localhost:11434).")
-        return OpenAI(api_key='ollama', base_url=f"{AGENTE_API_BASE}/v1")
+        return OpenAI(api_key='ollama', base_url=f"{api_base}/v1")
 
     else:
-        raise ValueError(f"Proveedor LLM desconocido: {AGENTE_PROVIDER}")
+        raise ValueError(f"Proveedor LLM desconocido: {provider}")
 
 def chat_with_tools(mensajes_usuario):
     """
@@ -1043,7 +1077,7 @@ Sé conciso y útil. Si hay ambigüedad, pide aclaración."""
 
         try:
             response = client.messages.create(
-                model=AGENTE_MODEL,
+                model=_get_config()['model'],
                 max_tokens=1024,
                 system=system_prompt,
                 tools=TOOLS_SCHEMA,
