@@ -148,6 +148,18 @@ def _buscar_profesor(query):
     puntuados.sort(reverse=True, key=lambda x: x[0])
     return [{'nombre': p} for _, p in puntuados[:5]]
 
+def _personas_conocidas():
+    """Nombres conocidos (profesores + personal no docente), para que el modelo pueda
+    detectar nombres incompletos/mal escritos al registrar préstamos sin tener que
+    buscarlos uno por uno con buscar_profesor."""
+    con = database.conectar()
+    cur = con.cursor()
+    cur.execute("SELECT DISTINCT profesor FROM clases WHERE profesor != '' ORDER BY profesor")
+    profesores = [r[0] for r in cur.fetchall()]
+    con.close()
+    personal = [p['nombre'] for p in database.obtener_lista_personal()]
+    return sorted(set(profesores) | set(personal))
+
 def _horario_profesor_fmt(nombre):
     """Horario de profesor, formato interpretado."""
     filas = obtener_filas('profesor', nombre)
@@ -463,15 +475,21 @@ def _crear_prestamo(persona, destino, notas, items_list):
             rid = int(recurso)
         else:
             # Buscar por nombre (match exacto o LIKE)
-            cur.execute("SELECT id FROM recursos WHERE nombre LIKE ?", (f"%{recurso}%",))
-            matches = [r[0] for r in cur.fetchall()]
+            cur.execute("SELECT id, nombre FROM recursos WHERE nombre LIKE ?", (f"%{recurso}%",))
+            matches = cur.fetchall()
             if len(matches) == 0:
                 con.close()
-                return {'ok': False, 'error': f'Recurso no encontrado: {recurso}'}
+                return {'ok': False, 'error': f'Recurso no encontrado: "{recurso}". No se creó el préstamo.'}
             elif len(matches) > 1:
+                opciones = [{'id': r[0], 'nombre': r[1]} for r in matches]
                 con.close()
-                return {'ok': False, 'error': f'Recurso ambiguo: {recurso} (matches: {matches})'}
-            rid = matches[0]
+                return {
+                    'ok': False,
+                    'error': f'"{recurso}" es ambiguo, hay {len(matches)} recursos que coinciden. '
+                             f'Preguntale al usuario cuál es antes de reintentar.',
+                    'opciones': opciones
+                }
+            rid = matches[0][0]
 
         # Validar stock
         stock = gestion._stock(cur, rid)
@@ -521,25 +539,45 @@ def _finalizar_prestamo(prestamo_id, items_list=None):
         )
     else:
         # Devoluciones parciales
+        no_encontrados = []
+        aplicados = []
         for item in items_list:
             rid = gestion._int(item.get('recurso_id'))
             cantidad = gestion._int(item.get('cantidad', 0))
 
-            if cantidad > 0:
-                fila = cur.execute(
-                    "SELECT cantidad, cantidad_devuelta FROM prestamo_items WHERE prestamo_id = ? AND recurso_id = ?",
-                    (prestamo_id, rid)
-                ).fetchone()
+            fila = cur.execute(
+                "SELECT cantidad, cantidad_devuelta FROM prestamo_items WHERE prestamo_id = ? AND recurso_id = ?",
+                (prestamo_id, rid)
+            ).fetchone()
 
-                if fila:
-                    pendiente = max(0, gestion._int(fila['cantidad']) - gestion._int(fila['cantidad_devuelta']))
-                    nuevo = gestion._int(fila['cantidad_devuelta']) + min(cantidad, pendiente)
-                    cur.execute(
-                        "UPDATE prestamo_items SET cantidad_devuelta = ? WHERE prestamo_id = ? AND recurso_id = ?",
-                        (str(nuevo), prestamo_id, rid)
-                    )
+            if not fila:
+                no_encontrados.append(rid)
+                continue
+
+            if cantidad > 0:
+                pendiente = max(0, gestion._int(fila['cantidad']) - gestion._int(fila['cantidad_devuelta']))
+                nuevo = gestion._int(fila['cantidad_devuelta']) + min(cantidad, pendiente)
+                cur.execute(
+                    "UPDATE prestamo_items SET cantidad_devuelta = ? WHERE prestamo_id = ? AND recurso_id = ?",
+                    (str(nuevo), prestamo_id, rid)
+                )
+                aplicados.append(rid)
 
         gestion._recalcular_estado(cur, prestamo_id)
+        con.commit()
+        con.close()
+
+        if no_encontrados:
+            return {
+                'ok': False,
+                'error': f'recurso_id {no_encontrados} no pertenece(n) al préstamo {prestamo_id}. '
+                         f'No se les aplicó ninguna devolución (revisá con detalle_prestamo). '
+                         f'Ítems sí aplicados: {aplicados}.',
+                'prestamo_id': prestamo_id,
+                'aplicados': aplicados
+            }
+
+        return {'ok': True, 'prestamo_id': prestamo_id, 'mensaje': f'Devuelto préstamo id={prestamo_id}', 'aplicados': aplicados}
 
     con.commit()
     con.close()
@@ -557,13 +595,32 @@ def _reabrir_prestamo(prestamo_id, items_list=None):
         cur.execute("UPDATE prestamos SET fecha_devolucion = '' WHERE id = ?", (prestamo_id,))
     else:
         # Reabrir ítems específicos
+        no_encontrados = []
         for item in items_list:
             rid = gestion._int(item.get('recurso_id'))
+            existe = cur.execute(
+                "SELECT 1 FROM prestamo_items WHERE prestamo_id = ? AND recurso_id = ?",
+                (prestamo_id, rid)
+            ).fetchone()
+            if not existe:
+                no_encontrados.append(rid)
+                continue
             cur.execute(
                 "UPDATE prestamo_items SET cantidad_devuelta = '0' WHERE prestamo_id = ? AND recurso_id = ?",
                 (prestamo_id, rid)
             )
         gestion._recalcular_estado(cur, prestamo_id)
+        con.commit()
+        con.close()
+
+        if no_encontrados:
+            return {
+                'ok': False,
+                'error': f'recurso_id {no_encontrados} no pertenece(n) al préstamo {prestamo_id}. No se reabrió nada para esos ítems.',
+                'prestamo_id': prestamo_id
+            }
+
+        return {'ok': True, 'prestamo_id': prestamo_id, 'mensaje': f'Reabierto préstamo id={prestamo_id}'}
 
     con.commit()
     con.close()
@@ -1047,7 +1104,9 @@ def chat_with_tools(mensajes_usuario):
     except ValueError as e:
         return str(e)
 
-    system_prompt = """Eres un asistente para el Sistema de Gestión de Conocimiento de la Escuela Técnica Emilio Mitre.
+    nombres_conocidos = _personas_conocidas()
+
+    system_prompt = f"""Eres un asistente para el Sistema de Gestión de Conocimiento de la Escuela Técnica Emilio Mitre.
 Tu tarea es ayudar al staff con:
 - Consultas sobre horarios (profesores, cursos, aulas)
 - Gestión del inventario (recursos, conjuntos, actividades, proyectos)
@@ -1060,7 +1119,29 @@ CONTEXTO Y REFERENCIAS - MUY IMPORTANTE:
   * Usuario: "¿En qué lugar?" → Se refiere a Andrea Alvarez. Extrae las aulas de la respuesta anterior.
   * Usuario: "¿Cuántos? ¿Stock?" → Se refiere al recurso/producto que acaba de consultar.
 - Pronombres y demostrativos (ella, él, ese, esa, su, sus, su horario, ese recurso) → SIEMPRE son referencias a la entidad consultada.
-- NUNCA pidas aclaración si el contexto está claro en el historial anterior.
+- NUNCA pidas aclaración si el contexto está claro en el historial anterior. Esta regla es solo
+  para preguntas de seguimiento sobre algo ya consultado — NO aplica a crear/editar registros
+  nuevos (ver "AL REGISTRAR PRÉSTAMOS" abajo, ahí SÍ hay que confirmar antes de ejecutar).
+
+AL REGISTRAR PRÉSTAMOS - MUY IMPORTANTE:
+- Comparación de persona: antes de llamar a crear_prestamo, compará el nombre que dio el
+  usuario contra esta lista de PERSONAS CONOCIDAS (docentes y personal no docente):
+  {', '.join(nombres_conocidos)}
+  * Si el nombre coincide exacto (o es obviamente la misma persona, ej. sin tilde) usalo tal cual.
+  * Si es parecido pero no exacto (apodo, nombre de pila solo, error de tipeo — ej. "Dami" cuando
+    en la lista hay "Damián Pérez") NO asumas ni completes: preguntale al usuario para confirmar
+    antes de ejecutar crear_prestamo. Ej: "¿Te referís a Damián Pérez?"
+  * Si el nombre no se parece a nadie de la lista, es probablemente una persona externa (alumno,
+    padre, visita): usalo tal cual como te lo dieron, sin preguntar.
+- Recursos ambiguos: si crear_prestamo devuelve un error con "opciones" (varios recursos
+  coinciden con el nombre dado), NUNCA elijas por tu cuenta ni reintentes adivinando — mostrale
+  las opciones al usuario (con sus nombres) y preguntá cuál corresponde. Recién llamá de nuevo a
+  crear_prestamo cuando el usuario confirme cuál es.
+- Devoluciones parciales: para devolver ítems específicos de un préstamo necesitás el
+  recurso_id exacto de ESE préstamo, no de una búsqueda general — llamá primero a
+  detalle_prestamo(id) para ver los ítems y sus recurso_id antes de llamar a finalizar_prestamo
+  con items. Si finalizar_prestamo/reabrir_prestamo devuelve ok=false porque un recurso_id no
+  pertenece al préstamo, no lo des por devuelto — avisale al usuario del error, no inventes éxito.
 
 REGLAS IMPORTANTES:
 1. Para ELIMINAR: NUNCA ejecutes en el mismo turno. Describe qué vas a borrar y pide confirmación.
@@ -1068,7 +1149,8 @@ REGLAS IMPORTANTES:
 3. Busca difuso: si no hay match exacto, intenta buscar_profesor o buscar_entidad.
 4. Lectura = sin auditoría. Escritura = con auditoría.
 
-Sé conciso. Prioriza responder del historial antes de pedir aclaración."""
+Sé conciso. Prioriza responder del historial antes de pedir aclaración, salvo en los casos de
+ambigüedad al registrar préstamos descritos arriba."""
 
     # Copiar la lista para no mutar el historial original (que se persiste en sesión
     # como texto plano) con objetos complejos de la API (ToolUseBlock, etc.)
@@ -1281,6 +1363,14 @@ def chat():
     session.modified = True
 
     return jsonify({'respuesta': respuesta})
+
+@bp.route('/reset', methods=['POST'])
+def reset():
+    """Limpia el historial de conversación y la entidad de contexto de la sesión."""
+    session.pop('agente_historial', None)
+    session.pop('agente_entidad_actual', None)
+    session.modified = True
+    return jsonify({'ok': True})
 
 @bp.route('/log', methods=['GET'])
 def agente_log():

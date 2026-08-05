@@ -46,6 +46,25 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-08-04] — Harness del agente para préstamos: la ambigüedad la resuelve el código, no el modelo
+
+**Contexto**: En uso real, el agente creaba préstamos "a ciegas" con datos ambiguos en vez de preguntar: `crear_prestamo('Erika Schneider', ..., 'panel solar')` se ejecutaba directo aunque el nombre de recurso fuera parcial, y `crear_prestamo('Dami', ...)` guardaba "Dami" tal cual como persona en vez de reconocer que probablemente se refería a un docente real con nombre completo distinto. Además, `finalizar_prestamo`/`reabrir_prestamo` con `items` ignoraban en silencio un `recurso_id` que no pertenecía al préstamo (ni error ni log) y devolvían `ok:true` igual — una devolución parcial podía "no pasar nada" sin que nadie se enterara.
+
+**Decisión**:
+- **Ambigüedad de recursos ya se resolvía en el código** (`_crear_prestamo` cuenta matches por `LIKE`), pero el error solo traía IDs crudos. Se cambió para que devuelva `opciones: [{id, nombre}]`, así el agente no necesita una tool extra para poder mostrárselo al usuario en texto.
+- **Lista completa de personas conocidas en el system prompt**, no una tool de "comparar nombre" dedicada. Se evaluaron las dos: una tool tipo `buscar_persona_similar` hubiera sido casi idéntica a la `buscar_profesor` que ya existe (mismo `_puntaje_busqueda`), y depende de que el modelo *decida* llamarla — si no la llama, el bug original persiste. Poniendo la lista completa (~340 nombres, ~1500 tokens) directo en el prompt de cada turno, la verificación deja de ser opcional: siempre está a la vista. El costo en tokens es despreciable para este volumen de uso.
+- **No se creó una tabla de "personas" en `gestion.db`** ni se migró `prestamos.persona` a una FK. Sería sobre-ingeniería: buena parte de quien retira material no es docente ni personal (alumnos, visitas, padres) así que el campo tiene que seguir aceptando texto libre; la lista sirve solo como referencia para detectar *"esto se parece a alguien real, confirmá"*, no como catálogo cerrado.
+- **`finalizar_prestamo`/`reabrir_prestamo` ya no fallan en silencio**: si un `recurso_id` no pertenece al préstamo, la tool devuelve `ok:false` con el detalle en vez de reportar éxito sin haber cambiado nada. El system prompt le indica al agente llamar primero a `detalle_prestamo(id)` para conseguir los `recurso_id` reales antes de una devolución parcial, en vez de adivinarlos.
+- **La regla vieja "nunca pidas aclaración si el contexto está claro"** (agregada para el bug de contexto conversacional) se acotó explícitamente a preguntas de seguimiento sobre algo ya consultado — no aplica a crear/editar registros nuevos, donde sí debe preguntar ante ambigüedad. Sin esta aclaración el prompt empujaba al modelo a **no** preguntar en ningún caso, lo cual empeoraba el problema original.
+
+**Alternativas descartadas**:
+- *Tool de comparación de nombres (`comparar_nombre`/fuzzy match como tool call)* — redundante con `buscar_profesor` existente y no garantiza que el modelo la invoque.
+- *Validación server-side dura del nombre de persona* (bloquear `crear_prestamo` si no matchea la lista con cierto umbral) — se descartó: haría fallar préstamos legítimos a alumnos/visitas que nunca van a estar en la lista de docentes/personal.
+
+**Consecuencia**: El prompt de sistema crece ~1500 tokens por turno (lista de nombres). Si la planta docente crece mucho en el futuro, reevaluar (paginar la lista o filtrar por relevancia) — hoy con ~340 nombres no es un problema.
+
+---
+
 ## [2026-07-21] — Alta de préstamos como carrito en sesión (reemplaza el form de filas)
 
 **Contexto**: El alta era un form con hasta 8 filas `recurso_N`/`cantidad_N`, cada una con un `<datalist>` donde había que tipear/elegir el recurso (desambiguando por sufijo `[#id]`). El usuario lo consideró "todo mal" y pidió **borrón y cuenta nueva**: que funcione como un carrito de compra — estando en recursos ir agregando, al final poner OK, y **recién ahí** cargar quién se lo llevó. (Reemplaza la decisión previa del mismo día de "registrar retiro desde la ficha vía `?recurso=<id>`", que quedó obsoleta.)

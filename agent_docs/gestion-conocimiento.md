@@ -225,12 +225,18 @@ etiquetas y cargarlas, gestionar préstamos. Todo con auditoría de escrituras e
   retorna `{respuesta}`. El backend llama a Claude con el mensaje + tools disponibles, ejecuta
   lo que Claude pida (tools de lectura y escritura), repite hasta respuesta final, audita
   escrituras en `agente_log`.
+- **`POST /gestion/agente/reset`** — limpia `session['agente_historial']` y
+  `session['agente_entidad_actual']`; usado por el botón ↺ del widget para arrancar una
+  conversación nueva sin arrastrar contexto viejo.
 - **`GET /gestion/agente/log`** — tabla de auditoría (últimas 50 escrituras), con snapshot
   "antes" visible para poder restaurar manualmente si el agente cometió un error.
 - **Widget** (`templates/gestion/_agente_widget.html` + `static/gestion-agente.js`) —
   panel flotante de chat con historial de mensajes, input de texto, opción de adjuntar imagen,
-  link a la auditoría. Incluido desde `base.html`. Progressive enhancement: con JS es fluido,
-  sin JS no aparece pero el servidor sigue funcionando.
+  botón ↺ para reiniciar la conversación, link a la auditoría. Incluido desde `base.html`.
+  Progressive enhancement: con JS es fluido, sin JS no aparece pero el servidor sigue
+  funcionando. Las respuestas del asistente se renderizan como markdown liviano
+  (`renderMarkdown()` en `gestion-agente.js`: negrita, listas, tablas) — Claude devuelve
+  texto en Markdown y sin esto se veía como un bloque de texto con `**`/`|` crudos.
 
 ### Tools
 
@@ -286,7 +292,29 @@ una devolución de préstamo o un borrado.
   agente propone los campos extraídos en texto y pide confirmación antes de llamar a
   `crear_entidad`.
 - **Resolución de ambigüedad en recursos**: si `crear_prestamo` busca un nombre de recurso
-  que matchea más de una fila, la tool devuelve error pidiendo aclaración en vez de adivinar.
+  que matchea más de una fila, la tool devuelve `ok:false` con `opciones` (id + nombre de cada
+  candidato) en vez de adivinar. El system prompt instruye a mostrarle esas opciones al usuario
+  y preguntar, nunca elegir por su cuenta ni reintentar adivinando.
+- **Resolución de persona por lista conocida**: `chat_with_tools()` arma en cada turno la lista
+  de "personas conocidas" (`_personas_conocidas()`: profesores de `clases` + personal no docente,
+  ~340 nombres) y la inyecta completa en el system prompt. Regla: si el nombre que dio el usuario
+  no es un match exacto/obvio contra la lista (apodo, nombre incompleto, typo — ej. "Dami"),
+  el agente debe preguntar antes de crear el préstamo en vez de guardar el nombre tal cual; si no
+  se parece a nadie de la lista, se asume persona externa (alumno/visita) y se usa tal cual sin
+  preguntar. Se evaluó dar la lista completa en el prompt vs. una tool de "comparar nombre"
+  dedicada — se descartó la tool porque ya existe `buscar_profesor` con la misma lógica de
+  scoring y agregar una segunda ruta hubiera sido redundante; la lista en el prompt evita además
+  que el agente decida "no hace falta buscar" y se salte la verificación. El costo en tokens es
+  chico (~1500 tokens por turno) y no justificó una tabla de "personas" nueva en `gestion.db`
+  (los préstamos son a veces gente que no está en ninguna lista — alumnos, visitas — así que
+  seguir aceptando texto libre es correcto).
+- **Devoluciones parciales no fallan en silencio**: `finalizar_prestamo`/`reabrir_prestamo` con
+  `items` verifican que cada `recurso_id` pertenezca al préstamo antes de tocarlo; si no
+  pertenece, la tool devuelve `ok:false` con el detalle en vez de reportar éxito sin haber
+  cambiado nada (bug real: antes un `recurso_id` inválido se ignoraba silenciosamente y la tool
+  igual respondía `ok:true`). El system prompt le pide al agente llamar primero a
+  `detalle_prestamo(id)` para obtener los `recurso_id` reales de ese préstamo antes de devolver
+  ítems puntuales, en vez de adivinarlos.
 
 ### Configuración
 

@@ -827,11 +827,18 @@ body {
     50% { opacity: 0.7; }
 }
 
-.agente-close-btn {
+.agente-widget-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.agente-close-btn,
+.agente-reset-btn {
     background: rgba(255, 255, 255, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.3);
     color: white;
-    font-size: 18px;
+    font-size: 16px;
     cursor: pointer;
     padding: 4px 8px;
     line-height: 1;
@@ -839,9 +846,18 @@ body {
     transition: all 0.2s;
 }
 
-.agente-close-btn:hover {
+.agente-close-btn {
+    font-size: 18px;
+}
+
+.agente-close-btn:hover,
+.agente-reset-btn:hover {
     background: rgba(255, 255, 255, 0.3);
     transform: scale(1.1);
+}
+
+.agente-reset-btn:hover {
+    transform: scale(1.1) rotate(-90deg);
 }
 
 .agente-messages {
@@ -930,8 +946,16 @@ body {
     color: var(--g-dark);
     border: 1px solid var(--g-border);
     align-self: flex-start;
-    max-width: 85%;
+    max-width: 96%;
     border-radius: 2px 8px 8px 8px;
+}
+
+.agente-message-assistant p {
+    margin: 0 0 8px 0;
+}
+
+.agente-message-assistant p:last-child {
+    margin-bottom: 0;
 }
 
 .agente-message-assistant strong {
@@ -944,6 +968,60 @@ body {
     border-radius: 3px;
     font-size: 12px;
     color: #c2185b;
+}
+
+.agente-message-assistant ul,
+.agente-message-assistant ol {
+    margin: 0 0 8px 0;
+    padding-left: 20px;
+}
+
+.agente-message-assistant li {
+    margin-bottom: 3px;
+}
+
+.agente-message-assistant li:last-child {
+    margin-bottom: 0;
+}
+
+.agente-table-wrap {
+    overflow-x: auto;
+    margin: 0 0 8px 0;
+    border-radius: 6px;
+    border: 1px solid var(--g-border);
+}
+
+.agente-table-wrap:last-child {
+    margin-bottom: 0;
+}
+
+.agente-message-assistant table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.agente-message-assistant th,
+.agente-message-assistant td {
+    padding: 5px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--g-border);
+}
+
+.agente-message-assistant thead th {
+    background: var(--g-primary);
+    color: white;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.agente-message-assistant tbody tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+.agente-message-assistant tbody tr:last-child td {
+    border-bottom: none;
 }
 
 .agente-message-error {
