@@ -1179,14 +1179,20 @@ Sé conciso y útil. Si hay ambigüedad, pide aclaración."""
 
 @bp.route('/chat', methods=['POST'])
 def chat():
-    """Endpoint para el widget de chat. JSON con 'mensaje' y opcionalmente 'imagen' (base64)."""
+    """Endpoint para el widget de chat. JSON con 'mensaje' y opcionalmente 'imagen' (base64).
+    Mantiene historial de conversación en session['agente_historial'] para contexto."""
     data = request.get_json() or {}
     mensaje_usuario = data.get('mensaje', '').strip()
 
     if not mensaje_usuario:
         return jsonify({'error': 'Mensaje vacío'}), 400
 
-    # Construir el mensaje para Claude (con imagen si viene)
+    # Recuperar historial de la sesión (max 10 mensajes para no saturar tokens)
+    if 'agente_historial' not in session:
+        session['agente_historial'] = []
+    mensajes = session.get('agente_historial', [])[-10:]  # Últimos 10 para mantener contexto
+
+    # Construir el contenido del mensaje del usuario (con imagen si viene)
     contenido = [{'type': 'text', 'text': mensaje_usuario}]
 
     imagen_base64 = data.get('imagen')
@@ -1195,7 +1201,7 @@ def chat():
         if imagen_base64.startswith('data:'):
             imagen_base64 = imagen_base64.split(',')[1]
 
-        # Detectar tipo de imagen (heurístico simple: si termina en cierto patrón)
+        # Detectar tipo de imagen
         media_type = 'image/jpeg'  # default
         if imagen_base64.startswith('/9j/'):  # JPEG magic
             media_type = 'image/jpeg'
@@ -1211,9 +1217,18 @@ def chat():
             }
         })
 
-    mensajes = [{'role': 'user', 'content': contenido}]
+    # Agregar mensaje del usuario al historial
+    mensajes.append({'role': 'user', 'content': contenido})
 
+    # Obtener respuesta del agente
     respuesta = chat_with_tools(mensajes)
+
+    # Guardar respuesta en el historial (convertir respuesta a formato de mensaje)
+    mensajes.append({'role': 'assistant', 'content': [{'type': 'text', 'text': respuesta}]})
+
+    # Guardar historial en sesión (max 20 mensajes = 10 turnos)
+    session['agente_historial'] = mensajes[-20:]
+    session.modified = True
 
     return jsonify({'respuesta': respuesta})
 
