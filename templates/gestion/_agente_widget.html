@@ -1,195 +1,41 @@
 <div id="agente-widget" class="agente-widget" hidden>
   <div class="agente-widget-header">
-    <span>🤖 Asistente</span>
-    <button id="agente-close-btn" class="agente-close-btn" title="Cerrar">✕</button>
+    <div class="agente-widget-title">
+      <span class="agente-title-icon">🤖</span>
+      <span>Asistente IA</span>
+    </div>
+    <button id="agente-close-btn" class="agente-close-btn" title="Cerrar widget" aria-label="Cerrar">✕</button>
   </div>
 
   <div id="agente-messages" class="agente-messages">
-    <!-- Los mensajes se agregan acá -->
+    <div class="agente-welcome">
+      <div class="agente-welcome-icon">🤖</div>
+      <div class="agente-welcome-text">
+        <strong>¡Hola!</strong><br>
+        Preguntá sobre horarios, recursos, préstamos o cualquier otra cosa.
+      </div>
+    </div>
   </div>
 
   <div class="agente-input-area">
-    <div class="agente-input-row">
-      <textarea id="agente-input" class="agente-input" placeholder="Preguntá algo o pedí una acción..."></textarea>
-      <button id="agente-send-btn" class="agente-send-btn" title="Enviar">📤</button>
-    </div>
+    <input type="file" id="agente-image-file" accept="image/*" style="display: none;">
 
-    <div class="agente-image-input" style="display: none;">
-      <input type="file" id="agente-image-file" accept="image/*" style="display: none;">
-      <button id="agente-image-btn" class="agente-image-btn" title="Adjuntar imagen">📷</button>
+    <div class="agente-toolbar">
+      <button id="agente-image-btn" class="agente-toolbar-btn" title="Adjuntar imagen" aria-label="Adjuntar imagen">
+        📷
+      </button>
       <span id="agente-image-preview" class="agente-image-preview"></span>
     </div>
-  </div>
 
-  <div id="agente-log-link" class="agente-log-link" style="text-align: center; font-size: 0.75rem; margin-top: 0.5rem;">
-    <a href="{{ url_for('agente.agente_log') }}" target="_blank" style="color: var(--primary); text-decoration: none;">📋 Ver auditoría</a>
+    <div class="agente-input-row">
+      <textarea id="agente-input" class="agente-input" placeholder="Escribí tu pregunta..." rows="2"></textarea>
+      <button id="agente-send-btn" class="agente-send-btn" title="Enviar (Ctrl+Enter)">
+        <span class="agente-send-icon">→</span>
+      </button>
+    </div>
+
+    <div class="agente-footer">
+      <a href="{{ url_for('agente.agente_log') }}" target="_blank" class="agente-footer-link">📋 Auditoría</a>
+    </div>
   </div>
 </div>
-
-<style>
-  .agente-widget {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 350px;
-    height: 500px;
-    background: white;
-    border: 2px solid var(--primary);
-    border-radius: 8px;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 9999;
-    font-family: 'Roboto Mono', monospace;
-  }
-
-  .agente-widget-header {
-    background: var(--primary);
-    color: white;
-    padding: 0.75rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-radius: 6px 6px 0 0;
-    font-weight: bold;
-  }
-
-  .agente-close-btn {
-    background: none;
-    border: none;
-    color: white;
-    font-size: 1.2rem;
-    cursor: pointer;
-    padding: 0;
-    line-height: 1;
-  }
-
-  .agente-close-btn:hover {
-    opacity: 0.8;
-  }
-
-  .agente-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    background: #fafafa;
-  }
-
-  .agente-message {
-    padding: 0.75rem;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    line-height: 1.4;
-    word-wrap: break-word;
-  }
-
-  .agente-message-user {
-    background: var(--primary);
-    color: white;
-    align-self: flex-end;
-    max-width: 85%;
-    text-align: left;
-  }
-
-  .agente-message-assistant {
-    background: white;
-    color: #333;
-    border: 1px solid #ddd;
-    align-self: flex-start;
-    max-width: 85%;
-  }
-
-  .agente-message-error {
-    background: #fee;
-    color: #c33;
-    border: 1px solid #fcc;
-    align-self: center;
-    max-width: 85%;
-  }
-
-  .agente-input-area {
-    border-top: 1px solid #ddd;
-    padding: 0.75rem;
-    background: white;
-    border-radius: 0 0 6px 6px;
-  }
-
-  .agente-input-row {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .agente-input {
-    flex: 1;
-    padding: 0.75rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-family: 'Roboto Mono', monospace;
-    font-size: 0.85rem;
-    resize: vertical;
-    min-height: 40px;
-    max-height: 100px;
-  }
-
-  .agente-input:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 2px rgba(26, 54, 93, 0.1);
-  }
-
-  .agente-send-btn {
-    padding: 0.75rem;
-    background: var(--primary);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 1rem;
-    line-height: 1;
-  }
-
-  .agente-send-btn:hover {
-    opacity: 0.9;
-  }
-
-  .agente-send-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .agente-image-btn {
-    padding: 0.5rem;
-    background: #f0f0f0;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 1rem;
-  }
-
-  .agente-image-btn:hover {
-    background: #e0e0e0;
-  }
-
-  .agente-image-preview {
-    font-size: 0.75rem;
-    color: #666;
-    margin-left: 0.5rem;
-  }
-
-  .agente-log-link a {
-    font-size: 0.75rem;
-  }
-
-  @media (max-width: 600px) {
-    .agente-widget {
-      width: calc(100vw - 20px);
-      height: calc(100vh - 120px);
-      bottom: 10px;
-      right: 10px;
-      left: 10px;
-    }
-  }
-</style>
