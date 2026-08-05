@@ -8,16 +8,18 @@ en Google Drive; acá solo se guardan links (`drive_url`).
 ## Arquitectura
 
 - **`gestion.py`** — todo el módulo: blueprint Flask (`bp`, prefix `/gestion`), schema,
-  seed y rutas. Server-rendered con Jinja. El único JS propio es `static/gestion.js`
-  (búsqueda en vivo del listado — ver abajo); el resto es HTML puro con forms + redirects.
+  seed y rutas. Server-rendered con Jinja. El JS propio es `static/gestion.js`, con dos
+  mejoras progressive-enhancement: búsqueda en vivo del listado y agregar al carrito por
+  AJAX (ver abajo); el resto es HTML puro con forms + redirects.
 - **`gestion.db`** — SQLite propia, separada de `escuela.db`. **No** se regenera desde
   Sheets y `/api/actualizar` no la toca. Es la única DB con datos propios de la app
   (en hosting efímero tipo Render se pierde en cada restart; en PythonAnywhere persiste).
 - **`templates/gestion/`** — `base.html` (layout + nav), `home.html`, `lista.html`,
   `form.html`, `detalle.html`. Los tres últimos son **genéricos**: se renderizan a partir
-  de la config declarativa de cada entidad. `prestamos_lista.html`, `prestamos_form.html`,
-  `prestamos_detalle.html` son específicos (préstamos no entra en `ENTIDADES`: tiene
-  ítems con cantidad y un ciclo prestado→devuelto que el trío genérico no modela).
+  de la config declarativa de cada entidad. `prestamos_lista.html`, `prestamos_detalle.html`,
+  `carrito.html`, `carrito_finalizar.html` son específicos (préstamos no entra en `ENTIDADES`:
+  tiene ítems con cantidad y un ciclo prestado→devuelto que el trío genérico no modela, y el
+  alta usa un carrito en sesión que el usuario ve como "PRÉSTAMO" en la UI).
 - **`static/gestion.css`** — hoja standalone (paleta blueprint copiada, no importa
   `style.css` para que los dos sistemas no se pisen). Sin modo oscuro.
 - **`static/gestion.js`** — único JS del módulo: búsqueda en vivo del listado (filtrado
@@ -115,7 +117,6 @@ Registro de quién se lleva qué recursos, cuánto y cuándo lo devuelve. Rutas 
 | Ruta | Método | Descripción |
 |------|--------|-------------|
 | `/gestion/prestamos` | GET | Listado dividido en "en préstamo" (`fecha_devolucion=''`) e "historial" (`?q=` busca en persona/destino/notas). En activos la columna "se llevó" muestra lo **pendiente**, no lo retirado |
-| `/gestion/prestamos/nuevo` | GET/POST | Form con hasta `PRESTAMO_FILAS_FORM` (8) filas de ítems (`recurso_N` + `cantidad_N`). `?recurso=<id>` (GET) precarga la fila 1 — lo usa el botón "REGISTRAR RETIRO" de la ficha del recurso |
 | `/gestion/prestamos/<id>` | GET | Detalle: persona, destino, notas, fechas, e ítems con prestado/devuelto/pendiente y controles de devolución por ítem |
 | `/gestion/prestamos/<id>/devolver` | POST | **Devolver TODO**: marca cada ítem entero (`cantidad_devuelta = cantidad`) y setea `fecha_devolucion`. Atajo — **nunca borra la fila** |
 | `/gestion/prestamos/<id>/devolver_item` | POST | Devuelve parte (o el resto) de un ítem (`recurso_id` + `cantidad` opcional; vacía = todo lo pendiente). Al cubrirse todo lo pendiente, el préstamo se cierra solo |
@@ -123,12 +124,44 @@ Registro de quién se lleva qué recursos, cuánto y cuándo lo devuelve. Rutas 
 | `/gestion/prestamos/<id>/reabrir_item` | POST | Deshace la devolución de un ítem puntual (vuelve a 0); si eso deja algo pendiente, reabre el préstamo |
 | `/gestion/prestamos/<id>/eliminar` | POST | Borra el registro entero — solo para cargas mal hechas, no es el flujo normal |
 
-**Resolución de recursos en el form**: el `<input>` de cada fila usa un `<datalist>` con
-todos los recursos como `"Nombre [#id]"` — el sufijo `[#id]` desambigua nombres
-duplicados (el inventario real tiene "Formon" x2, "Medidor de energia solar" x2).
-`_parsear_items_prestamo()` primero busca el sufijo `[#N]`; si no está, matchea por
-nombre normalizado y solo acepta si hay un único candidato (si no, error pidiendo elegir
-de la lista). Filas repetidas para el mismo recurso suman cantidades.
+### Alta como carrito (en sesión)
+
+No hay form de alta con filas de ítems. El préstamo se arma como un **carrito de compra
+tipo e-commerce**: en cada recurso hay un botón **RETIRAR** que lo suma al carrito. Al
+agregarlo, el botón se transforma en un **stepper verde `−  N  +`** (en la misma fila / ficha)
+que ajusta la cantidad **hasta el stock disponible** (`recursos.cantidad`; sin stock definido =
+sin tope). Arriba de todo, en el nav, hay un **PRÉSTAMO 📋** con el contador que lleva directo al
+checkout (`/carrito/finalizar`). Recién al finalizar se pide quién retira y **ahí** se crea el
+préstamo.
+
+**UI optimista, sin delay**: `gestion.js` cambia la interfaz al instante en el click (muestra el
+stepper, ajusta el badge) y sincroniza con el server en segundo plano por `fetch` — no se espera
+el round-trip. `carrito_agregar` agrega +1; el `+`/`−` mandan la cantidad exacta a `carrito_set`
+(coalesce por widget para no pisar el orden en ráfagas). Sin JS, el `<form>` del botón RETIRAR
+hace su POST + redirect normal; el stepper es una mejora que solo aparece con JS. Hooks del JS:
+`data-add-carrito` (form RETIRAR), `data-recurso` / `data-stock` / `data-cant` (widget/stepper),
+`data-cart-count` (badge), `data-set-url` (URL de `carrito_set`, en el link del PRÉSTAMO 📋).
+
+El carrito vive en `session['carrito']` = `{recurso_id: cantidad}` (por navegador, igual que el
+login; claves string al serializar). Helpers: `_carrito()` / `_carrito_guardar()` /
+`_carrito_filas()` / `_stock()`. El badge del nav (`carrito_count` en el context processor) cuenta
+**ítems distintos** (no unidades). `lista()` y `detalle()` pasan el dict `carrito` para renderizar
+el estado inicial del stepper de los recursos ya agregados.
+
+| Ruta | Método | Descripción |
+|------|--------|-------------|
+| `/gestion/carrito/agregar` | POST | Suma un recurso (`recurso_id` + `cantidad`, default 1) al carrito, topeado al stock. **Con AJAX** (`X-Requested-With: XMLHttpRequest`) devuelve JSON `{ok, count, cantidad}` y no recarga; sin JS redirige a `volver` (si empieza con `/gestion`, si no al listado — evita open redirect) |
+| `/gestion/carrito/set` | POST | Fija la cantidad exacta (`recurso_id` + `cantidad`) — la usan el `+`/`−` del stepper. `cantidad<=0` saca el ítem; topea al stock. Devuelve JSON `{ok, count, cantidad}` |
+| `/gestion/carrito` | GET | Ver/editar el carrito (UI: "PRÉSTAMO"): cambiar cantidades / quitar. Se llega por el link "editar el préstamo" del checkout. Botón "finalizar préstamo" |
+| `/gestion/carrito/actualizar` | POST | Guarda los cambios del préstamo (`cantidad_<id>`; 0 = quitar). Con `accion=finalizar` sigue al checkout |
+| `/gestion/carrito/quitar` | POST | Saca un ítem del carrito (`recurso_id`) |
+| `/gestion/carrito/vaciar` | POST | Vacía el carrito |
+| `/gestion/carrito/finalizar` | GET/POST | Checkout — **destino del PRÉSTAMO 📋 del nav**. GET muestra resumen + form de persona/destino/notas; POST valida persona, crea el préstamo con los ítems, lo vacía y va al detalle. Carrito vacío → redirige a `/carrito` |
+
+El listado de recursos y la ficha usan el atributo HTML `form=` para asociar inputs a un
+`<form>` vacío y así no anidar el form de "quitar" dentro del de cantidades (los forms no se
+pueden anidar). Recursos borrados que quedaron en el carrito se muestran como "(recurso
+eliminado)" y se pueden quitar.
 
 **No se descuenta stock**: `recursos.cantidad` no cambia al prestar/devolver — es
 "cuánto hay en total", no "cuánto está libre ahora mismo". Lo prestado se calcula por
@@ -152,7 +185,8 @@ Werkzeug prioriza las rutas más específicas (estáticas) sobre el converter `<
 así que `/gestion/prestamos/5` siempre despacha a `prestamo_detalle`, nunca a `detalle`
 con `slug='prestamos'` — verificado en runtime. Por eso `nav_entidades` y las cards del
 home tratan `slug == 'prestamos'` como caso especial al construir los links (usan
-`gestion.prestamos_lista` / `gestion.prestamo_nuevo`, no `gestion.lista` / `gestion.nuevo`).
+`gestion.prestamos_lista`, no `gestion.lista`). El "+ nuevo retiro" del home y de la lista de
+préstamos apunta al **listado de recursos** (ahí arranca el carrito), no a un form de alta.
 
 ## Seed
 
@@ -172,3 +206,108 @@ es público** (el repo lo es) — en el hosting hay que setear `GESTION_CLAVE` y
 Es una traba de desarrollo, no seguridad completa: sin usuarios ni auditoría, sin
 CSRF, sin límite de intentos. Decisión 2026-07-19 (ver `dev-log/DECISIONS.md`).
 El SPA de horarios y `/api/*` siguen sin auth.
+
+## Asistente conversacional con tool-calling (agente.py)
+
+Módulo independiente (`agente.py`, blueprint `/gestion/agente`) que expone un chat
+conversacional via Claude (Anthropic API). El usuario puede hablar con la app en lenguaje
+natural en vez de hacer click en formularios: consultar horarios, crear recursos, fotografiar
+etiquetas y cargarlas, gestionar préstamos. Todo con auditoría de escrituras en `agente_log`.
+
+**Acceso**: botón "🤖 ASISTENTE" en el header, visible solo tras iniciar sesión en
+`/gestion` (reusan `session['gestion_ok']`). Abre un widget flotante de chat.
+
+### Arquitectura
+
+- **`agente.py`** — blueprint completo: gate de sesión, esquemas de tools JSON, ejecutores,
+  loop de tool-calling contra Anthropic con manejo de tool use, endpoints Flask.
+- **`POST /gestion/agente/chat`** — acepta `{mensaje, imagen?}` (imagen en base64 o data URL);
+  retorna `{respuesta}`. El backend llama a Claude con el mensaje + tools disponibles, ejecuta
+  lo que Claude pida (tools de lectura y escritura), repite hasta respuesta final, audita
+  escrituras en `agente_log`.
+- **`GET /gestion/agente/log`** — tabla de auditoría (últimas 50 escrituras), con snapshot
+  "antes" visible para poder restaurar manualmente si el agente cometió un error.
+- **Widget** (`templates/gestion/_agente_widget.html` + `static/gestion-agente.js`) —
+  panel flotante de chat con historial de mensajes, input de texto, opción de adjuntar imagen,
+  link a la auditoría. Incluido desde `base.html`. Progressive enhancement: con JS es fluido,
+  sin JS no aparece pero el servidor sigue funcionando.
+
+### Tools
+
+**Lectura** (no se auditan, siempre disponibles):
+- `buscar_profesor(query)` — resolución difusa de nombre
+- `horario_profesor(nombre)` / `horario_curso(curso, division)` / `horario_aula(aula)`
+  — horarios agrupados por día
+- `aulas_libres()` — aulas desocupadas ahora, agrupadas por piso
+- `buscar_entidad(slug, query)` — búsqueda de recursos/conjuntos/actividades/proyectos
+- `detalle_entidad(slug, id)` — detalle completo + relaciones
+- `listar_prestamos(persona?)` / `detalle_prestamo(id)` — estados de préstamos
+
+**Escritura** (se auditan, requieren `session['gestion_ok']`, guardan snapshot "antes"):
+- `crear_entidad(slug, campos)` — create (valida nombre no vacío)
+- `editar_entidad(slug, id, campos)` — update
+- `vincular_entidad` / `desvincular_entidad` — gestionar M2M
+- `crear_prestamo(persona, destino?, notas?, items)` — crear préstamo (cantidad topeada
+  a stock, recurso por nombre o id con resolución ambigua)
+- `finalizar_prestamo(id, items?)` — devolución total o parcial (calcula estado automáticamente)
+- `reabrir_prestamo(id, items?)` — deshace una devolución
+- `eliminar_entidad` / `eliminar_prestamo` — **requieren confirmación en turno separado** (el
+  system prompt instruye a Claude a no ejecutar en el mismo turno en que se solicita, sino
+  responder primero qué va a borrar y esperar confirmación)
+
+### Salida interpretada
+
+Las tools de lectura retornan datos ya procesados, no filas SQL crudas: horarios agrupados
+por día, aulas libres agrupadas por piso, búsquedas con solo campos relevantes (omitiendo
+vacíos), pendientes de préstamos ya calculados. Reduce tokens de API y errores de interpretación.
+
+### Auditoría (agente_log)
+
+Tabla nueva en `gestion.db`:
+```sql
+agente_log (
+  id, fecha, tool, entrada (JSON de parámetros),
+  antes (JSON: snapshot de fila + relaciones M2M, NULL en alta, obligatorio en editar/eliminar),
+  resultado (JSON), ok
+)
+```
+Se inserta una fila **por cada tool de escritura ejecutada** (no por lecturas, para no llenar
+la tabla de ruido). El snapshot "antes" permite restaurar a mano si el agente se equivocó en
+una devolución de préstamo o un borrado.
+
+### Guardias de seguridad / guardrails de prompt
+
+- **Confirmación en dos turnos para eliminar**: el *system prompt* instruye a Claude a nunca
+  ejecutar `eliminar_entidad` / `eliminar_prestamo` en el mismo turno en que se pide el borrado.
+  Primero debe responder qué va a borrar y esperar una confirmación explícita del usuario en el
+  turno siguiente. Es una guardrail de prompt (coherente con "/gestion" siendo "traba de
+  desarrollo, no seguridad completa"), reforzada por la auditoría.
+- **Confirmación para crear desde foto**: igual criterio: si el usuario manda una foto, el
+  agente propone los campos extraídos en texto y pide confirmación antes de llamar a
+  `crear_entidad`.
+- **Resolución de ambigüedad en recursos**: si `crear_prestamo` busca un nombre de recurso
+  que matchea más de una fila, la tool devuelve error pidiendo aclaración en vez de adivinar.
+
+### Configuración
+
+- **Env var** `ANTHROPIC_API_KEY` — necesaria para llamar a la API de Anthropic. Sin ella,
+  el chat devuelve un error claro ("ANTHROPIC_API_KEY no está configurada").
+- **Env var** `AGENTE_MODEL` — modelo a usar (default `claude-haiku-4-5-20251001`, que
+  soporta visión para fotografiar etiquetas y es costo bajo). Configurable igual que
+  `GESTION_CLAVE`.
+- **Costo**: cada mensaje del chat consume tokens de la API de Anthropic (aparte de Render
+  gratuito). Las lecturas (búsquedas, horarios) suelen ser baratas (~100–500 tokens). Las
+  escrituras (create/edit/préstamos) más caras porque la salida de la tool puede ser larga
+  y Claude la procesa de vuelta.
+
+### Integración con módulo de /gestion
+
+- Reusan `gestion.ENTIDADES` (config declarativa de recursos/conjuntos/actividades/proyectos).
+- Reusan helpers de `gestion.py` ya refactorizados:
+  `buscar_entidad_sin_request`, `guardar_entidad_sin_request`, `snapshot_entidad`,
+  `agregar_relacion_m2m`, `quitar_relacion_m2m`, `_puntaje_busqueda`, `_carrito_filas`,
+  `_recalcular_estado`, etc. (todas sin dependencia de Flask `request`/`session`).
+- Reusan queries de `database.py`: `aulas_libres()` nueva (calcula libres vs ocupadas en
+  `clases` a tiempo real, agrupadas por piso de `FLOOR_MAPPING`).
+- El agente **no tiene acceso a escribir en `escuela.db`** (horarios) — solo lectura;
+  actualizar desde Sheets sigue siendo un botón aparte del SPA.

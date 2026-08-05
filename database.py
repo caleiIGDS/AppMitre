@@ -482,3 +482,96 @@ def obtener_planilla_preceptores_todos():
 
     con.close()
     return resultado
+
+
+def obtener_filas(tipo, valor):
+    """Obtiene filas de clases según tipo (profesor, aula, curso, planilla)."""
+    try:
+        con = conectar()
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+
+        if tipo == 'profesor':
+            cur.execute("SELECT * FROM clases WHERE profesor = ? OR (prof_suplente = ? AND suplente_activo = 1)", (valor, valor))
+        elif tipo == 'aula':
+            cur.execute("SELECT * FROM clases WHERE aula = ?", (valor,))
+        elif tipo == 'curso':
+            partes = valor.split(' ')
+            if len(partes) >= 2:
+                cur.execute("SELECT * FROM clases WHERE curso = ? AND division = ?", (partes[0], partes[1]))
+            else:
+                cur.execute("SELECT * FROM clases WHERE curso = ?", (partes[0],))
+        elif tipo == 'planilla':
+            if '|' in valor:
+                from config import FLOOR_MAPPING
+                dia_pl, piso = valor.split('|')
+                aulas = FLOOR_MAPPING.get(piso, [])
+                if aulas:
+                    placeholders = ','.join(['?'] * len(aulas))
+                    query = f"SELECT * FROM clases WHERE dia = ? AND aula IN ({placeholders})"
+                    cur.execute(query, [dia_pl] + aulas)
+            else:
+                con.close()
+                return []
+
+        filas = [dict(row) for row in cur.fetchall()]
+        con.close()
+        return filas
+    except Exception as e:
+        print(f"Error en obtener_filas: {e}")
+        return []
+
+def aulas_libres(dia=None, hora=None):
+    """Retorna aulas libres en un día/hora dados, agrupadas por piso.
+    Si día/hora no se especifican, usa el actual (si es un día laborable).
+    Retorna dict con 'dia', 'hora', 'libres_por_piso' (dict piso -> lista de aulas),
+    'total_libres' y 'nota' si aplica."""
+    from datetime import datetime
+    from config import DIAS, FLOOR_MAPPING
+
+    # Resolver día
+    if dia is None:
+        hoy = datetime.now()
+        dia_semana = hoy.weekday()  # 0=lunes, 4=viernes, 5+=sábado/domingo
+        if dia_semana >= 5:
+            return {'dia': None, 'hora': None, 'libres_por_piso': {}, 'total_libres': 0,
+                    'nota': 'Hoy es fin de semana.'}
+        dia = DIAS[dia_semana]
+
+    if dia not in DIAS:
+        return {'dia': dia, 'hora': hora, 'libres_por_piso': {}, 'total_libres': 0,
+                'nota': f'Día inválido: {dia}'}
+
+    # Resolver hora
+    if hora is None:
+        hora = datetime.now().strftime('%H:%M')
+
+    # Universo de aulas: todas las del FLOOR_MAPPING
+    todas_aulas = {}
+    for piso, aulas in FLOOR_MAPPING.items():
+        todas_aulas[piso] = set(aulas)
+
+    # Ocupadas en este día/hora
+    con = conectar()
+    cur = con.cursor()
+    cur.execute("""
+        SELECT DISTINCT aula FROM clases
+        WHERE dia = ? AND hora_inicio <= ? AND hora_fin > ?
+    """, (dia, hora, hora))
+    ocupadas = {row[0] for row in cur.fetchall()}
+    con.close()
+
+    # Libres por piso
+    libres_por_piso = {}
+    total_libres = 0
+    for piso, aulas_set in todas_aulas.items():
+        libres = sorted([a for a in aulas_set if a not in ocupadas])
+        libres_por_piso[piso] = libres
+        total_libres += len(libres)
+
+    return {
+        'dia': dia,
+        'hora': hora,
+        'libres_por_piso': libres_por_piso,
+        'total_libres': total_libres
+    }

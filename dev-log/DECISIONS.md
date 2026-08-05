@@ -4,6 +4,65 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-08-04] — Asistente conversacional: tool-calling contra Claude, no embeddings ni agentes full-autonomous
+
+**Contexto**: El usuario pidió un "agente" para la app que pueda: preguntar cuándo está un profesor, añadir material nuevo, crear y cerrar préstamos. El pedido explícitamente menciona "con alguna capa de seguridad para que no todos puedan hacer todo, pero sí preguntar distintas cosas".
+
+**Decisión**:
+- **Tool-calling contra Claude (Anthropic API)**: el agente es un **loop de tool-use**, no un modelo fine-tuned ni un agente "full-autonomous" con reflexión continua. Cada mensaje del usuario se procesa como: (1) Claude recibe el mensaje + la lista tipada de tools disponibles, (2) Claude elige qué tools ejecutar (puede ser varias), (3) el servidor ejecuta las functions Python reales (reads en DB/API, o writes con auditoría), (4) Claude recibe el resultado, (5) repite hasta dar una respuesta en texto. Es **sincrónico, acotado y verificable** — cada tool conocido existe en el código con validación y logs.
+- **Reusar autenticación existente**: no se crea un sistema de usuarios con roles nuevos. El agente hereda `session['gestion_ok']` (la sesión del login de `/gestion` con la contraseña compartida). La capa de "quién puede hacer qué" es el mismo gate que ya protege el módulo entero.
+- **Formato de salida interpretado en las tools**: cada tool de lectura devuelve datos ya procesados (horarios agrupados por día, aulas libres agrupadas por piso, búsquedas con solo campos relevantes sin vacíos) en vez de filas SQL crudas. Reduce tokens enviados a Claude y reduce errores de interpretación del modelo.
+- **Auditoría obligatoria para escrituras**: tabla nueva `agente_log` registra quién pidió qué (`entrada` = parámetros JSON), qué había antes (`antes` = snapshot de la fila/relaciones para poder restaurar) y qué pasó (`resultado` = JSON de lo que se creó/modificó/error). Lecturas **no** se auditan para no llenar la tabla de ruido. Permite "si el agente se equivocó, reconstruir manualmente".
+- **Confirmación en dos turnos para operaciones de riesgo**: el system prompt instruye a Claude a NUNCA ejecutar `eliminar_*` en el mismo turno en que se pide el borrado. Primero responde qué va a borrar, pide confirmación explícita, y recién en el turno siguiente ejecuta. Idem para crear desde foto — primero propone los campos, espera confirmación. Es una guardrail de **prompt**, coherente con "es una traba de desarrollo, no seguridad completa" (heredada de DECISIONS 2026-07-19), **no** un bloqueo hard en el código.
+
+**Alternativas descartadas**:
+- *Agentes full-autonomous (ReAct, loops de reflexión)* — más pesado, más tokens, más difícil de debuggear y más impredecible. El tool-calling simple ya da el comportamiento que se pidió.
+- *Sistema de usuarios con roles granulares (`admin`, `profesor`, `alumno`)* — se descartó explícitamente en la entrevista inicial para mantener la "traba provisoria" existente (DECISIONS 2026-07-19). Si en el futuro se necesitan roles de verdad, será una decisión separada de migrar a Flask-Login.
+- *Buscar semántica para recursos (embeddings)* — descartado por costo y complejidad. La búsqueda fuzzy existente (`_puntaje_busqueda`) es suficiente y se reusan las funciones existentes sin duplicar lógica.
+
+**Consecuencia**:
+- El costo de la API de Anthropic es externo al hosting gratuito de Render — correrá si `ANTHROPIC_API_KEY` está configurada, pero cada mensaje consume tokens pagos. El usuario debe estar consciente.
+- El modelo por defecto es `claude-haiku-4-5-20251001` (soporta visión para fotos de etiquetas, costo muy bajo). Se puede cambiar por env var `AGENTE_MODEL`.
+- Las funciones reusables en `gestion.py` se extraen para que no dependan de Flask `request`/`session` — ahora `agente.py` y los tests pueden usarlas sin necesidad de contexto HTTP.
+- La auditoría cubre **todas** las escrituras, pero es responsabilidad del staff revisar `GET /gestion/agente/log` y restaurar manualmente si hay un error — el agente no tiene rollback automático.
+
+---
+
+## [2026-08-04] — Tool-calling output: datos interpretados, no filas crudas
+
+**Contexto**: Al diseñar las tools, la pregunta fue: ¿le paso a Claude un array de filas SQL crudas o datos ya procesados? Ej: `horario_profesor` devuelve crudo `[{profesor, materia, aula, dia, hora_inicio, hora_fin, ...}]` vs interpretado `{profesor, clases: {Lunes: ["08:00–09:40 · Matemática · 3°B · aula 21"], ...}}`.
+
+**Decisión**: Salida **interpretada**. Cada tool devuelve datos ya formateados según el dominio:
+- Horarios agrupados por día, líneas legibles tipo "08:00–09:40 · Matemática · 3°B · aula 21" (sin repetir el profesor si fue buscado por profesor).
+- Aulas libres agrupadas por piso (así piensa el staff), no una lista plana de códigos.
+- Búsquedas de entidades omitiendo campos vacíos (la mayoría de `drive_url`, `fecha_revision` están en blanco), solo mostrando id, nombre, estado, ubicación.
+- Pendiente de préstamos ya calculado (`cantidad − cantidad_devuelta`) en la salida, no crudos.
+
+**Por qué**: (1) Reduce tokens enviados a Claude (menos JSON en ida y vuelta); (2) reduce errores de interpretación (Claude no tiene que agradecer por filas, parseándolas en su cabeza); (3) coincide con cómo **el staff piensa** los datos (por piso, por día, agrupado) — el modelo entiende más rápido. Es aplicar el principio de "no pasar ruido" que ya se usa en las queries de la app.
+
+**Alternativa descartada**: Filas SQL crudas. Habría sido más "puro" (así vienen de la BD), pero el extra de tokens y el parsing que Claude tiene que hacer no vale la pena.
+
+**Consecuencia**: Las tools son "opinadas" sobre el formato — si en el futuro otra interfaz necesita los datos en otro formato, habrá que agregar tools nuevas o parámetros. Es un trade-off de claridad sobre flexibilidad.
+
+---
+
+## [2026-07-21] — Alta de préstamos como carrito en sesión (reemplaza el form de filas)
+
+**Contexto**: El alta era un form con hasta 8 filas `recurso_N`/`cantidad_N`, cada una con un `<datalist>` donde había que tipear/elegir el recurso (desambiguando por sufijo `[#id]`). El usuario lo consideró "todo mal" y pidió **borrón y cuenta nueva**: que funcione como un carrito de compra — estando en recursos ir agregando, al final poner OK, y **recién ahí** cargar quién se lo llevó. (Reemplaza la decisión previa del mismo día de "registrar retiro desde la ficha vía `?recurso=<id>`", que quedó obsoleta.)
+
+**Decisión**:
+- **Carrito en la sesión de Flask** (`session['carrito']` = `{recurso_id: cantidad}`), no en localStorage ni en una tabla de "borrador". Es el mismo mecanismo que ya usa el login del módulo, sobrevive la navegación sin JS, y se serializa solo (dict chico). Cada "agregar" es un POST que actualiza la sesión y redirige de vuelta a donde se estaba. No hay estado de borrador en la DB que limpiar.
+- **El préstamo se crea recién en el checkout** (`/carrito/finalizar`): mientras tanto no hay fila en `prestamos`. Así "quién se lo llevó" se pide al final (como pidió el usuario) y un carrito abandonado no deja basura en la DB — se descarta con la sesión.
+- **Sin JS**: el carrito, agregar, editar cantidades y quitar son forms HTML + redirects, igual que el resto del módulo. El único JS del módulo sigue siendo la búsqueda en vivo. Para no anidar forms (quitar dentro del de cantidades) se usa el atributo HTML `form=`.
+- **Se elimina el matching por nombre/`[#id]`**: al agregar por `recurso_id` (viene del botón de cada recurso, no de texto tipeado), desaparece toda la ambigüedad de nombres duplicados que resolvía `_parsear_items_prestamo()`. Menos código y sin errores de "elegí de la lista".
+- **No se cambia el schema ni la devolución**: `prestamos`/`prestamo_items`/`cantidad_devuelta` y las rutas de devolución quedan igual; solo cambió cómo se arma el alta.
+
+**Alternativa descartada**: carrito en el cliente (localStorage + JS). Evitaría los round-trips por cada "agregar", pero obligaba a serializar datos de recursos en el navegador y a más JS, contra el patrón "forms + redirects" del módulo. Con inventarios de decenas de ítems el POST por agregado es imperceptible.
+
+**Consecuencia**: el carrito es por navegador/sesión — si se cierra sesión (`/salir` limpia toda la sesión) o expira la cookie, se pierde lo que no se finalizó. Aceptable: es un borrador efímero, no un registro. Con la clave compartida, dos personas en el mismo navegador comparten carrito (mismo caso que ya pasa con el login).
+
+---
+
 ## [2026-07-21] — Préstamos: devolución por ítem con `cantidad_devuelta`, y `fecha_devolucion` derivada
 
 **Contexto**: La devolución era todo-o-nada a nivel préstamo (`fecha_devolucion` en la fila `prestamos`). El usuario quiere devolver de a partes: marcar que volvió un ítem puntual, e incluso una fracción de su cantidad (ej: se llevó 3 multímetros, devuelve 1). También poder arrancar un retiro desde la ficha del recurso, no solo desde el form vacío.

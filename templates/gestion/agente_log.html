@@ -1,0 +1,123 @@
+{% extends "gestion/base.html" %}
+
+{% block title %}Auditoría del Agente | {{ escuela_nombre }}{% endblock %}
+
+{% block contenido %}
+<div class="gestion-container">
+  <div class="gestion-header">
+    <h1>📋 Auditoría del Agente</h1>
+    <p>Registro de todas las acciones ejecutadas por el asistente conversacional.</p>
+  </div>
+
+  {% if filas %}
+    <div class="agente-log-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Tool</th>
+            <th>Entrada</th>
+            <th>Resultado</th>
+            <th>OK</th>
+            <th>Antes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fila in filas %}
+            <tr class="{% if fila.ok %}ok-row{% else %}error-row{% endif %}">
+              <td>{{ fila.fecha }}</td>
+              <td><code>{{ fila.tool }}</code></td>
+              <td>
+                <details>
+                  <summary>Ver entrada</summary>
+                  <pre>{{ fila.entrada }}</pre>
+                </details>
+              </td>
+              <td>
+                <details>
+                  <summary>Ver resultado</summary>
+                  <pre>{{ fila.resultado }}</pre>
+                </details>
+              </td>
+              <td>{{ "✅ OK" if fila.ok else "❌ ERROR" }}</td>
+              <td>
+                {% if fila.antes %}
+                  <details>
+                    <summary>Snapshot</summary>
+                    <pre>{{ fila.antes }}</pre>
+                  </details>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <style>
+      .agente-log-table {
+        overflow-x: auto;
+        margin-top: 2rem;
+      }
+
+      .agente-log-table table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+      }
+
+      .agente-log-table th {
+        background: var(--primary);
+        color: white;
+        padding: 0.5rem;
+        text-align: left;
+        font-weight: bold;
+      }
+
+      .agente-log-table td {
+        padding: 0.5rem;
+        border-bottom: 1px solid #ddd;
+      }
+
+      .agente-log-table .ok-row {
+        background-color: #f0fdf4;
+      }
+
+      .agente-log-table .error-row {
+        background-color: #fef2f2;
+      }
+
+      .agente-log-table details {
+        cursor: pointer;
+      }
+
+      .agente-log-table summary {
+        user-select: none;
+        font-weight: bold;
+        color: var(--primary);
+      }
+
+      .agente-log-table pre {
+        background: #f5f5f5;
+        padding: 0.5rem;
+        border-radius: 4px;
+        overflow-x: auto;
+        font-size: 0.75rem;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .agente-log-table code {
+        background: #f5f5f5;
+        padding: 0.2rem 0.4rem;
+        border-radius: 2px;
+        font-family: monospace;
+      }
+    </style>
+  {% else %}
+    <p style="text-align: center; margin-top: 2rem; color: #666;">Sin registros aún.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -4,6 +4,39 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-04] — Asistente conversacional con tool-calling (agente.py)
+
+**Tipo**: módulo nuevo + dependencia nueva + endpoints + DB nueva
+**Archivos**: `agente.py` (nuevo), `requirements.txt`, `app.py`, `database.py`, `gestion.py`, `templates/gestion/_agente_widget.html` (nuevo), `templates/gestion/agente_log.html` (nuevo), `templates/gestion/base.html`, `static/gestion-agente.js` (nuevo)
+**Cambios**:
+- **Nueva dependencia**: `anthropic` (SDK de Anthropic para Claude API) en `requirements.txt`.
+- **Nuevo blueprint** `agente` (`agente.py`, prefix `/gestion/agente`): chat conversacional via Claude. Gate de sesión reusa `session['gestion_ok']` (mismo que `/gestion`, no requiere usuarios nuevos). Expone **21 tools** (9 de lectura: horarios, aulas libres, búsqueda de entidades; 12 de escritura: crear/editar/vincular recursos, crear/cerrar/reapertura de préstamos, eliminar).
+- **Endpoint nuevo** `POST /gestion/agente/chat`: acepta `{mensaje, imagen?}` (imagen en base64), retorna `{respuesta}`. El backend llama a Claude, ejecuta tools que Claude pida, repite hasta respuesta final.
+- **Endpoint nuevo** `GET /gestion/agente/log`: tabla de auditoría (últimas 50 entradas), con snapshot "antes" para restauración manual.
+- **Nueva tabla** `agente_log` en `gestion.db` (`fecha, tool, entrada, antes, resultado, ok`): cada tool de escritura se audita (no las lecturas).
+- **Widget de chat** (`_agente_widget.html` + `gestion-agente.js`): panel flotante en bottom-right, visible tras login en `/gestion`. Incluido en `base.html`, Progressive enhancement (sin JS no aparece, pero backend sigue). Botón "🤖 ASISTENTE" en header.
+- **Refactor en `gestion.py`**: funciones nuevas reusables sin dependencia de Flask `request`/`session`: `buscar_entidad_sin_request`, `guardar_entidad_sin_request`, `snapshot_entidad`, `agregar_relacion_m2m`, `quitar_relacion_m2m`. Usadas por `agente.py`.
+- **Nueva función en `database.py`**: `aulas_libres(dia, hora)` — calcula aulas desocupadas ahora, agrupadas por piso de `FLOOR_MAPPING`.
+- **Env vars nuevas**: `ANTHROPIC_API_KEY` (requerida; sin ella, chat devuelve error). `AGENTE_MODEL` (default `claude-haiku-4-5-20251001`).
+- **Guardrails de prompt**: confirmación en dos turnos para eliminar (primero qué va a borrar, esperar "sí" explícito antes de ejecutar). Idem para crear desde foto.
+- **Integración**: blueprint registrado en `app.py` + `agente.init_db()`. Reusan schemas/helpers de `/gestion` sin código duplicado.
+
+---
+
+## [2026-07-21] — Préstamos: alta rediseñada como carrito en sesión (reemplaza el form)
+
+**Tipo**: rediseño del alta de préstamos (rutas nuevas, sin cambio de schema)
+**Archivos**: `gestion.py`, `templates/gestion/carrito.html` (nuevo), `templates/gestion/carrito_finalizar.html` (nuevo), `templates/gestion/prestamos_form.html` (**eliminado**), `templates/gestion/base.html`, `templates/gestion/lista.html`, `templates/gestion/detalle.html`, `templates/gestion/home.html`, `templates/gestion/prestamos_lista.html`, `static/gestion.css`
+**Cambios**:
+- El préstamo se crea como **carrito de compra (e-commerce)**: cada recurso tiene un botón **RETIRO** (en el listado y en la ficha) que lo suma al carrito; arriba en el nav hay un **carrito 🛒** con contador que lleva directo al checkout (`/carrito/finalizar`). Recién al finalizar se pide quién retira. El carrito vive en `session['carrito']` = `{recurso_id: cantidad}`.
+- **Agregar es AJAX con UI optimista** (`gestion.js`): al tocar RETIRO el botón se transforma al instante en un **stepper verde `− N +`** que ajusta la cantidad hasta el stock (`recursos.cantidad`); la UI cambia en el click y el server se sincroniza en segundo plano por `fetch` (no se siente el round-trip). `carrito_agregar` suma +1 y devuelve `{ok, count, cantidad}`; ruta nueva `carrito_set` fija la cantidad exacta (la usan el +/−, topeada al stock, `<=0` saca el ítem). Sin JS, el form hace POST + redirect. Hooks: `data-add-carrito`, `data-recurso`/`data-stock`/`data-cant` (stepper), `data-cart-count` (badge), `data-set-url`. Helper `_stock()`; `lista()`/`detalle()` pasan el dict `carrito` para el estado inicial del stepper.
+- Rutas nuevas `/gestion/carrito`, `/carrito/agregar`, `/carrito/set`, `/carrito/actualizar`, `/carrito/quitar`, `/carrito/vaciar`, `/carrito/finalizar`. Badge del nav con `carrito_count` (ítems distintos).
+- **Eliminado** el alta vieja: ruta `prestamo_nuevo`, `prestamos_form.html`, `_parsear_items_prestamo()`, `PRESTAMO_FILAS_FORM`, el `<datalist>` con `[#id]` y el `?recurso=<id>`. Se saca `import re` (ya no se usa). El botón "+ nuevo retiro" de la ficha/home/lista lleva al listado de recursos.
+- Sin cambio de schema: `carrito_finalizar` inserta en `prestamos` + `prestamo_items` igual que antes (con `cantidad_devuelta = '0'`). La devolución por ítem y el detalle quedan intactos.
+- Cache-buster: `gestion.css` `?v=5`→`?v=10`; `gestion.js` `?v=1`→`?v=3`.
+
+---
+
 ## [2026-07-21] — Préstamos: devolución por ítem (parcial) + registrar retiro desde la ficha del recurso
 
 **Tipo**: columna nueva en `gestion.db` + rutas nuevas (dentro del módulo gestión)

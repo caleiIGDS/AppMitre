@@ -9,11 +9,10 @@
 
 import difflib
 import os
-import re
 import sqlite3
 import unicodedata
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, abort, session
+from flask import Blueprint, render_template, request, redirect, url_for, abort, session, jsonify
 
 from config import ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION
 
@@ -351,6 +350,145 @@ def _cfg(slug):
     return ENTIDADES[slug]
 
 
+def buscar_entidad_sin_request(slug, query, con=None):
+    """Búsqueda de entidades reusable por el agente (no depende de Flask request).
+    Retorna lista de dicts {id, nombre, descripcion, ...} ya filtrados y ordenados."""
+    cfg = _cfg(slug) if slug in ENTIDADES else None
+    if not cfg:
+        return []
+
+    debe_cerrar = con is None
+    if con is None:
+        con = conectar()
+    cur = con.cursor()
+
+    filas = cur.execute(f"SELECT * FROM {cfg['tabla']} ORDER BY nombre COLLATE NOCASE").fetchall()
+    con.close() if debe_cerrar else None
+
+    if not query:
+        return [dict(f) for f in filas]
+
+    q_norm = _norm(query)
+    puntuadas = []
+    for fila in filas:
+        puntaje = _puntaje_busqueda(q_norm, fila['nombre'], fila['descripcion'])
+        if puntaje is not None:
+            puntuadas.append((puntaje, fila))
+    puntuadas.sort(key=lambda par: (-par[0], _norm(par[1]['nombre'])))
+    return [dict(fila) for _, fila in puntuadas]
+
+
+def guardar_entidad_sin_request(slug, campos_dict, id=None, con=None):
+    """Versión de _guardar que recibe un dict de campos en vez de leer request.form.
+    Retorna el id creado o actualizado, o None si error."""
+    cfg = _cfg(slug) if slug in ENTIDADES else None
+    if not cfg:
+        return None
+
+    debe_cerrar = con is None
+    if con is None:
+        con = conectar()
+    cur = con.cursor()
+
+    try:
+        nombres = [c['nombre'] for c in cfg['campos']]
+        valores = [str(campos_dict.get(n, '')).strip() for n in nombres]
+
+        if id is None:
+            placeholders = ','.join('?' * len(nombres))
+            cur.execute(f"INSERT INTO {cfg['tabla']} ({','.join(nombres)}) VALUES ({placeholders})", valores)
+            id = cur.lastrowid
+        else:
+            sets = ','.join(f"{n} = ?" for n in nombres)
+            cur.execute(f"UPDATE {cfg['tabla']} SET {sets} WHERE id = ?", valores + [id])
+
+        # Relaciones M2M: si vienen en campos_dict con clave 'rel_*', procesarlas
+        for rel in cfg['relaciones']:
+            campo = rel['campo']
+            if campo in campos_dict:
+                cur.execute(f"DELETE FROM {rel['tabla']} WHERE {rel['col_propia']} = ?", (id,))
+                for rid_str in (campos_dict[campo] if isinstance(campos_dict[campo], list) else []):
+                    try:
+                        rid = int(rid_str)
+                        cur.execute(
+                            f"INSERT OR IGNORE INTO {rel['tabla']} ({rel['col_propia']}, {rel['col_ajena']}) VALUES (?,?)",
+                            (id, rid),
+                        )
+                    except (ValueError, TypeError):
+                        pass
+
+        con.commit()
+        con.close() if debe_cerrar else None
+        return id
+    except Exception as e:
+        con.close() if debe_cerrar else None
+        return None
+
+
+def snapshot_entidad(slug, id, con=None):
+    """Retorna un snapshot de una fila + sus relaciones M2M, para auditar antes de borrar.
+    Retorna dict con 'fila' (dict) y 'relaciones' (dict de slug -> [ids])."""
+    cfg = _cfg(slug) if slug in ENTIDADES else None
+    if not cfg:
+        return None
+
+    debe_cerrar = con is None
+    if con is None:
+        con = conectar()
+    cur = con.cursor()
+
+    fila = cur.execute(f"SELECT * FROM {cfg['tabla']} WHERE id = ?", (id,)).fetchone()
+
+    if fila is None:
+        con.close() if debe_cerrar else None
+        return None
+
+    relaciones = {}
+    for rel in cfg['relaciones']:
+        ids = [r[0] for r in cur.execute(f"SELECT {rel['col_ajena']} FROM {rel['tabla']} WHERE {rel['col_propia']} = ?", (id,)).fetchall()]
+        relaciones[rel['slug_ajeno']] = ids
+
+    con.close() if debe_cerrar else None
+    return {'fila': dict(fila), 'relaciones': relaciones}
+
+
+def agregar_relacion_m2m(tabla, col_propia, col_ajena, id_propio, id_ajeno, con=None):
+    """Agregar una fila a una tabla M2M."""
+    debe_cerrar = con is None
+    if con is None:
+        con = conectar()
+    cur = con.cursor()
+
+    try:
+        cur.execute(
+            f"INSERT OR IGNORE INTO {tabla} ({col_propia}, {col_ajena}) VALUES (?,?)",
+            (id_propio, id_ajeno),
+        )
+        con.commit()
+        con.close() if debe_cerrar else None
+        return True
+    except Exception:
+        con.close() if debe_cerrar else None
+        return False
+
+
+def quitar_relacion_m2m(tabla, col_propia, col_ajena, id_propio, id_ajeno, con=None):
+    """Quitar una fila de una tabla M2M."""
+    debe_cerrar = con is None
+    if con is None:
+        con = conectar()
+    cur = con.cursor()
+
+    try:
+        cur.execute(f"DELETE FROM {tabla} WHERE {col_propia} = ? AND {col_ajena} = ?", (id_propio, id_ajeno))
+        con.commit()
+        con.close() if debe_cerrar else None
+        return True
+    except Exception:
+        con.close() if debe_cerrar else None
+        return False
+
+
 def _opciones_relaciones(cfg, cur):
     """Opciones disponibles para cada relación M2M del formulario."""
     opciones = {}
@@ -439,6 +577,7 @@ def _contexto_base():
         'escuela_logo': ESCUELA_LOGO,
         'escuela_version': ESCUELA_VERSION,
         'nav_entidades': [(slug, e['plural']) for slug, e in ENTIDADES.items()] + [('prestamos', 'Préstamos')],
+        'carrito_count': len(_carrito()),  # ítems distintos en el carrito, para el badge del nav
     }
 
 
@@ -482,7 +621,11 @@ def lista(slug):
     # Texto de búsqueda ya normalizado por fila, para el filtrado en vivo del navegador
     # (data-buscar). Mismo alcance que la búsqueda del server: nombre + descripcion.
     buscar = {fila['id']: _norm(f"{fila['nombre']} {fila['descripcion'] or ''}") for fila in filas}
-    return render_template('gestion/lista.html', cfg=cfg, slug=slug, filas=filas, q=q, activo=slug, buscar=buscar)
+    # En recursos, cada fila muestra el botón RETIRO / stepper del carrito; pasamos las
+    # cantidades ya en el carrito para renderizar el estado inicial correcto.
+    carrito = _carrito() if slug == 'recursos' else {}
+    return render_template('gestion/lista.html', cfg=cfg, slug=slug, filas=filas, q=q,
+                           activo=slug, buscar=buscar, carrito=carrito)
 
 
 @bp.route('/<slug>/nuevo', methods=['GET', 'POST'])
@@ -517,7 +660,9 @@ def detalle(slug, id):
         abort(404)
     secciones = _secciones_detalle(slug, id, cur)
     con.close()
-    return render_template('gestion/detalle.html', cfg=cfg, slug=slug, fila=fila, secciones=secciones, activo=slug)
+    carrito = _carrito() if slug == 'recursos' else {}
+    return render_template('gestion/detalle.html', cfg=cfg, slug=slug, fila=fila,
+                           secciones=secciones, activo=slug, carrito=carrito)
 
 
 @bp.route('/<slug>/<int:id>/editar', methods=['GET', 'POST'])
@@ -566,8 +711,11 @@ def eliminar(slug, id):
 # ciclo prestado→devuelto). Las URLs /gestion/prestamos* son estáticas y tienen
 # prioridad sobre /<slug>, así nav/home pueden seguir usando url_for genérico.
 # No se descuenta stock de recursos.cantidad: lo prestado se calcula por consulta.
-
-PRESTAMO_FILAS_FORM = 8  # filas de ítems disponibles en el form de retiro
+#
+# ALTA TIPO CARRITO DE COMPRA: no hay form de alta con filas de ítems. Navegando recursos se
+# van agregando al carrito (session['carrito'] = {recurso_id: cantidad}); al finalizar
+# se pide quién retira y recién ahí se crea el préstamo. El carrito vive en la sesión
+# (por navegador), igual que el login. Ver rutas /carrito* más abajo.
 
 
 def _ahora():
@@ -621,38 +769,38 @@ def _resumen_items(cur, ids, solo_pendiente=False):
     return {pid: ', '.join(partes) for pid, partes in resumen.items()}
 
 
-def _parsear_items_prestamo(recursos):
-    """Lee las filas recurso_N/cantidad_N del form. Devuelve ([(recurso_id, cantidad)], errores).
-    El recurso se resuelve por el sufijo "[#id]" que agrega el datalist, o por nombre
-    exacto (sin acentos) si lo tipearon a mano. Filas repetidas suman cantidades."""
-    por_id = {r['id'] for r in recursos}
-    por_nombre = {}
-    for r in recursos:
-        por_nombre.setdefault(_norm(r['nombre']), []).append(r['id'])
-    items, errores = {}, []
-    for n in range(1, PRESTAMO_FILAS_FORM + 1):
-        texto = request.form.get(f'recurso_{n}', '').strip()
-        if not texto:
-            continue
-        cantidad = request.form.get(f'cantidad_{n}', '').strip() or '1'
-        if not cantidad.isdigit() or int(cantidad) < 1:
-            errores.append(f'Cantidad inválida para "{texto}".')
-            continue
-        m = re.search(r'\[#(\d+)\]\s*$', texto)
-        if m and int(m.group(1)) in por_id:
-            rid = int(m.group(1))
-        else:
-            candidatos = por_nombre.get(_norm(re.sub(r'\[#\d+\]\s*$', '', texto)), [])
-            if len(candidatos) == 1:
-                rid = candidatos[0]
-            elif not candidatos:
-                errores.append(f'No existe el recurso "{texto}" — elegilo de la lista.')
-                continue
-            else:
-                errores.append(f'Hay varios recursos llamados "{texto}" — elegilo de la lista, que incluye el número.')
-                continue
-        items[rid] = items.get(rid, 0) + int(cantidad)
-    return list(items.items()), errores
+def _carrito():
+    """Carrito actual como dict {recurso_id(int): cantidad(int)}. Descarta basura."""
+    items = {}
+    for k, v in session.get('carrito', {}).items():
+        rid, cant = _int(k), _int(v)
+        if rid and cant > 0:
+            items[rid] = cant
+    return items
+
+
+def _carrito_guardar(items):
+    """Persiste el carrito en la sesión (claves string; descarta cantidades <= 0)."""
+    session['carrito'] = {str(rid): cant for rid, cant in items.items() if cant > 0}
+    session.modified = True
+
+
+def _carrito_filas(cur, items):
+    """Ítems del carrito enriquecidos con nombre/ubicación, ordenados por nombre.
+    Tolera recursos borrados (quedan como '(recurso eliminado)')."""
+    if not items:
+        return []
+    marcas = ','.join('?' * len(items))
+    por_id = {r['id']: r for r in cur.execute(
+        f"SELECT id, nombre, ubicacion FROM recursos WHERE id IN ({marcas})", list(items)).fetchall()}
+    filas = []
+    for rid, cant in items.items():
+        r = por_id.get(rid)
+        filas.append({'id': rid, 'cantidad': cant,
+                      'nombre': r['nombre'] if r else '(recurso eliminado)',
+                      'ubicacion': r['ubicacion'] if r else ''})
+    filas.sort(key=lambda f: _norm(f['nombre']))
+    return filas
 
 
 @bp.route('/prestamos')
@@ -678,44 +826,137 @@ def prestamos_lista():
                            resumen=resumen, q=q, activo='prestamos')
 
 
-@bp.route('/prestamos/nuevo', methods=['GET', 'POST'])
-def prestamo_nuevo():
+def _volver_recursos():
+    """URL a la que volver tras agregar al carrito: la que mandó el form si es de
+    /gestion (evita open redirect), o el listado de recursos por defecto."""
+    destino = request.form.get('volver', '')
+    return destino if destino.startswith('/gestion') else url_for('gestion.lista', slug='recursos')
+
+
+def _stock(cur, rid):
+    """Stock del recurso (recursos.cantidad como entero); None si no existe la fila.
+    0 = sin stock definido → sin tope (cantidad vacía o no numérica)."""
+    row = cur.execute("SELECT cantidad FROM recursos WHERE id = ?", (rid,)).fetchone() if rid else None
+    return None if row is None else _int(row['cantidad'])
+
+
+@bp.route('/carrito/agregar', methods=['POST'])
+def carrito_agregar():
+    """Suma un recurso al carrito (topeado al stock). Con JS (fetch) devuelve JSON
+    {ok, count, cantidad} para actualizar el badge y el stepper sin recargar; sin JS,
+    redirige a donde se estaba. Progressive enhancement — ver static/gestion.js."""
+    rid = _int(request.form.get('recurso_id', ''))
     con = conectar()
     cur = con.cursor()
-    recursos = cur.execute("SELECT id, nombre, ubicacion FROM recursos ORDER BY nombre COLLATE NOCASE").fetchall()
+    stock = _stock(cur, rid)
+    con.close()
+    if stock is not None:
+        pedido = _int(request.form.get('cantidad', '')) or 1
+        items = _carrito()
+        nuevo = items.get(rid, 0) + max(1, pedido)
+        if stock > 0:
+            nuevo = min(nuevo, stock)
+        items[rid] = nuevo
+        _carrito_guardar(items)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'ok': stock is not None, 'count': len(_carrito()), 'cantidad': _carrito().get(rid, 0)})
+    return redirect(_volver_recursos())
+
+
+@bp.route('/carrito/set', methods=['POST'])
+def carrito_set():
+    """Fija la cantidad exacta de un recurso en el carrito — la usan el + y el − del
+    stepper (AJAX). `cantidad` <= 0 lo saca; se topea al stock (`recursos.cantidad`) si
+    está definido. Devuelve JSON {ok, count, cantidad}."""
+    rid = _int(request.form.get('recurso_id', ''))
+    con = conectar()
+    cur = con.cursor()
+    stock = _stock(cur, rid)
+    con.close()
+    items = _carrito()
+    if stock is None:
+        items.pop(rid, None)
+    else:
+        cant = _int(request.form.get('cantidad', ''))
+        if stock > 0:
+            cant = min(cant, stock)
+        if cant <= 0:
+            items.pop(rid, None)
+        else:
+            items[rid] = cant
+    _carrito_guardar(items)
+    return jsonify({'ok': stock is not None, 'count': len(_carrito()), 'cantidad': _carrito().get(rid, 0)})
+
+
+@bp.route('/carrito/quitar', methods=['POST'])
+def carrito_quitar():
+    items = _carrito()
+    items.pop(_int(request.form.get('recurso_id', '')), None)
+    _carrito_guardar(items)
+    return redirect(url_for('gestion.carrito'))
+
+
+@bp.route('/carrito/vaciar', methods=['POST'])
+def carrito_vaciar():
+    session.pop('carrito', None)
+    return redirect(url_for('gestion.carrito'))
+
+
+@bp.route('/carrito/actualizar', methods=['POST'])
+def carrito_actualizar():
+    """Guarda las cantidades editadas en la página del carrito. Con accion=finalizar
+    sigue al checkout (pedir quién retira); si no, vuelve al carrito."""
+    nuevos = {}
+    for rid in _carrito():
+        cant = _int(request.form.get(f'cantidad_{rid}', ''))
+        if cant > 0:
+            nuevos[rid] = cant  # cant <= 0 => se descarta (equivale a quitarlo)
+    _carrito_guardar(nuevos)
+    if request.form.get('accion') == 'finalizar' and nuevos:
+        return redirect(url_for('gestion.carrito_finalizar'))
+    return redirect(url_for('gestion.carrito'))
+
+
+@bp.route('/carrito')
+def carrito():
+    """Carrito de retiro: revisar ítems, editar cantidades, quitar. De acá se finaliza."""
+    con = conectar()
+    cur = con.cursor()
+    filas = _carrito_filas(cur, _carrito())
+    con.close()
+    return render_template('gestion/carrito.html', items=filas, activo='prestamos')
+
+
+@bp.route('/carrito/finalizar', methods=['GET', 'POST'])
+def carrito_finalizar():
+    """Checkout: recién acá se pide quién retira / destino / notas y se crea el
+    préstamo con lo que haya en el carrito. Al confirmar, vacía el carrito."""
+    items = _carrito()
+    if not items:
+        return redirect(url_for('gestion.carrito'))
+    con = conectar()
+    cur = con.cursor()
     error = None
     if request.method == 'POST':
         persona = request.form.get('persona', '').strip()
-        items, errores = _parsear_items_prestamo(recursos)
         if not persona:
             error = 'Falta quién retira.'
-        elif errores:
-            error = ' '.join(errores)
-        elif not items:
-            error = 'Cargá al menos un recurso.'
         else:
             cur.execute("INSERT INTO prestamos (persona, destino, notas, fecha_salida, fecha_devolucion) VALUES (?,?,?,?,'')",
                         (persona, request.form.get('destino', '').strip(),
                          request.form.get('notas', '').strip(), _ahora()))
             pid = cur.lastrowid
-            for rid, cantidad in items:
-                cur.execute("INSERT INTO prestamo_items (prestamo_id, recurso_id, cantidad) VALUES (?,?,?)",
-                            (pid, rid, str(cantidad)))
+            for rid, cant in items.items():
+                cur.execute("INSERT INTO prestamo_items (prestamo_id, recurso_id, cantidad, cantidad_devuelta) VALUES (?,?,?, '0')",
+                            (pid, rid, str(cant)))
             con.commit()
             con.close()
+            session.pop('carrito', None)
             return redirect(url_for('gestion.prestamo_detalle', id=pid))
+    filas = _carrito_filas(cur, items)
     con.close()
-    # Retiro iniciado desde la ficha de un recurso (/gestion/recursos/<id>): ?recurso=<id>
-    # precarga la primera fila con ese recurso (usa el mismo sufijo "[#id]" del datalist).
-    valores = request.form
-    pre = request.args.get('recurso', '')
-    if request.method == 'GET' and pre:
-        r = next((x for x in recursos if str(x['id']) == pre), None)
-        if r:
-            valores = {'recurso_1': f"{r['nombre']} [#{r['id']}]", 'cantidad_1': '1'}
-    return render_template('gestion/prestamos_form.html', recursos=recursos,
-                           filas=range(1, PRESTAMO_FILAS_FORM + 1), valores=valores,
-                           error=error, activo='prestamos')
+    return render_template('gestion/carrito_finalizar.html', items=filas,
+                           valores=request.form, error=error, activo='prestamos')
 
 
 @bp.route('/prestamos/<int:id>')

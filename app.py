@@ -3,10 +3,12 @@ import os
 import sqlite3
 import database
 import gestion
+import agente
 from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS, TURNO_CURSOS, TURNO_DEFAULT
 from fpdf import FPDF
 import io
 from datetime import datetime
+from database import obtener_filas
 
 app = Flask(__name__)
 
@@ -20,38 +22,11 @@ app.secret_key = os.environ.get('SECRET_KEY', 'appmitre-dev-cambiar-en-hosting')
 app.register_blueprint(gestion.bp)
 gestion.init_db()
 
-def obtener_filas(tipo, valor):
-    try:
-        con = database.conectar()
-        con.row_factory = sqlite3.Row
-        cur = con.cursor()
-        if tipo == 'profesor':
-            cur.execute("SELECT * FROM clases WHERE profesor = ? OR (prof_suplente = ? AND suplente_activo = 1)", (valor, valor))
-        elif tipo == 'aula':
-            cur.execute("SELECT * FROM clases WHERE aula = ?", (valor,))
-        elif tipo == 'curso':
-            partes = valor.split(' ')
-            if len(partes) >= 2:
-                cur.execute("SELECT * FROM clases WHERE curso = ? AND division = ?", (partes[0], partes[1]))
-            else:
-                cur.execute("SELECT * FROM clases WHERE curso = ?", (partes[0],))
-        elif tipo == 'planilla':
-            if '|' in valor:
-                dia, piso = valor.split('|')
-                aulas = FLOOR_MAPPING.get(piso, [])
-                if aulas:
-                    placeholders = ','.join(['?'] * len(aulas))
-                    query = f"SELECT * FROM clases WHERE dia = ? AND aula IN ({placeholders})"
-                    cur.execute(query, [dia] + aulas)
-            else:
-                return []
-        
-        filas = [dict(row) for row in cur.fetchall()]
-        con.close()
-        return filas
-    except Exception as e:
-        print(f"Error en busqueda: {e}")
-        return []
+# Agente conversacional (/gestion/agente) — blueprint independiente con su propio gate.
+app.register_blueprint(agente.bp)
+agente.init_db()
+
+# obtener_filas se importa desde database (ver database.py)
 
 @app.route('/')
 def index():

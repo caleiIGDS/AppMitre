@@ -1,3 +1,12 @@
 Flask
 fpdf2
+
+# LLM providers (install solo los que uses):
+# Para Anthropic (Claude): pip install anthropic
+# Para Groq: pip install groq
+# Para OpenAI: pip install openai
+# Para Ollama (local): pip install openai (compatible API)
+# Por defecto se instala anthropic:
+anthropic
+
 # weasyprint removed for performance and hosting compatibility
