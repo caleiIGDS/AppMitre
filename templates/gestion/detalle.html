@@ -10,7 +10,20 @@
     </div>
     <div class="g-toolbar-actions">
         {% if slug == 'recursos' %}
-        <a class="g-btn" href="{{ url_for('gestion.prestamo_nuevo', recurso=fila['id']) }}">📤 REGISTRAR RETIRO</a>
+        <span class="g-retiro-widget" data-recurso="{{ fila['id'] }}"
+              data-stock="{{ fila['cantidad'] or '' }}" data-cant="{{ carrito.get(fila['id'], 0) }}">
+            <form method="post" class="g-inline-form g-retiro-form" data-add-carrito
+                  action="{{ url_for('gestion.carrito_agregar') }}">
+                <input type="hidden" name="recurso_id" value="{{ fila['id'] }}">
+                <input type="hidden" name="volver" value="{{ request.path }}">
+                <button type="submit" class="g-btn g-retiro-btn">RETIRAR</button>
+            </form>
+            <span class="g-stepper" hidden>
+                <button type="button" class="g-step g-step-menos" aria-label="Quitar uno">−</button>
+                <span class="g-step-cant">1</span>
+                <button type="button" class="g-step g-step-mas" aria-label="Agregar uno">+</button>
+            </span>
+        </span>
         {% endif %}
         {% if fila['drive_url'] %}
         <a class="g-btn" href="{{ fila['drive_url'] }}" target="_blank" rel="noopener">📁 CARPETA EN DRIVE</a>

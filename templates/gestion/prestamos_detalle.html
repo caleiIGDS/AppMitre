@@ -37,7 +37,7 @@
                 {% else %}
                 <span class="g-badge g-badge-out">EN PRÉSTAMO</span>
                 {% if items | selectattr('devuelta') | list | length %}
-                <span class="g-help">· parcial, faltan {{ pendiente_total }}</span>
+                <span class="g-help">· parcial</span>
                 {% endif %}
                 {% endif %}
             </dd>
@@ -72,8 +72,7 @@
                         {% if it['pendiente'] == 0 %}
                         <span class="g-badge">✔ DEVUELTO ({{ it['cantidad'] }})</span>
                         {% else %}
-                        <span class="g-badge g-badge-out">FALTAN {{ it['pendiente'] }}</span>
-                        <span class="g-help">de {{ it['cantidad'] }}{% if it['devuelta'] %} · {{ it['devuelta'] }} devuelto{% endif %}</span>
+                        <span class="g-help">{{ it['cantidad'] }}× retirado{% if it['devuelta'] %} · {{ it['devuelta'] }} devuelto{% endif %}</span>
                         {% endif %}
                     </div>
                     <div class="g-item-devol-actions">

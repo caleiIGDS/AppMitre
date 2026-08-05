@@ -8,7 +8,7 @@
         <button type="submit">BUSCAR</button>
         {% if q %}<a class="g-link" href="{{ url_for('gestion.prestamos_lista') }}">limpiar</a>{% endif %}
     </form>
-    <a class="g-btn" href="{{ url_for('gestion.prestamo_nuevo') }}">+ REGISTRAR RETIRO</a>
+    <a class="g-btn" href="{{ url_for('gestion.lista', slug='recursos') }}">+ NUEVO RETIRO</a>
 </div>
 
 <h3 class="g-section-title">EN PRÉSTAMO</h3>

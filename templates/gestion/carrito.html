@@ -1,0 +1,63 @@
+{% extends 'gestion/base.html' %}
+{% block titulo %}Préstamo{% endblock %}
+{% block contenido %}
+<div class="g-toolbar">
+    <h2>📋 PRÉSTAMO <span class="g-count">{{ items | length }}</span></h2>
+    <a class="g-btn-outline-dark" href="{{ url_for('gestion.lista', slug='recursos') }}">＋ SEGUIR AGREGANDO</a>
+</div>
+
+{% if items %}
+<p class="g-help">Revisá las cantidades y, cuando esté todo, finalizá el préstamo — recién ahí se registra quién se lo lleva.</p>
+
+{# Form vacío: los inputs de cantidad y los botones se asocian por el atributo form=,
+   así los botones de "quitar" (forms propios) no quedan anidados adentro. #}
+<form id="f-carrito" method="post" action="{{ url_for('gestion.carrito_actualizar') }}"></form>
+
+<div class="g-table-wrap">
+    <table class="g-table">
+        <thead>
+            <tr><th>RECURSO</th><th>UBICACIÓN</th><th>CANTIDAD</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for it in items %}
+            <tr>
+                <td>
+                    {% if it['nombre'] != '(recurso eliminado)' %}
+                    <a class="g-item-link" href="{{ url_for('gestion.detalle', slug='recursos', id=it['id']) }}">{{ it['nombre'] }}</a>
+                    {% else %}
+                    <span class="g-help">{{ it['nombre'] }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ it['ubicacion'] }}</td>
+                <td>
+                    <input form="f-carrito" type="number" name="cantidad_{{ it['id'] }}"
+                           value="{{ it['cantidad'] }}" min="1" class="g-devol-cant" aria-label="Cantidad">
+                </td>
+                <td class="g-td-actions">
+                    <form method="post" class="g-inline-form" action="{{ url_for('gestion.carrito_quitar') }}">
+                        <input type="hidden" name="recurso_id" value="{{ it['id'] }}">
+                        <button type="submit" class="g-btn-danger g-btn-mini">Quitar</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="g-form-actions g-carrito-actions">
+    <button type="submit" form="f-carrito" name="accion" value="finalizar" class="g-btn">FINALIZAR PRÉSTAMO →</button>
+    <button type="submit" form="f-carrito" name="accion" value="actualizar" class="g-btn-outline-dark">GUARDAR CAMBIOS</button>
+    <form method="post" class="g-inline-form" action="{{ url_for('gestion.carrito_vaciar') }}"
+          onsubmit="return confirm('¿Vaciar el carrito?');">
+        <button type="submit" class="g-btn-danger">VACIAR</button>
+    </form>
+</div>
+{% else %}
+<div class="g-empty">
+    <p>No hay ítems en este préstamo.</p>
+    <p class="g-help">Andá a Recursos y agregá lo que se van a llevar con el botón RETIRO.</p>
+    <a class="g-btn" href="{{ url_for('gestion.lista', slug='recursos') }}">IR A RECURSOS</a>
+</div>
+{% endif %}
+{% endblock %}

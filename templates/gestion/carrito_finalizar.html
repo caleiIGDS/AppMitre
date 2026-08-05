@@ -1,0 +1,46 @@
+{% extends 'gestion/base.html' %}
+{% block titulo %}Finalizar préstamo{% endblock %}
+{% block contenido %}
+<div class="g-toolbar">
+    <div>
+        <span class="g-breadcrumb">
+            <a class="g-link" href="{{ url_for('gestion.carrito') }}">📋 PRÉSTAMO</a> /
+        </span>
+        <h2>¿QUIÉN RETIRA?</h2>
+    </div>
+</div>
+
+{% if error %}<div class="g-error">{{ error }}</div>{% endif %}
+
+<div class="g-relation-box g-carrito-resumen">
+    <h4>SE LLEVA ({{ items | length }})</h4>
+    <ul>
+        {% for it in items %}
+        <li><strong>{{ it['cantidad'] }}×</strong> {{ it['nombre'] }}{% if it['ubicacion'] %} <span class="g-help">({{ it['ubicacion'] }})</span>{% endif %}</li>
+        {% endfor %}
+    </ul>
+    <a class="g-link" href="{{ url_for('gestion.carrito') }}">← editar el préstamo</a>
+</div>
+
+<form method="post" class="g-form">
+    <div class="g-field">
+        <label for="campo-persona">QUIÉN RETIRA *</label>
+        <input id="campo-persona" type="text" name="persona" value="{{ valores['persona'] or '' }}" required
+               placeholder="Ej: Prof. García" autofocus>
+    </div>
+    <div class="g-field">
+        <label for="campo-destino">DESTINO / USO</label>
+        <input id="campo-destino" type="text" name="destino" value="{{ valores['destino'] or '' }}"
+               placeholder="Ej: 6° año — práctica de energía solar">
+    </div>
+    <div class="g-field">
+        <label for="campo-notas">NOTAS</label>
+        <textarea id="campo-notas" name="notas" rows="2"
+                  placeholder="Opcional: observaciones, estado en que salió, etc.">{{ valores['notas'] or '' }}</textarea>
+    </div>
+    <div class="g-form-actions">
+        <button type="submit" class="g-btn">✔ REGISTRAR PRÉSTAMO</button>
+        <a class="g-btn-outline-dark" href="{{ url_for('gestion.carrito') }}">← VOLVER AL PRÉSTAMO</a>
+    </div>
+</form>
+{% endblock %}

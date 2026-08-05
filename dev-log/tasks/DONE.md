@@ -4,6 +4,18 @@ _Solo leer si se pide explícitamente._
 
 ---
 
+## [2026-07-21] — Préstamos: devolución parcial por ítem + retiro desde la ficha del recurso
+Columna `prestamo_items.cantidad_devuelta` (migración aditiva). Rutas `devolver_item`/`reabrir_item`: devolver/deshacer de a partes (ej: 1 de 3); `_recalcular_estado()` cierra o reabre el préstamo según el pendiente total, con `fecha_devolucion` como fuente de verdad de "cerrado". `devolver`/`reabrir` pasan a ser "todo". `prestamo_nuevo?recurso=<id>` precarga la fila 1 desde la ficha del recurso. Ver CHANGELOG y DECISIONS 2026-07-21.
+
+## [2026-07-21] — Búsqueda en vivo (client-side) del listado de `/gestion`
+`static/gestion.js` (nuevo, primer JS del módulo): filtra el listado en el navegador mientras se escribe, sin recargar ni ir al server. Progressive enhancement — sin JS, el form sigue con la búsqueda difusa server-side. La ruta emite `data-buscar` normalizado por Python por fila; el JS filtra por substring (perdona acentos/mayúsculas, no typos: eso lo compensa el ver los resultados al escribir). Verificado: server-side con test_client + lógica del JS real en Node (11/11). Ver CHANGELOG/DECISIONS 2026-07-21.
+
+## [2026-07-21] — Búsqueda de recursos tolerante (acentos + typos)
+`lista()` filtra en Python con `_puntaje_busqueda()`: normaliza acentos/mayúsculas y perdona typos por similitud (`difflib`, sin dependencias). Substring gana siempre; el difuso entra con 3+ caracteres y umbral 0.6. Verificado en runtime (9 casos). Es el "nivel 1+2" de la tarea #21 — falta la columna `otros_nombres` + IA para sinónimos que no se parecen. Ver DECISIONS 2026-07-21.
+
+## [2026-07-21] — Préstamos / retiros internos de recursos
+Tablas `prestamos` + `prestamo_items`: registro de quién se lleva qué recursos y cuánto; devolver marca fecha sin borrar el historial. Rutas y templates propios (fuera de `ENTIDADES`), sección "historial de préstamos" en la ficha del recurso, desambiguación de nombres duplicados por `[#id]`. Verificado en runtime (13 casos). Ver CHANGELOG/DECISIONS 2026-07-21.
+
 ## [2026-07-19] — Login provisorio con contraseña compartida en `/gestion`
 Todo el blueprint detrás de `bp.before_request` + sesión Flask: rutas `/gestion/login` y `/gestion/salir`, template `login.html`, botón SALIR en el header. Clave vía env var `GESTION_CLAVE` (default público `mitre2026`), `SECRET_KEY` en `app.py`. Verificado en runtime (redirects con `next`, clave incorrecta/correcta, anti open-redirect, salir, SPA y API intactos). Seguridad completa diferida → TODO #20.
 

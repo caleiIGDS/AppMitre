@@ -682,6 +682,78 @@ body {
 
 .g-devol-cant:focus { border-color: var(--g-accent); }
 
+/* ---------- Carrito (alta de préstamo tipo e-commerce) ---------- */
+/* Badge con la cantidad de ítems en el carrito, sobre el botón 🛒 del nav. */
+.g-cart-link { position: relative; }
+
+.g-cart-count {
+    display: inline-block;
+    background: var(--g-accent);
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 1;
+    padding: 2px 6px;
+    margin-left: 2px;
+}
+
+/* Botón RETIRO de cada recurso (listado y ficha): al agregarlo, gestion.js esconde el
+   botón y muestra el stepper verde de al lado. Sin JS, el botón hace POST + redirect. */
+.g-retiro-widget {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    vertical-align: middle;
+}
+
+.g-retiro-form { display: inline; margin: 0; }
+.g-retiro-form[hidden] { display: none; }
+
+/* Stepper "−  N  +" en verde: indica que el recurso está en el carrito y ajusta la cantidad. */
+.g-stepper {
+    display: inline-flex;
+    align-items: center;
+    border: 2px solid #16a34a;
+    background: rgba(22, 163, 74, 0.10);
+}
+.g-stepper[hidden] { display: none; }
+
+.g-step {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-family: var(--g-font);
+    font-weight: bold;
+    font-size: 16px;
+    line-height: 1;
+    color: #16a34a;
+    width: 28px;
+    height: 26px;
+    padding: 0;
+}
+
+.g-step:hover:not(:disabled) { background: rgba(22, 163, 74, 0.18); }
+.g-step:disabled { opacity: 0.35; cursor: default; }
+
+.g-step-cant {
+    min-width: 26px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 13px;
+    color: #15803d;
+    padding: 0 2px;
+}
+
+.g-carrito-actions {
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 16px;
+}
+
+.g-carrito-resumen { margin-bottom: 20px; max-width: 760px; }
+.g-carrito-resumen ul { margin: 0 0 12px; padding-left: 20px; }
+.g-carrito-resumen li { font-size: 14px; line-height: 1.7; }
+
 /* ---------- Footer ---------- */
 .g-footer {
     text-align: center;
