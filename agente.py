@@ -1053,20 +1053,26 @@ Tu tarea es ayudar al staff con:
 - Gestión del inventario (recursos, conjuntos, actividades, proyectos)
 - Gestión de préstamos internos
 
+CONTEXTO Y REFERENCIAS - MUY IMPORTANTE:
+- Lee el HISTORIAL DE LA CONVERSACIÓN para mantener contexto. Si acaba de consultar sobre una persona/recurso, y el usuario hace una pregunta relativa, esa pregunta es SIEMPRE sobre la entidad anterior.
+- Ejemplos:
+  * Usuario: "¿Qué horarios tiene Andrea Alvarez?" (tu respuesta: muestra horarios)
+  * Usuario: "¿En qué lugar?" → Se refiere a Andrea Alvarez. Extrae las aulas de la respuesta anterior.
+  * Usuario: "¿Cuántos? ¿Stock?" → Se refiere al recurso/producto que acaba de consultar.
+- Pronombres y demostrativos (ella, él, ese, esa, su, sus, su horario, ese recurso) → SIEMPRE son referencias a la entidad consultada.
+- NUNCA pidas aclaración si el contexto está claro en el historial anterior.
+
 REGLAS IMPORTANTES:
-1. Para ELIMINAR cualquier cosa (eliminar_entidad, eliminar_prestamo): NUNCA ejecutes la tool en el mismo turno en que se pide el borrado.
-   Primero responde en texto describiendo QUÉ vas a borrar y pide confirmación explícita. Solo en el turno SIGUIENTE ejecuta la tool.
+1. Para ELIMINAR: NUNCA ejecutes en el mismo turno. Describe qué vas a borrar y pide confirmación.
+2. Para CREAR desde FOTO: Extrae campos, propón en texto, pide confirmación antes de ejecutar.
+3. Busca difuso: si no hay match exacto, intenta buscar_profesor o buscar_entidad.
+4. Lectura = sin auditoría. Escritura = con auditoría.
 
-2. Para CREAR recursos desde FOTO: extrae los campos del contenido de la imagen, responde con los campos propuestos en texto y pide confirmación.
-   Solo tras confirmación explícita llamas a crear_entidad.
+Sé conciso. Prioriza responder del historial antes de pedir aclaración."""
 
-3. Busca siempre de forma difusa: si no encuentras match exacto, intenta buscar_profesor o buscar_entidad con palabras clave.
-
-4. Las herramientas de lectura no generan auditoría (horarios, búsquedas). Las de escritura sí (crear, editar, vincular, eliminar, préstamos).
-
-Sé conciso y útil. Si hay ambigüedad, pide aclaración."""
-
-    messages = mensajes_usuario
+    # Copiar la lista para no mutar el historial original (que se persiste en sesión
+    # como texto plano) con objetos complejos de la API (ToolUseBlock, etc.)
+    messages = list(mensajes_usuario)
 
     # Loop: hasta que el modelo no quiera más tools
     max_iterations = 10
@@ -1174,26 +1180,65 @@ Sé conciso y útil. Si hay ambigüedad, pide aclaración."""
     return 'Máximo de iteraciones alcanzado'
 
 # ============================================================================
+# Utilidades para mantener contexto
+# ============================================================================
+
+def _es_pregunta_relativa(pregunta):
+    """Detecta si la pregunta es relativa (se refiere a algo mencionado antes)."""
+    patrones = [
+        'qué lugar', 'dónde', 'aula', 'piso',  # ubicación
+        'cuántos', 'cantidad', 'stock',  # cantidad
+        'cuándo', 'horario', 'clase',  # horario
+        'estado', 'ubicación',  # estado del recurso
+        'en qué', 'en dónde', 'en donde',
+        'dónde tiene', 'ubicado', 'está en',
+    ]
+    p_lower = pregunta.lower()
+    return any(patron in p_lower for patron in patrones) and len(pregunta.split()) <= 8
+
+def _extraer_entidad_mencionada(respuesta_anterior, tipo='profesor'):
+    """Extrae el nombre de la entidad de una respuesta anterior."""
+    # Buscar patrones como "Horario de NOMBRE:" o "**NOMBRE**"
+    import re
+    # Patrón 1: "Horario de NOMBRE:" o "**Horario de NOMBRE:**"
+    match = re.search(r'(?:de|del)\s+(?:\*{1,2})?(\w+(?:\s+\w+)?)\*{0,2}[:\s]', respuesta_anterior, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    # Patrón 2: "**NOMBRE**:"
+    match = re.search(r'\*\*([A-Z\s]+)\*\*:', respuesta_anterior)
+    if match:
+        return match.group(1).strip()
+    return None
+
+# ============================================================================
 # Endpoints Flask
 # ============================================================================
 
 @bp.route('/chat', methods=['POST'])
 def chat():
     """Endpoint para el widget de chat. JSON con 'mensaje' y opcionalmente 'imagen' (base64).
-    Mantiene historial de conversación en session['agente_historial'] para contexto."""
+    Mantiene historial + última entidad consultada para mejor contexto."""
     data = request.get_json() or {}
     mensaje_usuario = data.get('mensaje', '').strip()
 
     if not mensaje_usuario:
         return jsonify({'error': 'Mensaje vacío'}), 400
 
-    # Recuperar historial de la sesión (max 10 mensajes para no saturar tokens)
+    # Recuperar historial de la sesión
     if 'agente_historial' not in session:
         session['agente_historial'] = []
-    mensajes = session.get('agente_historial', [])[-10:]  # Últimos 10 para mantener contexto
+    mensajes = session.get('agente_historial', [])[-10:]  # Últimos 10
+
+    # Si el usuario hace una pregunta relativa sin especificar quién, inyectar referencia anterior
+    entidad_actual = session.get('agente_entidad_actual')  # Último profesor/recurso consultado
+    msg_procesado = mensaje_usuario
+
+    if entidad_actual and _es_pregunta_relativa(mensaje_usuario):
+        # Agregar contexto: "¿En qué lugar?" → "¿En qué lugar tiene clases [entidad]?"
+        msg_procesado = f"{mensaje_usuario} (refiriéndote a: {entidad_actual})"
 
     # Construir el contenido del mensaje del usuario (con imagen si viene)
-    contenido = [{'type': 'text', 'text': mensaje_usuario}]
+    contenido = [{'type': 'text', 'text': msg_procesado}]
 
     imagen_base64 = data.get('imagen')
     if imagen_base64:
@@ -1225,6 +1270,11 @@ def chat():
 
     # Guardar respuesta en el historial (convertir respuesta a formato de mensaje)
     mensajes.append({'role': 'assistant', 'content': [{'type': 'text', 'text': respuesta}]})
+
+    # Actualizar entidad actual si la respuesta menciona un profesor/recurso
+    entidad = _extraer_entidad_mencionada(respuesta)
+    if entidad:
+        session['agente_entidad_actual'] = entidad
 
     # Guardar historial en sesión (max 20 mensajes = 10 turnos)
     session['agente_historial'] = mensajes[-20:]
