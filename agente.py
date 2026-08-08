@@ -23,11 +23,13 @@
 #   - AGENTE_MODEL: nombre del modelo (defaults por provider arriba)
 
 import os
+import re
 import json
 import sqlite3
 import difflib
 import hashlib
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta
 from flask import (Blueprint, request, session, jsonify, render_template, abort,
                    redirect, url_for)
 
@@ -144,7 +146,24 @@ CREATE TABLE IF NOT EXISTS agente_log (
     resultado TEXT NOT NULL,
     ok INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS agente_conversaciones (
+    sid TEXT PRIMARY KEY,
+    actualizado TEXT NOT NULL,
+    historial TEXT NOT NULL,
+    entidad_actual TEXT,
+    fichas TEXT
+);
 """
+
+# La conversación vive acá y no en la sesión de Flask, que es una cookie firmada: los
+# navegadores descartan cookies de más de ~4093 bytes, y con el historial adentro el peor
+# caso medido daba ~3.5KB — al pasarse, el browser tira la cookie SIN AVISAR y el usuario
+# se queda deslogueado y sin conversación. En la cookie queda solo `agente_sid`.
+HISTORIAL_GUARDADO = 60    # mensajes que se conservan en la DB (30 turnos)
+HISTORIAL_AL_MODELO = 24   # mensajes que se le mandan al LLM por turno (12 turnos)
+FICHAS_MAX = 20            # altas sin confirmar que se recuerdan a la vez
+CONVERSACION_DIAS = 30     # a los N días sin uso, la conversación se descarta
 
 def conectar():
     con = sqlite3.connect(DB_PATH)
@@ -160,6 +179,94 @@ def init_db():
 
 def _ahora():
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+
+# ============================================================================
+# Conversación del chat (server-side, en gestion.db)
+# ============================================================================
+
+def _sid():
+    """Id de conversación del navegador actual. Es lo ÚNICO que va en la cookie."""
+    sid = session.get('agente_sid')
+    if not sid:
+        sid = secrets.token_urlsafe(16)
+        session['agente_sid'] = sid
+        session.modified = True
+    return sid
+
+
+def _conv_cargar():
+    """Historial, entidad de contexto y fichas pendientes de esta conversación.
+
+    Devuelve siempre un dict completo: si no hay fila todavía (o el JSON quedó corrupto
+    por una escritura a medias), arranca vacío en vez de reventar el chat.
+    """
+    con = conectar()
+    fila = con.execute(
+        "SELECT historial, entidad_actual, fichas FROM agente_conversaciones WHERE sid = ?",
+        (_sid(),)
+    ).fetchone()
+    con.close()
+
+    if not fila:
+        return {'historial': [], 'entidad_actual': None, 'fichas': {}}
+    try:
+        historial = json.loads(fila['historial'] or '[]')
+        fichas = json.loads(fila['fichas'] or '{}')
+    except ValueError:
+        historial, fichas = [], {}
+    return {'historial': historial,
+            'entidad_actual': fila['entidad_actual'],
+            'fichas': fichas}
+
+
+def _conv_guardar(historial, entidad_actual, fichas):
+    """Persiste la conversación y limpia las que quedaron abandonadas."""
+    con = conectar()
+    con.execute(
+        "INSERT INTO agente_conversaciones (sid, actualizado, historial, entidad_actual, fichas) "
+        "VALUES (?,?,?,?,?) "
+        "ON CONFLICT(sid) DO UPDATE SET actualizado=excluded.actualizado, "
+        "historial=excluded.historial, entidad_actual=excluded.entidad_actual, "
+        "fichas=excluded.fichas",
+        (_sid(), _ahora(),
+         json.dumps(historial[-HISTORIAL_GUARDADO:], default=str, ensure_ascii=False),
+         entidad_actual,
+         json.dumps(dict(list(fichas.items())[-FICHAS_MAX:]), default=str, ensure_ascii=False))
+    )
+    # Barrido de conversaciones viejas. Va acá y no en init_db() porque el server puede
+    # estar meses sin reiniciar; la tabla tiene una fila por navegador, no pesa.
+    con.execute("DELETE FROM agente_conversaciones WHERE actualizado < ?",
+                ((datetime.now() - timedelta(days=CONVERSACION_DIAS)).strftime('%Y-%m-%d %H:%M:%S'),))
+    con.commit()
+    con.close()
+
+
+def _sin_imagenes(mensajes):
+    """Copia del historial con los bloques de imagen reemplazados por una nota.
+
+    Una foto de etiqueta en base64 son varios MB: guardarla turno a turno engorda la fila
+    y no aporta nada, porque el modelo ya la interpretó cuando llegó. (Con la cookie esto
+    directamente rompía la sesión.)
+    """
+    limpios = []
+    for msg in mensajes:
+        contenido = msg.get('content')
+        if not isinstance(contenido, list):
+            limpios.append(msg)
+            continue
+        bloques = [b if not (isinstance(b, dict) and b.get('type') == 'image')
+                   else {'type': 'text', 'text': '[el usuario adjuntó una imagen]'}
+                   for b in contenido]
+        limpios.append({'role': msg.get('role'), 'content': bloques})
+    return limpios
+
+
+def _conv_borrar():
+    con = conectar()
+    con.execute("DELETE FROM agente_conversaciones WHERE sid = ?", (_sid(),))
+    con.commit()
+    con.close()
 
 # ============================================================================
 # Funciones adaptadoras: traducen llamadas de tool al código ya existente
@@ -343,12 +450,133 @@ def _aulas_libres_fmt():
     """Aulas libres ahora."""
     return database.aulas_libres()
 
+# ---------------------------------------------------------------------------
+# Historia de la escuela (lore + guiños internos)
+# ---------------------------------------------------------------------------
+
+HISTORIA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'historia_escuela.json')
+# Umbral del match difuso contra las claves. Más alto que el 0.68 del inventario a
+# propósito: acá un falso positivo hace que el asistente conteste una anécdota que no
+# tiene nada que ver con lo que preguntaron, y las claves son pocas y bien elegidas
+# (no hay 91 nombres compitiendo), así que se puede exigir más.
+HISTORIA_UMBRAL = 0.72
+
+_historia_cache = {'mtime': None, 'entradas': []}
+
+
+def _cargar_historia():
+    """Entradas del JSON, recargadas si el archivo cambió.
+
+    Se cachea por mtime y no de una vez para siempre porque en Render el proceso puede
+    quedar meses arriba: sin esto, sumar una anécdota al archivo obligaría a reiniciar.
+    """
+    try:
+        mtime = os.path.getmtime(HISTORIA_PATH)
+    except OSError:
+        return []  # sin archivo, el agente simplemente no sabe nada de historia
+    if _historia_cache['mtime'] != mtime:
+        try:
+            with open(HISTORIA_PATH, encoding='utf-8') as f:
+                datos = json.load(f)
+        except (ValueError, OSError):
+            return []  # JSON roto: mejor "no sé" que reventar el chat
+        _historia_cache['entradas'] = [e for e in datos if e.get('claves') and e.get('texto')]
+        _historia_cache['mtime'] = mtime
+    return _historia_cache['entradas']
+
+
+def _historia_fmt(tema):
+    """Busca una entrada de historia por tema y la devuelve TEXTUAL.
+
+    El texto sale del archivo y nunca del modelo: dejarlo improvisar anécdotas es
+    exactamente la conducta que la regla inviolable del prompt desactiva (se detectó
+    fabricando horarios enteros), y el modelo no tiene cómo saber que el permiso
+    terminaba en las anécdotas. Por eso el caso "no hay nada" devuelve una instrucción
+    explícita de no inventar, en vez de una lista vacía que invita a rellenar.
+    """
+    q = gestion._norm(tema or '')
+    if not q:
+        return {'encontrado': False,
+                'nota': 'Falta el tema. Preguntale al usuario sobre qué quiere saber.'}
+
+    mejor, puntaje_mejor = None, 0.0
+    for entrada in _cargar_historia():
+        for clave in entrada['claves']:
+            c_norm = gestion._norm(clave)
+            if not c_norm:
+                continue
+            # El substring gana siempre; el difuso solo entra con 3+ caracteres, igual
+            # que en _puntaje_busqueda (con menos, cualquier cosa se parece a cualquier cosa).
+            if q in c_norm or c_norm in q:
+                puntaje = 1.0
+            elif len(q) >= 3:
+                puntaje = difflib.SequenceMatcher(None, q, c_norm).ratio()
+            else:
+                continue
+            if puntaje > puntaje_mejor:
+                mejor, puntaje_mejor = entrada, puntaje
+
+    if not mejor or puntaje_mejor < HISTORIA_UMBRAL:
+        return {
+            'encontrado': False,
+            'nota': f'No hay nada guardado sobre "{tema}". Decíselo al usuario tal cual, en una '
+                    f'frase. NO inventes una anécdota, un dato histórico ni una explicación '
+                    f'plausible: si no está acá, no existe.'
+        }
+
+    return {
+        'encontrado': True,
+        'tipo': mejor.get('tipo', 'historia'),
+        'texto': mejor['texto'],
+        'nota': 'Contalo con tus palabras pero SIN agregar hechos, nombres, fechas ni detalles '
+                'que no estén en `texto`. Si el usuario pide más, decí que es todo lo que hay.'
+    }
+
+# Tope de resultados que se le mandan a Claude. La búsqueda difusa no acota: con una
+# query sin match literal devuelve cualquier cosa que se parezca de escritura, y con
+# query vacía devuelve la tabla entera. Más de esto es ruido que empuja al modelo a
+# elegir alguno igual. El total real viaja aparte para que sepa que se recortó.
+LIMITE_BUSQUEDA = 10
+# Las descripciones del inventario son cortas (máx ~180 chars), así que cuando el match
+# vino de ahí se manda entera en vez de recortar una ventana alrededor del término.
+MAX_DESC_BUSQUEDA = 160
+# Tope de `listar_todos`. Con 90 recursos el listado completo son ~500 tokens, menos de un
+# tercio de lo que ya cuesta la lista de personas en cada turno, así que mandarlo entero es
+# barato. Pero no escala para siempre: arriba de este número la tool se niega y pide afinar
+# la búsqueda, para que el día que el inventario crezca degrade de forma predecible en vez
+# de reventar el contexto en silencio.
+LIMITE_LISTADO_COMPLETO = 400
+
+
+def _clasificar_match(q_norm, nombre, descripcion):
+    """Por qué esta fila entró en los resultados: substring en el nombre ('exacto'),
+    substring en la descripción ('descripcion'), o solo parecido de escritura
+    ('aproximado', con su similitud 0–1). `buscar_entidad_sin_request` ordena por
+    puntaje pero lo descarta, así que sin esto Claude recibe un match literal y uno
+    difuso de 0.6 con exactamente el mismo peso."""
+    if not q_norm:
+        return None, None
+    if q_norm in gestion._norm(nombre or ''):
+        return 'exacto', None
+    if descripcion and q_norm in gestion._norm(descripcion):
+        return 'descripcion', None
+    # Acá ya sabemos que no hay substring en ninguno de los dos, así que
+    # _puntaje_busqueda devuelve la similitud cruda (<1.0), no el 1.0+ratio.
+    similitud = gestion._puntaje_busqueda(q_norm, nombre or '', descripcion or '')
+    return 'aproximado', round(similitud, 2) if similitud else None
+
+
 def _buscar_entidad_fmt(slug, query):
     """Búsqueda de entidad (recursos, conjuntos, actividades, proyectos)."""
+    if slug not in gestion.ENTIDADES:
+        # Sin esto un slug mal escrito devolvía 0 resultados y el agente concluía
+        # "no hay nada cargado" en vez de reintentar con el slug correcto.
+        return {'error': f'Slug inválido: {slug}. Válidos: {", ".join(gestion.ENTIDADES)}'}
     resultados = gestion.buscar_entidad_sin_request(slug, query)
+    q_norm = gestion._norm(query or '')
     # Omitir campos vacíos para reducir ruido
     limpios = []
-    for r in resultados:
+    for r in resultados[:LIMITE_BUSQUEDA]:
         limpio = {'id': r.get('id'), 'nombre': r.get('nombre')}
         if r.get('estado'):
             limpio['estado'] = r['estado']
@@ -356,8 +584,83 @@ def _buscar_entidad_fmt(slug, query):
             limpio['ubicacion'] = r['ubicacion']
         if r.get('tipo'):
             limpio['tipo'] = r['tipo']
+        match, similitud = _clasificar_match(q_norm, r.get('nombre'), r.get('descripcion'))
+        if match:
+            limpio['match'] = match
+            if similitud is not None:
+                limpio['similitud'] = similitud
+            if match == 'descripcion':
+                # Si no, el nombre llega sin relación visible con lo buscado (buscar
+                # "cable" trae "Faniot arduino" porque lo dice la descripción).
+                desc = (r.get('descripcion') or '').strip()
+                limpio['descripcion'] = (desc[:MAX_DESC_BUSQUEDA] + '…'
+                                         if len(desc) > MAX_DESC_BUSQUEDA else desc)
         limpios.append(limpio)
-    return {'slug': slug, 'resultados': limpios}
+
+    salida = {'slug': slug, 'query': query, 'total': len(resultados), 'resultados': limpios}
+    if len(resultados) > LIMITE_BUSQUEDA:
+        salida['truncado'] = (f'Se muestran los {LIMITE_BUSQUEDA} mejores de {len(resultados)}. '
+                              'Si no está el que buscás, afiná la búsqueda.')
+    # El aviso apunta al fallback en vez de dejar que el modelo concluya solo: la búsqueda
+    # compara strings, no significados, así que "no encontré" NO es lo mismo que "no existe"
+    # (buscar "tester" no encuentra el Multímetro; "taladro" no encuentra la Agujereadora).
+    if not resultados:
+        salida['aviso'] = (f'No hay {slug} cuyo nombre o descripción coincida con "{query}". '
+                           f'OJO: eso no significa que no exista — puede estar cargado con otro '
+                           f'nombre. Antes de afirmar que no está, llamá a listar_todos("{slug}") '
+                           f'y fijate vos mismo en la lista completa.')
+    elif q_norm and all(x.get('match') == 'aproximado' for x in limpios):
+        salida['aviso'] = (f'Ninguno contiene "{query}" en el nombre ni en la descripción: '
+                           'entraron solo por parecido de escritura, así que probablemente '
+                           'NINGUNO sea lo que se busca. No ofrezcas el más parecido como si '
+                           f'fuera el correcto. Llamá a listar_todos("{slug}") para ver la lista '
+                           'completa y recién ahí decidí si está o no.')
+    return salida
+
+
+def _listar_todos_fmt(slug):
+    """Todos los nombres de una entidad, para cuando la búsqueda por string no alcanza.
+
+    Es el fallback de `buscar_entidad`: el modelo sabe que un "tester" es un multímetro y
+    que la "Agujereadora de banco" es lo que casi todos llaman taladro, pero `_puntaje_busqueda`
+    no — compara letras. Viendo la lista entera resuelve sinónimos, paráfrasis y jerga sin
+    ningún diccionario que mantener, y sobre todo puede afirmar "no está" habiéndolo
+    verificado, en vez de deducirlo de que la búsqueda no encontró nada.
+    """
+    if slug not in gestion.ENTIDADES:
+        return {'error': f'Slug inválido: {slug}. Válidos: {", ".join(gestion.ENTIDADES)}'}
+
+    con = conectar()
+    tabla = gestion.ENTIDADES[slug]['tabla']
+    filas = con.execute(
+        f"SELECT id, nombre FROM {tabla} ORDER BY nombre COLLATE NOCASE").fetchall()
+    con.close()
+
+    # Las filas sin nombre no le dicen nada al modelo, pero esconderlas sin avisar haría
+    # falsa la afirmación "estos son todos": van contadas aparte.
+    items = [{'id': f['id'], 'nombre': f['nombre']} for f in filas if (f['nombre'] or '').strip()]
+    sin_nombre = len(filas) - len(items)
+
+    if len(items) > LIMITE_LISTADO_COMPLETO:
+        return {'error': f'Hay {len(items)} {slug}: demasiados para listarlos completos. '
+                         f'Usá buscar_entidad con un término más específico.',
+                'total': len(items)}
+
+    salida = {
+        'slug': slug,
+        'total': len(items),
+        'items': items,
+        'instruccion': (f'Estos son TODOS los {slug} cargados, la lista completa. Buscá entre '
+                        'ellos el que corresponda a lo que pidió el usuario aunque lo haya '
+                        'nombrado distinto (sinónimos, marcas, jerga del taller). Si ninguno '
+                        'es lo que se pide, decí claramente que no está cargado: NO ofrezcas '
+                        'el más parecido como si fuera el correcto. Para ver los datos de uno, '
+                        'llamá a detalle_entidad con su id.'),
+    }
+    if sin_nombre:
+        salida['sin_nombre'] = sin_nombre
+    return salida
+
 
 def _detalle_entidad_fmt(slug, id):
     """Detalle completo de una entidad."""
@@ -499,6 +802,13 @@ def _normalizar_borrador(slug, campos_dict):
 
     Normalizar acá y no al guardar es lo que hace comparable el token: la ficha que ve
     el usuario y la fila que se escribe salen del mismo dict.
+
+    Además completa la fecha de revisión de los recursos con la de hoy si no vino: dar de
+    alta un recurso ES un control de inventario. Se pone acá, antes de calcular el token,
+    para que la fecha aparezca en la ficha y el usuario la vea (y la pueda cambiar) — si
+    se agregara al guardar, se estaría escribiendo un campo que nadie aprobó. Va del lado
+    del código y no como "acordate de poner la fecha" en el prompt, que es la clase de
+    regla que el modelo cumple a veces.
     """
     borrador = {}
     for nombre in _campos_validos(slug):
@@ -508,6 +818,9 @@ def _normalizar_borrador(slug, campos_dict):
         valor = str(valor).strip()
         if valor:
             borrador[nombre] = valor
+
+    if slug == 'recursos' and not borrador.get('fecha_revision'):
+        borrador['fecha_revision'] = datetime.now().strftime(gestion.FORMATO_FECHA_REVISION)
     return borrador
 
 
@@ -552,9 +865,12 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno):
         if not borrador.get(nombre):
             vacios.append(label)
 
-    # Se anota que esta ficha se generó en este turno, para poder rechazar una
-    # confirmación que llegue sin que el usuario haya podido verla (ver _crear_entidad).
-    contexto_turno.setdefault('fichas_mostradas', set()).add(token)
+    # Se anota la ficha generada en este turno: sirve para rechazar una confirmación que
+    # llegue sin que el usuario haya podido verla (ver _crear_entidad) y para que el
+    # endpoint de chat le pase al front el botón de confirmar.
+    contexto_turno.setdefault('fichas_mostradas', {})[token] = {'slug': slug, 'campos': borrador}
+    contexto_turno['ultima_ficha'] = {'token': token, 'slug': slug,
+                                      'nombre': borrador.get('nombre', '')}
 
     resultado = {
         'ok': False,
@@ -567,11 +883,10 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno):
             'va a quedar guardada. Abajo, si hay campos vacíos o datos que valdría la pena '
             'sumar, hacele 1 a 3 preguntas cortas y concretas (medida, marca y modelo, dónde '
             'se guarda, cuántos hay). Aclarale que son opcionales: si no las contesta se '
-            'guarda igual. Cerrá pidiéndole el OK. Si pide cambios, volvé a llamar a '
-            'crear_entidad con los campos corregidos y te devuelve la ficha nueva. Cuando el '
-            'usuario diga que sí, llamala OTRA VEZ con EXACTAMENTE estos mismos campos y ahí '
-            'sí se guarda. No agregues ni saques campos al confirmar: cualquier cambio vuelve '
-            'a mostrar la ficha para que el usuario lo apruebe.'
+            'guarda igual. NO le pidas que escriba "sí" ni "confirmo": debajo de tu mensaje '
+            'le aparece un botón para guardar. Cerrá diciéndole que si está bien, lo confirme '
+            'con ese botón. Si pide cambios, volvé a llamar a crear_entidad con los campos '
+            'corregidos y te devuelve la ficha nueva (con su botón).'
         ),
     }
     if slug == 'recursos':
@@ -610,7 +925,7 @@ def _crear_entidad(slug, campos_dict, contexto_turno=None):
 
     borrador = _normalizar_borrador(slug, campos_dict)
     token = _token_ficha(slug, borrador)
-    previas = contexto_turno.setdefault('fichas_previas', [])
+    previas = contexto_turno.setdefault('fichas_previas', {})
 
     # Si esta ficha exacta no se mostró en un turno anterior, el usuario no la aprobó.
     # (Una mostrada en ESTE turno tampoco cuenta: hasta que el loop no termina, el usuario
@@ -620,7 +935,7 @@ def _crear_entidad(slug, campos_dict, contexto_turno=None):
 
     # Se consume: si el asistente vuelve a llamar con los mismos campos, es un alta nueva
     # y arranca otra vez por la ficha, en vez de duplicar el recurso en silencio.
-    previas.remove(token)
+    previas.pop(token, None)
 
     con = conectar()
     id_nuevo = gestion.guardar_entidad_sin_request(slug, borrador, con=con)
@@ -1112,7 +1427,17 @@ TOOLS_SCHEMA = [
                         '"conjuntos" son kits de recursos que se usan juntos; "actividades" son '
                         'prácticas de taller que consumen esos recursos; "proyectos" son trabajos ya '
                         'realizados por un curso. Un mismo nombre puede existir como proyecto Y como '
-                        'conjunto, así que elegí el slug según lo que pregunten.'),
+                        'conjunto, así que elegí el slug según lo que pregunten. '
+                        'CADA RESULTADO TRAE UN CAMPO "match" QUE DICE CUÁNTO CONFIAR: '
+                        '"exacto" = el nombre contiene lo que buscaste; "descripcion" = no está en el '
+                        'nombre pero sí en la descripción (que viene incluida, leela para ver si sirve); '
+                        '"aproximado" = NO coincide con nada, entró solo porque se escribe parecido '
+                        '(mirá "similitud", 0–1) y lo más probable es que NO sea lo que se busca. '
+                        'Nunca trates un "aproximado" como si fuera el recurso pedido. '
+                        'Y si no hay ningún "exacto", NO concluyas todavía que no está: esta '
+                        'búsqueda compara letras, no significados, así que no encuentra el '
+                        'Multímetro si te pidieron un "tester". En ese caso llamá a '
+                        'listar_todos con el mismo slug y decidí mirando la lista completa.'),
         'input_schema': {
             'type': 'object',
             'properties': {
@@ -1121,6 +1446,28 @@ TOOLS_SCHEMA = [
                 'query': {'type': 'string', 'description': 'Parte del nombre. Tolera errores de tipeo y falta de tildes'}
             },
             'required': ['slug', 'query']
+        }
+    },
+    {
+        'name': 'listar_todos',
+        'description': ('Devuelve la lista COMPLETA de nombres + id de un tipo de entidad. Es el '
+                        'respaldo de buscar_entidad, no un reemplazo: usala SOLO cuando '
+                        'buscar_entidad no trajo ningún resultado con match "exacto". '
+                        'Para qué sirve: la búsqueda compara letras, no significados, así que no '
+                        'encuentra el "Multímetro" si el usuario pidió un "tester", ni la '
+                        '"Agujereadora de banco" si pidió un "taladro". Vos sí sabés que son lo '
+                        'mismo, pero necesitás ver los nombres para darte cuenta. '
+                        'Úsala también antes de decirle a alguien que algo no está cargado: así '
+                        'esa afirmación la hacés habiendo mirado todo, no porque una búsqueda '
+                        'falló. Si la lista es demasiado larga devuelve un error pidiendo que '
+                        'busques con un término más específico.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'slug': {'type': 'string', 'enum': ['recursos', 'conjuntos', 'actividades', 'proyectos'],
+                         'description': 'Qué tipo de entidad listar (el mismo que usaste en buscar_entidad)'}
+            },
+            'required': ['slug']
         }
     },
     {
@@ -1167,6 +1514,23 @@ TOOLS_SCHEMA = [
             'required': ['prestamo_id']
         }
     },
+    {
+        'name': 'consultar_historia',
+        'description': ('Lore de la escuela: historia institucional, tradiciones y anécdotas internas '
+                        'sobre gente de la casa. Usala cuando la pregunta NO es operativa — "¿qué sabés '
+                        'de X?", "contame algo de...", "¿por qué se llama así la escuela?", "¿desde '
+                        'cuándo existe?". NO la uses para horarios, inventario ni préstamos: eso tiene '
+                        'sus propias tools y acá no está. Es la ÚNICA fuente de historia y de anécdotas: '
+                        'si devuelve encontrado:false, decí que no sabés y NO improvises una historia, '
+                        'por graciosa o inofensiva que parezca.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'tema': {'type': 'string', 'description': 'Sobre qué preguntan: un apellido, "fundación", "el edificio". Tolera typos y falta de tildes'}
+            },
+            'required': ['tema']
+        }
+    },
     # ESCRITURA
     {
         'name': 'crear_entidad',
@@ -1199,7 +1563,7 @@ TOOLS_SCHEMA = [
                            'description': 'Valores cerrados y distintos según el slug. RECURSOS: Disponible, Retirado, En uso, En reparación, De baja, Sin revisar. PROYECTOS: Activo, Pausado, Terminado. No mezcles los de un slug con los del otro ni inventes otros'},
                 'valor': {'type': 'string', 'enum': ['Básico', 'Secundario', 'Alto valor'],
                           'description': 'IMPORTANCIA del recurso dentro del inventario (qué tan crítico es), NO para qué sirve — eso va en descripcion. Solo recursos'},
-                'fecha_revision': {'type': 'string', 'description': 'Fecha del último control de inventario, en formato corto día/mes sin año (ej: 24/4, 8/5). Solo recursos'},
+                'fecha_revision': {'type': 'string', 'description': 'Fecha del último control de inventario, en formato día/mes/año (ej: 08/08/2026). Solo recursos. NO hace falta que la mandes en un alta: si la omitís se completa sola con la de hoy y aparece en la ficha; mandala solo si el usuario dice otra fecha'},
                 'uso_tipico': {'type': 'string', 'description': 'En qué se suele usar el kit. Solo conjuntos'},
                 'objetivo': {'type': 'string', 'description': 'Objetivo pedagógico. Solo actividades'},
                 'duracion': {'type': 'string', 'description': 'Duración estimada, texto libre (ej: 2 módulos, 80 minutos). Solo actividades'},
@@ -1233,7 +1597,7 @@ TOOLS_SCHEMA = [
                            'description': 'Valores cerrados y distintos según el slug. RECURSOS: Disponible, Retirado, En uso, En reparación, De baja, Sin revisar. PROYECTOS: Activo, Pausado, Terminado. No mezcles los de un slug con los del otro ni inventes otros'},
                 'valor': {'type': 'string', 'enum': ['Básico', 'Secundario', 'Alto valor'],
                           'description': 'IMPORTANCIA del recurso dentro del inventario (qué tan crítico es), NO para qué sirve — eso va en descripcion. Solo recursos'},
-                'fecha_revision': {'type': 'string', 'description': 'Fecha del último control de inventario, en formato corto día/mes sin año (ej: 24/4, 8/5). Solo recursos'},
+                'fecha_revision': {'type': 'string', 'description': 'Fecha del último control de inventario, en formato día/mes/año (ej: 08/08/2026). Solo recursos. Actualizala cuando el usuario diga que revisó o controló el recurso. Ojo: el inventario viejo importado del sheet tiene fechas cortas sin año (24/4, 8/5) — no las reformatees por tu cuenta'},
                 'uso_tipico': {'type': 'string', 'description': 'En qué se suele usar el kit. Solo conjuntos'},
                 'objetivo': {'type': 'string', 'description': 'Objetivo pedagógico. Solo actividades'},
                 'duracion': {'type': 'string', 'description': 'Duración estimada, texto libre (ej: 2 módulos, 80 minutos). Solo actividades'},
@@ -1430,7 +1794,8 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None):
 
     lectura = tool_name in [
         'buscar_profesor', 'horario_profesor', 'horario_curso', 'horario_aula',
-        'aulas_libres', 'buscar_entidad', 'detalle_entidad', 'listar_prestamos', 'detalle_prestamo'
+        'aulas_libres', 'buscar_entidad', 'listar_todos', 'detalle_entidad',
+        'listar_prestamos', 'detalle_prestamo', 'consultar_historia'
     ]
 
     try:
@@ -1446,12 +1811,16 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None):
             resultado = _aulas_libres_fmt()
         elif tool_name == 'buscar_entidad':
             resultado = _buscar_entidad_fmt(tool_input.get('slug', ''), tool_input.get('query', ''))
+        elif tool_name == 'listar_todos':
+            resultado = _listar_todos_fmt(tool_input.get('slug', ''))
         elif tool_name == 'detalle_entidad':
             resultado = _detalle_entidad_fmt(tool_input.get('slug', ''), tool_input.get('id', 0))
         elif tool_name == 'listar_prestamos':
             resultado = _listar_prestamos_fmt(tool_input.get('persona'))
         elif tool_name == 'detalle_prestamo':
             resultado = _detalle_prestamo_fmt(tool_input.get('prestamo_id', 0))
+        elif tool_name == 'consultar_historia':
+            resultado = _historia_fmt(tool_input.get('tema', ''))
         elif tool_name == 'crear_entidad':
             resultado = _crear_entidad(
                 tool_input.get('slug', ''),
@@ -1702,7 +2071,7 @@ def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None):
     _hoy = datetime.now()
     _dia_semana = DIAS[_hoy.weekday()] if _hoy.weekday() < len(DIAS) else _hoy.strftime('%A')
 
-    system_prompt = f"""Sos el asistente de gestión de la Escuela Técnica N° 1 "Ing. Emilio Mitre".
+    system_prompt = f"""Sos el asistente de gestión de la Escuela Técnica N° 4 "Ing. Emilio Mitre".
 
 QUIÉN SOS
 Tenés a mano las dos cosas que en la escuela viven en lugares separados: la planilla de
@@ -1717,6 +2086,11 @@ Tenés tres áreas a cargo:
    proyectos de los talleres. Acá sí das de alta, editás, vinculás y borrás.
 3. PAÑOL / PRÉSTAMOS — quién se llevó qué, cuándo, y qué falta que devuelva. Es el registro
    que evita que las herramientas de la escuela desaparezcan.
+4. HISTORIA DE LA CASA — cómo empezó la escuela, tradiciones, y anécdotas de gente de acá.
+   Cuando la pregunta no es operativa ("¿qué sabés de Fulana?", "contame algo de...", "¿por
+   qué se llama así?"), consultá `consultar_historia`. Si no hay nada guardado, decilo en una
+   frase y seguí: NO inventes una historia. Vale igual que para los horarios — una anécdota
+   inventada sobre un compañero de trabajo es peor que no tener ninguna.
 
 CÓMO TRABAJÁS
 - Sos la memoria de la escuela, no un buscador. Lo que anotás mal queda mal anotado para el
@@ -1757,6 +2131,18 @@ NUNCA AFIRMES ALGO QUE NO EJECUTASTE - REGLA INVIOLABLE:
     llamar a la tool con ese nombre. Identificar la entidad no te da sus datos.
   * Si la tool devolvió vacío, decí que no hay datos. Nunca inventes materias, aulas ni cursos.
 
+LOS ID NO SE MUESTRAN - REGLA FIJA:
+Los id son la cañería interna con la que se enganchan las filas de la base. Vos los usás
+para llamar a las tools, pero al usuario NO le dicen nada y no los ve en ninguna pantalla
+de la app. Nunca los escribas en tu respuesta: ni "(ID 4)", ni "id 52", ni "préstamo #2",
+ni una columna ID en una tabla. Las cosas se nombran por su NOMBRE.
+- Mal:  "Multímetro (ID 4) está prestado a Lucas Garcia (préstamo #2)"
+- Bien: "El multímetro está prestado a Lucas Garcia desde el 21/07"
+- Para desambiguar entre parecidos, usá lo que los distingue de verdad (ubicación, estado,
+  potencia, marca), no el id: "Panel solar 10 W, en A2" y "Panel solar 100W, en el Taller
+  de Electricidad".
+- Si el usuario te da un id él mismo, ahí sí podés usarlo para responderle.
+
 AL DAR DE ALTA ALGO EN EL CATÁLOGO - MUY IMPORTANTE:
 El alta pasa por una ficha de confirmación. La tool crear_entidad la maneja sola, vos seguí
 el circuito:
@@ -1767,12 +2153,14 @@ el circuito:
    preguntas cortas y concretas: "¿De qué medida es?", "¿Sabés la marca?", "¿Dónde se guarda?".
    Son OPCIONALES y tenés que decirlo: si no las contesta se guarda igual. NO son un
    interrogatorio ni una traba — nunca condiciones el alta a que las responda.
-4. Terminá pidiendo el OK.
-5. Si pide cambios, aplicalos y volvé al paso 1 con los campos corregidos (otra vez SIN token):
-   mostrale la ficha nueva y pedile el OK de nuevo.
-6. Recién cuando dice que sí, llamá a crear_entidad OTRA VEZ con exactamente los mismos
-   campos de la última ficha. Ahí sí se guarda. No agregues ni cambies nada al confirmar:
-   cualquier diferencia vuelve a mostrar la ficha para que el usuario la apruebe.
+4. NO le pidas que escriba "sí" ni "confirmo": debajo de tu mensaje le aparece un BOTÓN para
+   guardar. Cerrá con algo tipo "si está bien, confirmalo con el botón".
+5. Si pide cambios, aplicalos y volvé al paso 1 con los campos corregidos: se muestra la ficha
+   nueva, con su botón.
+6. El alta la dispara el botón, vos no tenés que hacer nada más. Si igual te lo pide escrito
+   ("dale, guardalo"), llamá a crear_entidad OTRA VEZ con exactamente los mismos campos de la
+   última ficha. No agregues ni cambies nada al confirmar: cualquier diferencia vuelve a
+   mostrar la ficha para que el usuario la apruebe.
 El nombre, el tipo y la descripción los escribís vos a partir de lo que te contó: no le pidas
 que te dicte una descripción. Lo que no te dijeron va vacío, no inventado.
 
@@ -1815,7 +2203,13 @@ REGLAS IMPORTANTES:
    el borrado si el nombre no coincide con el id — si te rechaza, NO reintentes con otro id a
    ver si pega: volvé a buscar cuál es el correcto.
 2. Para CREAR desde FOTO: Extrae campos, propón en texto, pide confirmación antes de ejecutar.
-3. Busca difuso: si no hay match exacto, intenta buscar_profesor o buscar_entidad.
+3. NUNCA digas "no está cargado" porque una búsqueda no encontró nada. La búsqueda compara
+   letras, no significados: buscar "tester" NO encuentra el "Multímetro", y "taladro" NO
+   encuentra la "Agujereadora de banco", aunque sean la misma cosa. El orden es siempre:
+   buscar_entidad -> si ningún resultado tiene match "exacto", llamá a listar_todos con el
+   mismo slug y buscá vos en la lista completa (ahí sí reconocés sinónimos, marcas y jerga
+   del taller) -> recién si tampoco está ahí, decí que no está cargado. Para profesores el
+   equivalente es buscar_profesor.
 4. Lectura = sin auditoría. Escritura = con auditoría.
 
 Sé conciso. Prioriza responder del historial antes de pedir aclaración, salvo en los casos de
@@ -2000,6 +2394,71 @@ def _escritura_no_ejecutada(respuesta, trazas):
     return not any(t.get('tool') in TOOLS_ESCRITURA and t.get('ok') for t in trazas)
 
 
+# ---------------------------------------------------------------------------
+# Ocultar ids internos en lo que ve el usuario
+# ---------------------------------------------------------------------------
+# Los ids son la cañería con la que se enganchan las filas: el modelo los necesita para
+# llamar a las tools, pero al usuario no le dicen nada (ni la web de /gestion los muestra,
+# solo los usa en las URLs). Igual el modelo los repetía en casi toda respuesta de lectura
+# — "Multímetro (ID 4)", "préstamo #2", una columna ID en la tabla de préstamos.
+#
+# Va como filtro de salida y no solo como regla del prompt porque es exactamente el tipo
+# de regla que este agente cumple a veces: acá el peor caso de fallar es ruido en pantalla,
+# así que conviene que sea determinístico.
+
+_RE_PAREN_SOLO_ID = re.compile(r'\s*\((?:ID|Id|id)\s*[:=#n°º]*\s*\d+\)')   # "Multímetro (ID 4)"
+_RE_ID_INLINE = re.compile(r'\b(?:ID|Id|id)\s*[:=#]?\s*\d+\s*[,;·–—-]?\s*')  # "(ID 2, Lucas...)"
+_RE_NUMERAL = re.compile(r'\s*#\s*\d+\b')                                   # "préstamo #2"
+
+
+def _quitar_columna_id(texto):
+    """Saca la columna ID de las tablas markdown que devuelve el modelo.
+
+    Con regex sobre todo el texto no alcanza: hay que borrar la misma posición en el
+    encabezado, en la fila separadora y en cada fila de datos.
+    """
+    lineas = texto.split('\n')
+    salida, i = [], 0
+    while i < len(lineas):
+        cabecera = lineas[i]
+        celdas = [c.strip() for c in cabecera.strip().strip('|').split('|')]
+        idx = next((n for n, c in enumerate(celdas) if c.strip('* ').lower() == 'id'), None)
+        es_tabla = (cabecera.strip().startswith('|') and idx is not None
+                    and i + 1 < len(lineas) and set(lineas[i + 1].strip()) <= set('|-: '))
+
+        if not es_tabla:
+            salida.append(cabecera)
+            i += 1
+            continue
+
+        while i < len(lineas) and lineas[i].strip().startswith('|'):
+            partes = lineas[i].strip().strip('|').split('|')
+            if len(partes) > idx:
+                del partes[idx]
+            salida.append('|' + '|'.join(partes) + '|')
+            i += 1
+    return '\n'.join(salida)
+
+
+def _ocultar_ids(respuesta):
+    """Quita del texto los ids internos que el usuario no tiene por qué ver."""
+    if not respuesta:
+        return respuesta
+    texto = _quitar_columna_id(respuesta)
+    texto = _RE_PAREN_SOLO_ID.sub('', texto)
+    texto = _RE_ID_INLINE.sub('', texto)
+    texto = _RE_NUMERAL.sub('', texto)
+    # El barrido deja restos: paréntesis vacíos ("Multímetro ( )"), comas al empezar un
+    # paréntesis, y guiones sueltos donde el id era lo único que seguía ("Amoladora — id 100.").
+    texto = re.sub(r'\(\s*[,;·–—-]?\s*\)', '', texto)
+    texto = re.sub(r'\(\s*[,;]\s*', '(', texto)
+    texto = re.sub(r'\s*[–—-]\s*([.,;:!?)])', r'\1', texto)
+    texto = re.sub(r'\s*[–—-]\s*$', '', texto, flags=re.MULTILINE)
+    texto = re.sub(r'[ \t]{2,}', ' ', texto)
+    texto = re.sub(r' +([,.;:)])', r'\1', texto)
+    return texto.strip()
+
+
 AVISO_NO_EJECUTADO = (
     "⚠️ **OJO: esto NO se ejecutó.** El asistente informó un cambio que nunca llegó a la "
     "base de datos (no corrió ninguna operación de escritura en este turno). Volvé a pedirlo "
@@ -2034,13 +2493,12 @@ def chat():
     if not mensaje_usuario:
         return jsonify({'error': 'Mensaje vacío'}), 400
 
-    # Recuperar historial de la sesión
-    if 'agente_historial' not in session:
-        session['agente_historial'] = []
-    mensajes = session.get('agente_historial', [])[-10:]  # Últimos 10
+    # Conversación: sale de gestion.db, no de la cookie (ver _conv_cargar).
+    conv = _conv_cargar()
+    mensajes = conv['historial'][-HISTORIAL_AL_MODELO:]
 
     # Si el usuario hace una pregunta relativa sin especificar quién, inyectar referencia anterior
-    entidad_actual = session.get('agente_entidad_actual')  # Último profesor/recurso consultado
+    entidad_actual = conv['entidad_actual']  # Último profesor/recurso consultado
     msg_procesado = mensaje_usuario
 
     if entidad_actual and _es_pregunta_relativa(mensaje_usuario):
@@ -2080,13 +2538,15 @@ def chat():
     # sin esto no habría forma de confirmar un alta, porque los resultados de las tools no
     # quedan en el historial y en el turno siguiente el modelo no tiene la ficha a la vista.
     trazas = []
-    contexto_turno = {'fichas_previas': list(session.get('agente_fichas', []))}
+    contexto_turno = {'fichas_previas': dict(conv['fichas'])}
     respuesta = chat_with_tools(mensajes, trazas=trazas, contexto_turno=contexto_turno)
+    # Se filtra ANTES de guardar, así el historial repintado tampoco muestra ids.
+    respuesta = _ocultar_ids(respuesta)
 
-    # Lo que quedó pendiente de confirmar + lo que se mostró recién. Tope de 10 para que
-    # una conversación larga no infle la cookie de sesión.
-    session['agente_fichas'] = (contexto_turno.get('fichas_previas', []) +
-                                sorted(contexto_turno.get('fichas_mostradas', set())))[-10:]
+    # Lo que quedó pendiente de confirmar + lo que se mostró recién.
+    fichas = dict(contexto_turno.get('fichas_previas', {}))
+    fichas.update(contexto_turno.get('fichas_mostradas', {}))
+    fichas = dict(list(fichas.items())[-FICHAS_MAX:])
 
     # Red de seguridad: si anunció un cambio que no ejecutó, avisarlo (ver comentario
     # en _escritura_no_ejecutada — la regla equivalente en el system prompt no alcanza).
@@ -2098,24 +2558,119 @@ def chat():
     mensajes.append({'role': 'assistant', 'content': [{'type': 'text', 'text': respuesta}]})
 
     # Actualizar entidad actual si la respuesta menciona un profesor/recurso
-    entidad = _extraer_entidad_mencionada(respuesta)
-    if entidad:
-        session['agente_entidad_actual'] = entidad
+    entidad = _extraer_entidad_mencionada(respuesta) or conv['entidad_actual']
 
-    # Guardar historial en sesión (max 20 mensajes = 10 turnos)
-    session['agente_historial'] = mensajes[-20:]
-    session.modified = True
+    # Se persiste el historial COMPLETO más los dos mensajes de este turno (`mensajes` es
+    # solo el recorte que vio el modelo). Las imágenes no se guardan: una foto en base64
+    # pesa megas y no se reusa en turnos siguientes — queda una nota en su lugar.
+    historial = conv['historial'] + _sin_imagenes(mensajes[-2:])
+    _conv_guardar(historial, entidad, fichas)
+
+    # Si quedó una ficha esperando el OK, el front pinta un botón debajo del mensaje en
+    # vez de que el usuario tenga que escribir "sí" (ver /confirmar).
+    ficha = contexto_turno.get('ultima_ficha')
+    confirmacion = None
+    if ficha and ficha['token'] in fichas:
+        singular = (gestion.ENTIDADES.get(ficha['slug'], {}).get('singular') or 'registro').lower()
+        confirmacion = {'token': ficha['token'],
+                        'etiqueta': f'Guardar {singular}',
+                        'nombre': ficha['nombre']}
 
     return jsonify({'respuesta': respuesta, 'tools': trazas,
-                    'escritura_fantasma': escritura_fantasma})
+                    'escritura_fantasma': escritura_fantasma,
+                    'confirmacion': confirmacion})
+
+
+def _texto_visible(msg):
+    """Texto plano de un mensaje del historial, listo para pintar en el chat.
+
+    Saca el "(refiriéndote a: X)" que `chat()` le agrega al mensaje del usuario: es una
+    pista para el modelo, no algo que el usuario haya escrito ni tenga que volver a leer.
+    """
+    contenido = msg.get('content')
+    if isinstance(contenido, str):
+        texto = contenido
+    else:
+        texto = "\n".join(b.get('text', '') for b in (contenido or [])
+                          if isinstance(b, dict) and b.get('type') == 'text')
+    if msg.get('role') == 'user':
+        texto = re.sub(r'\s*\(refiriéndote a:[^)]*\)\s*$', '', texto)
+    return texto.strip()
+
+
+def _confirmacion_pendiente(fichas):
+    """Datos del botón de confirmar para la última ficha sin resolver, si quedó alguna."""
+    if not fichas:
+        return None
+    token = list(fichas.keys())[-1]
+    pendiente = fichas[token]
+    singular = (gestion.ENTIDADES.get(pendiente['slug'], {}).get('singular') or 'registro').lower()
+    return {'token': token, 'etiqueta': f'Guardar {singular}',
+            'nombre': pendiente['campos'].get('nombre', '')}
+
+
+@bp.route('/historial', methods=['GET'])
+def historial():
+    """Conversación guardada, para repintar el chat al cargar la página.
+
+    Desde que la conversación vive en `gestion.db` y no en la cookie, el servidor la
+    recuerda pero el chat arrancaba en blanco cada vez que el usuario navegaba a otra
+    página de /gestion. Esto la trae de vuelta, junto con el botón de un alta que haya
+    quedado sin confirmar (si no, al cambiar de página se perdía la única forma de darle OK).
+    """
+    conv = _conv_cargar()
+    mensajes = [{'rol': m.get('role'), 'texto': _texto_visible(m)} for m in conv['historial']]
+    return jsonify({'mensajes': [m for m in mensajes if m['texto']],
+                    'confirmacion': _confirmacion_pendiente(conv['fichas'])})
+
+
+@bp.route('/confirmar', methods=['POST'])
+def confirmar():
+    """Confirma un alta desde el botón del chat, sin pasar por el modelo.
+
+    El botón manda solo el token de la ficha que el usuario vio; los campos salen de la
+    sesión, nunca del request. Así lo que se guarda es literalmente lo que se mostró en
+    pantalla, y da igual lo que arme el front. Tampoco hay una llamada al LLM de por
+    medio: el alta es determinística y sale gratis.
+    """
+    token = (request.get_json() or {}).get('token', '')
+    conv = _conv_cargar()
+    fichas = dict(conv['fichas'])
+    pendiente = fichas.get(token)
+
+    if not pendiente:
+        # Pasa si se reinició la conversación, si ya se confirmó, o si la ficha quedó
+        # desplazada por otras más nuevas (tope FICHAS_MAX).
+        return jsonify({'ok': False,
+                        'respuesta': 'Esa ficha ya no está pendiente. Pedile al asistente que '
+                                     'la vuelva a armar y confirmala de nuevo.'}), 409
+
+    entrada = dict(pendiente['campos'])
+    entrada['slug'] = pendiente['slug']
+    contexto_turno = {'fichas_previas': fichas}
+    resultado = ejecutar_tool('crear_entidad', entrada, contexto_turno)
+    # `ejecutar_tool` consumió el token de `fichas` si llegó a escribir.
+
+    if resultado.get('ok'):
+        respuesta = f"✅ Guardado: **{pendiente['campos'].get('nombre', '')}**."
+    else:
+        respuesta = f"No se pudo guardar: {resultado.get('error', 'error desconocido')}"
+
+    # Queda en el historial para que el asistente sepa, en el turno siguiente, que esto
+    # ya se guardó y no lo ofrezca de nuevo.
+    historial = conv['historial'] + [
+        {'role': 'user', 'content': [{'type': 'text', 'text': '(confirmé el alta con el botón)'}]},
+        {'role': 'assistant', 'content': [{'type': 'text', 'text': respuesta}]},
+    ]
+    _conv_guardar(historial, conv['entidad_actual'], fichas)
+
+    return jsonify({'ok': resultado.get('ok', False), 'respuesta': respuesta,
+                    'tools': [{'tool': 'crear_entidad', 'ok': resultado.get('ok', False)}]})
 
 @bp.route('/reset', methods=['POST'])
 def reset():
-    """Limpia el historial de conversación y la entidad de contexto de la sesión."""
-    session.pop('agente_historial', None)
-    session.pop('agente_entidad_actual', None)
-    session.pop('agente_fichas', None)  # un alta a medio confirmar no sobrevive al reset
-    session.modified = True
+    """Borra la conversación: historial, entidad de contexto y fichas sin confirmar."""
+    _conv_borrar()
     return jsonify({'ok': True})
 
 @bp.route('/log', methods=['GET'])

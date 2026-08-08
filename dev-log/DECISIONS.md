@@ -4,6 +4,36 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-08-08] — Historia de la escuela: contenido guardado en un JSON, nunca generado por el modelo
+
+**Contexto**: Se pidió que el agente pudiera contar la historia del colegio y tener guiños internos (anécdotas sobre gente de la casa) como easter egg, con la condición explícita de que no comprometiera el funcionamiento ni el costo.
+
+**Decisión**:
+- **Tool `consultar_historia(tema)` + `historia_escuela.json`**, no texto en el system prompt. El prompt se paga en cada turno; el esquema de una tool son ~200 tokens fijos y el contenido solo se paga cuando alguien pregunta, que es casi nunca. Con contenido en el prompt, cada anécdota nueva encarece todos los turnos.
+- **JSON en la raíz, no tabla en `gestion.db`**: es lore que se edita a mano y versiona en git, no dato de usuario. Una tabla obligaba a migración + ABM + template para algo que se toca dos veces por año.
+- **El texto se devuelve LITERAL del archivo; el modelo no inventa anécdotas nunca.** Es la parte que protege el resto del sistema: el prompt tiene una regla marcada como inviolable de que ningún dato salga de memoria (existe porque el modelo llegó a fabricar horarios enteros, ver 2026-08-04). Un permiso de "inventá algo gracioso" no tiene borde que el modelo pueda reconocer — no sabe que el permiso terminaba en las anécdotas y no llegaba al inventario. Por eso `encontrado:false` devuelve una instrucción explícita de no inventar en vez de una lista vacía (que invita a rellenar), el hit trae una `nota` que prohíbe agregar hechos/nombres/fechas que no estén en `texto`, y la descripción de la tool acota el dominio ("no la uses para horarios, inventario ni préstamos").
+- **Umbral de match 0.72, más alto que el 0.68 del inventario**: las claves son pocas y elegidas a mano, no 91 nombres compitiendo, así que se puede exigir más; y un falso positivo acá contesta una anécdota que no tiene nada que ver con lo preguntado.
+
+**Consecuencia**: agregar lore es editar un JSON — no toca código ni requiere reiniciar (la carga se cachea por mtime). El agente pasó de tres áreas a cuatro en el system prompt.
+
+---
+
+## [2026-08-08] — `UMBRAL_SIMILITUD` de 0.6 a 0.68, elegido midiendo y no a ojo
+
+**Contexto**: El umbral difuso de `_puntaje_busqueda` estaba en 0.6 "a ojo" desde 2026-07-21. Con el inventario real cargado (91 recursos, nombres cortos de una o dos palabras) resultó demasiado permisivo: buscar **"taladro"** —que no existe en el inventario— devolvía 4 recursos (*Caladora*, *Sierra de calar manual*, *Cinta de aisladora*, *Agujereadora de banco*), "guantes" devolvía 7 y "multimetro" traía 8 con *Pintura marrón (tarro)* adentro. Para nombres cortos, 0.6 deja pasar casi cualquier cosa que comparta vocales. Con el agente esto pasó de molesto a peligroso: Claude recibía esos candidatos y ofrecía el primero como si fuera el recurso pedido.
+
+**Decisión**: subir a **0.68**, valor elegido con un barrido medido sobre la base real (0.60 → 0.80), no estimado.
+
+- **Ruido** (queries de cosas inexistentes): "taladro" 4→0, "guantes" 7→1, "multimetro" 8→1, "alicate" 6→2.
+- **Recall intacto**: todas las queries con typo probadas (`multimetr0`, `alikate`, `agujeradora`, `anemometroo`, `caladra`, `termometro infrarrojo`, `pinza amperometrica`) siguen encontrando su recurso en el **puesto #1**, incluso a 0.80. Subir el umbral no costó tolerancia a typos en ningún caso medido.
+- **Por qué 0.68 y no más**: arriba de 0.68 la mejora de ruido es marginal (amoladora 4→2 recién a 0.72) y se empieza a arriesgar recall sin evidencia que lo justifique.
+
+**Consecuencia**: la constante es **compartida** por la búsqueda web (`?q=` en `lista()`) y por `buscar_entidad` del agente — el cambio aplica a las dos, que es lo deseado (el mismo ruido existía en la web). Verificado en runtime que la web sigue resolviendo typos y que "taladro" ahora devuelve 0 filas en vez de 4 falsos positivos.
+
+**Nota para el futuro**: si el inventario crece mucho o aparecen nombres largos, el umbral fijo puede volver a quedar mal calibrado — un umbral que escale con la longitud de la query sería más robusto, pero no se implementó porque con los datos actuales no hacía falta. **No revertir a 0.6 sin volver a medir.**
+
+---
+
 ## [2026-08-04] — Asistente conversacional: tool-calling contra Claude, no embeddings ni agentes full-autonomous
 
 **Contexto**: El usuario pidió un "agente" para la app que pueda: preguntar cuándo está un profesor, añadir material nuevo, crear y cerrar préstamos. El pedido explícitamente menciona "con alguna capa de seguridad para que no todos puedan hacer todo, pero sí preguntar distintas cosas".

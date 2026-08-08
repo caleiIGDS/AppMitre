@@ -1,6 +1,12 @@
 from flask import Flask, render_template, jsonify, send_file
 import os
 import sqlite3
+
+# Carga .env en desarrollo local (DEEPSEEK_API_KEY, etc.). En Render las env vars se
+# setean en el dashboard y este archivo ni existe, así que no falla si falta.
+from dotenv import load_dotenv
+load_dotenv()
+
 import database
 import gestion
 import agente

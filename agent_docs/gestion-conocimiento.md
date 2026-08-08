@@ -49,13 +49,25 @@ Estados: recursos = Disponible / En uso / En reparación / De baja / Sin revisar
 proyectos = Activo / Pausado / Terminado.
 Valor (recursos): "" / Básico / Secundario / Alto valor — es la *importancia* del recurso
 dentro del inventario, no su precio (se llamaba `utilidad`, renombrada 2026-08-08).
-`cantidad` y `fecha_revision` son TEXT (fecha en formato libre del inventario, ej "24/4").
+`cantidad` y `fecha_revision` son TEXT. **`fecha_revision` se precarga con la fecha de hoy
+en todo alta de recurso**, por los dos caminos: el form web (`_valores_iniciales()` en el
+GET de `/recursos/nuevo`) y el chat (`_normalizar_borrador()` en `agente.py`, antes de
+calcular el token, para que la fecha aparezca en la ficha y el usuario la vea y la pueda
+cambiar). Dar de alta un recurso es un control de inventario; antes quedaba vacía y casi
+ningún recurso terminaba con fecha. Formato `gestion.FORMATO_FECHA_REVISION` = `%d/%m/%Y`
+(ej `08/08/2026`) — **conviven** con las fechas cortas sin año del inventario importado del
+sheet ("24/4", "8/5"), que no se reformatean. Editar un recurso **no** toca la fecha:
+`_editar_entidad` parte de la fila actual y no pasa por `_normalizar_borrador`.
 
-**Inventario físico**: `importar_inventario.py` (root) importa el sheet "Inventario renovable
-2026" a `recursos` vía CSV export público (mismo patrón que `database.py`, sin API key).
-Es carga puntual re-ejecutable (upsert por nombre normalizado, no duplica); `gestion.db`
-sigue siendo la fuente de verdad — no hay write-back al sheet (ver DECISIONS 2026-07-19).
-Mapeo de estados del sheet: Funcional→Disponible, Reparar→En reparación, nc→Sin revisar.
+**Inventario físico**: la carga inicial vino del sheet "Inventario renovable 2026" vía
+`importar_inventario.py`, un script de root que se corrió una vez (81 insertados +
+2 actualizados) y **se eliminó el 2026-08-08**, ya cumplido su propósito. `gestion.db` es
+la fuente de verdad y nunca hubo write-back al sheet (ver DECISIONS 2026-07-19), así que
+la planilla quedó como material histórico. Si alguna vez hay que volver a importar, el
+script está en el historial de git (`git show 756a002:importar_inventario.py`) — ojo que
+mapeaba los estados Funcional→Disponible, Reparar→En reparación, nc→Sin revisar, y que
+traía las fechas de revisión en formato corto sin año, incompatible con
+`FORMATO_FECHA_REVISION`.
 
 ## Config declarativa (`ENTIDADES` en gestion.py)
 
@@ -92,7 +104,8 @@ No es el `LIKE` literal de SQL: `lista()` trae todas las filas y las filtra/orde
 Python con `_puntaje_busqueda()`. Perdona **acentos y mayúsculas** (normaliza con `_norm`)
 y **typos** (similitud difusa vía `difflib.SequenceMatcher`, sin dependencias). Reglas:
 substring normalizado siempre puntúa por encima de los difusos; la similitud difusa solo
-entra para queries de 3+ caracteres, con umbral `UMBRAL_SIMILITUD` (0.6). Compara la query
+entra para queries de 3+ caracteres, con umbral `UMBRAL_SIMILITUD` (**0.68**, medido contra
+el inventario real — ver `dev-log/DECISIONS.md` 2026-08-08). Compara la query
 contra el nombre, cada palabra del nombre, y la descripción. Con ~decenas de filas por
 entidad el filtrado en Python es despreciable; si alguna tabla creciera a miles habría que
 reconsiderar (índice, FTS). Aplica a las 4 entidades genéricas; los préstamos usan su propio
@@ -233,6 +246,19 @@ etiquetas y cargarlas, gestionar préstamos. Todo con auditoría de escrituras e
   retorna `{respuesta}`. El backend llama a Claude con el mensaje + tools disponibles, ejecuta
   lo que Claude pida (tools de lectura y escritura), repite hasta respuesta final, audita
   escrituras en `agente_log`.
+- **`GET /gestion/agente/historial`** — devuelve `{mensajes: [{rol, texto}], confirmacion}`
+  para repintar el chat al cargar la página. `gestion-agente.js` lo llama en el
+  `DOMContentLoaded` (`cargarHistorial()`). **Hace falta desde que la conversación pasó a
+  `gestion.db`**: el servidor la recuerda entre páginas, pero el chat se dibuja de cero en
+  cada carga, así que el historial existía y no se veía. Devuelve también el botón de un
+  alta que haya quedado sin confirmar — si no, navegar a otra página dejaba la ficha viva
+  en el servidor y sin forma de darle OK. `_texto_visible()` aplana los bloques de
+  contenido y saca el `(refiriéndote a: X)` que `chat()` le agrega al mensaje del usuario,
+  que es una pista para el modelo y no algo que el usuario escribió.
+- **`POST /gestion/agente/confirmar`** — acepta `{token}` de una ficha de alta pendiente y
+  la guarda sin pasar por el modelo. `409` si el token ya se usó, se reinició la
+  conversación, o quedó desplazado por fichas más nuevas. Ver "Alta con ficha de
+  confirmación".
 - **`POST /gestion/agente/reset`** — limpia `session['agente_historial']` y
   `session['agente_entidad_actual']`; usado por el botón ↺ del widget para arrancar una
   conversación nueva sin arrastrar contexto viejo.
@@ -308,8 +334,10 @@ El asistente se usa mayormente desde el teléfono, en el pasillo. Lo que eso imp
   — horarios agrupados por día
 - `aulas_libres()` — aulas desocupadas ahora, agrupadas por piso
 - `buscar_entidad(slug, query)` — búsqueda de recursos/conjuntos/actividades/proyectos
+  (calidad del match explícita, ver abajo)
 - `detalle_entidad(slug, id)` — detalle completo + relaciones
 - `listar_prestamos(persona?)` / `detalle_prestamo(id)` — estados de préstamos
+- `consultar_historia(tema)` — lore de la escuela y guiños internos, ver abajo
 
 **Escritura** (se auditan, requieren `session['gestion_ok']`, guardan snapshot "antes"):
 - `crear_entidad(slug, campos)` — alta **en dos pasos con ficha de confirmación**, ver abajo
@@ -335,8 +363,17 @@ quedar guardado. Circuito:
    ("¿de qué medida es?", "¿sabés la marca?"). **No son bloqueantes**: si el usuario no
    contesta, se guarda igual — está en el prompt y en el `instruccion` de la ficha.
 3. Si el usuario pide cambios, el asistente vuelve a llamar con los campos corregidos y
-   sale otra ficha. Se repite hasta el OK.
-4. Con el OK, llama **otra vez con exactamente los mismos campos** y ahí sí escribe.
+   sale otra ficha (con su botón). Se repite hasta el OK.
+4. **El OK es un botón, no una respuesta escrita.** `/chat` devuelve además
+   `confirmacion: {token, etiqueta, nombre}` cuando quedó una ficha pendiente, y
+   `gestion-agente.js` pinta un botón verde debajo del mensaje (`agregarConfirmacion()`).
+   El botón pega en **`POST /gestion/agente/confirmar`** con el token: el alta se resuelve
+   ahí, en Python, **sin llamar al modelo** — instantánea, gratis, y sin margen para que
+   el modelo escriba otra cosa. Los campos salen de la sesión, nunca del request.
+   El resultado se agrega al `agente_historial` como un turno más, para que el asistente
+   sepa después que eso ya se guardó.
+5. Escribir "dale, guardalo" también funciona: el modelo llama **otra vez con exactamente
+   los mismos campos** y el hash coincide. Los dos caminos terminan en el mismo lugar.
 
 **Cómo se sabe que el usuario aprobó** (`_token_ficha`): cada ficha se identifica por un
 SHA-1 de su contenido (`slug` + los campos normalizados). Una llamada escribe solo si su
@@ -348,8 +385,10 @@ hash ya se mostró en un turno **anterior**. Consecuencias buscadas:
 - El hash se **consume** al escribir; repetir la llamada arranca de nuevo por la ficha en
   vez de duplicar el recurso.
 
-Los hashes viven en `session['agente_fichas']` (tope 10), que el endpoint `/chat` carga en
-`contexto_turno['fichas_previas']` antes de llamar al modelo y vuelve a guardar después.
+Los hashes viven en `session['agente_fichas']` — un dict `{token: {slug, campos}}`, tope 3
+porque la sesión de Flask es una cookie firmada de ~4KB y el historial ya ocupa lo suyo.
+El endpoint `/chat` lo carga en `contexto_turno['fichas_previas']` antes de llamar al modelo
+y lo vuelve a guardar después; `/confirmar` lee de ahí los campos a escribir.
 **Tiene que ser la sesión y no el turno**: los resultados de tools no se persisten en
 `agente_historial`, así que en el turno siguiente el modelo no tiene la ficha a la vista —
 un token que tuviera que repetir de memoria no le llega, y el alta quedaba trabada en un
@@ -369,11 +408,95 @@ usuario los lea sabiendo que son propuestos. `tipo` es texto libre, así que la 
 `recursos` incluye `tipos_en_uso` (`SELECT DISTINCT tipo`) para que reuse una categoría
 existente en vez de inventar un sinónimo nuevo por cada alta.
 
+### Los id no se le muestran al usuario
+
+Los id son plumbing: enganchan filas entre tablas y le sirven al modelo para llamar a las
+tools, pero al usuario no le dicen nada — ni la web de `/gestion` los muestra, solo los usa
+en las URLs. Aun así el modelo los repetía en casi toda respuesta de lectura (medido: 6 de
+9 respuestas — "Multímetro (ID 4)", "préstamo #2", una columna `ID` en la tabla de préstamos).
+
+Se ataca por dos lados:
+- **Regla en el system prompt** ("LOS ID NO SE MUESTRAN"), con ejemplos de mal/bien y la
+  indicación de desambiguar por lo que distingue de verdad (ubicación, potencia, marca) en
+  vez de por el id.
+- **`_ocultar_ids()`, filtro de salida en `chat()`**, que corre **antes de persistir** la
+  respuesta — así el historial repintado tampoco los trae. Saca paréntesis que son solo un
+  id, ids inline, `#N`, y la columna `ID` de las tablas markdown (`_quitar_columna_id()`,
+  que borra la misma posición en encabezado, separador y filas — con regex plana no alcanza).
+  Después limpia los restos: paréntesis vacíos, comas al abrir paréntesis, guiones colgando.
+
+Es filtro de código y no solo prompt por lo mismo de siempre; acá el costo de que el modelo
+se olvide es bajo (ruido en pantalla), pero sale gratis hacerlo determinístico. Medición
+después del cambio: **0 de 9**. Los mensajes que arma el servidor tampoco los incluyen
+(`/confirmar` responde "✅ Guardado: **nombre**." sin id).
+
 ### Salida interpretada
 
 Las tools de lectura retornan datos ya procesados, no filas SQL crudas: horarios agrupados
 por día, aulas libres agrupadas por piso, búsquedas con solo campos relevantes (omitiendo
 vacíos), pendientes de préstamos ya calculados. Reduce tokens de API y errores de interpretación.
+
+### Calidad del match en `buscar_entidad`
+
+La búsqueda es la misma de la web (`buscar_entidad_sin_request` → `_puntaje_busqueda`), que
+ordena por puntaje pero **lo descarta al devolver**. Para el agente eso era un problema real:
+buscar "taladro" (que no existe en el inventario) devolvía *Caladora*, *Sierra de calar
+manual* y *Cinta de aisladora* — todos difusos de ~0.6 — y Claude los recibía con el mismo
+peso que un match literal, así que ofrecía el primero como si fuera el pedido. Por eso
+`_buscar_entidad_fmt` (en `agente.py`, capa de presentación, no toca la búsqueda compartida)
+agrega por resultado:
+
+- **`match`**: `exacto` (substring en el nombre) · `descripcion` (substring en la descripción,
+  no en el nombre) · `aproximado` (solo similitud difusa).
+- **`similitud`** (0–1) cuando es `aproximado`, recalculada con `_puntaje_busqueda`.
+- **`descripcion`** cuando `match == 'descripcion'`: sin esto el nombre llega sin relación
+  visible con lo buscado (buscar "cable" trae *Faniot arduino*, cuya descripción dice
+  "Falta un cable usb a mini usb"). Se manda entera hasta `MAX_DESC_BUSQUEDA` (160) porque
+  las descripciones del inventario son cortas (máx ~180 chars).
+
+Y a nivel respuesta: `total` real, tope de `LIMITE_BUSQUEDA` (10) con campo `truncado`
+(la difusa no acota: con query vacía devolvía la tabla entera), y un `aviso` cuando **todos**
+los resultados son `aproximado` que le dice explícitamente que probablemente no exista y no
+ofrezca el más parecido como correcto. La descripción de la tool documenta los tres valores
+de `match`; sin eso el campo llega y el modelo lo ignora.
+
+Slug inválido devuelve `{'error': ...}` con los válidos, no una lista vacía (que el agente
+leía como "no hay nada cargado").
+
+### Historia de la escuela (`consultar_historia`)
+
+Cuarta área del agente, además de horarios / inventario / préstamos: lore institucional
+(fundación, el nombre de la escuela, el edificio) y guiños internos sobre gente de la casa.
+Existe para que el chat pueda contestar lo que no es operativo — "¿qué sabés de Cañamas?" —
+sin que eso sea una invitación a inventar.
+
+**Contenido en `historia_escuela.json`** (raíz, al lado de `nombre_mapeos.json`), no en
+`gestion.db`: es lore que se edita a mano y versiona en git, no dato de usuario — no justifica
+tabla, ABM ni migración. Cada entrada es `{claves, tipo, texto}`; `tipo` es `historia` (dato
+institucional) o `guiño` (humor de pasillo). Las entradas sin `claves` o sin `texto` se
+descartan al cargar, así que se pueden dejar bloques de comentario adentro del JSON.
+
+**Carga cacheada por mtime** (`_cargar_historia`): recarga sola cuando el archivo cambia,
+porque en Render el proceso puede quedar meses arriba y sumar una anécdota no debería
+requerir reiniciar. Archivo ausente o JSON roto ⇒ lista vacía, no excepción: el agente
+responde "no sé" en vez de romper el chat.
+
+**Match** (`_historia_fmt`): substring normalizado con `gestion._norm` y, si no hay, `difflib`
+sobre las claves con umbral `HISTORIA_UMBRAL = 0.72` — más exigente que el 0.68 del inventario
+porque las claves son pocas y elegidas, y un falso positivo acá contesta una anécdota que no
+tiene nada que ver. El NFD de `_norm` le saca la tilde a la ñ, así que "Cañamas" queda
+`canamas` y "caniamas" entra por similitud (~0.93).
+
+**Por qué el texto se devuelve literal y nunca lo genera el modelo**: dejarlo improvisar
+anécdotas reactiva justo la conducta que la regla inviolable del prompt desactiva (se lo
+detectó fabricando horarios enteros), y el modelo no tiene cómo saber que el permiso para
+inventar terminaba en las anécdotas. Por eso `encontrado:false` no devuelve lista vacía sino
+una instrucción explícita de no inventar, y el hit trae una `nota` que prohíbe agregar hechos,
+nombres o fechas que no estén en `texto`. La descripción de la tool además acota el dominio
+("no la uses para horarios, inventario ni préstamos") para que no se dispare en turnos
+operativos.
+
+**Costo**: ~200 tokens de esquema por turno, fijos; el contenido solo se paga cuando se llama.
 
 ### Auditoría (agente_log)
 

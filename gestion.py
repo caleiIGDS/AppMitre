@@ -79,7 +79,7 @@ ENTIDADES = {
             {'nombre': 'ubicacion', 'label': 'Ubicación', 'tipo': 'text', 'ayuda': 'Ej: Taller de Electricidad, Pañol, A2'},
             {'nombre': 'estado', 'label': 'Estado', 'tipo': 'select', 'opciones': ESTADOS_RECURSO},
             {'nombre': 'valor', 'label': 'Valor', 'tipo': 'select', 'opciones': VALORES_RECURSO, 'ayuda': 'Importancia del recurso dentro del inventario'},
-            {'nombre': 'fecha_revision', 'label': 'Última revisión', 'tipo': 'text', 'ayuda': 'Fecha del último control de inventario (ej: 24/4)'},
+            {'nombre': 'fecha_revision', 'label': 'Última revisión', 'tipo': 'text', 'ayuda': 'Fecha del último control de inventario (día/mes/año). En un alta arranca en hoy'},
             {'nombre': 'drive_url', 'label': 'Carpeta de Drive (link)', 'tipo': 'url', 'ayuda': 'Fotos, planos y documentos viven en Drive; acá solo va el link'},
         ],
         'columnas': [('nombre', 'NOMBRE'), ('cantidad', 'CANT.'), ('ubicacion', 'UBICACIÓN'), ('estado', 'ESTADO'), ('valor', 'VALOR')],
@@ -238,8 +238,16 @@ def _norm(texto):
 # Búsqueda "que perdona": en vez del LIKE literal, normaliza acentos/mayúsculas y
 # tolera typos por similitud (difflib, sin dependencias). El substring normalizado
 # siempre gana; la similitud difusa solo entra para queries de 3+ caracteres (con
-# menos daría demasiado ruido). Umbral elegido a ojo — subir = más estricto.
-UMBRAL_SIMILITUD = 0.6
+# menos daría demasiado ruido). Subir = más estricto.
+#
+# 0.68 salió de medir contra el inventario real (91 recursos), no a ojo: con 0.6
+# buscar "taladro" (que no existe) devolvía 4 recursos, "guantes" 7 y "multimetro"
+# traía 8 con "Pintura marrón (tarro)" adentro. Para nombres cortos, 0.6 deja pasar
+# casi cualquier cosa que comparta vocales. A 0.68 esos casos caen a 0/1/1 y el
+# recall no se toca: todas las queries con typo probadas ("multimetr0", "alikate",
+# "agujeradora", "anemometroo", "caladra") siguen encontrando su recurso en el
+# puesto #1. Arriba de 0.68 se gana poco y se empieza a arriesgar recall.
+UMBRAL_SIMILITUD = 0.68
 
 
 def _puntaje_busqueda(q_norm, *textos):
@@ -655,6 +663,23 @@ def lista(slug):
                            activo=slug, buscar=buscar, carrito=carrito)
 
 
+# Formato de `recursos.fecha_revision`. La columna es TEXT y el inventario importado del
+# sheet trae fechas cortas sin año ("24/4"): conviven, pero lo que se carga de acá en más
+# lleva el año. `agente.py` importa esta constante para no tener dos formatos distintos.
+FORMATO_FECHA_REVISION = '%d/%m/%Y'
+
+
+def _valores_iniciales(slug):
+    """Con qué valores arranca el formulario de alta, antes de que el usuario escriba.
+
+    Dar de alta un recurso ES un control de inventario, así que la fecha de revisión
+    arranca en hoy. Antes quedaba vacía y casi ningún recurso terminaba con fecha.
+    """
+    if slug == 'recursos':
+        return {'fecha_revision': datetime.now().strftime(FORMATO_FECHA_REVISION)}
+    return {}
+
+
 @bp.route('/<slug>/nuevo', methods=['GET', 'POST'])
 def nuevo(slug):
     cfg = _cfg(slug)
@@ -672,7 +697,9 @@ def nuevo(slug):
     opciones = _opciones_relaciones(cfg, cur)
     con.close()
     seleccion = {rel['campo']: {int(v) for v in request.form.getlist(rel['campo'])} for rel in cfg['relaciones']}
-    return render_template('gestion/form.html', cfg=cfg, slug=slug, fila=None, valores=request.form,
+    # En el GET el form arranca con los defaults; en un POST fallido se respeta lo tipeado.
+    valores = request.form if request.method == 'POST' else _valores_iniciales(slug)
+    return render_template('gestion/form.html', cfg=cfg, slug=slug, fila=None, valores=valores,
                            opciones=opciones, seleccion=seleccion, error=error, activo=slug)
 
 

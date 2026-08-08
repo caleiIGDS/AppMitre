@@ -1243,6 +1243,52 @@ body {
     text-decoration: underline;
 }
 
+/* ---------- Botón de confirmar alta ---------- */
+/* Aparece debajo del mensaje con la ficha; el alta se confirma tocándolo, no
+   escribiendo "sí". Ver agregarConfirmacion() en gestion-agente.js. */
+
+.agente-confirm {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    margin-top: -4px;
+    animation: fadeIn 0.3s ease-in;
+}
+
+.agente-confirm-btn {
+    background: #16a34a;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 11px 18px;
+    font-family: var(--g-font);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    min-height: 44px;
+    box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3);
+    transition: all 0.2s;
+}
+
+.agente-confirm-btn:hover:not(:disabled) {
+    background: #15803d;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.35);
+}
+
+.agente-confirm-btn:disabled {
+    opacity: 0.6;
+    cursor: progress;
+}
+
+.agente-confirm-nota {
+    font-size: 11px;
+    color: var(--g-muted);
+    padding-left: 2px;
+}
+
 /* ========== PESTAÑA DEDICADA AL CHAT (/gestion/agente) ========== */
 /* Mismo markup que el widget (_agente_chat_core.html), otro contenedor. */
 

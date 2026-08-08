@@ -1,5 +1,6 @@
 Flask
 fpdf2
+python-dotenv
 
 # LLM providers del agente (agente.py)
 # El provider por DEFECTO es DeepSeek (deepseek-v4-pro), que usa la API compatible

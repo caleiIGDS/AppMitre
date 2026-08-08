@@ -126,6 +126,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!mensaje) return;
 
     limpiarBienvenida();
+    // Un botón de confirmar de un mensaje anterior deja de valer: si el usuario siguió
+    // escribiendo, lo más probable es que quiera cambiar algo, no guardar eso de antes.
+    quitarConfirmaciones();
     agregarMensaje(mensaje, 'user');
 
     // Preparar payload
@@ -169,6 +172,7 @@ document.addEventListener('DOMContentLoaded', function() {
           agregarMensaje('Error: ' + data.error, 'error');
         } else {
           agregarMensaje(data.respuesta, 'assistant');
+          if (data.confirmacion) agregarConfirmacion(data.confirmacion);
         }
       })
       .catch(error => {
@@ -226,6 +230,85 @@ document.addEventListener('DOMContentLoaded', function() {
     messagesDiv.appendChild(msgDiv);
     irAlFinal();
   }
+
+  // --- Botón de confirmar alta ---
+  // El alta en el catálogo no se confirma escribiendo "sí": el backend manda `confirmacion`
+  // con el token de la ficha que se acaba de mostrar y acá se pinta el botón. Al tocarlo,
+  // /confirmar guarda directo desde lo que quedó en la sesión — sin pasar por el modelo,
+  // así que es instantáneo, gratis, y guarda exactamente lo que el usuario leyó.
+
+  function quitarConfirmaciones() {
+    messagesDiv.querySelectorAll('.agente-confirm').forEach(el => el.remove());
+  }
+
+  function agregarConfirmacion(conf) {
+    const caja = document.createElement('div');
+    caja.className = 'agente-confirm';
+
+    const btn = document.createElement('button');
+    btn.className = 'agente-confirm-btn';
+    btn.textContent = '✅ ' + (conf.etiqueta || 'Guardar');
+
+    const nota = document.createElement('span');
+    nota.className = 'agente-confirm-nota';
+    nota.textContent = 'o seguí escribiendo para cambiar algo';
+
+    btn.addEventListener('click', function() {
+      if (enviando) return;
+      enviando = true;
+      btn.disabled = true;
+      btn.textContent = 'Guardando…';
+
+      fetch('/gestion/agente/confirmar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: conf.token })
+      })
+        .then(r => r.json().then(data => ({ ok: r.ok, data })))
+        .then(({ data }) => {
+          caja.remove();
+          agregarMensaje(data.respuesta || 'Sin respuesta', data.ok ? 'assistant' : 'error');
+        })
+        .catch(error => {
+          btn.disabled = false;
+          btn.textContent = '✅ ' + (conf.etiqueta || 'Guardar');
+          agregarMensaje('Error de conexión: ' + error.message, 'error');
+        })
+        .finally(() => {
+          enviando = false;
+          sendBtn.disabled = false;
+        });
+    });
+
+    caja.appendChild(btn);
+    caja.appendChild(nota);
+    messagesDiv.appendChild(caja);
+    irAlFinal();
+  }
+
+  // --- Repintar la conversación guardada ---
+  // La conversación vive en gestion.db, así que el servidor la recuerda al navegar entre
+  // páginas — pero el chat se dibuja de cero en cada carga. Sin esto el historial estaba
+  // ahí (el agente lo usaba de contexto) y el usuario no lo veía, que parecía un bug.
+
+  function cargarHistorial() {
+    // En el login el widget existe pero no hay sesión: pedir el historial daría 401.
+    if (widget && !toggleBtn) return;
+
+    fetch('/gestion/agente/historial')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (!data || !data.mensajes || !data.mensajes.length) return;
+        limpiarBienvenida();
+        data.mensajes.forEach(m => agregarMensaje(m.texto, m.rol === 'user' ? 'user' : 'assistant'));
+        // Un alta que quedó sin confirmar recupera su botón: si no, cambiar de página
+        // dejaba la ficha viva en el servidor y sin forma de darle OK.
+        if (data.confirmacion) agregarConfirmacion(data.confirmacion);
+      })
+      .catch(() => {});  // sin historial el chat igual funciona: no vale molestar con un error
+  }
+
+  cargarHistorial();
 
   // En la pestaña dedicada arrancamos con el cursor puesto (en desktop).
   if (!widget) enfocarInput();
