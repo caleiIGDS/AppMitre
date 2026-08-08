@@ -17,7 +17,13 @@ Texto: "Miriam Cañamas tiene fama de escuchar todo..."
   - Ejemplo: `["cañamas", "miriam", "multimetro", "fallado", "taller", "tercero"]`
 - **tipo**: `historia` (dato institucional) o `guiño` (humor interno)
 - **resumen**: una línea (~10 palabras) describiendo de qué trata
+- **fecha**: año o período aproximado (ej: "2011", "mediados de 2010s", "principios de los 2000s")
+  - **MUY IMPORTANTE**: aunque sea aproximada, determina el tono nostálgico. Una historia de 2005
+    tiene resonancia emocional diferente a una de 2020. El usuario que pregunta "algo nostálgico"
+    espera historias de hace años, no de hace meses.
+  - Si no se sabe, usar "s/f" (sin fecha)
 - **tono**: emoción al contar (nervioso, reflexivo, misterioso, conmocionado, nostálgico)
+  - El tono se ancliza en la fecha: si es historia de hace 15 años + tono reflexivo → claramente nostálgico
 - **estilo**: forma narrativa
   - Ejemplos: "primera persona, nervioso, como confesando un secreto"
   - "nostálgico, como recordando tu propia época"
@@ -32,6 +38,7 @@ Texto: "Miriam Cañamas tiene fama de escuchar todo..."
   "titulo": "Miriam Cañamas: el multímetro fallado",
   "claves": ["cañamas", "miriam", "multimetro", "fallado", "taller"],
   "tipo": "guiño",
+  "fecha": "2008",
   "resumen": "La anécdota de tercero que culpó al instrumento",
   "tono": "nervioso",
   "estilo": "primera persona, cómplice, como confesando",
@@ -47,6 +54,7 @@ En el array `indice`, agregar:
   "titulo": "Miriam Cañamas: el multímetro fallado",
   "claves": ["cañamas", "miriam", "multimetro", "fallado", "taller"],
   "tipo": "guiño",
+  "fecha": "2008",
   "resumen": "La anécdota de tercero que culpó al instrumento",
   "tono": "nervioso",
   "estilo": "primera persona, cómplice, como confesando"
@@ -73,13 +81,16 @@ git commit -m "Historia: Miriam Cañamas"
 - **Cobertura**: incluir nombre, tema principal, palabras del texto, sinónimos comunes
 - **Evitar**: palabras genéricas ("historia", "escuela") que macheen todo
 
-### Tono
-Elige según la narrativa:
-- `reflexivo`: recordando, pensativo, nostálgico
+### Tono y Fecha (crítico para nostalgia)
+Elige según la narrativa, pero **ancla el tono en la fecha**:
+- `reflexivo`: recordando, pensativo. Una historia de 2005 + reflexivo = profundamente nostálgico
 - `nervioso`: incómodo, como confesando secreto, admiración incómoda
 - `misterioso`: enigmático, como mostrando secretos, suspensivo
 - `conmocionado`: admiración, sorpresa, emoción fuerte
-- `nostálgico`: recordando tiempos pasados con cariño
+- `nostálgico`: recordando tiempos pasados con cariño. Más poderoso si la fecha es lejana (15+ años)
+
+**Ejemplo**: la historia de Kaypacha (2011) con tono "misterioso" = nostalgia por una época que se fue.
+Sin la fecha, sería un misterio sin peso emocional. Con la fecha, es "ese misterio sin resolver de hace años".
 
 ### Estilo
 Describe cómo Emilio cuenta la historia:
@@ -111,18 +122,19 @@ Si **ninguna**: "no sé de eso".
 
 ```json
 {
-  "id": "hist_ejemplo",                    // slug único, snake_case
-  "titulo": "Título de la historia",       // público, aparece en listados
-  "claves": [                              // búsqueda: 5-10 palabras
+  "id": "hist_ejemplo",                      // slug único, snake_case
+  "titulo": "Título de la historia",         // público, aparece en listados
+  "claves": [                                // búsqueda: 5-10 palabras
     "palabra1",
     "palabra2",
     "sinonimo",
     "nombre_persona"
   ],
-  "tipo": "historia|guiño",                // dato real vs humor
-  "resumen": "Una línea breve",            // ~10 palabras, qué trata
-  "tono": "reflexivo|nervioso|...",        // emoción al contar
-  "estilo": "primera persona, íntimo...",  // cómo cuenta Emilio
+  "tipo": "historia|guiño",                  // dato real vs humor
+  "fecha": "2011",                           // año/período (muy importante para tono nostálgico)
+  "resumen": "Una línea breve",              // ~10 palabras, qué trata
+  "tono": "reflexivo|nervioso|misterioso|...", // emoción al contar
+  "estilo": "primera persona, íntimo...",    // cómo cuenta Emilio
   "texto": "El texto completo de la historia. Puede tener varias líneas."
 }
 ```
@@ -131,17 +143,20 @@ Si **ninguna**: "no sé de eso".
 
 ## Ejemplo: agregar una historia
 
-**Usuario dice**: "Hay una anécdota sobre que una vez el taller se inundó"
+**Usuario dice**: "Hay una anécdota sobre que una vez el taller se inundó. Fue en 2015, en febrero."
 
 **Claude hace**:
 1. Genera `id: "anecdota_inundacion_taller"` (o más corto: `hist_inundacion`)
-2. Genera `claves: ["inundacion", "taller", "agua", "desastre", "accidente"]`
+2. Genera `claves: ["inundacion", "taller", "agua", "desastre", "accidente", "2015"]`
 3. Propone `tipo: "historia"` (es un evento real)
-4. Propone `tono: "nervioso"` (un desastre es emocionante de contar)
-5. Propone `estilo: "primera persona, dramático, como revelando un caos"` (lo vivió)
-6. Propone `resumen: "El día que el taller se inundó sin aviso"`
-7. Crea `historias/hist_inundacion.json` con el texto
-8. Actualiza `historia_indice.json` con la entrada
-9. Commitea
+4. Propone `fecha: "2015"` (precisión completa, pero también acepta "mediados de 2010s")
+5. Propone `tono: "nervioso"` (un desastre es emocionante, pero hace años es nostálgico también)
+6. Propone `estilo: "primera persona, dramático, como revelando un caos que ya pasó"` (lo vivió, lo recuerda)
+7. Propone `resumen: "El día que el taller se inundó sin aviso"`
+8. Crea `historias/hist_inundacion.json` con el texto + fecha
+9. Actualiza `historia_indice.json` con la entrada + fecha
+10. Commitea
 
-Listo. El agente puede consultarla inmediatamente con `consultar_historia(tema='inundacion')`.
+Listo. El agente puede consultarla inmediatamente con `consultar_historia(tema='inundacion')`. Si alguien 
+pregunta "algo nostálgico", la fecha 2015 ayuda a Emilio a contar con la emoción correcta: "hace años 
+que pasó eso".
