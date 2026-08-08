@@ -519,12 +519,16 @@ Estructura por historia:
   "titulo": "Miriam Cañamas: el multímetro fallado",
   "claves": ["cañamas", "miriam", "multimetro"],
   "tipo": "guiño",
+  "fecha": "2008",
   "resumen": "La anécdota de tercero que culpó al instrumento",
   "tono": "nervioso",
   "estilo": "primera persona, cómplice, como confesando",
   "texto": "Miriam Cañamas tiene fama de escuchar todo..."
 }
 ```
+
+**Campo `fecha`** (crítico): año o período aproximado. Determina el tono nostálgico de la historia.
+Una historia de 2005 + tono reflexivo = profundamente nostálgica. Sin fecha, es solo una anécdota.
 
 **Búsqueda** (`_historia_fmt`): sin tema devuelve índice completo. Con tema:
 - Busca en `claves`, `tono`, `estilo`, `titulo`, `resumen` (substring + difuso con umbral 0.72)
