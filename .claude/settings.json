@@ -9,7 +9,8 @@
       "Bash(python -c \"import json; json.load\\(open\\('historia_indice.json', encoding='utf-8'\\)\\)\")",
       "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\verify_listar.py\")",
       "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\piso_real.py\")",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\e2e_listar.py\")"
     ]
   }
 }

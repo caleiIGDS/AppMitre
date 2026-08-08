@@ -4,6 +4,20 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-08] — Tool nueva `listar_todos`: fallback de lectura completa para sinónimos
+
+**Tipo**: tool nueva del agente (sin cambio de schema)
+**Archivos**: `agente.py`
+**Cambios**:
+- **Tool nueva `listar_todos(slug)`** — devuelve la lista completa de `{id, nombre}` de una entidad. Es el **fallback** de `buscar_entidad`, no un reemplazo: se usa cuando ningún resultado trae `match: "exacto"`. Resuelve sinónimos y jerga (tester→*Multímetro*, taladro→*Agujereadora de banco*) sin diccionario que mantener, y convierte "no está cargado" de conjetura en afirmación verificada.
+- **Contrato de la salida**: `{slug, total, items:[{id,nombre}], instruccion}` + `sin_nombre: N` si hay filas con nombre vacío (se filtran de `items` pero se cuentan, para que "estos son todos" sea cierto). Arriba de `LIMITE_LISTADO_COMPLETO` (400) devuelve `{'error', 'total'}` en vez de la lista.
+- **Un solo punto de registro cubre los dos proveedores**: se agrega a `TOOLS_SCHEMA` (formato Anthropic) y `_tools_openai()` la convierte para DeepSeek/OpenAI/Groq. Registrada además en la lista de tools de lectura de `ejecutar_tool` (no se audita) y en el dispatch.
+- **`buscar_entidad` cambia sus `aviso`**: donde antes decían "avisale que quizá no está cargado", ahora dicen "antes de afirmar que no está, llamá a `listar_todos(slug)`". Su `description` también deja de sugerir concluir que no existe.
+- **Regla 3 del system prompt reescrita**: de "busca difuso" al orden explícito `buscar_entidad` → si no hay `exacto`, `listar_todos` → recién ahí "no está cargado".
+- Costo medido: el listado completo de 91 recursos son ~1.190 tokens contra un piso de ~8.050 por round-trip. Ver `dev-log/DECISIONS.md` 2026-08-08 para las alternativas descartadas (columna `sinonimos`, JSON de grupos, tier de reintentos) y cuándo la decisión se da vuelta.
+
+---
+
 ## [2026-08-08] — Historias: arquitectura de dos niveles con lazy-loading e instrucciones de tono
 
 **Tipo**: refactor de estructura de archivos + cambio en tool `consultar_historia`

@@ -11,7 +11,7 @@ Texto: "Miriam Cañamas tiene fama de escuchar todo..."
 ```
 
 ### 2. Claude completa
-- **id**: slug único, `guion_bajo`, de 2-3 palabras (ej: `guino_canamas`)
+- **id**: slug único, `guion_bajo`, de 2-3 palabras (ej: `guiño_canamas`)
 - **claves**: palabras-clave para búsqueda (5-10), sin acentos, en minúsculas
   - Incluye: nombre/tema principal, palabras que aparecen en el texto, sinónimos
   - Ejemplo: `["cañamas", "miriam", "multimetro", "fallado", "taller", "tercero"]`
@@ -34,7 +34,7 @@ Texto: "Miriam Cañamas tiene fama de escuchar todo..."
 **A) `historias/{id}.json`**
 ```json
 {
-  "id": "guino_canamas",
+  "id": "guiño_canamas",
   "titulo": "Miriam Cañamas: el multímetro fallado",
   "claves": ["cañamas", "miriam", "multimetro", "fallado", "taller"],
   "tipo": "guiño",
@@ -50,7 +50,7 @@ Texto: "Miriam Cañamas tiene fama de escuchar todo..."
 En el array `indice`, agregar:
 ```json
 {
-  "id": "guino_canamas",
+  "id": "guiño_canamas",
   "titulo": "Miriam Cañamas: el multímetro fallado",
   "claves": ["cañamas", "miriam", "multimetro", "fallado", "taller"],
   "tipo": "guiño",
@@ -63,12 +63,12 @@ En el array `indice`, agregar:
 
 ### 4. Verificar
 ```bash
-python -c "import json; json.load(open('historias/guino_canamas.json', encoding='utf-8'))" && echo "OK"
+python -c "import json; json.load(open('historias/guiño_canamas.json', encoding='utf-8'))" && echo "OK"
 ```
 
 ### 5. Commit
 ```bash
-git add historias/guino_canamas.json historia_indice.json
+git add historias/guiño_canamas.json historia_indice.json
 git commit -m "Historia: Miriam Cañamas"
 ```
 
