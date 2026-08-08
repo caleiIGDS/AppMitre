@@ -4,6 +4,26 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-08-08] — Personalidad de Emilio: fantasma omnipotente en historias, herramienta neutral en tareas
+
+**Contexto**: El agente se llamaba "Emilio" por el nombre de la escuela, pero sin identidad — respondía todo con el mismo tono neutral. Se pidió darle **personaje**: que cuando cuente historias sea Emilio Mitre en persona, el ingeniero cuyo nombre lleva la escuela, un fantasma que habita desde su construcción y vio todo lo que pasó. Pero solo en historias — para horarios y búsquedas operativas, debe seguir siendo una herramienta eficiente.
+
+**Decisión**:
+- **Emilio cobra vida solo en historias** (`consultar_historia`). Cuando el usuario pide un horario, aulas libres o un inventario, responde como herramienta neutral (no cambia). Es así porque alguien que consulta horarios en medio de la jornada quiere info rápida, sin storytelling.
+- **Personalidad activada por `instruccion_tono`**: cuando hay una historia en modo `directo`, la tool devuelve una instrucción que le dice a Claude:
+  > "ERES EMILIO MITRE, el fantasma que vive en esta escuela desde que se construyó. Recorres todos los pasillos, ves y escuchas todo. Cuéntale esta historia EN PRIMERA PERSONA, como testigo omnipotente que lo presenció."
+  - La instrucción no carga en system prompt, viaja en la respuesta de la tool. Así es contextual a esa historia específica.
+  - Incluye el `tono` emocional específico (nervioso, reflexivo, misterioso, etc.) y el `estilo` narrativo (primera persona, íntimo, como confesando, etc.).
+- **Por qué `instruccion_tono` en la respuesta y no en system prompt dinámico**: 
+  - Las instrucciones por historia viajan con la tool de lectura (modo `directo` le pasa la instrucción al texto).
+  - Si fueran dinámicas en el loop, tendrían que inyectarse en el system prompt a cada turno (cargo fijo). Viajando en la tool, no pesan si no se consultan historias.
+  - Conceptualmente: Emilio es el resultado de la lectura, no un personaje que espera en el background.
+  - Auditoría: la instrucción está en el JSON que la tool retorna, no es magia del prompt.
+
+**Consecuencia**: el agente es "bifásico" — dos caras de la misma entidad. Tareas operativas: máquina eficiente. Historias: fantasma omnipotente que cuenta lo que vio. El usuario interactúa con Emilio siempre, pero él solo "despierta" en las historias.
+
+---
+
 ## [2026-08-08] — Historias: arquitectura de dos niveles (índice + archivos) + tonos/estilos
 
 **Contexto**: Se pidió escalar el sistema de historias para cientos de anécdotas, permitiendo búsquedas por atmósfera ("algo misterioso", "historias excitantes") y que el agente las cuente **con emoción real** (primera persona, tono nervioso/reflexivo/etc.), no como texto plano de "dos puntos y listar".

@@ -335,6 +335,8 @@ El asistente se usa mayormente desde el teléfono, en el pasillo. Lo que eso imp
 - `aulas_libres()` — aulas desocupadas ahora, agrupadas por piso
 - `buscar_entidad(slug, query)` — búsqueda de recursos/conjuntos/actividades/proyectos
   (calidad del match explícita, ver abajo)
+- `listar_todos(slug)` — lista completa de nombres + id; **fallback** de `buscar_entidad`
+  cuando no hay ningún match `exacto`, ver abajo
 - `detalle_entidad(slug, id)` — detalle completo + relaciones
 - `listar_prestamos(persona?)` / `detalle_prestamo(id)` — estados de préstamos
 - `consultar_historia(tema)` — lore de la escuela y guiños internos, ver abajo
@@ -463,11 +465,45 @@ de `match`; sin eso el campo llega y el modelo lo ignora.
 Slug inválido devuelve `{'error': ...}` con los válidos, no una lista vacía (que el agente
 leía como "no hay nada cargado").
 
+### Búsqueda en dos niveles: `buscar_entidad` → `listar_todos`
+
+`_puntaje_busqueda` compara **letras, no significados**: buscar "tester" no encuentra el
+*Multímetro*, y "taladro" no encuentra la *Agujereadora de banco*, que es exactamente eso.
+Por eso "no encontré" **no** equivale a "no existe", y el agente no debe concluir lo segundo
+desde lo primero. El orden es:
+
+1. `buscar_entidad(slug, query)` — barata y precisa.
+2. Si ningún resultado trae `match: "exacto"` → `listar_todos(slug)`, que devuelve **todos**
+   los nombres + id. El modelo reconoce ahí el sinónimo, la marca o la jerga del taller.
+3. Recién entonces afirmar que no está cargado — habiéndolo verificado, no deducido.
+
+`_listar_todos_fmt` devuelve `{slug, total, items:[{id,nombre}], instruccion}` y, si hay filas
+con el nombre vacío, las cuenta aparte en `sin_nombre` (esconderlas sin avisar haría falsa la
+afirmación "estos son todos"). Tope `LIMITE_LISTADO_COMPLETO` (400): arriba de eso devuelve
+`error` pidiendo afinar la búsqueda, en vez de reventar el contexto en silencio.
+
+**Costo medido** (91 recursos): el listado completo son ~1.190 tokens. El piso que se
+re-procesa en **cada** round-trip de tool es ~8.050 (esquemas de las 20 tools ~6.420 + lista
+de personas ~1.625, sin contar system prompt ni historial), así que un intento extra de
+búsqueda cuesta ~6,7x lo que cuesta mandar el inventario entero. Por eso se eligió esto sobre
+un diccionario de sinónimos o un tier intermedio de reintentos — ver `dev-log/DECISIONS.md`
+2026-08-08, que además documenta cuándo esta decisión se da vuelta (si el inventario supera
+el tope).
+
+**El guardrail vive en tres lugares que se refuerzan** — es de prompt, no de código, y con
+DeepSeek (proveedor por defecto) es más frágil que con Claude:
+- el `aviso` de `buscar_entidad` nombra la tool cuando la búsqueda falla;
+- la `instruccion` del resultado dice "estos son TODOS; si ninguno es, decilo — no ofrezcas
+  el más parecido como si fuera el correcto";
+- la regla 3 del system prompt fija el orden de los tres pasos.
+
 ### Historia de la escuela (`consultar_historia`)
 
 Cuarta área del agente: lore institucional (fundación, nombre de la escuela, edificio) y
-guiños internos sobre gente de la casa. El agente responde "¿qué sabés de Cañamas?" sin
-inventar, porque las historias son literales del archivo.
+guiños internos sobre gente de la casa. **Cuando se piden historias, no es el agente quien
+responde: es Emilio Mitre, el fantasma que habita la escuela desde su construcción.** Recorre
+todos los pasillos, ve y escucha todo. Por eso cuenta en primera persona con autoridad omnipotente.
+Las historias son literales del archivo — nunca improvisadas.
 
 **Estructura de archivos**:
 - **`historia_indice.json`** — índice comprimido: id, título, claves, tipo, resumen, tono, estilo.
@@ -493,14 +529,21 @@ Estructura por historia:
 **Búsqueda** (`_historia_fmt`): sin tema devuelve índice completo. Con tema:
 - Busca en `claves`, `tono`, `estilo`, `titulo`, `resumen` (substring + difuso con umbral 0.72)
 - Devuelve tres modos:
-  * **directo**: 1 coincidencia exacta → devuelve historia completa + `instruccion_tono` (cómo contar)
-  * **listar**: múltiples opciones → devuelve índice sin textos, usuario elige
+  * **directo**: 1 coincidencia exacta → devuelve historia completa + `instruccion_tono` (instrucciones para Emilio)
+  * **listar**: múltiples opciones → devuelve índice sin textos, usuario elige cuál historia quiere escuchar
   * **no_encontrado**: nada coincide → instrucción de no inventar
 
-**Tonos y estilos**: cada historia define cómo debe contarse. El agente recibe `instruccion_tono`
-que le pide primera persona, emociones específicas (nervioso, reflexivo, misterioso, conmocionado),
-y el estilo narrativo (íntimo, nostálgico, dramático). El modelo respeta estas instrucciones como
-parte de la respuesta de la tool.
+**Personalidad de Emilio**: en modo `directo`, la `instruccion_tono` le recordar a Claude que es
+Emilio Mitre, el fantasma omnipotente, contando desde su perspectiva de siglos. Cada historia
+especifica un `tono` (emociones: nervioso, reflexivo, misterioso, conmocionado, nostálgico) y
+un `estilo` (narrativa: primera persona, íntimo, dramático, como confesando, etc.). El modelo
+respeta estas instrucciones y cuenta la historia con la voz de Emilio, no como un asistente
+que relata.
+
+**Gatillo de personalidad**: Emilio solo cobra vida cuando se consultan historias. Para tareas
+prácticas (horarios, inventario, préstamos), sigue siendo una herramienta eficiente sin personaje.
+Así alguien que consulta un horario en medio de la jornada obtiene info rápida, sin interrupciones
+de lore.
 
 **Por qué textos literales**: dejarlo improvisar anécdotas dispara la conducta que el prompt desactiva
 (fabricación de historias), y el modelo no sabe que el permiso termina en anécdotas. Por eso textos
