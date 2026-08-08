@@ -5,40 +5,11 @@
       <span>Asistente IA</span>
     </div>
     <div class="agente-widget-actions">
+      <a href="{{ url_for('agente.chat_page') }}" class="agente-expand-btn" title="Abrir en pantalla completa" aria-label="Abrir en pantalla completa">⤢</a>
       <button id="agente-reset-btn" class="agente-reset-btn" title="Reiniciar chat" aria-label="Reiniciar chat">↺</button>
       <button id="agente-close-btn" class="agente-close-btn" title="Cerrar widget" aria-label="Cerrar">✕</button>
     </div>
   </div>
 
-  <div id="agente-messages" class="agente-messages">
-    <div class="agente-welcome">
-      <div class="agente-welcome-icon">🤖</div>
-      <div class="agente-welcome-text">
-        <strong>¡Hola!</strong><br>
-        Preguntá sobre horarios, recursos, préstamos o cualquier otra cosa.
-      </div>
-    </div>
-  </div>
-
-  <div class="agente-input-area">
-    <input type="file" id="agente-image-file" accept="image/*" style="display: none;">
-
-    <div class="agente-toolbar">
-      <button id="agente-image-btn" class="agente-toolbar-btn" title="Adjuntar imagen" aria-label="Adjuntar imagen">
-        📷
-      </button>
-      <span id="agente-image-preview" class="agente-image-preview"></span>
-    </div>
-
-    <div class="agente-input-row">
-      <textarea id="agente-input" class="agente-input" placeholder="Escribí tu pregunta..." rows="2"></textarea>
-      <button id="agente-send-btn" class="agente-send-btn" title="Enviar (Ctrl+Enter)">
-        <span class="agente-send-icon">→</span>
-      </button>
-    </div>
-
-    <div class="agente-footer">
-      <a href="{{ url_for('agente.agente_log') }}" target="_blank" class="agente-footer-link">📋 Auditoría</a>
-    </div>
-  </div>
+  {% include 'gestion/_agente_chat_core.html' %}
 </div>

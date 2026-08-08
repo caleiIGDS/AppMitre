@@ -4,6 +4,46 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-08] — Alta por chat: ficha de confirmación obligatoria (`crear_entidad`)
+
+**Tipo**: cambio de contrato de una tool del agente (sin cambio de schema)
+**Archivos**: `agente.py`
+**Cambios**:
+- **`crear_entidad` ya no escribe en la primera llamada.** Devuelve `{ok:false, requiere_confirmacion:true, ficha, campos_vacios, redactados_por_vos, instruccion}` (+ `tipos_en_uso` en `recursos`). Escribe recién cuando se la vuelve a llamar con **exactamente los mismos campos**, en un turno posterior. Quien consuma la tool tiene que contemplar los dos resultados posibles.
+- **Cómo se valida la confirmación**: SHA-1 del contenido de la ficha (`_token_ficha`). Escribe solo si ese hash se mostró en un turno **anterior**; cambiar un campo da otro hash y vuelve a la ficha, y el hash se consume al escribir (repetir la llamada no duplica). Es un guard de código, no una regla del system prompt.
+- **Estado nuevo en sesión**: `session['agente_fichas']` (lista de hashes, tope 10). El endpoint `/chat` la carga en `contexto_turno['fichas_previas']` y la reescribe al terminar; `/reset` la limpia. Hace falta porque los resultados de tools no se persisten en `agente_historial`.
+- **Firma nueva**: `ejecutar_tool(tool_name, tool_input, contexto_turno=None)`, `chat_with_tools(mensajes, trazas=None, contexto_turno=None)` y `_loop_openai(..., contexto_turno=None)`. `contexto_turno` es estado compartido por las tools de un mismo turno.
+- **Las fichas no se auditan** en `agente_log` (no tocan la base). Sí el alta efectiva y los intentos rechazados.
+- **`nombre`, `tipo` y `descripcion` los redacta el asistente** a partir de lo que dijo el usuario (`CAMPOS_REDACTADOS`), no se piden literalmente. La ficha de `recursos` expone `tipos_en_uso` (`SELECT DISTINCT tipo`) para que reuse categorías en vez de inventar sinónimos.
+
+---
+
+## [2026-08-08] — `recursos.utilidad` pasa a llamarse `recursos.valor`
+
+**Tipo**: rename de columna (schema `gestion.db`) + tool schemas del agente
+**Archivos**: `gestion.py`, `agente.py`, `importar_inventario.py`
+**Cambios**:
+- **Columna renombrada** `recursos.utilidad` → `recursos.valor`. Las opciones no cambian (`""` / Básico / Secundario / Alto valor) y la constante pasa a llamarse `VALORES_RECURSO`. Label del form "Utilidad" → "Valor"; columna del listado "UTILIDAD" → "VALOR".
+- **Migración con datos**: `_migrar()` hace `ALTER TABLE recursos RENAME COLUMN utilidad TO valor` en las DBs existentes (conserva lo cargado) antes del `ALTER` aditivo, que ahora pide `valor`. Es idempotente y **la primera migración no aditiva** de `_migrar()`.
+- **Contrato con el agente**: el parámetro `utilidad` de las tools `crear_entidad` / `editar_entidad` pasa a llamarse `valor`. Conversaciones viejas que mandaran `utilidad` ya no escriben ese campo (se ignora, como cualquier campo fuera del slug).
+- **Importador**: `importar_inventario.py` escribe en `recursos.valor`. **La columna del sheet sigue llamándose "Utilidad"** — no hace falta tocar la planilla.
+
+---
+
+## [2026-08-08] — Asistente: pestaña propia a pantalla completa (`/gestion/agente/`)
+
+**Tipo**: endpoint nuevo + refactor de templates
+**Archivos**: `agente.py`, `templates/gestion/agente_chat.html` (nuevo), `templates/gestion/_agente_chat_core.html` (nuevo), `templates/gestion/_agente_widget.html`, `templates/gestion/base.html`, `static/gestion.css`, `static/gestion-agente.js`
+**Cambios**:
+- **Endpoint nuevo** `GET /gestion/agente/` (`agente.chat_page`): el chat a pantalla completa, con pestaña propia en el nav de `/gestion`. Pensado para el celular, que es donde más se usa.
+- **Markup del chat extraído** a `_agente_chat_core.html`, que ahora incluyen tanto el widget flotante como la pestaña. **Contrato**: los IDs del core (`agente-messages`, `agente-input`, …) son únicos y `gestion-agente.js` los busca con `getElementById` — las dos vistas **nunca** pueden renderizarse juntas. `base.html` omite el widget y el botón del header cuando `activo == 'agente'`.
+- **Gate de sesión de `agente.bp` diferenciado**: los endpoints HTML (`_ENDPOINTS_PAGINA`: `chat_page`, `agente_log`) ahora **redirigen a `/gestion/login?next=...`** en vez de `abort(401)`. Los endpoints JSON (`/chat`, `/reset`) siguen devolviendo 401.
+- **Fix**: `agente.bp` no tenía context processor, así que `GET /gestion/agente/log` renderizaba `base.html` sin `escuela_nombre`/`escuela_logo`/`nav_entidades` (header vacío). Ahora delega en `gestion._contexto_base()`.
+- **`<meta viewport>` de `base.html`**: se agregó `viewport-fit=cover`, necesario para que `env(safe-area-inset-*)` tenga valor.
+- **Enter envía el mensaje en todas las pantallas** (Shift+Enter hace salto de línea). En táctil (`pointer: coarse`) sigue sin autoenfocarse el input, para que abrir el chat no levante el teclado.
+
+---
+
 ## [2026-08-04] — Asistente conversacional con tool-calling (agente.py)
 
 **Tipo**: módulo nuevo + dependencia nueva + endpoints + DB nueva

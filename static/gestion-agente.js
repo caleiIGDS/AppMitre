@@ -1,4 +1,11 @@
-// gestion-agente.js — Widget del asistente IA
+// gestion-agente.js — Asistente IA
+//
+// Sirve a las DOS vistas del chat, que comparten markup (_agente_chat_core.html):
+//   - el widget flotante que se abre desde el header en cualquier página de /gestion
+//   - la pestaña a pantalla completa en /gestion/agente
+// Nunca se renderizan juntas (base.html omite el widget en esa pestaña), así que los
+// getElementById de abajo siempre encuentran uno solo. Los elementos exclusivos del
+// widget (toggle, cerrar) pueden no existir: por eso cada listener va guardado.
 
 document.addEventListener('DOMContentLoaded', function() {
   const widget = document.getElementById('agente-widget');
@@ -12,9 +19,32 @@ document.addEventListener('DOMContentLoaded', function() {
   const imageFile = document.getElementById('agente-image-file');
   const imagePreview = document.getElementById('agente-image-preview');
 
+  if (!messagesDiv || !inputField || !sendBtn) return;
+
   let imagenSeleccionada = null;
   let imagenNombre = null;
   let enviando = false;
+
+  // Pantalla táctil (celular/tablet): no se enfoca el campo solo, que abriría el teclado
+  // de entrada. Enter envía en todos lados (ver listener de keydown).
+  const esTactil = window.matchMedia('(pointer: coarse)').matches;
+
+  function enfocarInput() {
+    if (!esTactil) inputField.focus();
+  }
+
+  function irAlFinal() {
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  }
+
+  // Al abrirse el teclado el viewport se achica y el último mensaje queda tapado.
+  // visualViewport avisa de ese resize (window.onresize no dispara en iOS).
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', irAlFinal);
+  }
+  inputField.addEventListener('focus', function() {
+    setTimeout(irAlFinal, 250);  // después de que el teclado terminó de subir
+  });
 
   // Limpiar bienvenida cuando se escriba algo
   function limpiarBienvenida() {
@@ -30,7 +60,7 @@ document.addEventListener('DOMContentLoaded', function() {
       e.preventDefault();
       widget.hidden = !widget.hidden;
       if (!widget.hidden) {
-        inputField.focus();
+        enfocarInput();
       }
     });
   }
@@ -59,7 +89,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 Preguntá sobre horarios, recursos, préstamos o cualquier otra cosa.
               </div>
             </div>`;
-          inputField.focus();
+          enfocarInput();
         });
     });
   }
@@ -106,6 +136,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Limpiar UI
     inputField.value = '';
+    inputField.style.height = 'auto';  // deshacer el auto-resize del textarea
     imagenSeleccionada = null;
     imagenNombre = null;
     imagePreview.textContent = '';
@@ -150,7 +181,7 @@ document.addEventListener('DOMContentLoaded', function() {
       .finally(() => {
         enviando = false;
         sendBtn.disabled = false;
-        inputField.focus();
+        enfocarInput();
       });
   }
 
@@ -159,20 +190,23 @@ document.addEventListener('DOMContentLoaded', function() {
     sendBtn.addEventListener('click', enviarMensaje);
   }
 
-  if (inputField) {
-    inputField.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        enviarMensaje();
-      }
-    });
+  inputField.addEventListener('keydown', function(e) {
+    // Enter envía (también en táctil); Shift+Enter hace salto de línea.
+    // `isComposing`: con IME (acentos, teclados asiáticos) el Enter que confirma el
+    // candidato no debe mandar el mensaje.
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      enviarMensaje();
+    }
+  });
 
-    inputField.addEventListener('input', function() {
-      // Auto-resize textarea
-      this.style.height = 'auto';
-      this.style.height = Math.min(this.scrollHeight, 80) + 'px';
-    });
-  }
+  inputField.addEventListener('input', function() {
+    // Auto-resize del textarea, hasta el max-height que fije el CSS (que en mobile
+    // es más alto que en desktop — por eso se lee de ahí y no está hardcodeado).
+    this.style.height = 'auto';
+    const tope = parseInt(getComputedStyle(this).maxHeight, 10) || 80;
+    this.style.height = Math.min(this.scrollHeight, tope) + 'px';
+  });
 
   // Agregar mensaje al chat
   function agregarMensaje(texto, tipo) {
@@ -190,8 +224,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     messagesDiv.appendChild(msgDiv);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    irAlFinal();
   }
+
+  // En la pestaña dedicada arrancamos con el cursor puesto (en desktop).
+  if (!widget) enfocarInput();
 
   // --- Renderizado de markdown liviano (negrita, listas, tablas) ---
 

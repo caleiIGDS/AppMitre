@@ -2,14 +2,16 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {# viewport-fit=cover: habilita env(safe-area-inset-*), que la pestaña del chat
+       usa para no meter el input abajo del notch/barra gestual del celular. #}
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block titulo %}Sistema de Gestión{% endblock %} — {{ escuela_nombre }}</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=10">
+    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=11">
     <script src="{{ url_for('static', filename='gestion.js') }}?v=3" defer></script>
-    <script src="{{ url_for('static', filename='gestion-agente.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='gestion-agente.js') }}?v=2" defer></script>
 </head>
-<body>
+<body{% if activo == 'agente' %} class="g-chat-page"{% endif %}>
     <div class="g-bg">
         <header class="g-header">
             <div class="g-container g-header-flex">
@@ -23,7 +25,10 @@
                 <div class="g-header-actions">
                     <a class="g-btn-outline" href="/">‹ SISTEMA DE HORARIOS</a>
                     {% if session.get('gestion_ok') %}
+                    {# En la pestaña del chat el botón flotante sobraría: el widget no se renderiza ahí. #}
+                    {% if activo != 'agente' %}
                     <button id="agente-toggle-btn" class="g-btn-outline" title="Abrir asistente" style="cursor: pointer;">🤖 ASISTENTE</button>
+                    {% endif %}
                     <a class="g-btn-outline g-cart-link" href="{{ url_for('gestion.carrito_finalizar') }}"
                        data-set-url="{{ url_for('gestion.carrito_set') }}">📋 PRÉSTAMO <span class="g-cart-count" data-cart-count {% if not carrito_count %}hidden{% endif %}>{{ carrito_count }}</span></a>
                     <a class="g-btn-outline" href="{{ url_for('gestion.salir') }}">SALIR</a>
@@ -32,7 +37,7 @@
             </div>
         </header>
 
-        <div class="g-container">
+        <div class="g-container g-shell">
             <nav class="g-nav">
                 <a href="{{ url_for('gestion.home') }}" class="g-nav-tag {{ 'active' if activo == 'home' }}">INICIO</a>
                 {% for slug, plural in nav_entidades %}
@@ -42,6 +47,9 @@
                 <a href="{{ url_for('gestion.lista', slug=slug) }}" class="g-nav-tag {{ 'active' if activo == slug }}">{{ plural | upper }}</a>
                 {% endif %}
                 {% endfor %}
+                {% if session.get('gestion_ok') %}
+                <a href="{{ url_for('agente.chat_page') }}" class="g-nav-tag g-nav-tag-agente {{ 'active' if activo == 'agente' }}">🤖 ASISTENTE</a>
+                {% endif %}
             </nav>
 
             <main class="g-main">
@@ -54,6 +62,9 @@
         </footer>
     </div>
 
+    {# El widget y la pestaña comparten IDs: en /gestion/agente solo va la pestaña. #}
+    {% if activo != 'agente' %}
     {% include 'gestion/_agente_widget.html' %}
+    {% endif %}
 </body>
 </html>

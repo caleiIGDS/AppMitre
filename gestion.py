@@ -57,10 +57,10 @@ def salir():
     return redirect(url_for('gestion.login'))
 
 
-ESTADOS_RECURSO = ["Disponible", "En uso", "En reparación", "De baja", "Sin revisar"]
+ESTADOS_RECURSO = ["Disponible", "Retirado", "En uso", "En reparación", "De baja", "Sin revisar"]
 ESTADOS_PROYECTO = ["Activo", "Pausado", "Terminado"]
-# "" primero: permite dejar la utilidad sin definir (recursos previos al inventario).
-UTILIDADES_RECURSO = ["", "Básico", "Secundario", "Alto valor"]
+# "" primero: permite dejar el valor sin definir (recursos previos al inventario).
+VALORES_RECURSO = ["", "Básico", "Secundario", "Alto valor"]
 
 # Configuración declarativa de cada entidad: campos del form, columnas del listado
 # y relaciones M2M editables desde su formulario. Los campos de relación usan el
@@ -78,11 +78,11 @@ ENTIDADES = {
             {'nombre': 'descripcion', 'label': 'Descripción', 'tipo': 'textarea'},
             {'nombre': 'ubicacion', 'label': 'Ubicación', 'tipo': 'text', 'ayuda': 'Ej: Taller de Electricidad, Pañol, A2'},
             {'nombre': 'estado', 'label': 'Estado', 'tipo': 'select', 'opciones': ESTADOS_RECURSO},
-            {'nombre': 'utilidad', 'label': 'Utilidad', 'tipo': 'select', 'opciones': UTILIDADES_RECURSO, 'ayuda': 'Importancia del recurso dentro del inventario'},
+            {'nombre': 'valor', 'label': 'Valor', 'tipo': 'select', 'opciones': VALORES_RECURSO, 'ayuda': 'Importancia del recurso dentro del inventario'},
             {'nombre': 'fecha_revision', 'label': 'Última revisión', 'tipo': 'text', 'ayuda': 'Fecha del último control de inventario (ej: 24/4)'},
             {'nombre': 'drive_url', 'label': 'Carpeta de Drive (link)', 'tipo': 'url', 'ayuda': 'Fotos, planos y documentos viven en Drive; acá solo va el link'},
         ],
-        'columnas': [('nombre', 'NOMBRE'), ('cantidad', 'CANT.'), ('ubicacion', 'UBICACIÓN'), ('estado', 'ESTADO'), ('utilidad', 'UTILIDAD')],
+        'columnas': [('nombre', 'NOMBRE'), ('cantidad', 'CANT.'), ('ubicacion', 'UBICACIÓN'), ('estado', 'ESTADO'), ('valor', 'VALOR')],
         'relaciones': [],
     },
     'conjuntos': {
@@ -162,7 +162,7 @@ CREATE TABLE IF NOT EXISTS recursos (
     estado TEXT DEFAULT 'Disponible',
     drive_url TEXT DEFAULT '',
     cantidad TEXT DEFAULT '',
-    utilidad TEXT DEFAULT '',
+    valor TEXT DEFAULT '',
     fecha_revision TEXT DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS conjuntos (
@@ -285,9 +285,14 @@ def init_db():
 
 
 def _migrar(cur):
-    """Suma columnas nuevas a una gestion.db creada con un schema anterior (solo ALTER aditivo)."""
+    """Adapta una gestion.db creada con un schema anterior (ALTER aditivo + renombres)."""
     existentes = {c[1] for c in cur.execute("PRAGMA table_info(recursos)").fetchall()}
-    for columna in ('cantidad', 'utilidad', 'fecha_revision'):
+    # 'utilidad' pasó a llamarse 'valor'. RENAME COLUMN conserva los datos ya cargados;
+    # va antes del ALTER aditivo para no crear un 'valor' vacío al lado del viejo.
+    if 'utilidad' in existentes and 'valor' not in existentes:
+        cur.execute("ALTER TABLE recursos RENAME COLUMN utilidad TO valor")
+        existentes = {c[1] for c in cur.execute("PRAGMA table_info(recursos)").fetchall()}
+    for columna in ('cantidad', 'valor', 'fecha_revision'):
         if columna not in existentes:
             cur.execute(f"ALTER TABLE recursos ADD COLUMN {columna} TEXT DEFAULT ''")
     # Devolución por ítem: cuánto de cada ítem ya volvió (0 = sigue afuera entero).
@@ -448,8 +453,18 @@ def snapshot_entidad(slug, id, con=None):
         ids = [r[0] for r in cur.execute(f"SELECT {rel['col_ajena']} FROM {rel['tabla']} WHERE {rel['col_propia']} = ?", (id,)).fetchall()]
         relaciones[rel['slug_ajeno']] = ids
 
+    # Filas M2M crudas que un borrado destruiría. No alcanza con 'relaciones': esa recorre
+    # cfg['relaciones'] (dirección "hacia afuera"), y para 'recursos' está vacía — pero
+    # LIMPIEZA_M2M sí borra sus 3 tablas inversas. Sin esto el snapshot decía relaciones={}
+    # y un borrado erróneo de un recurso no se podía restaurar completo.
+    m2m = {}
+    for tabla, columna in LIMPIEZA_M2M.get(slug, []):
+        filas_m2m = cur.execute(f"SELECT * FROM {tabla} WHERE {columna} = ?", (id,)).fetchall()
+        if filas_m2m:
+            m2m[tabla] = [dict(f) for f in filas_m2m]
+
     con.close() if debe_cerrar else None
-    return {'fila': dict(fila), 'relaciones': relaciones}
+    return {'fila': dict(fila), 'relaciones': relaciones, 'm2m': m2m}
 
 
 def agregar_relacion_m2m(tabla, col_propia, col_ajena, id_propio, id_ajeno, con=None):
@@ -546,6 +561,18 @@ def _secciones_detalle(slug, id, cur):
                 "SELECT a.id, a.nombre FROM actividades a JOIN actividad_recursos r ON r.actividad_id = a.id WHERE r.recurso_id = ? ORDER BY a.nombre COLLATE NOCASE")
         agregar('Proyectos relacionados', 'proyectos',
                 "SELECT p.id, p.nombre FROM proyectos p JOIN proyecto_recursos r ON r.proyecto_id = p.id WHERE r.recurso_id = ? ORDER BY p.nombre COLLATE NOCASE")
+        # Sección especial: quien lo tiene ahora (préstamos activos)
+        en_prestamo = cur.execute(
+            "SELECT p.persona, i.cantidad, i.cantidad_devuelta "
+            "FROM prestamos p JOIN prestamo_items i ON i.prestamo_id = p.id "
+            "WHERE i.recurso_id = ? AND p.fecha_devolucion = '' "
+            "ORDER BY p.fecha_salida DESC", (id,)).fetchall()
+        prestamo_activo = []
+        for row in en_prestamo:
+            pendiente = max(0, _int(row['cantidad']) - _int(row['cantidad_devuelta']))
+            prestamo_activo.append({'persona': row['persona'], 'pendiente': pendiente})
+        if prestamo_activo:
+            secciones.append({'titulo': 'En préstamo', 'slug': None, 'items': prestamo_activo, 'tipo': 'prestamo_activo'})
         # slug 'prestamos' no está en ENTIDADES, pero url_for('gestion.detalle', slug='prestamos', id=N)
         # genera /gestion/prestamos/N, que el routing despacha a prestamo_detalle (la ruta
         # estática tiene prioridad sobre /<slug>/<id>) — el template genérico no cambia.
@@ -733,9 +760,10 @@ def _int(texto):
 def _recalcular_estado(cur, id):
     """Cierra el préstamo (setea fecha_devolucion) cuando no queda nada pendiente, y lo
     reabre (la limpia) si vuelve a haber algo afuera. fecha_devolucion sigue siendo la
-    fuente de verdad de 'devuelto' para la lista y el contador del home."""
+    fuente de verdad de 'devuelto' para la lista y el contador del home.
+    También actualiza el estado de recursos: 'Retirado' mientras haya afuera, 'Disponible' cuando vuelve todo."""
     filas = cur.execute(
-        "SELECT cantidad, cantidad_devuelta FROM prestamo_items WHERE prestamo_id = ?", (id,)).fetchall()
+        "SELECT cantidad, cantidad_devuelta, recurso_id FROM prestamo_items WHERE prestamo_id = ?", (id,)).fetchall()
     pendiente = sum(max(0, _int(f['cantidad']) - _int(f['cantidad_devuelta'])) for f in filas)
     actual = cur.execute("SELECT fecha_devolucion FROM prestamos WHERE id = ?", (id,)).fetchone()
     if actual is None:
@@ -743,8 +771,20 @@ def _recalcular_estado(cur, id):
     cerrado = bool(actual['fecha_devolucion'])
     if filas and pendiente == 0 and not cerrado:
         cur.execute("UPDATE prestamos SET fecha_devolucion = ? WHERE id = ?", (_ahora(), id))
+        # Marcar recursos como Disponible si no hay más préstamos activos
+        for f in filas:
+            rid = f['recurso_id']
+            tiene_prestamos = cur.execute(
+                "SELECT 1 FROM prestamo_items i JOIN prestamos p ON p.id = i.prestamo_id "
+                "WHERE i.recurso_id = ? AND p.fecha_devolucion = '' LIMIT 1", (rid,)).fetchone()
+            if not tiene_prestamos:
+                cur.execute("UPDATE recursos SET estado = 'Disponible' WHERE id = ? AND estado = 'Retirado'", (rid,))
     elif pendiente > 0 and cerrado:
         cur.execute("UPDATE prestamos SET fecha_devolucion = '' WHERE id = ?", (id,))
+        # Marcar recursos como Retirado nuevamente
+        for f in filas:
+            rid = f['recurso_id']
+            cur.execute("UPDATE recursos SET estado = 'Retirado' WHERE id = ? AND estado != 'De baja'", (rid,))
 
 
 def _resumen_items(cur, ids, solo_pendiente=False):
@@ -949,6 +989,7 @@ def carrito_finalizar():
             for rid, cant in items.items():
                 cur.execute("INSERT INTO prestamo_items (prestamo_id, recurso_id, cantidad, cantidad_devuelta) VALUES (?,?,?, '0')",
                             (pid, rid, str(cant)))
+                cur.execute("UPDATE recursos SET estado = 'Retirado' WHERE id = ?", (rid,))
             con.commit()
             con.close()
             session.pop('carrito', None)
@@ -992,6 +1033,7 @@ def prestamo_devolver(id):
     cur.execute("UPDATE prestamo_items SET cantidad_devuelta = cantidad WHERE prestamo_id = ?", (id,))
     cur.execute("UPDATE prestamos SET fecha_devolucion = ? WHERE id = ? AND fecha_devolucion = ''",
                 (_ahora(), id))
+    _recalcular_estado(cur, id)
     con.commit()
     con.close()
     if request.form.get('volver') == 'detalle':
@@ -1031,6 +1073,7 @@ def prestamo_reabrir(id):
     cur = con.cursor()
     cur.execute("UPDATE prestamo_items SET cantidad_devuelta = '0' WHERE prestamo_id = ?", (id,))
     cur.execute("UPDATE prestamos SET fecha_devolucion = '' WHERE id = ?", (id,))
+    _recalcular_estado(cur, id)
     con.commit()
     con.close()
     return redirect(url_for('gestion.prestamo_detalle', id=id))
@@ -1056,8 +1099,18 @@ def prestamo_eliminar(id):
     """Solo para registros mal cargados — la devolución normal usa /devolver."""
     con = conectar()
     cur = con.cursor()
+    # Obtener recursos antes de eliminar para actualizar su estado
+    filas = cur.execute("SELECT recurso_id FROM prestamo_items WHERE prestamo_id = ?", (id,)).fetchall()
     cur.execute("DELETE FROM prestamos WHERE id = ?", (id,))
     cur.execute("DELETE FROM prestamo_items WHERE prestamo_id = ?", (id,))
+    # Actualizar estado de recursos: si no hay más préstamos activos, marcar como Disponible
+    for f in filas:
+        rid = f['recurso_id']
+        tiene_prestamos = cur.execute(
+            "SELECT 1 FROM prestamo_items i JOIN prestamos p ON p.id = i.prestamo_id "
+            "WHERE i.recurso_id = ? AND p.fecha_devolucion = '' LIMIT 1", (rid,)).fetchone()
+        if not tiene_prestamos:
+            cur.execute("UPDATE recursos SET estado = 'Disponible' WHERE id = ? AND estado = 'Retirado'", (rid,))
     con.commit()
     con.close()
     return redirect(url_for('gestion.prestamos_lista'))

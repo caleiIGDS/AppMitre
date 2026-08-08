@@ -23,7 +23,8 @@ GID = "0"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}"
 
 # Columnas del sheet: Material, Fecha, Estado, Utilidad, Descripcion-observaciones,
-# Cantidad, Ubicación.
+# Cantidad, Ubicación. La columna "Utilidad" del sheet entra en recursos.valor
+# (el sheet conserva el nombre viejo; la app la renombró a "Valor").
 COLUMNAS = 7
 
 # Estados del sheet → vocabulario de la app (gestion.ESTADOS_RECURSO).
@@ -70,7 +71,7 @@ def importar(ruta_csv=None):
     insertados = actualizados = 0
     for fila in filas[1:]:
         fila = (fila + [''] * COLUMNAS)[:COLUMNAS]
-        material, fecha, estado, utilidad, obs, cantidad, ubicacion = (c.strip() for c in fila)
+        material, fecha, estado, valor, obs, cantidad, ubicacion = (c.strip() for c in fila)
         if not material:
             continue
         estado_app = MAPEO_ESTADOS.get(estado.lower())
@@ -85,14 +86,14 @@ def importar(ruta_csv=None):
             if obs and obs not in descripcion:
                 descripcion = f"{descripcion}\n{obs}".strip()
             cur.execute(
-                "UPDATE recursos SET fecha_revision=?, estado=?, utilidad=?, descripcion=?, cantidad=?, ubicacion=? WHERE id=?",
-                (fecha, estado_app, utilidad, descripcion, cantidad, ubicacion, previo['id']))
+                "UPDATE recursos SET fecha_revision=?, estado=?, valor=?, descripcion=?, cantidad=?, ubicacion=? WHERE id=?",
+                (fecha, estado_app, valor, descripcion, cantidad, ubicacion, previo['id']))
             actualizados += 1
         else:
             cur.execute(
-                "INSERT INTO recursos (nombre, tipo, descripcion, ubicacion, estado, drive_url, cantidad, utilidad, fecha_revision) "
+                "INSERT INTO recursos (nombre, tipo, descripcion, ubicacion, estado, drive_url, cantidad, valor, fecha_revision) "
                 "VALUES (?,?,?,?,?,?,?,?,?)",
-                (material, '', obs, ubicacion, estado_app, '', cantidad, utilidad, fecha))
+                (material, '', obs, ubicacion, estado_app, '', cantidad, valor, fecha))
             insertados += 1
 
     con.commit()

@@ -1,12 +1,17 @@
 Flask
 fpdf2
 
-# LLM providers (install solo los que uses):
-# Para Anthropic (Claude): pip install anthropic
-# Para Groq: pip install groq
-# Para OpenAI: pip install openai
-# Para Ollama (local): pip install openai (compatible API)
-# Por defecto se instala anthropic:
+# LLM providers del agente (agente.py)
+# El provider por DEFECTO es DeepSeek (deepseek-v4-pro), que usa la API compatible
+# con OpenAI → el paquete `openai` es OBLIGATORIO, no opcional.
+openai
+
+# Anthropic: alternativa vía AGENTE_PROVIDER=anthropic. Necesario si se quiere el
+# alta de recursos desde foto, porque DeepSeek no tiene visión.
 anthropic
+
+# Otros providers soportados, instalar solo si se usan:
+# Para Groq: pip install groq
+# Para Ollama (local): ya cubierto por `openai` (API compatible)
 
 # weasyprint removed for performance and hosting compatibility

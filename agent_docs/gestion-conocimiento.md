@@ -34,7 +34,7 @@ en Google Drive; acá solo se guardan links (`drive_url`).
 
 | Tabla | Campos |
 |-------|--------|
-| `recursos` | id, nombre, tipo, descripcion, ubicacion, estado, drive_url, cantidad, utilidad, fecha_revision |
+| `recursos` | id, nombre, tipo, descripcion, ubicacion, estado, drive_url, cantidad, valor, fecha_revision |
 | `conjuntos` | id, nombre, descripcion, uso_tipico, drive_url |
 | `actividades` | id, nombre, objetivo, descripcion, duracion, curso, drive_url |
 | `proyectos` | id, nombre, descripcion, fecha, participantes, estado, drive_url |
@@ -47,7 +47,8 @@ M2M (con `UNIQUE` por par): `conjunto_recursos`, `actividad_recursos`,
 
 Estados: recursos = Disponible / En uso / En reparación / De baja / Sin revisar;
 proyectos = Activo / Pausado / Terminado.
-Utilidad (recursos): "" / Básico / Secundario / Alto valor.
+Valor (recursos): "" / Básico / Secundario / Alto valor — es la *importancia* del recurso
+dentro del inventario, no su precio (se llamaba `utilidad`, renombrada 2026-08-08).
 `cantidad` y `fecha_revision` son TEXT (fecha en formato libre del inventario, ej "24/4").
 
 **Inventario físico**: `importar_inventario.py` (root) importa el sheet "Inventario renovable
@@ -63,7 +64,10 @@ Cada entidad define: `tabla`, `singular`/`plural`, `descripcion` (card del home)
 `columnas` (listado) y `relaciones` (M2M editables desde su form, campos con prefijo
 `rel_` para no colisionar con columnas). Para agregar un campo: sumarlo al `SCHEMA`,
 a `campos` y a la lista de `_migrar()` — `init_db()` hace el `ALTER TABLE` aditivo
-automáticamente en DBs existentes (así entraron cantidad/utilidad/fecha_revision).
+automáticamente en DBs existentes (así entraron cantidad/valor/fecha_revision).
+Para **renombrar** uno, además del `SCHEMA` y `campos` va un `ALTER TABLE ... RENAME COLUMN`
+guardado por `PRAGMA table_info` en `_migrar()`, **antes** del loop aditivo (si no, el aditivo
+crea la columna nueva vacía al lado de la vieja y se pierde el dato). Ver `utilidad`→`valor`.
 
 `LIMPIEZA_M2M` mapea qué tablas de relación limpiar al eliminar cada tipo de entidad.
 
@@ -214,8 +218,12 @@ conversacional via Claude (Anthropic API). El usuario puede hablar con la app en
 natural en vez de hacer click en formularios: consultar horarios, crear recursos, fotografiar
 etiquetas y cargarlas, gestionar préstamos. Todo con auditoría de escrituras en `agente_log`.
 
-**Acceso**: botón "🤖 ASISTENTE" en el header, visible solo tras iniciar sesión en
-`/gestion` (reusan `session['gestion_ok']`). Abre un widget flotante de chat.
+**Acceso**: dos vistas del mismo chat, ambas visibles solo tras iniciar sesión en
+`/gestion` (reusan `session['gestion_ok']`):
+- Botón "🤖 ASISTENTE" en el header → widget flotante, para consultar sin salir de la
+  página en la que se está.
+- Pestaña "🤖 ASISTENTE" en el nav → `/gestion/agente/`, el chat a pantalla completa.
+  Es la vista pensada para el celular, que es donde más se usa el asistente.
 
 ### Arquitectura
 
@@ -228,15 +236,69 @@ etiquetas y cargarlas, gestionar préstamos. Todo con auditoría de escrituras e
 - **`POST /gestion/agente/reset`** — limpia `session['agente_historial']` y
   `session['agente_entidad_actual']`; usado por el botón ↺ del widget para arrancar una
   conversación nueva sin arrastrar contexto viejo.
+- **`GET /gestion/agente/`** (`chat_page`) — la pestaña del chat a pantalla completa
+  (`templates/gestion/agente_chat.html`, extiende `base.html`).
 - **`GET /gestion/agente/log`** — tabla de auditoría (últimas 50 escrituras), con snapshot
   "antes" visible para poder restaurar manualmente si el agente cometió un error.
-- **Widget** (`templates/gestion/_agente_widget.html` + `static/gestion-agente.js`) —
-  panel flotante de chat con historial de mensajes, input de texto, opción de adjuntar imagen,
-  botón ↺ para reiniciar la conversación, link a la auditoría. Incluido desde `base.html`.
-  Progressive enhancement: con JS es fluido, sin JS no aparece pero el servidor sigue
-  funcionando. Las respuestas del asistente se renderizan como markdown liviano
-  (`renderMarkdown()` en `gestion-agente.js`: negrita, listas, tablas) — Claude devuelve
-  texto en Markdown y sin esto se veía como un bloque de texto con `**`/`|` crudos.
+
+**Gate de sesión** (`_requiere_clave`): los endpoints JSON (`/chat`, `/reset`) devuelven
+`401` sin sesión, que es lo que el `fetch` del frontend sabe manejar. Los endpoints que
+devuelven HTML —listados en `_ENDPOINTS_PAGINA`— redirigen a `/gestion/login?next=...`,
+porque entrar por link directo a `/gestion/agente/` desde el celular es el caso normal y
+un 401 pelado ahí es un callejón sin salida.
+
+**Context processor**: `agente.bp` registra su propio `_contexto_base()` que delega en el
+de `gestion.bp`. Los context processors de un blueprint no corren para requests de otro,
+y `base.html` necesita `escuela_nombre`/`escuela_logo`/`escuela_version`/`nav_entidades`/
+`carrito_count` — sin esto el header de las páginas del agente renderiza vacío.
+
+### Las dos vistas del chat
+
+Comparten markup y JS; lo único que cambia es el contenedor.
+
+| Archivo | Rol |
+|---|---|
+| `templates/gestion/_agente_chat_core.html` | El chat en sí: `#agente-messages` + área de input (texto, 📷 imagen, enviar, link a auditoría). **Único lugar donde se edita el markup del chat.** |
+| `templates/gestion/_agente_widget.html` | Widget flotante = header propio (↺ reiniciar, ⤢ abrir a pantalla completa, ✕ cerrar) + el core. |
+| `templates/gestion/agente_chat.html` | Pestaña = barra de título + el core, dentro de `base.html`. |
+| `static/gestion-agente.js` | Sirve a las dos. |
+
+Los IDs del core (`agente-messages`, `agente-input`, `agente-send-btn`, `agente-reset-btn`…)
+son únicos y el JS los busca con `getElementById` — por eso **las dos vistas nunca se
+renderizan juntas**: `base.html` omite el include del widget (y el botón del header) cuando
+`activo == 'agente'`. Si se agrega otra vista del chat, mantener esa invariante.
+
+Progressive enhancement: con JS es fluido, sin JS el chat no funciona pero el resto del
+servidor sigue andando. Las respuestas se renderizan como markdown liviano
+(`renderMarkdown()` en `gestion-agente.js`: negrita, listas, tablas) — el modelo devuelve
+Markdown y sin esto se veía como un bloque de texto con `**`/`|` crudos.
+
+### Diseño para celular
+
+El asistente se usa mayormente desde el teléfono, en el pasillo. Lo que eso impone
+(estilos en `gestion.css`, sección "PESTAÑA DEDICADA AL CHAT" y las media queries de
+`max-width: 700px`):
+
+- **`body.g-chat-page`** (la clase la pone `base.html` cuando `activo == 'agente'`) arma
+  una cadena flex `.g-bg → .g-shell → .g-main → .agente-page` con `min-height: 0`, de modo
+  que **scrollea solo el historial y nunca la página**. Si scrolleara el body, al abrir el
+  teclado el input se iría abajo del fold y habría que ir a buscarlo.
+- **`100dvh`, no `100vh`** — en iOS/Chrome mobile `100vh` incluye la barra del navegador
+  que en realidad tapa la pantalla, y el input quedaba cortado abajo.
+- **`.agente-input { font-size: 16px }` en mobile es obligatorio.** Con menos, iOS hace
+  zoom al enfocar el campo, descuadra el layout y no vuelve solo. No bajar ese valor.
+- **Enter envía el mensaje en todas las pantallas**, táctiles incluidas (Shift+Enter hace
+  salto de línea; el `<textarea>` lleva `enterkeyhint="send"`). Se descarta el Enter con
+  `isComposing` (IME). Antes en táctil Enter insertaba salto y se enviaba solo con el botón,
+  para evitar mandar a medio escribir con el teclado virtual; se revirtió a pedido — el
+  botón de enviar sigue estando.
+- **No se autoenfoca el input en táctil**, para que abrir el chat no abra el teclado.
+- **`visualViewport.resize`** vuelve a scrollear al final cuando sube el teclado
+  (`window.onresize` no dispara en iOS).
+- `env(safe-area-inset-bottom)` en el área de input (requiere el `viewport-fit=cover` que
+  agrega el `<meta viewport>` de `base.html`) para no quedar abajo de la barra gestual.
+- Objetivos táctiles de 44px, header comprimido, footer oculto, y el nav de 8 pestañas
+  scrollea horizontalmente en vez de envolver en tres filas.
 
 ### Tools
 
@@ -250,7 +312,7 @@ etiquetas y cargarlas, gestionar préstamos. Todo con auditoría de escrituras e
 - `listar_prestamos(persona?)` / `detalle_prestamo(id)` — estados de préstamos
 
 **Escritura** (se auditan, requieren `session['gestion_ok']`, guardan snapshot "antes"):
-- `crear_entidad(slug, campos)` — create (valida nombre no vacío)
+- `crear_entidad(slug, campos)` — alta **en dos pasos con ficha de confirmación**, ver abajo
 - `editar_entidad(slug, id, campos)` — update
 - `vincular_entidad` / `desvincular_entidad` — gestionar M2M
 - `crear_prestamo(persona, destino?, notas?, items)` — crear préstamo (cantidad topeada
@@ -260,6 +322,52 @@ etiquetas y cargarlas, gestionar préstamos. Todo con auditoría de escrituras e
 - `eliminar_entidad` / `eliminar_prestamo` — **requieren confirmación en turno separado** (el
   system prompt instruye a Claude a no ejecutar en el mismo turno en que se solicita, sino
   responder primero qué va a borrar y esperar confirmación)
+
+### Alta con ficha de confirmación (`crear_entidad`)
+
+Ningún alta se escribe sin que el usuario haya visto antes, campo por campo, lo que va a
+quedar guardado. Circuito:
+
+1. El asistente llama a `crear_entidad`. **La primera llamada con un juego de campos no
+   escribe nada**: devuelve `{requiere_confirmacion: true, ficha, campos_vacios,
+   redactados_por_vos, instruccion}` (y `tipos_en_uso` si el slug es `recursos`).
+2. El asistente muestra la ficha y, debajo, 1 a 3 preguntas cortas por lo que falta
+   ("¿de qué medida es?", "¿sabés la marca?"). **No son bloqueantes**: si el usuario no
+   contesta, se guarda igual — está en el prompt y en el `instruccion` de la ficha.
+3. Si el usuario pide cambios, el asistente vuelve a llamar con los campos corregidos y
+   sale otra ficha. Se repite hasta el OK.
+4. Con el OK, llama **otra vez con exactamente los mismos campos** y ahí sí escribe.
+
+**Cómo se sabe que el usuario aprobó** (`_token_ficha`): cada ficha se identifica por un
+SHA-1 de su contenido (`slug` + los campos normalizados). Una llamada escribe solo si su
+hash ya se mostró en un turno **anterior**. Consecuencias buscadas:
+- Cambiar un solo campo entre la ficha y el alta da otro hash → vuelve a la ficha. No se
+  puede guardar algo distinto de lo que el usuario leyó.
+- Una ficha mostrada en el turno en curso no habilita nada: el loop ejecuta todas las
+  tools antes de devolver una palabra, así que el usuario todavía no la vio.
+- El hash se **consume** al escribir; repetir la llamada arranca de nuevo por la ficha en
+  vez de duplicar el recurso.
+
+Los hashes viven en `session['agente_fichas']` (tope 10), que el endpoint `/chat` carga en
+`contexto_turno['fichas_previas']` antes de llamar al modelo y vuelve a guardar después.
+**Tiene que ser la sesión y no el turno**: los resultados de tools no se persisten en
+`agente_historial`, así que en el turno siguiente el modelo no tiene la ficha a la vista —
+un token que tuviera que repetir de memoria no le llega, y el alta quedaba trabada en un
+bucle de fichas (así falló el primer diseño). `/reset` limpia `agente_fichas`.
+
+Las fichas **no se auditan** en `agente_log`: no tocaron la base, y esa tabla existe para
+deshacer cambios reales. Sí se audita el alta efectiva.
+
+`contexto_turno` es el dict que `chat_with_tools()` pasa a todas las tools de un mismo
+turno (`ejecutar_tool(tool, input, contexto_turno)`), para lo que hay que decidir mirando
+el turno entero y no la llamada aislada.
+
+**Campos que redacta el asistente** (`CAMPOS_REDACTADOS`): `nombre`, `tipo` y `descripcion`
+los escribe él a partir de lo que contó el usuario — no se los pide literalmente ("¿qué
+descripción le pongo?"). Van marcados en la ficha como `redactados_por_vos` para que el
+usuario los lea sabiendo que son propuestos. `tipo` es texto libre, así que la ficha de
+`recursos` incluye `tipos_en_uso` (`SELECT DISTINCT tipo`) para que reuse una categoría
+existente en vez de inventar un sinónimo nuevo por cada alta.
 
 ### Salida interpretada
 
@@ -288,9 +396,10 @@ una devolución de préstamo o un borrado.
   Primero debe responder qué va a borrar y esperar una confirmación explícita del usuario en el
   turno siguiente. Es una guardrail de prompt (coherente con "/gestion" siendo "traba de
   desarrollo, no seguridad completa"), reforzada por la auditoría.
-- **Confirmación para crear desde foto**: igual criterio: si el usuario manda una foto, el
-  agente propone los campos extraídos en texto y pide confirmación antes de llamar a
-  `crear_entidad`.
+- **Confirmación de alta con ficha**: a diferencia del borrado, el alta **no** depende del
+  prompt — `crear_entidad` no escribe hasta que el hash de la ficha coincida con uno mostrado
+  en un turno anterior (ver "Alta con ficha de confirmación"). Vale también para las altas
+  desde foto: la foto llena la ficha, no la base.
 - **Resolución de ambigüedad en recursos**: si `crear_prestamo` busca un nombre de recurso
   que matchea más de una fila, la tool devuelve `ok:false` con `opciones` (id + nombre de cada
   candidato) en vez de adivinar. El system prompt instruye a mostrarle esas opciones al usuario

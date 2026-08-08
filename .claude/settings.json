@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\probar_busqueda.py\")"
+    ]
+  }
+}

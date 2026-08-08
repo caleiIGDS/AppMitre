@@ -56,14 +56,37 @@
         {% for s in secciones %}
         <div class="g-relation-box">
             <h4>{{ s.titulo | upper }}</h4>
-            {% if s['items'] %}
-            <ul>
-                {% for it in s['items'] %}
-                <li><a class="g-item-link" href="{{ url_for('gestion.detalle', slug=s.slug, id=it['id']) }}">{{ it['nombre'] }}</a></li>
-                {% endfor %}
-            </ul>
+            {% if s.get('tipo') == 'prestamo_activo' %}
+                {% if s['items'] %}
+                <table class="g-prestamo-tabla">
+                    <thead>
+                        <tr>
+                            <th>Quién lo tiene</th>
+                            <th>Cantidad</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for it in s['items'] %}
+                        <tr>
+                            <td>{{ it['persona'] }}</td>
+                            <td>{{ it['pendiente'] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="g-help">Sin elementos vinculados.</p>
+                {% endif %}
             {% else %}
-            <p class="g-help">Sin elementos vinculados.</p>
+                {% if s['items'] %}
+                <ul>
+                    {% for it in s['items'] %}
+                    <li><a class="g-item-link" href="{{ url_for('gestion.detalle', slug=s.slug, id=it['id']) }}">{{ it['nombre'] }}</a></li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="g-help">Sin elementos vinculados.</p>
+                {% endif %}
             {% endif %}
         </div>
         {% endfor %}

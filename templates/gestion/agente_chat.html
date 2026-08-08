@@ -1,0 +1,17 @@
+{% extends "gestion/base.html" %}
+
+{% block titulo %}Asistente{% endblock %}
+
+{% block contenido %}
+<div class="agente-page">
+  <div class="agente-page-bar">
+    <div class="agente-page-title">
+      <span class="agente-title-icon">🤖</span>
+      <span>Asistente</span>
+    </div>
+    <button id="agente-reset-btn" class="agente-reset-btn" title="Reiniciar conversación" aria-label="Reiniciar conversación">↺</button>
+  </div>
+
+  {% include 'gestion/_agente_chat_core.html' %}
+</div>
+{% endblock %}

@@ -634,6 +634,30 @@ body {
 
 .g-relation-box li { font-size: 14px; }
 
+.g-prestamo-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.g-prestamo-tabla th {
+    background: var(--g-primary);
+    color: white;
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    font-weight: bold;
+}
+
+.g-prestamo-tabla td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--g-border);
+}
+
+.g-prestamo-tabla tbody tr:hover { background: #f8fafc; }
+.g-prestamo-tabla tbody tr:last-child td { border-bottom: none; }
+
 /* ---------- Ítems de préstamo con devolución por ítem ---------- */
 .g-items-devol { gap: 12px; }
 
@@ -831,6 +855,23 @@ body {
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+.agente-expand-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    font-size: 15px;
+    text-decoration: none;
+    padding: 4px 8px;
+    line-height: 1;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.agente-expand-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
 }
 
 .agente-close-btn,
@@ -1202,10 +1243,115 @@ body {
     text-decoration: underline;
 }
 
-@media (max-width: 600px) {
+/* ========== PESTAÑA DEDICADA AL CHAT (/gestion/agente) ========== */
+/* Mismo markup que el widget (_agente_chat_core.html), otro contenedor. */
+
+.agente-page {
+    display: flex;
+    flex-direction: column;
+    background: var(--g-surface);
+    border: 2px solid var(--g-primary);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    /* En desktop es un panel alto dentro del layout normal; en mobile pasa a
+       ocupar toda la pantalla (ver la media query de abajo). */
+    height: min(72vh, 700px);
+}
+
+.agente-page-bar {
+    background: linear-gradient(135deg, var(--g-primary) 0%, #0d1f3c 100%);
+    color: white;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 3px solid var(--g-accent);
+    flex-shrink: 0;
+}
+
+.agente-page-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 15px;
+}
+
+.agente-page .agente-input-area {
+    border-radius: 0;
+}
+
+.g-nav-tag-agente.active {
+    background: var(--g-accent);
+    border-color: var(--g-accent);
+    color: white;
+}
+
+/* ---------- Chat en celular: pantalla completa, input siempre visible ---------- */
+@media (max-width: 700px) {
+    /* Scrollea SOLO el historial, no la página: si scrollea el body, al abrir el
+       teclado el input se va abajo del fold y hay que buscarlo a mano.
+       100dvh y no 100vh porque en iOS/Chrome mobile 100vh incluye la barra del
+       navegador que en realidad tapa la pantalla. */
+    body.g-chat-page {
+        overflow: hidden;
+    }
+
+    body.g-chat-page .g-bg {
+        height: 100dvh;
+        min-height: 0;
+    }
+
+    body.g-chat-page .g-shell {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 10px 10px 0;
+    }
+
+    body.g-chat-page .g-main {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+    }
+
+    body.g-chat-page .agente-page {
+        flex: 1;
+        height: auto;
+        min-height: 0;
+        border-width: 1px;
+        border-bottom: none;
+        border-radius: 8px 8px 0 0;
+    }
+
+    /* Header y footer comen pantalla que acá vale oro. */
+    body.g-chat-page .g-footer { display: none; }
+    body.g-chat-page .g-header { padding: 8px 0; }
+    body.g-chat-page .g-header .g-container { padding: 6px 10px; }
+    body.g-chat-page .g-logo { height: 34px; }
+    body.g-chat-page .g-titles p { display: none; }
+    body.g-chat-page .g-titles h1 { font-size: 15px; }
+
+    /* El nav son 8 pestañas: en vez de envolver en 3 filas, scrollea de costado. */
+    body.g-chat-page .g-nav {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        margin-bottom: 10px;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    body.g-chat-page .g-nav::-webkit-scrollbar { display: none; }
+    body.g-chat-page .g-nav-tag { flex: 0 0 auto; }
+}
+
+/* ---------- Ajustes táctiles (widget y pestaña por igual) ---------- */
+@media (max-width: 700px) {
     .agente-widget {
-        width: calc(100vw - 20px);
-        height: calc(100vh - 120px);
+        width: auto;
+        height: calc(100dvh - 120px);
         bottom: 10px;
         right: 10px;
         left: 10px;
@@ -1215,10 +1361,59 @@ body {
 
     .agente-messages {
         padding: 12px;
+        gap: 10px;
+    }
+
+    .agente-message {
+        font-size: 14px;
+    }
+
+    .agente-message-user,
+    .agente-message-assistant {
+        max-width: 92%;
     }
 
     .agente-input-area {
         padding: 10px;
+        /* Barra gestual del iPhone: sin esto el botón de enviar queda abajo de ella. */
+        padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .agente-input {
+        /* 16px EXACTOS: con menos, iOS hace zoom al enfocar el campo y descuadra
+           todo el layout, y no vuelve solo. No bajar este valor. */
+        font-size: 16px;
+        min-height: 44px;
+        max-height: 120px;
+        padding: 11px 12px;
+    }
+
+    /* Objetivos táctiles de 44px, que es el mínimo usable con el dedo. */
+    .agente-send-btn {
+        min-width: 54px;
+        min-height: 44px;
+        font-size: 18px;
+    }
+
+    .agente-toolbar-btn {
+        min-width: 44px;
+        min-height: 40px;
+    }
+
+    .agente-reset-btn,
+    .agente-close-btn,
+    .agente-expand-btn {
+        min-width: 34px;
+        min-height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Las tablas que devuelve el agente (horarios) no deben ensanchar la pantalla. */
+    .agente-table-wrap {
+        max-width: 100%;
+        overflow-x: auto;
     }
 }
 
