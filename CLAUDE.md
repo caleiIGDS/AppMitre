@@ -221,6 +221,7 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 - Sistema de búsqueda y parsing de queries → leer `agent_docs/search-api.md`
 - Estilos, variables CSS, patrones visuales → leer `agent_docs/frontend-ui.md`
 - Sistema de Gestión de Conocimiento (`/gestion`, `gestion.py`, `gestion.db`) → leer `agent_docs/gestion-conocimiento.md`
+- Historias de la escuela: cómo agregar, campos, tonos y estilos → leer `HISTORIAS_PROCEDIMIENTO.md`
 
 ## Dev Log
 
