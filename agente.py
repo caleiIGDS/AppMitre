@@ -603,8 +603,10 @@ def _historia_fmt(tema):
             f'natural entre dos personas. Nada de narrativa de acción (NO escribas —mirando—, —se acomoda—, descripciones '
             f'de gestos). Solo vos hablando, contando directo, conversacional. '
             f'Tono emocional: {tono}. Estilo narrativo: {estilo}. '
-            f'Cuéntale lo que viste con tus propios ojos, lo que guardaste en tu memoria. El usuario puede hacer preguntas después; '
-            f'no las anticipes. Usa el texto de la historia textualmente, nada más. No inventes ni agregues.'
+            f'Podés endulzar la narrativa (agregar reacciones, atmósfera, detalles pequeños que realcen lo que pasó), '
+            f'pero NUNCA inventar hechos nuevos ni cambiar eventos. La diferencia: "todos lo miraron con sorpresa" está bien; '
+            f'"y luego se fue del aula" está mal si no está en la historia. Cuéntale lo que viste. El usuario puede hacer preguntas después; '
+            f'no las anticipes.'
         )
 
         return {
