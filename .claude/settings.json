@@ -5,7 +5,11 @@
       "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\probar_busqueda.py\")",
       "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\len_desc.py\")",
       "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\probar_busqueda2.py\")",
-      "Bash(python -m py_compile agente.py)"
+      "Bash(python -m py_compile agente.py)",
+      "Bash(python -c \"import json; json.load\\(open\\('historia_indice.json', encoding='utf-8'\\)\\)\")",
+      "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\verify_listar.py\")",
+      "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\piso_real.py\")",
+      "Bash(git commit *)"
     ]
   }
 }

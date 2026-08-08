@@ -31,6 +31,27 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-08-08] — Sinónimos del inventario: que el modelo lea la lista completa, no un diccionario
+
+**Contexto**: La búsqueda del inventario (`_puntaje_busqueda`) compara **letras, no significados**. Buscar "tester" no encuentra el *Multímetro*; "taladro" no encuentra la *Agujereadora de banco*, que es exactamente eso. El agente respondía "no está cargado", que era una **conjetura** derivada de que la búsqueda falló, no un hecho verificado. Subir el umbral a 0.68 el mismo día empeoró el síntoma: "taladro" pasó de 4 falsos positivos a 0 resultados.
+
+**Decisión**: tool nueva `listar_todos(slug)` que devuelve **todos** los nombres + id, usada como **fallback** cuando `buscar_entidad` no trae ningún `match: "exacto"`. El modelo reconoce el sinónimo mirando la lista; no hay diccionario que mantener.
+
+**Alternativas descartadas** (las tres son diccionarios curados a mano):
+- *Columna `sinonimos` por recurso* — **47% de las filas comparten concepto** (medido: 4 paneles solares, 5 pinzas, 5 kits, 4 destornilladores). El sinónimo pertenece al *concepto*, no a la *fila*: habría que repetir "módulo fotovoltaico" en los 4 paneles y acordarse en cada alta nueva. A favor tenía que se edita desde la UI sin deploy.
+- *`sinonimos.json` por concepto* — arregla la cardinalidad, pero sigue siendo curaduría manual perpetua y no cubre paráfrasis ("lo que mide tensión").
+- *Regla de prompt: reintentar con 1–2 sinónimos antes de listar* — **cuesta más, no menos**. En tool-calling cada round-trip re-envía todo el contexto: medido, el piso es **~8.050 tokens** (esquemas de 20 tools ~6.420 + lista de personas ~1.625, sin contar el system prompt ni el historial) contra **~1.190 tokens** del listado completo de 91 recursos. Un intento de sinónimo de más cuesta **~6,7x** lo que cuesta mandar el inventario entero. Y puede *acertar mal*: adivinar "voltímetro" para "tester", encontrar un voltímetro real y detenerse ahí con confianza. La lectura completa ve todo y decide una sola vez.
+
+**Por qué el costo es aceptable**: el agente ya inyecta ~1.625 tokens en **cada turno** con `_personas_conocidas()` (decisión 2026-08-04). El listado completo cuesta menos que eso y solo se paga cuando la búsqueda falla.
+
+**Consecuencia**:
+- "No está cargado" pasa de conjetura a afirmación verificada. Ese es el beneficio principal, más que el recall.
+- **No escala para siempre**: `LIMITE_LISTADO_COMPLETO = 400`. Arriba de eso la tool se niega y pide afinar la búsqueda. **Si el inventario supera ese tope, el tier de sinónimos descartado arriba vuelve a ser la respuesta correcta** — la aritmética se da vuelta cuando el listado deja de caber.
+- El guardrail es de prompt, en tres lugares que se refuerzan: el `aviso` de `buscar_entidad` nombra la tool, la `instruccion` del resultado dice "si ninguno es, decilo — no ofrezcas el más parecido", y la regla 3 del system prompt fija el orden. **Con DeepSeek (proveedor por defecto) esto es más frágil que con Claude**: si sobre-matchea, la salida es endurecer el guardrail, no volver al diccionario.
+- **No agregar una columna `sinonimos` "para mejorar la búsqueda"** sin releer esto: se evaluó y se descartó con datos.
+
+---
+
 ## [2026-08-08] — Historia de la escuela: contenido guardado en un JSON, nunca generado por el modelo
 
 **Contexto**: Se pidió que el agente pudiera contar la historia del colegio y tener guiños internos (anécdotas sobre gente de la casa) como easter egg, con la condición explícita de que no comprometiera el funcionamiento ni el costo.
