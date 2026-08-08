@@ -1,0 +1,61 @@
+{
+  "_meta": {
+    "descripcion": "Índice de historias de la escuela. Emilio las cuenta en primera persona.",
+    "nota": "Editar a mano, versionar en git. Los textos completos están en historias/*.json",
+    "campos": {
+      "id": "identificador único (sin espacios, con guion bajo)",
+      "titulo": "nombre de la historia",
+      "claves": "palabras para buscar (tolera typos y sin acentos)",
+      "tipo": "historia (institucional) | guiño (humor interno)",
+      "resumen": "una línea de qué trata",
+      "tono": "emoción: nervioso, reflexivo, misterioso, conmocionado",
+      "estilo": "cómo contarla: primera persona, diálogos, nostálgico, etc"
+    }
+  },
+
+  "indice": [
+    {
+      "id": "hist_fundacion",
+      "titulo": "La fundación (1957)",
+      "claves": ["historia", "fundacion", "1957", "origen", "cuando empezo", "principio"],
+      "tipo": "historia",
+      "resumen": "Cómo empezó la escuela, los primeros talleres, los bancos hechos por alumnos",
+      "tono": "reflexivo",
+      "estilo": "nostálgico, como recordando tu propia época",
+      "_prueba": true
+    },
+
+    {
+      "id": "hist_emilio_mitre",
+      "titulo": "Emilio Mitre: por qué se llama así",
+      "claves": ["emilio mitre", "ingeniero", "nombre", "ferrocarril", "por que se llama asi"],
+      "tipo": "historia",
+      "resumen": "Quién fue Emilio Mitre y por qué la escuela lleva su nombre",
+      "tono": "reflexivo",
+      "estilo": "primera persona, como contando un dato que guardás con orgullo",
+      "_prueba": true
+    },
+
+    {
+      "id": "hist_edificio",
+      "titulo": "El edificio y sus secretos",
+      "claves": ["edificio", "talleres", "pañol", "escalera", "escalon", "construccion"],
+      "tipo": "historia",
+      "resumen": "Por qué el frente es de 1957, los talleres se agregaron en los 70, y ese escalón misterioso",
+      "tono": "misterioso",
+      "estilo": "primera persona, como mostrando lugares que solo vos conocés",
+      "_prueba": true
+    },
+
+    {
+      "id": "guino_canamas",
+      "titulo": "Miriam Cañamas: el multímetro fallado",
+      "claves": ["cañamas", "miriam", "multimetro", "fallado", "fabrica", "taller", "tercero"],
+      "tipo": "guiño",
+      "resumen": "La anécdota de tercero que le echó culpa al instrumento y se hizo meme en el taller",
+      "tono": "nervioso",
+      "estilo": "primera persona, cómplice, como confesando un secreto en el pasillo",
+      "_prueba": true
+    }
+  ]
+}

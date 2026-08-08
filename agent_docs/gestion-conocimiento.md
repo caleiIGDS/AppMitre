@@ -465,38 +465,50 @@ leía como "no hay nada cargado").
 
 ### Historia de la escuela (`consultar_historia`)
 
-Cuarta área del agente, además de horarios / inventario / préstamos: lore institucional
-(fundación, el nombre de la escuela, el edificio) y guiños internos sobre gente de la casa.
-Existe para que el chat pueda contestar lo que no es operativo — "¿qué sabés de Cañamas?" —
-sin que eso sea una invitación a inventar.
+Cuarta área del agente: lore institucional (fundación, nombre de la escuela, edificio) y
+guiños internos sobre gente de la casa. El agente responde "¿qué sabés de Cañamas?" sin
+inventar, porque las historias son literales del archivo.
 
-**Contenido en `historia_escuela.json`** (raíz, al lado de `nombre_mapeos.json`), no en
-`gestion.db`: es lore que se edita a mano y versiona en git, no dato de usuario — no justifica
-tabla, ABM ni migración. Cada entrada es `{claves, tipo, texto}`; `tipo` es `historia` (dato
-institucional) o `guiño` (humor de pasillo). Las entradas sin `claves` o sin `texto` se
-descartan al cargar, así que se pueden dejar bloques de comentario adentro del JSON.
+**Estructura de archivos**:
+- **`historia_indice.json`** — índice comprimido: id, título, claves, tipo, resumen, tono, estilo.
+  Se cachea por mtime (pequeño, ~20KB). Recarga sola cuando cambia sin reiniciar.
+- **`historias/`** — directorio con un archivo JSON por historia (ej: `guino_canamas.json`).
+  Contiene: id, título, claves, tipo, resumen, tono, estilo, **texto completo**.
+  Se cargan bajo demanda (lazy-loading), no se cachean.
 
-**Carga cacheada por mtime** (`_cargar_historia`): recarga sola cuando el archivo cambia,
-porque en Render el proceso puede quedar meses arriba y sumar una anécdota no debería
-requerir reiniciar. Archivo ausente o JSON roto ⇒ lista vacía, no excepción: el agente
-responde "no sé" en vez de romper el chat.
+Estructura por historia:
+```json
+{
+  "id": "guino_canamas",
+  "titulo": "Miriam Cañamas: el multímetro fallado",
+  "claves": ["cañamas", "miriam", "multimetro"],
+  "tipo": "guiño",
+  "resumen": "La anécdota de tercero que culpó al instrumento",
+  "tono": "nervioso",
+  "estilo": "primera persona, cómplice, como confesando",
+  "texto": "Miriam Cañamas tiene fama de escuchar todo..."
+}
+```
 
-**Match** (`_historia_fmt`): substring normalizado con `gestion._norm` y, si no hay, `difflib`
-sobre las claves con umbral `HISTORIA_UMBRAL = 0.72` — más exigente que el 0.68 del inventario
-porque las claves son pocas y elegidas, y un falso positivo acá contesta una anécdota que no
-tiene nada que ver. El NFD de `_norm` le saca la tilde a la ñ, así que "Cañamas" queda
-`canamas` y "caniamas" entra por similitud (~0.93).
+**Búsqueda** (`_historia_fmt`): sin tema devuelve índice completo. Con tema:
+- Busca en `claves`, `tono`, `estilo`, `titulo`, `resumen` (substring + difuso con umbral 0.72)
+- Devuelve tres modos:
+  * **directo**: 1 coincidencia exacta → devuelve historia completa + `instruccion_tono` (cómo contar)
+  * **listar**: múltiples opciones → devuelve índice sin textos, usuario elige
+  * **no_encontrado**: nada coincide → instrucción de no inventar
 
-**Por qué el texto se devuelve literal y nunca lo genera el modelo**: dejarlo improvisar
-anécdotas reactiva justo la conducta que la regla inviolable del prompt desactiva (se lo
-detectó fabricando horarios enteros), y el modelo no tiene cómo saber que el permiso para
-inventar terminaba en las anécdotas. Por eso `encontrado:false` no devuelve lista vacía sino
-una instrucción explícita de no inventar, y el hit trae una `nota` que prohíbe agregar hechos,
-nombres o fechas que no estén en `texto`. La descripción de la tool además acota el dominio
-("no la uses para horarios, inventario ni préstamos") para que no se dispare en turnos
-operativos.
+**Tonos y estilos**: cada historia define cómo debe contarse. El agente recibe `instruccion_tono`
+que le pide primera persona, emociones específicas (nervioso, reflexivo, misterioso, conmocionado),
+y el estilo narrativo (íntimo, nostálgico, dramático). El modelo respeta estas instrucciones como
+parte de la respuesta de la tool.
 
-**Costo**: ~200 tokens de esquema por turno, fijos; el contenido solo se paga cuando se llama.
+**Por qué textos literales**: dejarlo improvisar anécdotas dispara la conducta que el prompt desactiva
+(fabricación de historias), y el modelo no sabe que el permiso termina en anécdotas. Por eso textos
+vienen del JSON siempre, jamás generados. `no_encontrado` devuelve instrucción explícita de no inventar,
+no lista vacía que invita a rellenar.
+
+**Costo**: índice cachea siempre (~250 tokens por turno). Historias completas se pagan solo cuando se
+leen (varían, típicamente 200–500 tokens por historia).
 
 ### Auditoría (agente_log)
 

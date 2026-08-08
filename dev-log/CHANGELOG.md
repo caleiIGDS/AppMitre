@@ -4,6 +4,24 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-08] — Historias: arquitectura de dos niveles con lazy-loading e instrucciones de tono
+
+**Tipo**: refactor de estructura de archivos + cambio en tool `consultar_historia`
+**Archivos**: `historia_indice.json` (nuevo), `historias/` (directorio nuevo), `agente.py`, `agent_docs/gestion-conocimiento.md`
+**Cambios**:
+- **Estructura anterior** (`historia_escuela.json` monolítico) → **nueva estructura**:
+  - `historia_indice.json`: índice cachea (id, título, claves, tipo, resumen, tono, estilo, sin texto)
+  - `historias/{id}.json`: archivos individuales con texto completo + metadata (lazy-load)
+  - Beneficio: escalable a cientos de historias; índice pequeño, textos bajo demanda
+- **Tool `consultar_historia(tema?, id?)`** devuelve tres modos:
+  - `directo`: 1 coincidencia exacta → historia completa + `instruccion_tono` (cómo contar: tono, estilo, primera persona)
+  - `listar`: múltiples opciones → índice sin textos, usuario elige
+  - `no_encontrado`: nada coincide → instrucción de no inventar
+- **Búsqueda** ampliada: antes solo en claves; ahora también en `tono`, `estilo`, permitiendo consultas como "historias misterosas" o "algo excitante"
+- **Costo de tokens**: índice cachea (250/turno fijo); textos solo al leerlos (~200–500 según historia)
+
+---
+
 ## [2026-08-08] — El agente deja de mostrar los id internos
 
 **Tipo**: cambio en la salida del agente al usuario

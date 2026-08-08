@@ -4,7 +4,8 @@
       "Bash(python -c ' *)",
       "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\probar_busqueda.py\")",
       "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\len_desc.py\")",
-      "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\probar_busqueda2.py\")"
+      "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\probar_busqueda2.py\")",
+      "Bash(python -m py_compile agente.py)"
     ]
   }
 }

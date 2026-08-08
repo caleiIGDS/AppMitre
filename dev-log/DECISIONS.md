@@ -4,6 +4,33 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-08-08] — Historias: arquitectura de dos niveles (índice + archivos) + tonos/estilos
+
+**Contexto**: Se pidió escalar el sistema de historias para cientos de anécdotas, permitiendo búsquedas por atmósfera ("algo misterioso", "historias excitantes") y que el agente las cuente **con emoción real** (primera persona, tono nervioso/reflexivo/etc.), no como texto plano de "dos puntos y listar".
+
+**Decisión**:
+- **Arquitectura de dos niveles (lazy-loading)**:
+  - `historia_indice.json`: índice cachea siempre (id, título, claves, tipo, resumen, tono, estilo, **sin texto**)
+  - `historias/{id}.json`: archivos individuales, un por historia, con texto completo + metadata. Se cargan **bajo demanda**.
+  - **Beneficio**: escalable a 1000+ historias. Índice pequeño (~20KB, 250 tokens/turno), textos solo al leerlos (~200-500 tokens variando por historia).
+  - **vs alternativas consideradas**: base de datos SQLite (overkill, menos editables a mano), un JSON gigante (no escalable), archivos `.md` (Markdown headers no son index-friendly).
+
+- **Búsqueda expandida**: antes solo en `claves`; ahora también en `tono` y `estilo`. Permite "algo misterioso" matchear historias con `tono: misterioso` sin necesidad de esa palabra en las claves. El umbral sigue siendo 0.72.
+
+- **Tonos + estilos como instrucciones para el agente**: cada historia devuelve `instruccion_tono` que le dice cómo contar: qué emoción sentir, qué perspectiva (primera persona, testigo, etc.), cómo mantener el misterio de ser Emilio. El modelo lo recibe como **respuesta de la tool**, no como system prompt, así que la instrucción es contextual a esa historia específica y no carga peso en todos los turnos.
+
+- **Tool devuelve tres modos** (no dos como se esperaría):
+  - `directo`: 1 coincidencia exacta → historia completa + `instruccion_tono` (el agente la cuenta sin preguntar)
+  - `listar`: múltiples opciones o búsqueda vaga → índice sin textos (el agente ofrece opciones, usuario elige)
+  - `no_encontrado`: nada coincide → instrucción de no inventar
+  - **Beneficio**: el flujo es inteligente — "cuéntame de Cañamas" es directo, "historias" ofrece opciones, "algo misterioso" busca por atmósfera.
+
+- **Por qué no un sistema de prompts dinámicos o sub-prompts**: las instrucciones de tono viajan en la respuesta de la tool (JSON), no inyectadas en el loop de tool-calling del modelo. Más simple, más auditable, y el modelo las ve de forma natural como parte de su respuesta de lectura.
+
+**Consecuencia**: el sistema es ahora ansatz para cientos de historias sin problema de tokens. Agregar una anécdota es: (1) crear `historias/nuevo_id.json`, (2) agregar entrada al `indice` de `historia_indice.json`. Sin tocar código. El editor de historias no necesita saber de programación.
+
+---
+
 ## [2026-08-08] — Historia de la escuela: contenido guardado en un JSON, nunca generado por el modelo
 
 **Contexto**: Se pidió que el agente pudiera contar la historia del colegio y tener guiños internos (anécdotas sobre gente de la casa) como easter egg, con la condición explícita de que no comprometiera el funcionamiento ni el costo.

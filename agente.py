@@ -39,6 +39,8 @@ from database import obtener_filas
 from config import DIAS
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gestion.db')
+HISTORIA_INDICE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'historia_indice.json')
+HISTORIA_DIR_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'historias')
 
 bp = Blueprint('agente', __name__, url_prefix='/gestion/agente')
 
@@ -461,75 +463,176 @@ HISTORIA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'histor
 # (no hay 91 nombres compitiendo), así que se puede exigir más.
 HISTORIA_UMBRAL = 0.72
 
-_historia_cache = {'mtime': None, 'entradas': []}
+_historia_indice_cache = {'mtime': None, 'datos': []}
 
 
-def _cargar_historia():
-    """Entradas del JSON, recargadas si el archivo cambió.
+def _cargar_historia_indice():
+    """Índice de historias, recargado si el archivo cambió.
 
-    Se cachea por mtime y no de una vez para siempre porque en Render el proceso puede
-    quedar meses arriba: sin esto, sumar una anécdota al archivo obligaría a reiniciar.
+    Cachea el índice pero no el contenido de textos. Así en turnos normales
+    no se paga el costo de leer historias.
     """
     try:
-        mtime = os.path.getmtime(HISTORIA_PATH)
+        mtime = os.path.getmtime(HISTORIA_INDICE_PATH)
     except OSError:
-        return []  # sin archivo, el agente simplemente no sabe nada de historia
-    if _historia_cache['mtime'] != mtime:
+        return []
+    if _historia_indice_cache['mtime'] != mtime:
         try:
-            with open(HISTORIA_PATH, encoding='utf-8') as f:
+            with open(HISTORIA_INDICE_PATH, encoding='utf-8') as f:
                 datos = json.load(f)
+                indice = datos.get('indice', [])
+                # Filtrar: solo entradas con claves e id válido
+                _historia_indice_cache['datos'] = [
+                    e for e in indice
+                    if e.get('claves') and e.get('id') and not e.get('_prueba', False)
+                ]
         except (ValueError, OSError):
-            return []  # JSON roto: mejor "no sé" que reventar el chat
-        _historia_cache['entradas'] = [e for e in datos if e.get('claves') and e.get('texto')]
-        _historia_cache['mtime'] = mtime
-    return _historia_cache['entradas']
+            _historia_indice_cache['datos'] = []
+        _historia_indice_cache['mtime'] = mtime
+    return _historia_indice_cache['datos']
+
+
+def _cargar_historia_completa(id_historia):
+    """Lee el archivo individual de una historia completa.
+
+    No se cachea porque se lee bajo demanda y es pequeño.
+    Devuelve None si no existe o hay error.
+    """
+    try:
+        path = os.path.join(HISTORIA_DIR_PATH, f'{id_historia}.json')
+        with open(path, encoding='utf-8') as f:
+            return json.load(f)
+    except (ValueError, OSError, FileNotFoundError):
+        return None
 
 
 def _historia_fmt(tema):
-    """Busca una entrada de historia por tema y la devuelve TEXTUAL.
+    """Busca historias por tema y devuelve modo + contenido.
 
-    El texto sale del archivo y nunca del modelo: dejarlo improvisar anécdotas es
-    exactamente la conducta que la regla inviolable del prompt desactiva (se detectó
-    fabricando horarios enteros), y el modelo no tiene cómo saber que el permiso
-    terminaba en las anécdotas. Por eso el caso "no hay nada" devuelve una instrucción
-    explícita de no inventar, en vez de una lista vacía que invita a rellenar.
+    Modos de respuesta:
+    - 'directo': 1 coincidencia exacta → devuelve historia completa + instrucción tono/estilo
+    - 'listar': múltiples coincidencias o tema vago → devuelve índice sin textos
+    - 'no_encontrado': ninguna coincidencia → devuelve instrucción de no inventar
+
+    El texto sale del archivo, nunca se improvisa.
     """
     q = gestion._norm(tema or '')
     if not q:
-        return {'encontrado': False,
-                'nota': 'Falta el tema. Preguntale al usuario sobre qué quiere saber.'}
+        # Sin tema = listar todo el índice
+        indice = _cargar_historia_indice()
+        if not indice:
+            return {
+                'modo': 'no_encontrado',
+                'nota': 'No hay historias guardadas todavía.'
+            }
+        return {
+            'modo': 'listar',
+            'historias': [
+                {
+                    'id': e['id'],
+                    'titulo': e.get('titulo', ''),
+                    'tipo': e.get('tipo', ''),
+                    'resumen': e.get('resumen', ''),
+                    'tono': e.get('tono', ''),
+                    'estilo': e.get('estilo', '')
+                }
+                for e in indice
+            ],
+            'total': len(indice)
+        }
 
-    mejor, puntaje_mejor = None, 0.0
-    for entrada in _cargar_historia():
-        for clave in entrada['claves']:
+    # Búsqueda por tema: mira claves, título, resumen, tono, estilo
+    indice = _cargar_historia_indice()
+    matches = []
+
+    for entrada in indice:
+        puntaje = 0.0
+
+        # Busca en claves (exacto/substring)
+        for clave in entrada.get('claves', []):
             c_norm = gestion._norm(clave)
             if not c_norm:
                 continue
-            # El substring gana siempre; el difuso solo entra con 3+ caracteres, igual
-            # que en _puntaje_busqueda (con menos, cualquier cosa se parece a cualquier cosa).
             if q in c_norm or c_norm in q:
-                puntaje = 1.0
+                puntaje = max(puntaje, 1.0)
             elif len(q) >= 3:
-                puntaje = difflib.SequenceMatcher(None, q, c_norm).ratio()
-            else:
-                continue
-            if puntaje > puntaje_mejor:
-                mejor, puntaje_mejor = entrada, puntaje
+                sim = difflib.SequenceMatcher(None, q, c_norm).ratio()
+                puntaje = max(puntaje, sim)
 
-    if not mejor or puntaje_mejor < HISTORIA_UMBRAL:
+        # También busca en tono y estilo (para queries como "excitante", "misterioso")
+        for campo in ['tono', 'estilo', 'titulo', 'resumen']:
+            valor = gestion._norm(entrada.get(campo, ''))
+            if not valor:
+                continue
+            if q in valor or valor in q:
+                puntaje = max(puntaje, 1.0)
+            elif len(q) >= 3:
+                sim = difflib.SequenceMatcher(None, q, valor).ratio()
+                puntaje = max(puntaje, sim)
+
+        if puntaje >= HISTORIA_UMBRAL:
+            matches.append((entrada, puntaje))
+
+    if not matches:
         return {
-            'encontrado': False,
-            'nota': f'No hay nada guardado sobre "{tema}". Decíselo al usuario tal cual, en una '
-                    f'frase. NO inventes una anécdota, un dato histórico ni una explicación '
-                    f'plausible: si no está acá, no existe.'
+            'modo': 'no_encontrado',
+            'nota': f'No hay historias sobre "{tema}". Decíselo al usuario en una frase. '
+                    'NO inventes anécdotas ni datos: si no está acá, no existe.'
         }
 
+    # Ordena por puntaje
+    matches.sort(key=lambda x: x[1], reverse=True)
+
+    # Si hay UNA coincidencia muy buena, devuelve directo
+    if len(matches) == 1 or (matches[0][1] > 0.95 and matches[1][1] < 0.90 if len(matches) > 1 else True):
+        mejor_entrada = matches[0][0]
+        historia_completa = _cargar_historia_completa(mejor_entrada['id'])
+        if not historia_completa:
+            return {
+                'modo': 'no_encontrado',
+                'nota': f'Encontré la historia sobre "{tema}" pero no puedo cargar su contenido. Disculpá.'
+            }
+
+        # Construir instrucción de tono/estilo
+        tono = mejor_entrada.get('tono', 'reflexivo')
+        estilo = mejor_entrada.get('estilo', 'primera persona')
+        instruccion_tono = (
+            f'Eres Emilio, el espíritu que habita la escuela. Cuéntale esta historia en PRIMERA PERSONA '
+            f'como si la hubieras presenciado o guardado en tu memoria. '
+            f'Tono: {tono}. Estilo: {estilo}. '
+            f'Mantén el misterio de ser un fantasma contando sobre los vivos. '
+            f'No agregues hechos ni nombres que no estén en el texto.'
+        )
+
+        return {
+            'modo': 'directo',
+            'historia': {
+                'id': historia_completa['id'],
+                'titulo': historia_completa.get('titulo', ''),
+                'tipo': historia_completa.get('tipo', ''),
+                'texto': historia_completa.get('texto', ''),
+                'tono': tono,
+                'estilo': estilo
+            },
+            'instruccion_tono': instruccion_tono
+        }
+
+    # Múltiples coincidencias: devuelve índice para que elija
     return {
-        'encontrado': True,
-        'tipo': mejor.get('tipo', 'historia'),
-        'texto': mejor['texto'],
-        'nota': 'Contalo con tus palabras pero SIN agregar hechos, nombres, fechas ni detalles '
-                'que no estén en `texto`. Si el usuario pide más, decí que es todo lo que hay.'
+        'modo': 'listar',
+        'historias': [
+            {
+                'id': e['id'],
+                'titulo': e.get('titulo', ''),
+                'tipo': e.get('tipo', ''),
+                'resumen': e.get('resumen', ''),
+                'tono': e.get('tono', ''),
+                'estilo': e.get('estilo', '')
+            }
+            for e, _ in matches[:5]  # top 5 matches
+        ],
+        'total': len(matches),
+        'nota': 'Hay varias historias que podrían interesarte. ¿Cuál querés escuchar?'
     }
 
 # Tope de resultados que se le mandan a Claude. La búsqueda difusa no acota: con una
@@ -1517,18 +1620,19 @@ TOOLS_SCHEMA = [
     {
         'name': 'consultar_historia',
         'description': ('Lore de la escuela: historia institucional, tradiciones y anécdotas internas '
-                        'sobre gente de la casa. Usala cuando la pregunta NO es operativa — "¿qué sabés '
-                        'de X?", "contame algo de...", "¿por qué se llama así la escuela?", "¿desde '
-                        'cuándo existe?". NO la uses para horarios, inventario ni préstamos: eso tiene '
-                        'sus propias tools y acá no está. Es la ÚNICA fuente de historia y de anécdotas: '
-                        'si devuelve encontrado:false, decí que no sabés y NO improvises una historia, '
-                        'por graciosa o inofensiva que parezca.'),
+                        'sobre gente de la casa. Usala cuando la pregunta NO es operativa — "¿qué sabés de X?", '
+                        '"contame algo de...", "¿por qué se llama así?", "historias excitantes", "algo misterioso". '
+                        'Sin tema: lista todas las historias disponibles. Con tema: busca (tolera typos, busca en '
+                        'claves, tono, estilo). Si devuelve modo:directo, ella ya eligió → cuéntala con el tono/estilo '
+                        'indicado, PRIMERA PERSONA. Si devuelve modo:listar, ofrécele esas opciones al usuario. '
+                        'Si modo:no_encontrado, decíselo tal cual (NO improvises). Es la ÚNICA fuente de historia.'),
         'input_schema': {
             'type': 'object',
             'properties': {
-                'tema': {'type': 'string', 'description': 'Sobre qué preguntan: un apellido, "fundación", "el edificio". Tolera typos y falta de tildes'}
+                'tema': {'type': 'string', 'description': 'Qué buscar: nombre, "fundación", "edificio", "misterioso", "excitante". Vacío = listar todas'},
+                'id': {'type': 'string', 'description': 'ID de una historia para obtenerla directamente (ej: "guino_canamas"). Opcional; si se pasa, ignora tema'}
             },
-            'required': ['tema']
+            'required': []
         }
     },
     # ESCRITURA
@@ -1820,7 +1924,28 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None):
         elif tool_name == 'detalle_prestamo':
             resultado = _detalle_prestamo_fmt(tool_input.get('prestamo_id', 0))
         elif tool_name == 'consultar_historia':
-            resultado = _historia_fmt(tool_input.get('tema', ''))
+            # Si pasan ID directamente, carga esa historia
+            if tool_input.get('id'):
+                historia = _cargar_historia_completa(tool_input.get('id'))
+                if historia:
+                    tono = historia.get('tono', 'reflexivo')
+                    estilo = historia.get('estilo', 'primera persona')
+                    instruccion_tono = (
+                        f'Eres Emilio. Cuéntala en PRIMERA PERSONA. '
+                        f'Tono: {tono}. Estilo: {estilo}. No agregues hechos que no estén en el texto.'
+                    )
+                    resultado = {
+                        'modo': 'directo',
+                        'historia': historia,
+                        'instruccion_tono': instruccion_tono
+                    }
+                else:
+                    resultado = {
+                        'modo': 'no_encontrado',
+                        'nota': f'No encontré la historia con ID "{tool_input.get("id")}"'
+                    }
+            else:
+                resultado = _historia_fmt(tool_input.get('tema', ''))
         elif tool_name == 'crear_entidad':
             resultado = _crear_entidad(
                 tool_input.get('slug', ''),
@@ -2088,9 +2213,12 @@ Tenés tres áreas a cargo:
    que evita que las herramientas de la escuela desaparezcan.
 4. HISTORIA DE LA CASA — cómo empezó la escuela, tradiciones, y anécdotas de gente de acá.
    Cuando la pregunta no es operativa ("¿qué sabés de Fulana?", "contame algo de...", "¿por
-   qué se llama así?"), consultá `consultar_historia`. Si no hay nada guardado, decilo en una
-   frase y seguí: NO inventes una historia. Vale igual que para los horarios — una anécdota
-   inventada sobre un compañero de trabajo es peor que no tener ninguna.
+   qué se llama así?", "historias excitantes"), llama a `consultar_historia(tema='...')`.
+   La tool devuelve un `modo`:
+   - directo: ya eligió una historia → cuéntala en PRIMERA PERSONA con el tono/estilo que devuelve
+   - listar: hay varias opciones → muéstrale al usuario cuáles son y dejá que elija
+   - no_encontrado: nada coincide → decilo tal cual (NO improvises historias)
+   Si no hay nada guardado, decilo en una frase. Una anécdota inventada es peor que nada.
 
 CÓMO TRABAJÁS
 - Sos la memoria de la escuela, no un buscador. Lo que anotás mal queda mal anotado para el

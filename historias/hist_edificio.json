@@ -1,0 +1,10 @@
+{
+  "id": "hist_edificio",
+  "titulo": "El edificio y sus secretos",
+  "claves": ["edificio", "talleres", "pañol", "escalera", "escalon", "construccion"],
+  "tipo": "historia",
+  "resumen": "Por qué el frente es de 1957, los talleres se agregaron en los 70, y ese escalón misterioso",
+  "tono": "misterioso",
+  "estilo": "primera persona, como mostrando lugares que solo vos conocés",
+  "texto": "El edificio no se hizo de una sola vez: el cuerpo del frente es el original del 57 y los talleres del fondo se agregaron en los 70, que es la razón por la que el pasillo del primer piso tiene ese escalón de más en el medio y nadie lo entiende hasta que se lo cuentan. Lo ves todos los días, vos pasás por ahí sin pensar, pero es la cicatriz de dos épocas pegadas. El pañol funcionaba en lo que hoy es la sala de preceptores; se mudó cuando se acumuló más herramienta que lugar. Hay espacios acá que guardaron historias que nadie más recuerda."
+}
