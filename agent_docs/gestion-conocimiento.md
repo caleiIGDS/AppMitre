@@ -34,10 +34,17 @@ en Google Drive; acá solo se guardan links (`drive_url`).
 
 | Tabla | Campos |
 |-------|--------|
-| `recursos` | id, nombre, tipo, descripcion, ubicacion, estado, drive_url, cantidad, valor, fecha_revision |
-| `conjuntos` | id, nombre, descripcion, uso_tipico, drive_url |
-| `actividades` | id, nombre, objetivo, descripcion, duracion, curso, drive_url |
-| `proyectos` | id, nombre, descripcion, fecha, participantes, estado, drive_url |
+| `recursos` | id, nombre, tipo, descripcion, ubicacion, estado, drive_url, cantidad, valor, fecha_revision, **fotos** |
+| `conjuntos` | id, nombre, descripcion, uso_tipico, drive_url, **fotos** |
+| `actividades` | id, nombre, objetivo, descripcion, duracion, curso, drive_url, **fotos** |
+| `proyectos` | id, nombre, descripcion, fecha, participantes, estado, drive_url, **fotos** |
+
+**Galería de fotos** (`fotos` en cada tabla): array JSON con objetos `{b64, tipo, fecha}`.
+- `b64`: imagen codificada en base64 (embedded, sin servicios externos)
+- `tipo`: content-type (ej: `image/png`)
+- `fecha`: timestamp ISO de cuándo se subió
+- Upload: botón en ficha de detalle → POST `/<slug>/<id>/foto` → sube imagen, convierte a base64, guarda en DB
+- Renderizado: galería grid responsive (150px minmax) con preview nativo en el HTML
 
 M2M (con `UNIQUE` por par): `conjunto_recursos`, `actividad_recursos`,
 `actividad_conjuntos`, `proyecto_recursos`.
