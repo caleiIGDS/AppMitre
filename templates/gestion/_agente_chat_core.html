@@ -17,20 +17,17 @@
 <div class="agente-input-area">
   <input type="file" id="agente-image-file" accept="image/*" style="display: none;">
 
-  <div class="agente-toolbar">
+  <div class="agente-input-row">
     <button id="agente-image-btn" class="agente-toolbar-btn" title="Adjuntar imagen" aria-label="Adjuntar imagen">
       📷
     </button>
-    <span id="agente-image-preview" class="agente-image-preview"></span>
-  </div>
-
-  <div class="agente-input-row">
     <textarea id="agente-input" class="agente-input" placeholder="Escribí tu pregunta..." rows="2"
               autocomplete="off" autocapitalize="sentences" enterkeyhint="send"></textarea>
     <button id="agente-send-btn" class="agente-send-btn" title="Enviar" aria-label="Enviar">
       <span class="agente-send-icon">→</span>
     </button>
   </div>
+  <span id="agente-image-preview" class="agente-image-preview"></span>
 
   <div class="agente-footer">
     <a href="{{ url_for('agente.agente_log') }}" target="_blank" class="agente-footer-link">📋 Auditoría</a>
