@@ -1143,12 +1143,12 @@ body {
 
 .agente-input-row {
     display: flex;
-    align-items: flex-end;
-    gap: 2px;
+    align-items: center;
+    gap: 6px;
     background: white;
     border: 1px solid var(--g-border);
-    border-radius: 22px;
-    padding: 4px 4px 4px 6px;
+    border-radius: 14px;
+    padding: 6px;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -1159,17 +1159,17 @@ body {
 
 .agente-toolbar-btn {
     padding: 0;
-    background: transparent;
+    background: #f1f5f9;
     border: none;
-    border-radius: 50%;
+    border-radius: 8px;
     cursor: pointer;
     font-size: 16px;
     transition: background 0.2s;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     flex-shrink: 0;
 }
 
@@ -1179,13 +1179,13 @@ body {
 
 .agente-input {
     flex: 1;
-    padding: 8px 4px;
+    padding: 7px 4px;
     border: none;
     background: transparent;
     font-family: var(--g-font);
     font-size: 13px;
     resize: none;
-    min-height: 36px;
+    min-height: 34px;
     max-height: 80px;
     color: var(--g-dark);
 }
@@ -1203,7 +1203,7 @@ body {
     background: var(--g-primary);
     color: white;
     border: none;
-    border-radius: 50%;
+    border-radius: 8px;
     cursor: pointer;
     font-size: 14px;
     font-weight: 600;
@@ -1212,8 +1212,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     flex-shrink: 0;
 }
 
@@ -1500,6 +1500,11 @@ body {
         padding: 10px;
         /* Barra gestual del iPhone: sin esto el botón de enviar queda abajo de ella. */
         padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .agente-input-row {
+        padding: 8px;
+        border-radius: 16px;
     }
 
     .agente-input {
