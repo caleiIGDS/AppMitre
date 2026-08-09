@@ -1244,69 +1244,74 @@ body {
 }
 
 /* ---------- Galería de fotos ---------- */
-.g-galeria {
+.g-foto-section {
     margin-bottom: 24px;
-    background: var(--g-surface);
-    padding: 16px;
-    border: 1px solid var(--g-border);
-    border-radius: 4px;
 }
 
-.g-galeria h4 {
-    margin: 0 0 12px 0;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--g-primary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+.g-galeria {
+    background: var(--g-surface);
+    padding: 12px;
+    border: 1px solid var(--g-border);
+    border-radius: 4px;
+    margin-bottom: 8px;
 }
 
 .g-galeria-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
 }
 
 .g-foto {
     width: 100%;
-    height: 150px;
+    height: 120px;
     object-fit: cover;
-    border-radius: 4px;
+    border-radius: 3px;
     border: 1px solid var(--g-border);
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .g-foto:hover {
-    transform: scale(1.02);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transform: scale(1.05);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
-.g-upload-foto {
-    margin-bottom: 24px;
-}
-
-.g-upload-foto form {
-    display: flex;
-    gap: 8px;
-}
-
-.g-btn-outline {
-    background: transparent;
-    color: var(--g-primary);
-    border: 2px solid var(--g-primary);
-    padding: 8px 16px;
+.g-foto-toolbar {
+    background: var(--g-surface);
+    border: 1px solid var(--g-border);
     border-radius: 4px;
-    cursor: pointer;
-    font-family: var(--g-font);
-    font-size: 12px;
-    font-weight: 600;
-    transition: all 0.2s;
+    padding: 6px 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
-.g-btn-outline:hover {
-    background: var(--g-primary);
-    color: white;
+.g-foto-toolbar form {
+    display: flex;
+    align-items: center;
+}
+
+.g-foto-btn {
+    background: transparent;
+    border: 1px solid var(--g-border);
+    color: var(--g-muted);
+    padding: 6px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    min-height: 32px;
+}
+
+.g-foto-btn:hover {
+    background: var(--g-bg);
+    color: var(--g-primary);
+    border-color: var(--g-primary);
 }
 
 /* ---------- Botón de confirmar alta ---------- */
