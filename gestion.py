@@ -7,7 +7,9 @@
 # Entidades: recursos, conjuntos (agrupaciones de recursos), actividades, proyectos.
 # Relaciones M2M: conjunto_recursos, actividad_recursos, actividad_conjuntos, proyecto_recursos.
 
+import base64
 import difflib
+import json
 import os
 import sqlite3
 import unicodedata
@@ -186,14 +188,16 @@ CREATE TABLE IF NOT EXISTS recursos (
     drive_url TEXT DEFAULT '',
     cantidad TEXT DEFAULT '',
     valor TEXT DEFAULT '',
-    fecha_revision TEXT DEFAULT ''
+    fecha_revision TEXT DEFAULT '',
+    fotos TEXT DEFAULT '[]'
 );
 CREATE TABLE IF NOT EXISTS conjuntos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre TEXT NOT NULL,
     descripcion TEXT DEFAULT '',
     uso_tipico TEXT DEFAULT '',
-    drive_url TEXT DEFAULT ''
+    drive_url TEXT DEFAULT '',
+    fotos TEXT DEFAULT '[]'
 );
 CREATE TABLE IF NOT EXISTS actividades (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -202,7 +206,8 @@ CREATE TABLE IF NOT EXISTS actividades (
     descripcion TEXT DEFAULT '',
     duracion TEXT DEFAULT '',
     curso TEXT DEFAULT '',
-    drive_url TEXT DEFAULT ''
+    drive_url TEXT DEFAULT '',
+    fotos TEXT DEFAULT '[]'
 );
 CREATE TABLE IF NOT EXISTS proyectos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -211,7 +216,8 @@ CREATE TABLE IF NOT EXISTS proyectos (
     fecha TEXT DEFAULT '',
     participantes TEXT DEFAULT '',
     estado TEXT DEFAULT 'Activo',
-    drive_url TEXT DEFAULT ''
+    drive_url TEXT DEFAULT '',
+    fotos TEXT DEFAULT '[]'
 );
 CREATE TABLE IF NOT EXISTS conjunto_recursos (
     conjunto_id INTEGER NOT NULL,
@@ -336,13 +342,19 @@ def _migrar(cur):
     if 'utilidad' in existentes and 'valor' not in existentes:
         cur.execute("ALTER TABLE recursos RENAME COLUMN utilidad TO valor")
         existentes = {c[1] for c in cur.execute("PRAGMA table_info(recursos)").fetchall()}
-    for columna in ('cantidad', 'valor', 'fecha_revision'):
+    for columna in ('cantidad', 'valor', 'fecha_revision', 'fotos'):
         if columna not in existentes:
-            cur.execute(f"ALTER TABLE recursos ADD COLUMN {columna} TEXT DEFAULT ''")
+            default = '[]' if columna == 'fotos' else ''
+            cur.execute(f"ALTER TABLE recursos ADD COLUMN {columna} TEXT DEFAULT '{default}'")
     # Devolución por ítem: cuánto de cada ítem ya volvió (0 = sigue afuera entero).
     cols_items = {c[1] for c in cur.execute("PRAGMA table_info(prestamo_items)").fetchall()}
     if 'cantidad_devuelta' not in cols_items:
         cur.execute("ALTER TABLE prestamo_items ADD COLUMN cantidad_devuelta TEXT DEFAULT '0'")
+    # Agregar columna fotos a las demás tablas si no existe
+    for tabla in ('conjuntos', 'actividades', 'proyectos'):
+        cols = {c[1] for c in cur.execute(f"PRAGMA table_info({tabla})").fetchall()}
+        if 'fotos' not in cols:
+            cur.execute(f"ALTER TABLE {tabla} ADD COLUMN fotos TEXT DEFAULT '[]'")
 
 
 def _seed(cur):
@@ -751,7 +763,10 @@ def detalle(slug, id):
     secciones = _secciones_detalle(slug, id, cur)
     con.close()
     carrito = _carrito() if slug == 'recursos' else {}
-    return render_template('gestion/detalle.html', cfg=cfg, slug=slug, fila=fila,
+    # Parsear fotos de JSON a lista para el template
+    fila_dict = dict(fila)
+    fila_dict['fotos'] = json.loads(fila_dict.get('fotos', '[]'))
+    return render_template('gestion/detalle.html', cfg=cfg, slug=slug, fila=fila_dict,
                            secciones=secciones, activo=slug, carrito=carrito)
 
 
@@ -792,6 +807,52 @@ def eliminar(slug, id):
     con.commit()
     con.close()
     return redirect(url_for('gestion.lista', slug=slug))
+
+
+@bp.route('/<slug>/<int:id>/foto', methods=['POST'])
+def subir_foto(slug, id):
+    """Sube una foto, la convierte a base64 y la guarda en el JSON de fotos."""
+    cfg = _cfg(slug)
+
+    if 'file' not in request.files:
+        return jsonify({'ok': False, 'error': 'No hay archivo'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'ok': False, 'error': 'Archivo vacío'}), 400
+
+    # Solo imágenes
+    if not file.content_type.startswith('image/'):
+        return jsonify({'ok': False, 'error': 'Solo se aceptan imágenes'}), 400
+
+    try:
+        # Leer y convertir a base64
+        datos_archivo = file.read()
+        b64 = base64.b64encode(datos_archivo).decode('utf-8')
+        content_type = file.content_type
+
+        # Cargar fotos actuales
+        con = conectar()
+        cur = con.cursor()
+        fila = cur.execute(f"SELECT fotos FROM {cfg['tabla']} WHERE id = ?", (id,)).fetchone()
+        fotos = json.loads(fila['fotos'] or '[]') if fila else []
+
+        # Agregar nueva foto
+        fotos.append({
+            'b64': b64,
+            'tipo': content_type,
+            'fecha': datetime.now().isoformat()
+        })
+
+        # Guardar
+        cur.execute(f"UPDATE {cfg['tabla']} SET fotos = ? WHERE id = ?",
+                   (json.dumps(fotos), id))
+        con.commit()
+        con.close()
+
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 # --- Préstamos / retiros internos --------------------------------------------

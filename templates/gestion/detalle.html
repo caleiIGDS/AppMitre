@@ -37,6 +37,26 @@
 </div>
 
 <div class="g-detail">
+    {% if fila['fotos'] %}
+    <div class="g-galeria">
+        <h4>FOTOS</h4>
+        <div class="g-galeria-grid">
+            {% for foto in fila['fotos'] %}
+            <img src="data:{{ foto.tipo }};base64,{{ foto.b64 }}" alt="Foto" class="g-foto">
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="g-upload-foto">
+        <form id="form-foto" enctype="multipart/form-data">
+            <input type="file" name="file" accept="image/*" id="input-foto" style="display:none">
+            <button type="button" class="g-btn-outline" onclick="document.getElementById('input-foto').click()">
+                📷 Agregar foto
+            </button>
+        </form>
+    </div>
+
     <dl class="g-props">
         {% for c in cfg.campos %}
         {% if c.nombre not in ('nombre', 'drive_url') and fila[c.nombre] %}
@@ -92,4 +112,36 @@
         {% endfor %}
     </div>
 </div>
+
+<script>
+document.getElementById('form-foto')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('input-foto');
+    if (!input.files.length) return;
+
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch(location.pathname + '/foto', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        if (data.ok) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (err) {
+        alert('Error al subir: ' + err.message);
+    }
+});
+
+document.getElementById('input-foto')?.addEventListener('change', (e) => {
+    const form = document.getElementById('form-foto');
+    if (form) form.requestSubmit();
+});
+</script>
 {% endblock %}
