@@ -1128,26 +1128,6 @@ body {
     gap: 8px;
 }
 
-.agente-toolbar-btn {
-    padding: 6px 10px;
-    background: #f1f5f9;
-    border: 1px solid var(--g-border);
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 16px;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 40px;
-    min-height: 38px;
-}
-
-.agente-toolbar-btn:hover {
-    background: #e2e8f0;
-    border-color: var(--g-primary);
-}
-
 .agente-image-preview {
     font-size: 12px;
     color: #16a34a;
@@ -1163,22 +1143,51 @@ body {
 
 .agente-input-row {
     display: flex;
-    gap: 6px;
     align-items: flex-end;
+    gap: 2px;
+    background: white;
+    border: 1px solid var(--g-border);
+    border-radius: 22px;
+    padding: 4px 4px 4px 6px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.agente-input-row:focus-within {
+    border-color: var(--g-primary);
+    box-shadow: 0 0 0 2px rgba(26, 54, 93, 0.1);
+}
+
+.agente-toolbar-btn {
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+}
+
+.agente-toolbar-btn:hover {
+    background: #e2e8f0;
 }
 
 .agente-input {
     flex: 1;
-    padding: 10px 12px;
-    border: 1px solid var(--g-border);
-    border-radius: 6px;
+    padding: 8px 4px;
+    border: none;
+    background: transparent;
     font-family: var(--g-font);
     font-size: 13px;
     resize: none;
-    min-height: 38px;
+    min-height: 36px;
     max-height: 80px;
     color: var(--g-dark);
-    transition: border-color 0.2s;
 }
 
 .agente-input::placeholder {
@@ -1187,16 +1196,14 @@ body {
 
 .agente-input:focus {
     outline: none;
-    border-color: var(--g-primary);
-    box-shadow: 0 0 0 2px rgba(26, 54, 93, 0.1);
 }
 
 .agente-send-btn {
-    padding: 10px 12px;
+    padding: 0;
     background: var(--g-primary);
     color: white;
     border: none;
-    border-radius: 6px;
+    border-radius: 50%;
     cursor: pointer;
     font-size: 14px;
     font-weight: 600;
@@ -1205,14 +1212,14 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 40px;
-    min-height: 38px;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
 }
 
 .agente-send-btn:hover:not(:disabled) {
     background: #0d1f3c;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(26, 54, 93, 0.3);
+    box-shadow: 0 2px 8px rgba(26, 54, 93, 0.3);
 }
 
 .agente-send-btn:disabled {
@@ -1501,19 +1508,19 @@ body {
         font-size: 16px;
         min-height: 44px;
         max-height: 120px;
-        padding: 11px 12px;
+        padding: 10px 6px;
     }
 
     /* Objetivos táctiles de 44px, que es el mínimo usable con el dedo. */
     .agente-send-btn {
-        min-width: 54px;
-        min-height: 44px;
+        width: 44px;
+        height: 44px;
         font-size: 18px;
     }
 
     .agente-toolbar-btn {
-        min-width: 44px;
-        min-height: 40px;
+        width: 44px;
+        height: 44px;
     }
 
     .agente-reset-btn,
