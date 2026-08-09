@@ -640,6 +640,69 @@ def _historia_fmt(tema):
         'nota': 'Hay varias historias que podrían interesarte. ¿Cuál querés escuchar?'
     }
 
+HISTORIA_UMBRAL = 0.72
+NIVEL_ORDEN = {'Crítico': 3, 'Importante': 2, 'Básico': 1}
+
+def _buscar_hitos_fmt(etiqueta=None, desde_fecha=None, hasta_fecha=None, limite=50):
+    """Busca hitos en la línea del tiempo institucional.
+
+    Devuelve hitos ordenados por nivel (Crítico > Importante > Básico) y fecha (reciente primero).
+    El agente puede filtrar según el contexto de la pregunta.
+    """
+    con = gestion.conectar()
+    cur = con.cursor()
+
+    query = "SELECT id, titulo, descripcion, fecha, tipo, nivel, etiquetas FROM hitos WHERE 1=1"
+    params = []
+
+    # Filtro por etiqueta (búsqueda en el campo etiquetas que es comma-separated)
+    if etiqueta:
+        etiqueta_norm = gestion._norm(etiqueta)
+        # Busca la etiqueta en el campo etiquetas (tolerando espacios)
+        query += " AND (etiquetas LIKE ? OR etiquetas LIKE ?)"
+        params.extend([f'%{etiqueta}%', f'%{etiqueta_norm}%'])
+
+    # Filtro por rango de fechas
+    if desde_fecha:
+        query += " AND fecha >= ?"
+        params.append(desde_fecha)
+    if hasta_fecha:
+        query += " AND fecha <= ?"
+        params.append(hasta_fecha)
+
+    # Ordenar: nivel DESC (Crítico > Importante > Básico), fecha DESC (reciente primero)
+    query += " ORDER BY CASE nivel WHEN 'Crítico' THEN 3 WHEN 'Importante' THEN 2 ELSE 1 END DESC, fecha DESC LIMIT ?"
+    params.append(limite + 1)  # +1 para detectar truncado
+
+    filas = cur.execute(query, params).fetchall()
+    con.close()
+
+    truncado = len(filas) > limite
+    hitos = []
+
+    for fila in filas[:limite]:
+        hito = dict(fila)
+        # Parsear etiquetas (separated by comma)
+        etiquetas_str = hito.get('etiquetas', '')
+        hito['etiquetas'] = [e.strip() for e in etiquetas_str.split(',') if e.strip()]
+        hitos.append(hito)
+
+    resultado = {
+        'total': len(hitos),
+        'hitos': hitos,
+        'instruccion': (
+            'Estos hitos ya están ordenados por relevancia (nivel + fecha). '
+            'Selecciona los más significativos según lo que preguntó el usuario. '
+            'Evita abrumar: máximo 3-5 si es una pregunta casual, hasta 10 si es '
+            'una búsqueda específica sobre logros.'
+        )
+    }
+
+    if truncado:
+        resultado['truncado'] = f'Se muestran los primeros {limite} de {len(filas)} totales.'
+
+    return resultado
+
 # Tope de resultados que se le mandan a Claude. La búsqueda difusa no acota: con una
 # query sin match literal devuelve cualquier cosa que se parezca de escritura, y con
 # query vacía devuelve la tabla entera. Más de esto es ruido que empuja al modelo a
@@ -1640,6 +1703,25 @@ TOOLS_SCHEMA = [
             'required': []
         }
     },
+    {
+        'name': 'buscar_hitos',
+        'description': ('Línea del tiempo institucional: logros, eventos, construcciones, participaciones y cambios de la escuela. '
+                        'Devuelve hitos ordenados por relevancia (Crítico > Importante > Básico) y fecha (reciente primero). '
+                        'El agente SELECCIONA según el contexto: pregunta casual → 3-5 hitos Críticos/Importantes recientes; '
+                        'búsqueda específica sobre logros → todos los Críticos; pregunta por año → todo lo de ese año ordenado por nivel. '
+                        'Úsala para enriquecer respuestas con contexto institucional: "¿qué pasó en Renovables?" → busca_hitos(etiqueta="Renovables") '
+                        'y luego selecciona los más relevantes para la pregunta.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'etiqueta': {'type': 'string', 'description': 'Filtra por etiqueta: "Renovables", "Olimpiada", "Electromecánica", "Matemática", etc. Tolera typos'},
+                'desde_fecha': {'type': 'string', 'description': 'Rango desde (YYYY-MM-DD). Ej: "2024-01-01"'},
+                'hasta_fecha': {'type': 'string', 'description': 'Rango hasta (YYYY-MM-DD). Ej: "2024-12-31"'},
+                'limite': {'type': 'integer', 'description': 'Cuántos hitos traer máximo (default 50). Acá vienen muchos; el agente elige cuántos mostrar'}
+            },
+            'required': []
+        }
+    },
     # ESCRITURA
     {
         'name': 'crear_entidad',
@@ -1904,7 +1986,7 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None):
     lectura = tool_name in [
         'buscar_profesor', 'horario_profesor', 'horario_curso', 'horario_aula',
         'aulas_libres', 'buscar_entidad', 'listar_todos', 'detalle_entidad',
-        'listar_prestamos', 'detalle_prestamo', 'consultar_historia'
+        'listar_prestamos', 'detalle_prestamo', 'consultar_historia', 'buscar_hitos'
     ]
 
     try:
@@ -1951,6 +2033,13 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None):
                     }
             else:
                 resultado = _historia_fmt(tool_input.get('tema', ''))
+        elif tool_name == 'buscar_hitos':
+            resultado = _buscar_hitos_fmt(
+                etiqueta=tool_input.get('etiqueta'),
+                desde_fecha=tool_input.get('desde_fecha'),
+                hasta_fecha=tool_input.get('hasta_fecha'),
+                limite=tool_input.get('limite', 50)
+            )
         elif tool_name == 'crear_entidad':
             resultado = _crear_entidad(
                 tool_input.get('slug', ''),
@@ -2215,7 +2304,7 @@ Te consultan preceptores, docentes, jefes de taller, secretaría y dirección �
 en el pasillo, entre hora y hora. Tu trabajo es que no tengan que abrir el sistema ni ir a
 buscar la planilla: preguntan y les resolvés.
 
-Tenés tres áreas a cargo:
+Tenés cuatro áreas a cargo:
 1. HORARIOS — quién da clase, dónde y cuándo; qué aulas están libres; quién es el preceptor
    de un curso. Es información de consulta: la planilla la carga otra persona, vos no la editás.
 2. INVENTARIO — recursos (herramientas, instrumentos, materiales), conjuntos, actividades y
@@ -2232,6 +2321,15 @@ Tenés tres áreas a cargo:
      memoria de fantasma. Mantén el misterio de ser un espíritu.
    - listar: hay varias opciones → muéstrale cuáles son y dejá que elija cuál quiere escuchar
    - no_encontrado: nada coincide → decilo tal cual (NO improvises historias ni inventés)
+5. LÍNEA DEL TIEMPO — hitos institucionales (logros, eventos, carreras nuevas, construcciones,
+   participaciones en competencias). Cuando la pregunta es sobre "¿qué pasó en X?", "¿hay
+   antecedentes?", "últimos logros", "casos históricos", usá `buscar_hitos(etiqueta='...')`.
+   La tool devuelve muchos hitos ordenados por nivel (Crítico > Importante > Básico) y fecha.
+   TÚ ERES INTELIGENTE: seleccioná solo los más relevantes según lo que preguntó:
+   - Pregunta casual ("¿qué pasó en Renovables?") → muestra máximo 3-5 hitos Críticos/Importantes recientes
+   - Pregunta sobre logros ("¿qué olimpiadas ganaron?") → filtra los Críticos, muéstralos todos
+   - Pregunta por año ("¿qué pasó en 2023?") → muestra todo lo de ese año, ordenado por nivel
+   NO ABRUMAR: estos datos son para contextualizar tu respuesta, no para listar todo.
    Una anécdota inventada es peor que nada. Una historia que no está acá, no existe.
 
 CÓMO TRABAJÁS

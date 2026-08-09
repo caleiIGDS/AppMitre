@@ -61,6 +61,8 @@ ESTADOS_RECURSO = ["Disponible", "Retirado", "En uso", "En reparación", "De baj
 ESTADOS_PROYECTO = ["Activo", "Pausado", "Terminado"]
 # "" primero: permite dejar el valor sin definir (recursos previos al inventario).
 VALORES_RECURSO = ["", "Básico", "Secundario", "Alto valor"]
+TIPOS_HITO = ["Evento", "Logro", "Carrera nueva", "Construcción", "Participación", "Programa", "Otro"]
+NIVELES_HITO = ["Básico", "Importante", "Crítico"]
 
 # Configuración declarativa de cada entidad: campos del form, columnas del listado
 # y relaciones M2M editables desde su formulario. Los campos de relación usan el
@@ -142,6 +144,26 @@ ENTIDADES = {
              'col_propia': 'proyecto_id', 'col_ajena': 'recurso_id', 'slug_ajeno': 'recursos'},
         ],
     },
+    'hitos': {
+        'tabla': 'hitos',
+        'singular': 'Hito',
+        'plural': 'Hitos',
+        'descripcion': 'Línea del tiempo institucional: eventos, logros, creaciones, participaciones y cambios significativos de la escuela',
+        'campos': [
+            {'nombre': 'titulo', 'label': 'Título del hito', 'tipo': 'text', 'requerido': True},
+            {'nombre': 'descripcion', 'label': 'Descripción', 'tipo': 'textarea'},
+            {'nombre': 'fecha', 'label': 'Fecha', 'tipo': 'date', 'requerido': True},
+            {'nombre': 'tipo', 'label': 'Tipo', 'tipo': 'select', 'opciones': TIPOS_HITO},
+            {'nombre': 'nivel', 'label': 'Importancia', 'tipo': 'select', 'opciones': NIVELES_HITO,
+             'ayuda': 'Básico: evento/actividad. Importante: logro, programa nuevo. Crítico: olimpiada, construcción significativa'},
+            {'nombre': 'etiquetas', 'label': 'Etiquetas (separadas por coma)', 'tipo': 'text',
+             'ayuda': 'Ej: Energías Renovables, Olimpiada, Matemática, Nacional'},
+            {'nombre': 'protagonistas', 'label': 'Personas/cursos involucrados', 'tipo': 'text'},
+            {'nombre': 'drive_url', 'label': 'Fotos, documentos (Drive)', 'tipo': 'url'},
+        ],
+        'columnas': [('fecha', 'FECHA'), ('titulo', 'HITO'), ('etiquetas', 'ETIQUETAS'), ('tipo', 'TIPO'), ('nivel', 'NIVEL')],
+        'relaciones': [],
+    },
 }
 
 # Tablas M2M a limpiar cuando se elimina una entidad de cada tipo.
@@ -150,6 +172,7 @@ LIMPIEZA_M2M = {
     'conjuntos': [('conjunto_recursos', 'conjunto_id'), ('actividad_conjuntos', 'conjunto_id')],
     'actividades': [('actividad_recursos', 'actividad_id'), ('actividad_conjuntos', 'actividad_id')],
     'proyectos': [('proyecto_recursos', 'proyecto_id')],
+    'hitos': [],
 }
 
 SCHEMA = """
@@ -225,6 +248,19 @@ CREATE TABLE IF NOT EXISTS prestamo_items (
     cantidad_devuelta TEXT DEFAULT '0',
     UNIQUE(prestamo_id, recurso_id)
 );
+CREATE TABLE IF NOT EXISTS hitos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    titulo TEXT NOT NULL,
+    descripcion TEXT DEFAULT '',
+    fecha TEXT NOT NULL,
+    tipo TEXT DEFAULT '',
+    nivel TEXT DEFAULT 'Básico',
+    etiquetas TEXT DEFAULT '',
+    protagonistas TEXT DEFAULT '',
+    drive_url TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_hitos_fecha ON hitos(fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_hitos_nivel ON hitos(nivel);
 """
 
 
