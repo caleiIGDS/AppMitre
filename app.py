@@ -9,6 +9,7 @@ load_dotenv()
 
 import database
 import gestion
+import historia
 import agente
 from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS, TURNO_CURSOS, TURNO_DEFAULT
 from fpdf import FPDF
@@ -18,17 +19,21 @@ from database import obtener_filas
 
 app = Flask(__name__)
 
-# Firma la cookie de sesión (la usa el login de /gestion). El default solo evita
-# romper el arranque local: en el hosting setear SECRET_KEY como env var, porque
-# con el default público cualquiera puede forjar la sesión.
+# Firma la cookie de sesión (la usa el login de /gestion, /historia y /agente). El
+# default solo evita romper el arranque local: en el hosting setear SECRET_KEY como
+# env var, porque con el default público cualquiera puede forjar la sesión.
 app.secret_key = os.environ.get('SECRET_KEY', 'appmitre-dev-cambiar-en-hosting')
 
-# Sistema de Gestión de Conocimiento (/gestion) — módulo independiente con DB propia.
+# Gestión de recursos (/gestion) — módulo independiente con DB propia (gestion.db).
 # init_db() en import para que también corra bajo gunicorn/WSGI (no solo en __main__).
 app.register_blueprint(gestion.bp)
 gestion.init_db()
 
-# Agente conversacional (/gestion/agente) — blueprint independiente con su propio gate.
+# Historia institucional (/historia) — módulo hermano de gestion, DB propia (historia.db).
+app.register_blueprint(historia.bp)
+historia.init_db()
+
+# Asistente conversacional (/agente) — blueprint independiente con su propio gate.
 app.register_blueprint(agente.bp)
 agente.init_db()
 

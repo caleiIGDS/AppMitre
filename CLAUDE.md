@@ -2,9 +2,16 @@
 
 ## Qué es esta app
 
-**AppMitre** es un sistema de gestión y visualización de horarios para la **Escuela Técnica Emilio Mitre**. Permite consultar los horarios de clases organizados por curso (1°–7°), profesor, aula y preceptor. Incluye un dashboard en tiempo real ("En Vivo") para uso en pantallas de kiosco y exportación a PDF.
+**AppMitre** son **cuatro áreas independientes** sobre el mismo Flask, para la **Escuela Técnica Emilio Mitre**. Cada una vive en su propio archivo, su propio prefijo de URL y (las que tienen datos propios) su propia DB, **sin importarse entre sí**: tocar o borrar una no rompe las otras.
 
-Además incluye un módulo independiente al mismo nivel: el **Sistema de Gestión de Conocimiento** (`/gestion`) — memoria técnica de la escuela (recursos, conjuntos, actividades, proyectos y sus relaciones), con DB propia (`gestion.db`). Ver `agent_docs/gestion-conocimiento.md`.
+| Área | URL | Archivo | DB | Qué es |
+|---|---|---|---|---|
+| **Horarios** | `/` | `app.py` + `database.py` | `escuela.db` | Consulta de horarios por curso (1°–7°), profesor, aula y preceptor; dashboard "En Vivo" para kiosco; export a PDF. Se regenera desde Google Sheets. |
+| **Gestión de recursos** | `/gestion` | `gestion.py` | `gestion.db` | Inventario técnico: recursos, conjuntos, actividades y préstamos. |
+| **Historia institucional** | `/historia` | `historia.py` | `historia.db` | Línea del tiempo: hitos y las personas que hicieron la escuela. |
+| **Asistente** | `/agente` | `agente.py` | (usa las de arriba) | Chat con tool-calling. Único transversal: **lee las tres** y escribe en recursos e historia. |
+
+El motor CRUD de `gestion.py` e `historia.py` está **duplicado a propósito** (ver `dev-log/DECISIONS.md` 2026-08-10). Lo único compartido entre áreas es lo que no es lógica de dominio: `static/gestion.css` (paleta), `static/gestion-agente.js` y el widget del chat.
 
 **Usuarios principales:** alumnos, docentes, preceptores y administración.  
 **Stack:** Flask + SQLite + Vanilla JS (sin frameworks). Sin tests, sin linter, sin build step.
@@ -43,7 +50,9 @@ Google Sheets (CSV export por año: 1ro–7mo + preceptores + personal)
 | `static/js/script.js` | Toda la lógica frontend (~1500 líneas) |
 | `static/style.css` | Tema blueprint/industrial con CSS variables |
 | `nombre_mapeos.json` | Correcciones manuales de nombres de docentes |
-| `gestion.py` | Sistema de Gestión de Conocimiento (`/gestion`): blueprint + `gestion.db` + templates en `templates/gestion/` |
+| `gestion.py` | Gestión de recursos (`/gestion`): blueprint + `gestion.db` + templates en `templates/gestion/` |
+| `historia.py` | Historia institucional (`/historia`): blueprint + `historia.db` + templates en `templates/historia/` |
+| `agente.py` | Asistente conversacional (`/agente`): blueprint + templates en `templates/agente/` |
 
 ---
 
@@ -220,8 +229,10 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 - Renderizado del calendario, clustering, superposición → leer `agent_docs/calendar-engine.md`
 - Sistema de búsqueda y parsing de queries → leer `agent_docs/search-api.md`
 - Estilos, variables CSS, patrones visuales → leer `agent_docs/frontend-ui.md`
-- Sistema de Gestión de Conocimiento (`/gestion`, `gestion.py`, `gestion.db`) → leer `agent_docs/gestion-conocimiento.md`
-- Historias de la escuela: cómo agregar, campos, tonos y estilos → leer `HISTORIAS_PROCEDIMIENTO.md`
+- Gestión de recursos (`/gestion`, `gestion.py`, `gestion.db`) → leer `agent_docs/gestion-conocimiento.md`
+- Historia institucional (`/historia`, `historia.py`, `historia.db`: hitos y personas) → leer `agent_docs/historia-institucional.md`
+- Asistente conversacional (`/agente`, `agente.py`, tools, fichas de confirmación, fotos) → leer `agent_docs/agente-asistente.md`
+- Historias narradas por Emilio (`historias/*.json`, lore — NO confundir con `/historia`): cómo agregar, campos, tonos y estilos → leer `HISTORIAS_PROCEDIMIENTO.md`
 
 ## Dev Log
 
@@ -240,7 +251,9 @@ Actualizar la doc **es parte de la tarea, no un paso opcional**: siempre que un 
 - ¿Cambié lógica del calendario o clustering? → actualizar `agent_docs/calendar-engine.md`
 - ¿Cambié rutas, búsqueda o parsing del SPA de horarios (`app.py` / `script.js`)? → actualizar `agent_docs/search-api.md`
 - ¿Cambié estilos o variables CSS del SPA? → actualizar `agent_docs/frontend-ui.md`
-- ¿Cambié algo del módulo de Gestión (`/gestion`, `gestion.py`, rutas/búsqueda/schema de `gestion.db`, templates de `gestion/`, `gestion.css`, o JS propio del módulo)? → actualizar `agent_docs/gestion-conocimiento.md`
+- ¿Cambié algo de Gestión de recursos (`/gestion`, `gestion.py`, rutas/búsqueda/schema de `gestion.db`, templates de `gestion/`, `gestion.css`, o JS propio del módulo)? → actualizar `agent_docs/gestion-conocimiento.md`
+- ¿Cambié algo de Historia institucional (`/historia`, `historia.py`, schema de `historia.db`, templates de `historia/`)? → actualizar `agent_docs/historia-institucional.md`
+- ¿Cambié algo del Asistente (`agente.py`, tools, prompts, `templates/agente/`, `gestion-agente.js`)? → actualizar `agent_docs/agente-asistente.md`
 - ¿Cambió un contrato entre módulos? → agregar entrada en `dev-log/CHANGELOG.md`
 - ¿Tomaste una decisión no obvia? → agregar entrada en `dev-log/DECISIONS.md`
 - ¿Creaste, moviste o eliminaste un documento (`.md` de referencia)? → actualizar la referencia en `CLAUDE.md` (Context Rules o la sección que corresponda)

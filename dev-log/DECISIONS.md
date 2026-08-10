@@ -4,6 +4,50 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-08-10] — Quién decide qué hacer con una foto: el modelo, no un `if` en el backend
+
+**Contexto**: `chat()` cortaba el turno con un aviso fijo cuando llegaba una foto y no había con qué leerla. El razonamiento original era sólido —sin visión el modelo contestaría igual, inventando lo que "leyó" en la etiqueta, que es el peor resultado posible para un inventario— pero descansaba en una premisa falsa: **que toda foto se manda para ser leída**. No es así. El caso más común en el taller es adjuntar una foto a la ficha de algo que ya existe, y para eso no hace falta ver la imagen: el base64 va del `contexto_turno` a la galería sin pasar por el modelo. El corte dejaba `adjuntar_foto` inalcanzable, y con el default del proyecto (DeepSeek, sin key de visión) eso significaba que mandar una foto no servía para nada.
+
+**Decisión**: que el turno corra siempre y que la distinción "adjuntar" vs. "analizar" la haga el modelo, que es quien entiende la frase del usuario. El backend ya no adivina la intención a partir de la config.
+
+**Por qué `leer_foto` sigue expuesta aunque no haya lector.** La alternativa era filtrarla del `TOOLS_SCHEMA` cuando `_get_vision_config()` es `None`. Se descartó: sin esa tool el modelo no tiene forma de *detectar* que le pidieron analizar, y el pedido de "¿qué dice esta etiqueta?" terminaría en una respuesta inventada o en un silencio raro. Dejándola, el modelo la llama, recibe un error que dice exactamente por qué no se puede y qué ofrecer a cambio, y lo cuenta con sus palabras. Cuesta una vuelta del loop —no una llamada de visión— y DeepSeek cachea el prefijo, así que es despreciable.
+
+**Por qué el aviso lo redacta el modelo y no es un texto fijo.** El mismo motivo por el que leer es una tool y no un paso automático: un texto fijo no sabe si el usuario quería adjuntar o analizar, así que o corta de más (el bug que se arregló) o contesta al lado. El error de la tool le da al modelo el dato y las dos salidas posibles (que le dicten los datos, o que le digan a qué ficha guardarla) y él elige según lo que se venía hablando.
+
+**Se distingue "no hay lector" de "el lector falló"** aunque `_leer_imagen()` devuelva `None` en los dos casos: para el usuario son cosas distintas —una se arregla cargando una API key en el servidor, la otra se arregla esperando un rato— y mandarle "el servicio no respondió" a alguien que nunca configuró un lector lo deja esperando algo que no va a pasar.
+
+**El riesgo que queda**: una foto adjuntada al recurso equivocado no se puede sacar desde la app. Se mitiga en el prompt y en la descripción de `adjuntar_foto`, que insisten en preguntar cuando el destino es ambiguo, no en volver a poner un candado en el backend.
+
+---
+
+## [2026-08-10] — Cuatro áreas separadas físicamente, con el motor CRUD duplicado
+
+**Contexto**: todo convivía en `gestion.py` (1509 líneas, una DB, un blueprint): el inventario del taller, la línea del tiempo institucional (hitos, personas, proyectos) y —adentro de su prefijo— el asistente. Querer tocar la parte de historia, que es más anecdótica y se retoca seguido, ponía en riesgo la gestión de inventario, que es la que la escuela usa todos los días.
+
+**Decisión**: partir en cuatro áreas con frontera física — horarios (`app.py`), recursos (`/gestion`), historia institucional (`/historia`, `historia.py`, `historia.db`) y asistente (`/agente`) — cada una con su archivo, su prefijo, sus templates y su gate de sesión. **Ningún módulo de dominio importa a otro.**
+
+**El motor CRUD se duplicó en vez de extraerse a una librería común.** `gestion.py` e `historia.py` tienen cada uno su copia completa de: `conectar`, `_norm`/`_puntaje_busqueda`, respaldos, `init_db`/`_migrar`, `_cfg`/`_campo_nombre`/`_select`, `_guardar`, los helpers `*_sin_request`, y las rutas genéricas. Son ~350 líneas repetidas.
+
+**Por qué duplicar y no compartir**: el criterio del pedido era "casi que borrás los archivos de una parte y todo el resto sigue funcionando". Un `entidad_crud.py` compartido cumple el DRY pero no ese criterio: los dos módulos pasarían a depender de un tercero que no se puede borrar ni tocar sin pensar en ambos, que es exactamente el acoplamiento del que se venía. El costo aceptado y conocido: **un bug en el motor (por ejemplo, el umbral de la búsqueda difusa) hay que arreglarlo en los dos archivos**. Con dos copias es manejable; si algún día hay una tercera, conviene revisar esta decisión.
+
+**Lo que sí se comparte, a propósito**: `static/gestion.css` (paleta, identidad visual), `static/gestion-agente.js` y el widget del chat. Nada de eso es lógica de dominio — es cómo se ve la escuela y cómo se habla con el asistente, y ahí la duplicación sería el problema, no la solución.
+
+**Los gates de sesión también están duplicados** (~15 líneas por módulo) y comparten `GESTION_CLAVE` + `session['gestion_ok']`: una sola contraseña abre las tres áreas (es el mismo staff), pero cada `before_request` y cada `/login` viven en su archivo. Si un día una necesita auth propia, se cambia sola.
+
+---
+
+## [2026-08-10] — `proyectos` deja de ser una entidad y pasa a ser una etiqueta de `hitos`
+
+**Contexto**: `proyectos` era la única entidad que ataba las dos mitades del sistema — su tabla `proyecto_recursos` vinculaba un trabajo de un curso con recursos del inventario. Era también la relación que impedía separar las DBs, y la que el pedido marcó explícitamente para eliminar.
+
+**Decisión**: eliminar la entidad. Un proyecto es un hecho de la línea del tiempo como cualquier otro, así que se carga como **hito con `Proyecto` en `etiquetas`**. Se eliminaron `proyectos`, `proyecto_recursos` y `persona_proyectos`; la única fila real se migró a hito conservando fecha, participantes (→ `protagonistas`) y estado (anexado a `descripcion`).
+
+**Por qué `etiquetas` y no un valor de `tipo`**: `tipo` es una lista cerrada de siete valores que clasifica *qué clase de hecho* fue (Evento, Logro, Construcción…). "Proyecto" no es una clase de hecho paralela a esas: un proyecto puede ser una Construcción o un Logro. `etiquetas` es texto libre separado por comas y ya existía para agrupar la línea del tiempo (Olimpiada, Matemática, Nacional), que es exactamente el rol que cumple acá. Además no obliga a elegir: un hito puede ser `tipo: Construcción` **y** llevar la etiqueta Proyecto.
+
+**Qué se pierde**: la navegación "este recurso salió de tal proyecto". Se aceptó a cambio de que las dos DBs queden sin ninguna FK cruzada — que era el punto del pedido. Si volviera a hacer falta, el camino no es reponer `proyecto_recursos` (vuelve a atar las DBs) sino nombrar el recurso en la descripción del hito.
+
+---
+
 ## [2026-08-09] — Buscar una persona cruza los dos padrones, y el aviso va en la tool "equivocada"
 
 **Contexto**: el agente maneja **dos padrones de personas que no se superponen**. Los

@@ -1,0 +1,56 @@
+{% extends 'historia/base.html' %}
+{% block titulo %}{{ cfg.plural }}{% endblock %}
+{% block contenido %}
+<div class="g-toolbar">
+    <h2>{{ cfg.plural | upper }} <span class="g-count">{{ filas | length }}</span></h2>
+    <form method="get" class="g-search" action="{{ url_for('historia.lista', slug=slug) }}">
+        <input type="text" name="q" value="{{ q }}" placeholder="BUSCAR POR NOMBRE O DESCRIPCIÓN...">
+        <button type="submit">BUSCAR</button>
+        {% if q %}<a class="g-link" href="{{ url_for('historia.lista', slug=slug) }}">limpiar</a>{% endif %}
+    </form>
+    <a class="g-btn" href="{{ url_for('historia.nuevo', slug=slug) }}">+ CREAR {{ cfg.singular | upper }}</a>
+</div>
+
+{% if filas %}
+<div class="g-table-wrap">
+    <table class="g-table">
+        <thead>
+            <tr>
+                {% for campo, label in cfg.columnas %}<th>{{ label }}</th>{% endfor %}
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for fila in filas %}
+            <tr data-buscar="{{ buscar[fila['id']] }}">
+                {% for campo, label in cfg.columnas %}
+                <td>
+                    {% if loop.first %}
+                    <a class="g-item-link" href="{{ url_for('historia.detalle', slug=slug, id=fila['id']) }}">{{ fila[campo] }}</a>
+                    {% elif campo == 'estado' %}
+                    <span class="g-badge">{{ fila[campo] }}</span>
+                    {% else %}
+                    {{ fila[campo] }}
+                    {% endif %}
+                </td>
+                {% endfor %}
+                <td class="g-td-actions">
+                    <a class="g-link" href="{{ url_for('historia.detalle', slug=slug, id=fila['id']) }}">Ver</a>
+                    <a class="g-link" href="{{ url_for('historia.editar', slug=slug, id=fila['id']) }}">Editar</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="g-empty">
+    {% if q %}
+    <p>No se encontraron {{ cfg.plural | lower }} para "{{ q }}".</p>
+    {% else %}
+    <p>Todavía no hay {{ cfg.plural | lower }} cargados.</p>
+    <a class="g-btn" href="{{ url_for('historia.nuevo', slug=slug) }}">+ CREAR EL PRIMERO</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

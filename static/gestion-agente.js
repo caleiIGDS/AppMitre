@@ -1,8 +1,8 @@
 // gestion-agente.js — Asistente IA
 //
 // Sirve a las DOS vistas del chat, que comparten markup (_agente_chat_core.html):
-//   - el widget flotante que se abre desde el header en cualquier página de /gestion
-//   - la pestaña a pantalla completa en /gestion/agente
+//   - el widget flotante que se abre desde el header en /gestion o /historia
+//   - la pestaña a pantalla completa en /agente
 // Nunca se renderizan juntas (base.html omite el widget en esa pestaña), así que los
 // getElementById de abajo siempre encuentran uno solo. Los elementos exclusivos del
 // widget (toggle, cerrar) pueden no existir: por eso cada listener va guardado.
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function restaurarEstadoWidget() {
     // Restaurar el estado guardado cuando el widget existe en el DOM.
-    // Si el widget no está presente (ej: en /gestion/agente), la próxima vez
+    // Si el widget no está presente (ej: en /agente), la próxima vez
     // que se renderice (al volver a otra página) lo restaurará.
     const abierto = localStorage.getItem('agente-widget-open') === 'true';
     if (widget) {
@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', function() {
       e.preventDefault();
       if (enviando) return;
 
-      fetch('/gestion/agente/reset', { method: 'POST' })
+      fetch('/agente/reset', { method: 'POST' })
         .catch(() => {})
         .finally(() => {
           messagesDiv.innerHTML = `
@@ -220,7 +220,7 @@ document.addEventListener('DOMContentLoaded', function() {
     enviando = true;
     sendBtn.disabled = true;
 
-    fetch('/gestion/agente/chat', {
+    fetch('/agente/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -331,7 +331,7 @@ document.addEventListener('DOMContentLoaded', function() {
       btn.disabled = true;
       btn.textContent = 'Guardando…';
 
-      fetch('/gestion/agente/confirmar', {
+      fetch('/agente/confirmar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: conf.token })
@@ -390,7 +390,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // En el login el widget existe pero no hay sesión: pedir el historial daría 401.
     if (widget && !toggleBtn) return;
 
-    fetch('/gestion/agente/historial')
+    fetch('/agente/historial')
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
         if (!data || !data.mensajes || !data.mensajes.length) return;

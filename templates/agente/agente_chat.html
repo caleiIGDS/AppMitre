@@ -1,4 +1,4 @@
-{% extends "gestion/base.html" %}
+{% extends "agente/base.html" %}
 
 {% block titulo %}Asistente{% endblock %}
 
@@ -12,6 +12,6 @@
     <button id="agente-reset-btn" class="agente-reset-btn" title="Reiniciar conversación" aria-label="Reiniciar conversación">↺</button>
   </div>
 
-  {% include 'gestion/_agente_chat_core.html' %}
+  {% include 'agente/_agente_chat_core.html' %}
 </div>
 {% endblock %}

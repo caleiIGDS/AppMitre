@@ -1,0 +1,109 @@
+{% extends 'historia/base.html' %}
+{% block titulo %}{{ fila['nombre'] }}{% endblock %}
+{% block contenido %}
+<div class="g-toolbar">
+    <div>
+        <span class="g-breadcrumb">
+            <a class="g-link" href="{{ url_for('historia.lista', slug=slug) }}">{{ cfg.plural | upper }}</a> /
+        </span>
+        <h2>{{ fila['nombre'] }}</h2>
+    </div>
+    <div class="g-toolbar-actions">
+        {% if fila['drive_url'] %}
+        <a class="g-btn" href="{{ fila['drive_url'] }}" target="_blank" rel="noopener">📁 CARPETA EN DRIVE</a>
+        {% endif %}
+        <a class="g-btn-outline-dark" href="{{ url_for('historia.editar', slug=slug, id=fila['id']) }}">EDITAR</a>
+        <form method="post" action="{{ url_for('historia.eliminar', slug=slug, id=fila['id']) }}"
+              onsubmit="return confirm('¿Eliminar este elemento? Esta acción no se puede deshacer.');">
+            <button type="submit" class="g-btn-danger">ELIMINAR</button>
+        </form>
+    </div>
+</div>
+
+<div class="g-detail">
+    <div class="g-foto-section">
+        {% if fila['fotos'] %}
+        <div class="g-galeria">
+            <div class="g-galeria-grid">
+                {% for foto in fila['fotos'] %}
+                <img src="data:{{ foto.tipo }};base64,{{ foto.b64 }}" alt="Foto" class="g-foto">
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="g-foto-toolbar">
+            <form id="form-foto" enctype="multipart/form-data">
+                <input type="file" name="file" accept="image/*" id="input-foto" style="display:none">
+                <button type="button" class="g-foto-btn" title="Agregar foto" onclick="document.getElementById('input-foto').click()">
+                    📷
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <dl class="g-props">
+        {% for c in cfg.campos %}
+        {% if c.nombre not in (cfg.campo_nombre or 'nombre', 'drive_url') and fila[c.nombre] %}
+        <div class="g-prop">
+            <dt>{{ c.label | upper }}</dt>
+            {% if c.nombre == 'estado' %}
+            <dd><span class="g-badge">{{ fila[c.nombre] }}</span></dd>
+            {% else %}
+            <dd class="{{ 'g-pre' if c.tipo == 'textarea' }}">{{ fila[c.nombre] }}</dd>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% endfor %}
+    </dl>
+
+    <div class="g-relations">
+        {% for s in secciones %}
+        <div class="g-relation-box">
+            <h4>{{ s.titulo | upper }}</h4>
+            {% if s['items'] %}
+            <ul>
+                {% for it in s['items'] %}
+                <li><a class="g-item-link" href="{{ url_for('historia.detalle', slug=s.slug, id=it['id']) }}">{{ it['nombre'] }}</a></li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="g-help">Sin elementos vinculados.</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+document.getElementById('form-foto')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('input-foto');
+    if (!input.files.length) return;
+
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch(location.pathname + '/foto', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        if (data.ok) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (err) {
+        alert('Error al subir: ' + err.message);
+    }
+});
+
+document.getElementById('input-foto')?.addEventListener('change', (e) => {
+    const form = document.getElementById('form-foto');
+    if (form) form.requestSubmit();
+});
+</script>
+{% endblock %}

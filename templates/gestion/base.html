@@ -11,7 +11,7 @@
     <script src="{{ url_for('static', filename='gestion.js') }}?v=3" defer></script>
     <script src="{{ url_for('static', filename='gestion-agente.js') }}?v=5" defer></script>
 </head>
-<body{% if activo == 'agente' %} class="g-chat-page"{% endif %}>
+<body>
     <div class="g-bg">
         <header class="g-header">
             <div class="g-container g-header-flex">
@@ -25,10 +25,8 @@
                 <div class="g-header-actions">
                     <a class="g-btn-outline" href="/">‹ SISTEMA DE HORARIOS</a>
                     {% if session.get('gestion_ok') %}
-                    {# En la pestaña del chat el botón flotante sobraría: el widget no se renderiza ahí. #}
-                    {% if activo != 'agente' %}
+                    <a class="g-btn-outline" href="{{ url_for('historia.home') }}">HISTORIA INSTITUCIONAL ›</a>
                     <button id="agente-toggle-btn" class="g-btn-outline" title="Abrir asistente" style="cursor: pointer;">🤖 ASISTENTE</button>
-                    {% endif %}
                     <a class="g-btn-outline g-cart-link" href="{{ url_for('gestion.carrito_finalizar') }}"
                        data-set-url="{{ url_for('gestion.carrito_set') }}">📋 PRÉSTAMO <span class="g-cart-count" data-cart-count {% if not carrito_count %}hidden{% endif %}>{{ carrito_count }}</span></a>
                     <a class="g-btn-outline" href="{{ url_for('gestion.salir') }}">SALIR</a>
@@ -48,7 +46,7 @@
                 {% endif %}
                 {% endfor %}
                 {% if session.get('gestion_ok') %}
-                <a href="{{ url_for('agente.chat_page') }}" class="g-nav-tag g-nav-tag-agente {{ 'active' if activo == 'agente' }}">🤖 ASISTENTE</a>
+                <a href="{{ url_for('agente.chat_page') }}" class="g-nav-tag g-nav-tag-agente">🤖 ASISTENTE</a>
                 {% endif %}
             </nav>
 
@@ -62,9 +60,8 @@
         </footer>
     </div>
 
-    {# El widget y la pestaña comparten IDs: en /gestion/agente solo va la pestaña. #}
-    {% if activo != 'agente' %}
-    {% include 'gestion/_agente_widget.html' %}
-    {% endif %}
+    {# El widget y la pestaña completa (/agente) comparten IDs y nunca se renderizan
+       juntos: la pestaña vive en templates/agente/ con su propio base.html. #}
+    {% include 'agente/_agente_widget.html' %}
 </body>
 </html>

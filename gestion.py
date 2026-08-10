@@ -1,11 +1,14 @@
 # gestion.py
-# Sistema de Gestión de Conocimiento — módulo independiente del sistema de horarios.
+# Gestión de recursos — módulo independiente del sistema de horarios Y de historia.py
+# (línea del tiempo institucional: hitos/personas, antes vivían acá — ver
+# dev-log/DECISIONS.md sobre la separación física de los dos módulos).
 #
 # Usa su propia DB (gestion.db): a diferencia de escuela.db, NO se regenera desde
-# Google Sheets y /api/actualizar no la toca. Es la única DB con datos propios de la app.
+# Google Sheets y /api/actualizar no la toca. Es la única DB con datos propios de la app
+# (además de historia.db).
 #
-# Entidades: recursos, conjuntos (agrupaciones de recursos), actividades, proyectos.
-# Relaciones M2M: conjunto_recursos, actividad_recursos, actividad_conjuntos, proyecto_recursos.
+# Entidades: recursos, conjuntos (agrupaciones de recursos), actividades.
+# Relaciones M2M: conjunto_recursos, actividad_recursos, actividad_conjuntos.
 
 import base64
 import difflib
@@ -68,11 +71,8 @@ def salir():
 
 
 ESTADOS_RECURSO = ["Disponible", "Retirado", "En uso", "En reparación", "De baja", "Sin revisar"]
-ESTADOS_PROYECTO = ["Activo", "Pausado", "Terminado"]
 # "" primero: permite dejar el valor sin definir (recursos previos al inventario).
 VALORES_RECURSO = ["", "Básico", "Secundario", "Alto valor"]
-TIPOS_HITO = ["Evento", "Logro", "Carrera nueva", "Construcción", "Participación", "Programa", "Otro"]
-NIVELES_HITO = ["Básico", "Importante", "Crítico"]
 
 # Configuración declarativa de cada entidad: campos del form, columnas del listado
 # y relaciones M2M editables desde su formulario. Los campos de relación usan el
@@ -82,7 +82,7 @@ ENTIDADES = {
         'tabla': 'recursos',
         'singular': 'Recurso',
         'plural': 'Recursos',
-        'descripcion': 'Objetos físicos o conceptuales: instrumentos, equipos, materiales, estructuras. Se definen una sola vez y se reutilizan en conjuntos, actividades y proyectos.',
+        'descripcion': 'Objetos físicos o conceptuales: instrumentos, equipos, materiales, estructuras. Se definen una sola vez y se reutilizan en conjuntos y actividades.',
         'campos': [
             {'nombre': 'nombre', 'label': 'Nombre', 'tipo': 'text', 'requerido': True},
             {'nombre': 'tipo', 'label': 'Tipo', 'tipo': 'text', 'ayuda': 'Ej: Instrumento, Equipo, Estructura, Material'},
@@ -135,83 +135,13 @@ ENTIDADES = {
              'col_propia': 'actividad_id', 'col_ajena': 'recurso_id', 'slug_ajeno': 'recursos'},
         ],
     },
-    'proyectos': {
-        'tabla': 'proyectos',
-        'singular': 'Proyecto',
-        'plural': 'Proyectos',
-        'descripcion': 'Procesos de construcción o desarrollo que crean o modifican recursos de la escuela.',
-        'campos': [
-            {'nombre': 'nombre', 'label': 'Nombre', 'tipo': 'text', 'requerido': True},
-            {'nombre': 'descripcion', 'label': 'Descripción / resultados', 'tipo': 'textarea'},
-            {'nombre': 'fecha', 'label': 'Fecha', 'tipo': 'date'},
-            {'nombre': 'participantes', 'label': 'Participantes', 'tipo': 'text', 'ayuda': 'Cursos, docentes o grupos que participaron'},
-            {'nombre': 'estado', 'label': 'Estado', 'tipo': 'select', 'opciones': ESTADOS_PROYECTO},
-            {'nombre': 'drive_url', 'label': 'Carpeta de Drive (link)', 'tipo': 'url'},
-        ],
-        'columnas': [('nombre', 'NOMBRE'), ('fecha', 'FECHA'), ('estado', 'ESTADO')],
-        'relaciones': [
-            {'campo': 'rel_recursos', 'label': 'Recursos generados o involucrados', 'tabla': 'proyecto_recursos',
-             'col_propia': 'proyecto_id', 'col_ajena': 'recurso_id', 'slug_ajeno': 'recursos'},
-        ],
-    },
-    'hitos': {
-        'tabla': 'hitos',
-        'singular': 'Hito',
-        'plural': 'Hitos',
-        # Única entidad cuya columna de nombre no se llama 'nombre' — ver _select().
-        'campo_nombre': 'titulo',
-        'descripcion': 'Línea del tiempo institucional: eventos, logros, creaciones, participaciones y cambios significativos de la escuela',
-        'campos': [
-            {'nombre': 'titulo', 'label': 'Título del hito', 'tipo': 'text', 'requerido': True},
-            {'nombre': 'descripcion', 'label': 'Descripción', 'tipo': 'textarea'},
-            {'nombre': 'fecha', 'label': 'Fecha', 'tipo': 'date', 'requerido': True},
-            {'nombre': 'tipo', 'label': 'Tipo', 'tipo': 'select', 'opciones': TIPOS_HITO},
-            {'nombre': 'nivel', 'label': 'Importancia', 'tipo': 'select', 'opciones': NIVELES_HITO,
-             'ayuda': 'Básico: evento/actividad. Importante: logro, programa nuevo. Crítico: olimpiada, construcción significativa'},
-            {'nombre': 'etiquetas', 'label': 'Etiquetas (separadas por coma)', 'tipo': 'text',
-             'ayuda': 'Ej: Energías Renovables, Olimpiada, Matemática, Nacional'},
-            {'nombre': 'protagonistas', 'label': 'Personas/cursos involucrados', 'tipo': 'text'},
-            {'nombre': 'drive_url', 'label': 'Fotos, documentos (Drive)', 'tipo': 'url'},
-        ],
-        'columnas': [('fecha', 'FECHA'), ('titulo', 'HITO'), ('etiquetas', 'ETIQUETAS'), ('tipo', 'TIPO'), ('nivel', 'NIVEL')],
-        # Espejo de `personas.rel_hitos`: la misma tabla, declarada también de este lado para
-        # que el hito muestre y edite a su gente. Sin esto el vínculo existía pero solo se veía
-        # desde la ficha de la persona, y desde el hito parecía que no se había guardado nadie.
-        # `protagonistas` sigue siendo el texto libre (sirve para cursos y para gente sin ficha).
-        'relaciones': [
-            {'campo': 'rel_personas', 'label': 'Personas con ficha', 'tabla': 'persona_hitos',
-             'col_propia': 'hito_id', 'col_ajena': 'persona_id', 'slug_ajeno': 'personas'},
-        ],
-    },
-    'personas': {
-        'tabla': 'personas',
-        'singular': 'Persona',
-        'plural': 'Personas',
-        'descripcion': 'Quiénes hacen y hicieron la escuela: docentes, preceptores, no docentes. Una semblanza por persona y los hilos que la conectan con proyectos e hitos.',
-        'campos': [
-            {'nombre': 'nombre', 'label': 'Nombre y apellido', 'tipo': 'text', 'requerido': True},
-            {'nombre': 'descripcion', 'label': 'Semblanza', 'tipo': 'textarea',
-             'ayuda': 'Quién es y qué aporta a la escuela, en prosa. Ej: "Ingeniero del INTI; sus prácticas de armado de colector solar son un clásico de 6°." El rol no es un campo aparte: si importa, va acá.'},
-            {'nombre': 'drive_url', 'label': 'Carpeta de Drive (link)', 'tipo': 'url'},
-        ],
-        'columnas': [('nombre', 'NOMBRE'), ('fecha_actualizada', 'ACTUALIZADA')],
-        'relaciones': [
-            {'campo': 'rel_proyectos', 'label': 'Proyectos en los que participó', 'tabla': 'persona_proyectos',
-             'col_propia': 'persona_id', 'col_ajena': 'proyecto_id', 'slug_ajeno': 'proyectos'},
-            {'campo': 'rel_hitos', 'label': 'Hitos en los que aparece', 'tabla': 'persona_hitos',
-             'col_propia': 'persona_id', 'col_ajena': 'hito_id', 'slug_ajeno': 'hitos'},
-        ],
-    },
 }
 
 # Tablas M2M a limpiar cuando se elimina una entidad de cada tipo.
 LIMPIEZA_M2M = {
-    'recursos': [('conjunto_recursos', 'recurso_id'), ('actividad_recursos', 'recurso_id'), ('proyecto_recursos', 'recurso_id')],
+    'recursos': [('conjunto_recursos', 'recurso_id'), ('actividad_recursos', 'recurso_id')],
     'conjuntos': [('conjunto_recursos', 'conjunto_id'), ('actividad_conjuntos', 'conjunto_id')],
     'actividades': [('actividad_recursos', 'actividad_id'), ('actividad_conjuntos', 'actividad_id')],
-    'proyectos': [('proyecto_recursos', 'proyecto_id'), ('persona_proyectos', 'proyecto_id')],
-    'hitos': [('persona_hitos', 'hito_id')],
-    'personas': [('persona_proyectos', 'persona_id'), ('persona_hitos', 'persona_id')],
 }
 
 SCHEMA = """
@@ -246,16 +176,6 @@ CREATE TABLE IF NOT EXISTS actividades (
     drive_url TEXT DEFAULT '',
     fotos TEXT DEFAULT '[]'
 );
-CREATE TABLE IF NOT EXISTS proyectos (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre TEXT NOT NULL,
-    descripcion TEXT DEFAULT '',
-    fecha TEXT DEFAULT '',
-    participantes TEXT DEFAULT '',
-    estado TEXT DEFAULT 'Activo',
-    drive_url TEXT DEFAULT '',
-    fotos TEXT DEFAULT '[]'
-);
 CREATE TABLE IF NOT EXISTS conjunto_recursos (
     conjunto_id INTEGER NOT NULL,
     recurso_id INTEGER NOT NULL,
@@ -270,11 +190,6 @@ CREATE TABLE IF NOT EXISTS actividad_conjuntos (
     actividad_id INTEGER NOT NULL,
     conjunto_id INTEGER NOT NULL,
     UNIQUE(actividad_id, conjunto_id)
-);
-CREATE TABLE IF NOT EXISTS proyecto_recursos (
-    proyecto_id INTEGER NOT NULL,
-    recurso_id INTEGER NOT NULL,
-    UNIQUE(proyecto_id, recurso_id)
 );
 CREATE TABLE IF NOT EXISTS prestamos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -291,45 +206,6 @@ CREATE TABLE IF NOT EXISTS prestamo_items (
     cantidad_devuelta TEXT DEFAULT '0',
     UNIQUE(prestamo_id, recurso_id)
 );
-CREATE TABLE IF NOT EXISTS hitos (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    titulo TEXT NOT NULL,
-    descripcion TEXT DEFAULT '',
-    fecha TEXT NOT NULL,
-    tipo TEXT DEFAULT '',
-    nivel TEXT DEFAULT 'Básico',
-    etiquetas TEXT DEFAULT '',
-    protagonistas TEXT DEFAULT '',
-    drive_url TEXT DEFAULT '',
-    fotos TEXT DEFAULT '[]'
-);
-CREATE INDEX IF NOT EXISTS idx_hitos_fecha ON hitos(fecha DESC);
-CREATE INDEX IF NOT EXISTS idx_hitos_nivel ON hitos(nivel);
-CREATE TABLE IF NOT EXISTS personas (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre TEXT NOT NULL,
-    nombre_norm TEXT NOT NULL DEFAULT '',
-    descripcion TEXT DEFAULT '',
-    fecha_actualizada TEXT DEFAULT '',
-    drive_url TEXT DEFAULT '',
-    fotos TEXT DEFAULT '[]'
-);
--- La identidad de una persona es su nombre normalizado, no el que se tipeó: el mismo
--- docente entra como "Juan Pablo Crivari" desde el chat y como "CRIVARI JUAN PABLO"
--- desde los horarios. Sin este UNIQUE quedan dos nodos y los hilos M2M se reparten.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_personas_norm ON personas(nombre_norm);
-CREATE TABLE IF NOT EXISTS persona_proyectos (
-    persona_id INTEGER NOT NULL,
-    proyecto_id INTEGER NOT NULL,
-    UNIQUE(persona_id, proyecto_id)
-);
-CREATE TABLE IF NOT EXISTS persona_hitos (
-    persona_id INTEGER NOT NULL,
-    hito_id INTEGER NOT NULL,
-    UNIQUE(persona_id, hito_id)
-);
-CREATE INDEX IF NOT EXISTS idx_persona_proyectos ON persona_proyectos(persona_id);
-CREATE INDEX IF NOT EXISTS idx_persona_hitos ON persona_hitos(persona_id);
 """
 
 
@@ -523,13 +399,7 @@ def _migrar(cur):
     if 'cantidad_devuelta' not in cols_items:
         cur.execute("ALTER TABLE prestamo_items ADD COLUMN cantidad_devuelta TEXT DEFAULT '0'")
     # Agregar columna fotos a las demás tablas si no existe
-    # `personas.rol` se descartó: la semblanza ya dice qué es cada quien, y una taxonomía
-    # fija se quedaba corta enseguida (alguien es docente y ex alumno a la vez, o pasó de
-    # preceptor a directivo). Requiere SQLite 3.35+, que es de 2021.
-    cols_personas = {c[1] for c in cur.execute("PRAGMA table_info(personas)").fetchall()}
-    if 'rol' in cols_personas:
-        cur.execute("ALTER TABLE personas DROP COLUMN rol")
-    for tabla in ('conjuntos', 'actividades', 'proyectos', 'hitos'):
+    for tabla in ('conjuntos', 'actividades'):
         cols = {c[1] for c in cur.execute(f"PRAGMA table_info({tabla})").fetchall()}
         if 'fotos' not in cols:
             cur.execute(f"ALTER TABLE {tabla} ADD COLUMN fotos TEXT DEFAULT '[]'")
@@ -570,18 +440,6 @@ def _seed(cur):
         cur.execute("INSERT INTO actividad_recursos (actividad_id, recurso_id) VALUES (?,?)", (actividad_id, ids[nombre]))
     cur.execute("INSERT INTO actividad_conjuntos (actividad_id, conjunto_id) VALUES (?,?)", (actividad_id, conjunto_id))
 
-    cur.execute("INSERT INTO proyectos (nombre, descripcion, fecha, participantes, estado, drive_url) VALUES (?,?,?,?,?,?)", (
-        "Construcción del banco de ensayo solar",
-        "Diseño y construcción del banco de ensayo con estructura de inclinación regulable. Resultado: banco operativo usado en las prácticas de energías renovables.",
-        "2025-11-20",
-        "6° año Electricidad",
-        "Terminado",
-        "",
-    ))
-    proyecto_id = cur.lastrowid
-    for nombre in ("Panel solar 100W", "Estructura regulable", "Inclinómetro digital"):
-        cur.execute("INSERT INTO proyecto_recursos (proyecto_id, recurso_id) VALUES (?,?)", (proyecto_id, ids[nombre]))
-
 
 def _cfg(slug):
     if slug not in ENTIDADES:
@@ -590,7 +448,9 @@ def _cfg(slug):
 
 
 def _campo_nombre(cfg):
-    """Columna que hace de nombre visible de la entidad (`hitos` la llama `titulo`)."""
+    """Columna que hace de nombre visible de la entidad. Ninguna de este módulo la
+    redefine hoy (todas usan 'nombre') — el mecanismo existe porque `historia.hitos`
+    sí la necesita (`titulo`) y las dos DBs comparten el mismo patrón de CRUD genérico."""
     return cfg.get('campo_nombre', 'nombre')
 
 
@@ -599,8 +459,7 @@ def _select(cfg):
 
     Todo el módulo (templates genéricos, búsqueda, `agente.py`) lee `fila['nombre']`.
     Con el alias, una entidad puede tener su columna con otro nombre sin que ninguno de
-    esos consumidores se entere. `hitos` usa `titulo` y sin esto el CRUD genérico
-    reventaba con "no such column: nombre".
+    esos consumidores se entere (ver `_campo_nombre`).
     """
     campo = _campo_nombre(cfg)
     alias = '' if campo == 'nombre' else f", {campo} AS nombre"
@@ -650,9 +509,6 @@ def guardar_entidad_sin_request(slug, campos_dict, id=None, con=None):
     try:
         nombres = [c['nombre'] for c in cfg['campos']]
         valores = [str(campos_dict.get(n, '')).strip() for n in nombres]
-        for columna, valor in _derivados(slug, dict(zip(nombres, valores))).items():
-            nombres.append(columna)
-            valores.append(valor)
 
         if id is None:
             placeholders = ','.join('?' * len(nombres))
@@ -780,57 +636,15 @@ def _seleccion_relaciones(cfg, id, cur):
 
 
 # Qué decir cuando un UNIQUE de la DB rechaza el guardado (si no, sale un 500 pelado).
-_ERROR_DUPLICADO = {
-    'personas': 'Ya hay una persona cargada con ese nombre. Buscala en el listado y editala '
-                'en vez de crear una segunda ficha.',
-}
-
-
-def clave_persona(nombre):
-    """Identidad de una persona: sus palabras normalizadas y **ordenadas alfabéticamente**.
-
-    El orden importa porque el mismo docente llega escrito de las dos formas —
-    "Juan Pablo Crivari" cuando alguien lo tipea o lo dicta al chat, "CRIVARI JUAN PABLO"
-    cuando sale de los horarios (`limpiar_profesor()` los guarda apellido primero). Con
-    `_norm` a secas esas son dos claves distintas y quedan dos fichas de la misma persona,
-    con los hilos M2M repartidos entre las dos — que es justo lo que este modelo existe
-    para evitar. Ordenar las palabras las colapsa en una sola.
-
-    El costo: dos personas distintas cuyos nombres son la misma bolsa de palabras
-    ("María José Pérez" vs "José María Pérez") chocan y la segunda no se puede cargar.
-    Es raro, y cuando pasa el usuario ve un mensaje claro y puede desambiguar; el modo
-    de falla contrario (duplicados silenciosos) rompe el grafo sin que nadie se entere.
-
-    La puntuación se descarta por lo mismo: "Crivari, Juan Pablo" es la forma en que se
-    escribe un apellido primero, y `limpiar_profesor()` (database.py) ya le saca las
-    comas a los nombres que vienen de los horarios.
-    """
-    limpio = ''.join(c if (c.isalnum() or c.isspace()) else ' ' for c in nombre)
-    return ' '.join(sorted(_norm(limpio).split()))
-
-
-def _derivados(slug, valores):
-    """Columnas que la app calcula sola, por eso no están en `campos` ni en el form.
-
-    `personas.nombre_norm` es la identidad real de la fila (tiene un UNIQUE encima),
-    ver `clave_persona`. `fecha_actualizada` es un hecho sobre el registro, no un dato
-    que el usuario tipee: se pisa en cada guardado.
-    """
-    if slug != 'personas':
-        return {}
-    return {
-        'nombre_norm': clave_persona(valores.get('nombre', '')),
-        'fecha_actualizada': datetime.now().strftime(FORMATO_FECHA_REVISION),
-    }
+# Vacío hoy: ninguna entidad de este módulo tiene un UNIQUE de negocio (a diferencia de
+# historia.personas, que sí lo necesita — ver historia._ERROR_DUPLICADO).
+_ERROR_DUPLICADO = {}
 
 
 def _guardar(slug, cfg, cur, id=None):
     """Inserta o actualiza la fila y sincroniza sus relaciones M2M. Devuelve el id."""
     nombres = [c['nombre'] for c in cfg['campos']]
     valores = [request.form.get(n, '').strip() for n in nombres]
-    for columna, valor in _derivados(slug, dict(zip(nombres, valores))).items():
-        nombres.append(columna)
-        valores.append(valor)
     if id is None:
         placeholders = ','.join('?' * len(nombres))
         cur.execute(f"INSERT INTO {cfg['tabla']} ({','.join(nombres)}) VALUES ({placeholders})", valores)
@@ -864,8 +678,6 @@ def _secciones_detalle(slug, id, cur):
                 "SELECT c.id, c.nombre FROM conjuntos c JOIN conjunto_recursos r ON r.conjunto_id = c.id WHERE r.recurso_id = ? ORDER BY c.nombre COLLATE NOCASE")
         agregar('Actividades que lo usan', 'actividades',
                 "SELECT a.id, a.nombre FROM actividades a JOIN actividad_recursos r ON r.actividad_id = a.id WHERE r.recurso_id = ? ORDER BY a.nombre COLLATE NOCASE")
-        agregar('Proyectos relacionados', 'proyectos',
-                "SELECT p.id, p.nombre FROM proyectos p JOIN proyecto_recursos r ON r.proyecto_id = p.id WHERE r.recurso_id = ? ORDER BY p.nombre COLLATE NOCASE")
         # Sección especial: quien lo tiene ahora (préstamos activos)
         en_prestamo = cur.execute(
             "SELECT p.persona, i.cantidad, i.cantidad_devuelta "
@@ -896,20 +708,6 @@ def _secciones_detalle(slug, id, cur):
                 "SELECT c.id, c.nombre FROM conjuntos c JOIN actividad_conjuntos r ON r.conjunto_id = c.id WHERE r.actividad_id = ? ORDER BY c.nombre COLLATE NOCASE")
         agregar('Recursos utilizados', 'recursos',
                 "SELECT x.id, x.nombre FROM recursos x JOIN actividad_recursos r ON r.recurso_id = x.id WHERE r.actividad_id = ? ORDER BY x.nombre COLLATE NOCASE")
-    elif slug == 'proyectos':
-        agregar('Recursos generados o involucrados', 'recursos',
-                "SELECT x.id, x.nombre FROM recursos x JOIN proyecto_recursos r ON r.recurso_id = x.id WHERE r.proyecto_id = ? ORDER BY x.nombre COLLATE NOCASE")
-        agregar('Personas que participaron', 'personas',
-                "SELECT p.id, p.nombre FROM personas p JOIN persona_proyectos r ON r.persona_id = p.id WHERE r.proyecto_id = ? ORDER BY p.nombre COLLATE NOCASE")
-    elif slug == 'hitos':
-        agregar('Personas involucradas', 'personas',
-                "SELECT p.id, p.nombre FROM personas p JOIN persona_hitos r ON r.persona_id = p.id WHERE r.hito_id = ? ORDER BY p.nombre COLLATE NOCASE")
-    elif slug == 'personas':
-        # `titulo AS nombre` porque detalle.html lee it['nombre'] para todas las secciones.
-        agregar('Proyectos en los que participó', 'proyectos',
-                "SELECT x.id, x.nombre FROM proyectos x JOIN persona_proyectos r ON r.proyecto_id = x.id WHERE r.persona_id = ? ORDER BY x.fecha DESC, x.nombre COLLATE NOCASE")
-        agregar('Hitos en los que aparece', 'hitos',
-                "SELECT h.id, h.titulo AS nombre FROM hitos h JOIN persona_hitos r ON r.hito_id = h.id WHERE r.persona_id = ? ORDER BY h.fecha DESC")
     return secciones
 
 

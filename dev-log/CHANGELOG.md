@@ -4,6 +4,48 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-10] — `POST /agente/chat` con foto ya no corta el turno cuando no hay lector de imágenes
+
+**Tipo**: cambio de comportamiento de un endpoint (misma forma de request y de response) + error nuevo de una tool
+**Archivos**: `agente.py`, `agent_docs/agente-asistente.md`
+
+**Contexto**: `chat()` tenía tres ramas para decidir qué hacer con una foto adjunta. La tercera —sin lector (`AGENTE_VISION_API_KEY`) **y** sin chat con visión— respondía un `AVISO_SIN_VISION` fijo **sin llegar a llamar al modelo**. Con el default del proyecto (`AGENTE_PROVIDER=deepseek`, sin key de visión) esa era la rama de *toda* foto: mandar una imagen al agente no servía para nada.
+
+**Cambio de contrato:**
+
+- **Con foto y sin visión, `/agente/chat` ahora ejecuta el turno completo** (llama al LLM, puede correr tools y devolver `tools` no vacío) en vez de devolver una respuesta fija con `tools: []`. La forma del request y de la response no cambió; sí cambia lo que un cliente puede esperar del turno, y que ese turno ahora **puede escribir en la base** (`adjuntar_foto`).
+- **`adjuntar_foto` pasa a ser alcanzable sin ninguna API key de visión.** Guardar una foto en la galería de un registro nunca necesitó verla: el base64 va de `contexto_turno['foto_turno']` a `gestion.agregar_foto()` sin pasar por el modelo. Por lo mismo, el alta con foto pendiente (`agente_fotos_pendientes` → `_adjuntar_foto_pendiente` al confirmar) también funciona sin lector.
+- **`leer_foto` devuelve un error nuevo** cuando `_get_vision_config()` es `None`: "no hay lector configurado", distinto del ya existente "el lector no respondió". Antes los dos caían en el mismo texto porque `_leer_imagen()` devuelve `None` en ambos casos. La tool **sigue en `TOOLS_SCHEMA` aunque no haya lector**: es lo que le permite al modelo detectar que le pidieron *analizar* y decirlo.
+- **Se eliminó la constante `AVISO_SIN_VISION`.** Quien dependiera de ese texto exacto en la respuesta ya no lo recibe: el aviso ahora lo redacta el modelo.
+
+**Rama que sí se conserva**: si el proveedor del chat ve imágenes (`AGENTE_PROVIDER=anthropic` o `AGENTE_VISION=1`) y no hay lector aparte, la imagen sigue viajando inline como bloque `image`.
+
+---
+
+## [2026-08-10] — La app se parte en 4 áreas físicas: `/historia` nuevo, `/agente` mudado, `proyectos` eliminado
+
+**Tipo**: DB nueva + tablas movidas y eliminadas + prefijos de URL cambiados + templates movidos + entidad eliminada
+**Archivos**: `historia.py` (nuevo), `gestion.py`, `agente.py`, `app.py`, `static/gestion-agente.js`, `templates/historia/` (nuevo), `templates/agente/` (nuevo), `templates/gestion/base.html`, `templates/gestion/home.html`, `init_historia.py` (nuevo), `agent_docs/*`
+
+**Cambios que rompen contratos:**
+
+- **`historia.db` es una DB nueva.** `hitos`, `personas` y `persona_hitos` **se movieron** de `gestion.db` a `historia.db` (mismo schema, ids preservados) y se borraron del origen. Cualquier query que las buscara en `gestion.db` ahora falla con `no such table`. `gestion.db` conserva recursos/conjuntos/actividades/préstamos **y** las tablas del agente (`agente_log`, `agente_conversaciones`, `agente_fotos_pendientes`), que no se movieron.
+- **La entidad `proyectos` ya no existe.** Se eliminaron las tablas `proyectos`, `proyecto_recursos` y `persona_proyectos`. Las filas se migraron a `hitos` con `'Proyecto'` en `etiquetas` (el `estado` del proyecto quedó anexado a `descripcion`, `participantes` → `protagonistas`), y los vínculos de `persona_proyectos` se recrearon como `persona_hitos`. **No queda ninguna relación M2M que cruce las dos DBs.**
+- **`/gestion/agente/*` → `/agente/*`.** Cambió el `url_prefix` del blueprint. Los cuatro `fetch` hardcodeados de `static/gestion-agente.js` se actualizaron (`/agente/chat`, `/agente/historial`, `/agente/confirmar`, `/agente/reset`). Cualquier link o bookmark a `/gestion/agente/` da 404.
+- **`/gestion/proyectos`, `/gestion/hitos` y `/gestion/personas` dan 404.** Hitos y personas viven ahora en `/historia/hitos` y `/historia/personas`, con las mismas rutas bajo el nuevo prefijo.
+- **Templates del agente movidos** de `templates/gestion/` a `templates/agente/` (`agente_chat.html`, `agente_log.html`, `_agente_chat_core.html`, `_agente_widget.html`), más `base.html` y `login.html` nuevos. `gestion/base.html` e `historia/base.html` incluyen el widget desde la ruta nueva.
+- **`agente.SLUGS_ENTIDAD = list(gestion.ENTIDADES) + list(historia.ENTIDADES)`** y **`_modulo(slug)`** nuevo: todas las tools genéricas resuelven contra el módulo dueño del slug. Consecuencia para quien agregue un módulo de dominio: tiene que exponer la misma superficie (`ENTIDADES`, `conectar`, `_select`, `_campo_nombre`, `LIMPIEZA_M2M`, `buscar_entidad_sin_request`, `guardar_entidad_sin_request`, `snapshot_entidad`, `agregar_relacion_m2m`, `quitar_relacion_m2m`, `_secciones_detalle`, `agregar_foto`).
+- **Cada área tiene su propio login**: `/gestion/login`, `/historia/login`, `/agente/login`. Comparten `GESTION_CLAVE` y `session['gestion_ok']` (una contraseña abre las tres), pero ningún módulo importa el gate del otro. `agente._contexto_base()` dejó de delegar en `gestion._contexto_base()`.
+- **Esquemas de tools**: `crear_entidad`/`editar_entidad` ya no aceptan `participantes`, y el enum de `estado` perdió los valores de proyecto (`Activo`/`Pausado`/`Terminado`). `fecha` ahora es solo de hitos.
+
+**Fixes que venían de arrastre** (aparecieron al verificar el agente contra `hitos`):
+- `_listar_todos_fmt` hacía `SELECT id, nombre` → reventaba con `no such column: nombre` en hitos. Ahora usa el alias de `_campo_nombre`.
+- `_detalle_entidad_fmt` hacía `SELECT *` → la ficha de un hito llegaba sin la clave `nombre` que el modelo lee en todos los slugs. Ahora usa `_select()`.
+
+**Migración**: se corrió una vez con `migrar_proyecto_a_hito.py` (script de un solo uso, borrado después — está en el historial de git). Respaldos previos en `backups/`.
+
+---
+
 ## [2026-08-09] — Buscar una persona mira los dos padrones (fichas + horarios), en las dos direcciones
 
 **Tipo**: cambio de forma en la respuesta de dos tools de lectura (condicional) + funciones nuevas en `agente.py`

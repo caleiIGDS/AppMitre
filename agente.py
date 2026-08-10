@@ -45,14 +45,26 @@ from flask import (Blueprint, request, session, jsonify, render_template, abort,
 
 import database
 import gestion
+import historia
 from database import obtener_filas
-from config import DIAS
+from config import DIAS, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gestion.db')
 HISTORIA_INDICE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'historia_indice.json')
 HISTORIA_DIR_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'historias')
 
-bp = Blueprint('agente', __name__, url_prefix='/gestion/agente')
+bp = Blueprint('agente', __name__, url_prefix='/agente')
+
+# Módulos de dominio que el agente puede leer/escribir, por slug de entidad. Antes todo
+# vivía en gestion.db; ahora recursos/conjuntos/actividades siguen en gestion.py y
+# hitos/personas se separaron a historia.py (DB propia). SLUGS_ENTIDAD y _modulo()
+# abajo son lo que le permite al agente seguir tratando ambos grupos de forma uniforme.
+SLUGS_ENTIDAD = list(gestion.ENTIDADES) + list(historia.ENTIDADES)
+
+
+def _modulo(slug):
+    """Módulo (gestion o historia) dueño de `slug`, para resolver conexión/ENTIDADES."""
+    return historia if slug in historia.ENTIDADES else gestion
 
 # ============================================================================
 # Configuración del LLM (agnóstico del proveedor) — Lee en tiempo de request
@@ -173,30 +185,60 @@ def _get_agente_api_key():
 def _get_agente_api_base():
     return _get_config()['api_base']
 
-# Endpoints que devuelven HTML. Sin sesión conviene mandarlos al login de /gestion
-# (con `next` para volver acá), no un 401 pelado: entrar por link directo a
-# /gestion/agente desde el celular es el caso normal, y ahí un 401 es un callejón.
+# Endpoints que devuelven HTML. Sin sesión conviene mandarlos al login propio de /agente
+# (con `next` para volver acá), no un 401 pelado: entrar por link directo a /agente
+# desde el celular es el caso normal, y ahí un 401 es un callejón.
 # Los endpoints JSON sí siguen dando 401, que es lo que el fetch del chat sabe leer.
 _ENDPOINTS_PAGINA = ('agente.chat_page', 'agente.agente_log')
 
+# Mismo env var y misma clave de sesión que gestion.py/historia.py (GESTION_CLAVE /
+# gestion_ok): una sola contraseña sirve para las tres áreas, con gate propio acá
+# (sin importar el módulo de gestion.py) para que /agente quede igual de aislado.
+_CLAVE = os.environ.get('GESTION_CLAVE', 'mitre2026')
 
-# Gate de sesión: requiere haber iniciado sesión en /gestion
+
+@bp.route('/login', methods=['GET', 'POST'])
+def login():
+    error = None
+    if request.method == 'POST':
+        if request.form.get('clave', '') == _CLAVE:
+            session['gestion_ok'] = True
+            destino = request.form.get('next', '')
+            if not destino.startswith('/agente'):
+                destino = url_for('agente.chat_page')
+            return redirect(destino)
+        error = 'Contraseña incorrecta.'
+    return render_template('agente/login.html', error=error,
+                           next=request.values.get('next', ''), activo=None)
+
+
+@bp.route('/salir')
+def salir():
+    session.pop('gestion_ok', None)
+    return redirect(url_for('agente.login'))
+
+
+# Gate de sesión: requiere haber iniciado sesión (misma sesión que /gestion y /historia)
 @bp.before_request
 def _requiere_clave():
-    if session.get('gestion_ok'):
+    if request.endpoint in ('agente.login',) or session.get('gestion_ok'):
         return
     if request.endpoint in _ENDPOINTS_PAGINA:
-        return redirect(url_for('gestion.login', next=request.path))
+        return redirect(url_for('agente.login', next=request.path))
     abort(401)
 
 
 @bp.context_processor
 def _contexto_base():
-    """`base.html` espera escuela_nombre/logo/version, nav_entidades y carrito_count.
-    Los inyecta el context_processor de `gestion.bp`, que NO corre para requests de
-    este blueprint — por eso reusamos el mismo acá (si no, el header renderiza vacío).
+    """`agente/base.html` espera escuela_nombre/logo/version. A diferencia de antes,
+    ya no delega en `gestion._contexto_base()` (nav_entidades/carrito_count no aplican
+    acá) — así el blueprint no depende de gestion.py para renderizar su propio layout.
     """
-    return gestion._contexto_base()
+    return {
+        'escuela_nombre': ESCUELA_NOMBRE,
+        'escuela_logo': ESCUELA_LOGO,
+        'escuela_version': ESCUELA_VERSION,
+    }
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS agente_log (
@@ -432,7 +474,7 @@ def _buscar_profesor_scored(query):
 def _buscar_profesor(query):
     """Resolución difusa de nombre de profesor.
 
-    Devuelve además las personas CON FICHA (`gestion.db`) que se parecen al nombre, cuando
+    Devuelve además las personas CON FICHA (`historia.db`) que se parecen al nombre, cuando
     las hay. Son dos padrones distintos y el modelo tiende a olvidarlo: los docentes salen
     de los horarios (`escuela.db`) y ahí no está el alumno que ganó una olimpiada ni el
     ex director. Pidiendo "el hito lo logró nati" el modelo llamaba acá, veía tres docentes
@@ -455,7 +497,7 @@ def _buscar_profesor(query):
             'OJO: "' + query + '" también se parece a personas que tienen FICHA propia en la '
             'memoria de la escuela (' + ', '.join(n for _, n in con_ficha) + '). Son dos '
             'padrones distintos: `docentes` sale de los horarios, `personas_con_ficha` de las '
-            'semblanzas. Si estás hablando de un hito, un proyecto o la historia de alguien, '
+            'semblanzas. Si estás hablando de un hito o la historia de alguien, '
             'casi seguro te referís a una de `personas_con_ficha` — usá esa y NO ofrezcas solo '
             'la lista de docentes. Si no estás seguro, mostrale las dos y preguntá.'
         ),
@@ -868,7 +910,7 @@ def _buscar_hitos_fmt(etiqueta=None, desde_fecha=None, hasta_fecha=None, limite=
     Devuelve hitos ordenados por nivel (Crítico > Importante > Básico) y fecha (reciente primero).
     El agente puede filtrar según el contexto de la pregunta.
     """
-    con = gestion.conectar()
+    con = historia.conectar()
     cur = con.cursor()
 
     query = "SELECT id, titulo, descripcion, fecha, tipo, nivel, etiquetas FROM hitos WHERE 1=1"
@@ -876,7 +918,7 @@ def _buscar_hitos_fmt(etiqueta=None, desde_fecha=None, hasta_fecha=None, limite=
 
     # Filtro por etiqueta (búsqueda en el campo etiquetas que es comma-separated)
     if etiqueta:
-        etiqueta_norm = gestion._norm(etiqueta)
+        etiqueta_norm = historia._norm(etiqueta)
         # Busca la etiqueta en el campo etiquetas (tolerando espacios)
         query += " AND (etiquetas LIKE ? OR etiquetas LIKE ?)"
         params.extend([f'%{etiqueta}%', f'%{etiqueta_norm}%'])
@@ -957,12 +999,12 @@ def _clasificar_match(q_norm, nombre, descripcion):
 
 
 def _buscar_entidad_fmt(slug, query):
-    """Búsqueda de entidad (recursos, conjuntos, actividades, proyectos)."""
-    if slug not in gestion.ENTIDADES:
+    """Búsqueda de entidad (recursos, conjuntos, actividades, hitos, personas)."""
+    if slug not in SLUGS_ENTIDAD:
         # Sin esto un slug mal escrito devolvía 0 resultados y el agente concluía
         # "no hay nada cargado" en vez de reintentar con el slug correcto.
-        return {'error': f'Slug inválido: {slug}. Válidos: {", ".join(gestion.ENTIDADES)}'}
-    resultados = gestion.buscar_entidad_sin_request(slug, query)
+        return {'error': f'Slug inválido: {slug}. Válidos: {", ".join(SLUGS_ENTIDAD)}'}
+    resultados = _modulo(slug).buscar_entidad_sin_request(slug, query)
     q_norm = gestion._norm(query or '')
     # Omitir campos vacíos para reducir ruido
     limpios = []
@@ -1026,8 +1068,8 @@ def _buscar_entidad_fmt(slug, query):
                     'NO hay ficha de persona que coincida, pero en los HORARIOS sí hay: '
                     + ', '.join(docentes) + '. O sea que existe en la escuela, solo que sin '
                     'ficha propia. NO le digas al usuario que no la tenés. Si te está hablando '
-                    'de horarios, resolvelo con esos nombres; si está armando un hito, un '
-                    'proyecto o una semblanza, avisale que todavía no tiene ficha y ofrecé '
+                    'de horarios, resolvelo con esos nombres; si está armando un hito o una '
+                    'semblanza, avisale que todavía no tiene ficha y ofrecé '
                     'crearla con crear_entidad.'
                 )
     return salida
@@ -1042,13 +1084,17 @@ def _listar_todos_fmt(slug):
     ningún diccionario que mantener, y sobre todo puede afirmar "no está" habiéndolo
     verificado, en vez de deducirlo de que la búsqueda no encontró nada.
     """
-    if slug not in gestion.ENTIDADES:
-        return {'error': f'Slug inválido: {slug}. Válidos: {", ".join(gestion.ENTIDADES)}'}
+    if slug not in SLUGS_ENTIDAD:
+        return {'error': f'Slug inválido: {slug}. Válidos: {", ".join(SLUGS_ENTIDAD)}'}
 
-    con = conectar()
-    tabla = gestion.ENTIDADES[slug]['tabla']
+    modulo = _modulo(slug)
+    con = modulo.conectar()
+    # Por _select(), no `SELECT id, nombre`: en `hitos` la columna se llama `titulo` y la
+    # query cruda reventaba con "no such column: nombre".
+    cfg = modulo.ENTIDADES[slug]
+    campo = modulo._campo_nombre(cfg)
     filas = con.execute(
-        f"SELECT id, nombre FROM {tabla} ORDER BY nombre COLLATE NOCASE").fetchall()
+        f"SELECT id, {campo} AS nombre FROM {cfg['tabla']} ORDER BY nombre COLLATE NOCASE").fetchall()
     con.close()
 
     # Las filas sin nombre no le dicen nada al modelo, pero esconderlas sin avisar haría
@@ -1079,19 +1125,22 @@ def _listar_todos_fmt(slug):
 
 def _detalle_entidad_fmt(slug, id):
     """Detalle completo de una entidad."""
-    con = conectar()
+    modulo = _modulo(slug)
+    con = modulo.conectar()
     cur = con.cursor()
-    cfg = gestion.ENTIDADES.get(slug)
+    cfg = modulo.ENTIDADES.get(slug)
     if not cfg:
         return {'error': f'Slug inválido: {slug}'}
 
-    fila = cur.execute(f"SELECT * FROM {cfg['tabla']} WHERE id = ?", (id,)).fetchone()
+    # Por _select() para que la ficha siempre traiga `nombre`, se llame como se llame la
+    # columna (en `hitos` es `titulo`): el modelo lee esa clave en todos los slugs.
+    fila = cur.execute(f"{modulo._select(cfg)} WHERE id = ?", (id,)).fetchone()
     if not fila:
         con.close()
         return {'error': f'No encontrado: {slug} id={id}'}
 
     # Relaciones
-    secciones = gestion._secciones_detalle(slug, id, cur)
+    secciones = modulo._secciones_detalle(slug, id, cur)
     con.close()
 
     resultado = dict(fila)
@@ -1200,22 +1249,18 @@ def _detalle_prestamo_fmt(prestamo_id):
 # Alta en dos pasos: ficha → confirmación del usuario → escritura
 # ---------------------------------------------------------------------------
 
-# Entidades que el agente puede tocar. Se DERIVA de gestion.ENTIDADES a propósito: los
-# esquemas de tools repiten este enum en diez lugares, y cuando se agregó `hitos` nadie
-# los actualizó — la entidad quedó invisible para el chat sin que nada fallara. Derivarlo
-# hace que sumar una entidad sea un cambio en un solo archivo.
-SLUGS_ENTIDAD = list(gestion.ENTIDADES)
+# SLUGS_ENTIDAD y _modulo() están definidos arriba, junto a los imports de gestion/historia.
 
 # Campos que el asistente REDACTA a partir de lo que contó el usuario, en vez de
 # pedirlos literalmente ("¿qué descripción le pongo?"). Se marcan en la ficha para que
 # el usuario sepa que ese texto lo escribió el asistente y lo lea con esa expectativa.
-# 'titulo' es el 'nombre' de los hitos (ver gestion._campo_nombre).
+# 'titulo' es el 'nombre' de los hitos (ver historia._campo_nombre).
 CAMPOS_REDACTADOS = ('nombre', 'titulo', 'tipo', 'descripcion')
 
 
 def _campos_validos(slug):
-    """Nombres de campo de la entidad, en el orden del formulario de /gestion."""
-    cfg = gestion.ENTIDADES.get(slug) or {}
+    """Nombres de campo de la entidad, en el orden del formulario de /gestion o /historia."""
+    cfg = _modulo(slug).ENTIDADES.get(slug) or {}
     return [c['nombre'] for c in cfg.get('campos', [])]
 
 
@@ -1223,10 +1268,11 @@ def _nombre_de(slug, campos):
     """El nombre visible de una ficha de alta.
 
     `campos` es el dict que armó el modelo, no una fila de la DB, así que acá **no** llega
-    el alias de `gestion._select()`: en `hitos` la clave es 'titulo'. Sin esto el botón de
+    el alias de `_select()`: en `hitos` la clave es 'titulo'. Sin esto el botón de
     confirmar y el "✅ Guardado" salían con el nombre en blanco.
     """
-    return campos.get(gestion._campo_nombre(gestion.ENTIDADES.get(slug, {})), '')
+    modulo = _modulo(slug)
+    return campos.get(modulo._campo_nombre(modulo.ENTIDADES.get(slug, {})), '')
 
 
 def _normalizar_borrador(slug, campos_dict):
@@ -1285,8 +1331,9 @@ def _tipos_en_uso():
 
 
 def _personas_cargadas():
-    """[(id, nombre)] de todas las personas, para cruzar nombres contra texto libre."""
-    con = conectar()
+    """[(id, nombre)] de todas las personas, para cruzar nombres contra texto libre.
+    `personas` vive en historia.db (se separó de gestion.db) — ver dev-log/DECISIONS.md."""
+    con = historia.conectar()
     filas = con.execute("SELECT id, nombre FROM personas WHERE TRIM(nombre) <> ''").fetchall()
     con.close()
     return [(f[0], f[1]) for f in filas]
@@ -1421,7 +1468,7 @@ def _recordatorio_hito(borrador):
 
 def _ficha_confirmacion(slug, borrador, token, contexto_turno):
     """Paso 1 del alta: la ficha para mostrarle al usuario. No escribe nada."""
-    cfg = gestion.ENTIDADES.get(slug) or {}
+    cfg = _modulo(slug).ENTIDADES.get(slug) or {}
     etiquetas = {c['nombre']: c.get('label', c['nombre']) for c in cfg.get('campos', [])}
     nombres = _campos_validos(slug)
 
@@ -1471,7 +1518,7 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno):
 
 
 def _crear_entidad(slug, campos_dict, contexto_turno=None):
-    """Alta de recurso/conjunto/actividad/proyecto, en DOS PASOS.
+    """Alta de recurso/conjunto/actividad/hito/persona, en DOS PASOS.
 
     Primera llamada con un juego de campos: no toca la base, devuelve la ficha para que el
     asistente se la muestre al usuario. Segunda llamada con LOS MISMOS campos (ya en otro
@@ -1494,10 +1541,11 @@ def _crear_entidad(slug, campos_dict, contexto_turno=None):
     if contexto_turno is None:
         contexto_turno = {}
 
-    if slug not in gestion.ENTIDADES:
+    if slug not in SLUGS_ENTIDAD:
         return {'ok': False, 'error': f'Slug desconocido: {slug}. Usá {", ".join(SLUGS_ENTIDAD)}.'}
+    modulo = _modulo(slug)
     # No es siempre 'nombre': en `hitos` el campo obligatorio se llama 'titulo'.
-    campo_nombre = gestion._campo_nombre(gestion.ENTIDADES[slug])
+    campo_nombre = modulo._campo_nombre(modulo.ENTIDADES[slug])
     if not campos_dict.get(campo_nombre):
         return {'ok': False, 'error': f'El campo "{campo_nombre}" es obligatorio.'}
 
@@ -1515,8 +1563,8 @@ def _crear_entidad(slug, campos_dict, contexto_turno=None):
     # y arranca otra vez por la ficha, en vez de duplicar el recurso en silencio.
     previas.pop(token, None)
 
-    con = conectar()
-    id_nuevo = gestion.guardar_entidad_sin_request(slug, borrador, con=con)
+    con = modulo.conectar()
+    id_nuevo = modulo.guardar_entidad_sin_request(slug, borrador, con=con)
     con.close()
 
     if id_nuevo:
@@ -1542,6 +1590,17 @@ def _leer_foto_fmt(contexto_turno=None):
     if not foto:
         return {'error': 'En este turno el usuario no adjuntó ninguna foto. Si querés que te '
                          'mande una, pedísela; no llames a esta tool de nuevo hasta que la mande.'}
+
+    # "No hay lector configurado" y "el lector falló" son cosas distintas para el usuario —
+    # una se arregla cargando una API key y la otra se arregla esperando — pero `_leer_imagen`
+    # devuelve None en los dos casos. El primero se detecta acá para que el aviso sea el que
+    # corresponde. Ojo: adjuntar NO pasa por acá, así que sin lector sigue funcionando.
+    if not _get_vision_config():
+        return {'error': 'No hay ningún lector de imágenes configurado en el servidor, así que '
+                         'no podés leer fotos ni saber qué muestran. Decíselo al usuario en una '
+                         'línea y ofrecele las dos salidas: que te dicte por texto lo que dice la '
+                         'etiqueta, o que te diga a qué ficha guardar la foto (adjuntar_foto sí '
+                         'funciona, no necesita leerla). NO inventes lo que decía la foto.'}
 
     b64, tipo = foto
     lectura = _leer_imagen(b64, tipo, (contexto_turno or {}).get('texto_usuario', ''))
@@ -1573,12 +1632,12 @@ def _adjuntar_foto_entidad(slug, id, contexto_turno=None):
                          'la foto que acaba de mandar; si quiere subir otra, que la adjunte y '
                          'te lo vuelva a pedir.'}
 
-    if slug not in gestion.ENTIDADES:
+    if slug not in SLUGS_ENTIDAD:
         return {'ok': False, 'error': f'Slug inválido: {slug}. Válidos: {", ".join(SLUGS_ENTIDAD)}'}
 
     b64, tipo = foto
     try:
-        if not gestion.agregar_foto(slug, id, b64, tipo):
+        if not _modulo(slug).agregar_foto(slug, id, b64, tipo):
             return {'ok': False,
                     'error': f'No existe {slug} id={id}. Buscalo con buscar_entidad.'}
     except Exception as e:
@@ -1588,7 +1647,7 @@ def _adjuntar_foto_entidad(slug, id, contexto_turno=None):
 
 
 def _editar_entidad(slug, id, campos_dict):
-    """Editar recurso/conjunto/actividad/proyecto (edición PARCIAL).
+    """Editar recurso/conjunto/actividad/hito/persona (edición PARCIAL).
 
     `guardar_entidad_sin_request` hace UPDATE de TODAS las columnas usando
     `campos_dict.get(n, '')`, porque nació del form de /gestion, que siempre postea el
@@ -1598,10 +1657,11 @@ def _editar_entidad(slug, id, campos_dict):
     lo que vino. Se arregla del lado del código y no pidiéndole al modelo que mande todos
     los campos, que es justo el tipo de regla que a veces cumple y a veces no.
     """
-    con = conectar()
+    modulo = _modulo(slug)
+    con = modulo.conectar()
 
     # Snapshot antes
-    antes = gestion.snapshot_entidad(slug, id, con=con)
+    antes = modulo.snapshot_entidad(slug, id, con=con)
 
     if not antes or not antes.get('fila'):
         con.close()
@@ -1614,7 +1674,7 @@ def _editar_entidad(slug, id, campos_dict):
             campos_merge[clave] = valor
 
     # Guardar
-    id_result = gestion.guardar_entidad_sin_request(slug, campos_merge, id=id, con=con)
+    id_result = modulo.guardar_entidad_sin_request(slug, campos_merge, id=id, con=con)
     con.close()
 
     if id_result:
@@ -1623,8 +1683,12 @@ def _editar_entidad(slug, id, campos_dict):
         return {'ok': False, 'error': f'Error al editar {slug} id={id}'}
 
 def _vincular_entidad(slug_origen, id_origen, slug_destino, id_destino):
-    """Vincular dos entidades vía relación M2M."""
-    cfg_origen = gestion.ENTIDADES.get(slug_origen)
+    """Vincular dos entidades vía relación M2M. Las relaciones son siempre intra-módulo
+    (no hay ninguna cruzada entre gestion/recursos e historia/hitos-personas desde que se
+    sacó `proyecto_recursos` — ver dev-log/DECISIONS.md), así que alcanza con el módulo
+    del slug de origen para conectar."""
+    modulo = _modulo(slug_origen)
+    cfg_origen = modulo.ENTIDADES.get(slug_origen)
     if not cfg_origen:
         return {'ok': False, 'error': f'Slug inválido: {slug_origen}'}
 
@@ -1642,8 +1706,8 @@ def _vincular_entidad(slug_origen, id_origen, slug_destino, id_destino):
     col_propia = rel_config['col_propia']
     col_ajena = rel_config['col_ajena']
 
-    con = conectar()
-    resultado = gestion.agregar_relacion_m2m(tabla, col_propia, col_ajena, id_origen, id_destino, con=con)
+    con = modulo.conectar()
+    resultado = modulo.agregar_relacion_m2m(tabla, col_propia, col_ajena, id_origen, id_destino, con=con)
     con.close()
 
     if resultado:
@@ -1652,8 +1716,9 @@ def _vincular_entidad(slug_origen, id_origen, slug_destino, id_destino):
         return {'ok': False, 'error': 'Error al vincular'}
 
 def _desvincular_entidad(slug_origen, id_origen, slug_destino, id_destino):
-    """Desvincular dos entidades."""
-    cfg_origen = gestion.ENTIDADES.get(slug_origen)
+    """Desvincular dos entidades (siempre intra-módulo, ver _vincular_entidad)."""
+    modulo = _modulo(slug_origen)
+    cfg_origen = modulo.ENTIDADES.get(slug_origen)
     if not cfg_origen:
         return {'ok': False, 'error': f'Slug inválido: {slug_origen}'}
 
@@ -1670,8 +1735,8 @@ def _desvincular_entidad(slug_origen, id_origen, slug_destino, id_destino):
     col_propia = rel_config['col_propia']
     col_ajena = rel_config['col_ajena']
 
-    con = conectar()
-    resultado = gestion.quitar_relacion_m2m(tabla, col_propia, col_ajena, id_origen, id_destino, con=con)
+    con = modulo.conectar()
+    resultado = modulo.quitar_relacion_m2m(tabla, col_propia, col_ajena, id_origen, id_destino, con=con)
     con.close()
 
     if resultado:
@@ -1881,23 +1946,24 @@ def _reabrir_prestamo(prestamo_id, items_list=None):
     return {'ok': True, 'prestamo_id': prestamo_id, 'mensaje': f'Reabierto préstamo id={prestamo_id}'}
 
 def _eliminar_entidad(slug, id, nombre_confirmacion=None):
-    """Eliminar entidad (recurso/conjunto/actividad/proyecto).
+    """Eliminar entidad (recurso/conjunto/actividad/hito/persona).
 
     `nombre_confirmacion` es obligatorio y debe coincidir con el nombre real de la fila:
     es una traba de CÓDIGO, no de prompt. Sin esto el modelo podía alucinar un id
     (llegó a borrar 'Panel solar 100W' id=1 creyendo que borraba un recurso de prueba
     que nunca existió) — ver DECISIONS 2026-08-04.
     """
-    con = conectar()
+    modulo = _modulo(slug)
+    con = modulo.conectar()
     cur = con.cursor()
 
     # Snapshot antes (obligatorio)
-    antes = gestion.snapshot_entidad(slug, id, con=con)
+    antes = modulo.snapshot_entidad(slug, id, con=con)
     if not antes:
         con.close()
         return {'ok': False, 'error': f'No encontrado: {slug} id={id}. No se borró nada.'}
 
-    cfg = gestion.ENTIDADES.get(slug)
+    cfg = modulo.ENTIDADES.get(slug)
     if not cfg:
         con.close()
         return {'ok': False, 'error': f'Slug inválido: {slug}'}
@@ -1919,7 +1985,7 @@ def _eliminar_entidad(slug, id, nombre_confirmacion=None):
 
     try:
         # Borrar relaciones M2M
-        for tabla, columna in gestion.LIMPIEZA_M2M.get(slug, []):
+        for tabla, columna in modulo.LIMPIEZA_M2M.get(slug, []):
             cur.execute(f"DELETE FROM {tabla} WHERE {columna} = ?", (id,))
 
         # Borrar la fila
@@ -1997,7 +2063,7 @@ TOOLS_SCHEMA = [
                         'y querés ofrecerle opciones. Si ya tenés el nombre, no hace falta: '
                         'horario_profesor también busca difuso. OJO: es el padrón de los HORARIOS, '
                         'no el de las personas con ficha (alumnos, ex docentes, gente de la memoria '
-                        'institucional). Si el tema es un hito, un proyecto o la semblanza de '
+                        'institucional). Si el tema es un hito o la semblanza de '
                         "alguien, la persona se busca con buscar_entidad('personas', ...). Cuando el "
                         'nombre coincide con las dos cosas, esta tool te devuelve además '
                         '`personas_con_ficha` y un `aviso`: hacele caso.'),
@@ -2068,14 +2134,16 @@ TOOLS_SCHEMA = [
     },
     {
         'name': 'buscar_entidad',
-        'description': ('Busca en el inventario por nombre aproximado y devuelve id + nombre + datos '
-                        'básicos. Es la forma correcta de conseguir un id: NUNCA inventes uno ni lo '
-                        'recuerdes de otra conversación. Los cuatro tipos son distintos: "recursos" son '
-                        'cosas físicas sueltas (una herramienta, un instrumento, un material); '
-                        '"conjuntos" son kits de recursos que se usan juntos; "actividades" son '
-                        'prácticas de taller que consumen esos recursos; "proyectos" son trabajos ya '
-                        'realizados por un curso. Un mismo nombre puede existir como proyecto Y como '
-                        'conjunto, así que elegí el slug según lo que pregunten. '
+        'description': ('Busca en el inventario o en la línea del tiempo institucional por nombre '
+                        'aproximado y devuelve id + nombre + datos básicos. Es la forma correcta de '
+                        'conseguir un id: NUNCA inventes uno ni lo recuerdes de otra conversación. Los '
+                        'tipos son distintos: "recursos" son cosas físicas sueltas (una herramienta, un '
+                        'instrumento, un material); "conjuntos" son kits de recursos que se usan '
+                        'juntos; "actividades" son prácticas de taller que consumen esos recursos; '
+                        '"hitos" son eventos de la línea del tiempo institucional (incluye lo que antes '
+                        'se llamaba "proyecto": hoy es un hito con "Proyecto" en sus etiquetas); '
+                        '"personas" son fichas de quién hizo la escuela. Un mismo nombre puede existir '
+                        'como hito Y como conjunto, así que elegí el slug según lo que pregunten. '
                         'CADA RESULTADO TRAE UN CAMPO "match" QUE DICE CUÁNTO CONFIAR: '
                         '"exacto" = el nombre contiene lo que buscaste; "descripcion" = no está en el '
                         'nombre pero sí en la descripción (que viene incluida, leela para ver si sirve); '
@@ -2124,9 +2192,10 @@ TOOLS_SCHEMA = [
     },
     {
         'name': 'detalle_entidad',
-        'description': ('Ficha completa de una entidad del inventario: todos sus campos más las '
-                        'relaciones (qué conjuntos/actividades/proyectos la usan, y si es un recurso, '
-                        'quién lo tiene prestado ahora). Necesitás el id: sacalo de buscar_entidad. '
+        'description': ('Ficha completa de una entidad: todos sus campos más las relaciones (qué '
+                        'conjuntos/actividades la usan si es un recurso, qué personas aparecen si es '
+                        'un hito, y si es un recurso, quién lo tiene prestado ahora). Necesitás el id: '
+                        'sacalo de buscar_entidad. '
                         'Un campo vacío significa que nadie lo cargó — decilo así, no lo completes con '
                         'un valor plausible.'),
         'input_schema': {
@@ -2242,15 +2311,14 @@ TOOLS_SCHEMA = [
                 'slug': {'type': 'string', 'enum': SLUGS_ENTIDAD},
                 'nombre': {'type': 'string', 'description': 'Nombre, redactado por VOS con lo que dijo el usuario: corto y reconocible para quien lo busque en el pañol (ej: "Taladro percutor Bosch GSB 550"). OBLIGATORIO en todos los slugs MENOS hitos, que usa `titulo` en su lugar'},
                 'titulo': {'type': 'string', 'description': 'Título del hito, redactado por VOS: qué pasó, corto y reconocible en una línea de tiempo (ej: "Olimpiada Matemática Argentina — Certamen Nacional"). OBLIGATORIO en hitos, y solo aplica a hitos: es el campo que en el resto de los slugs se llama `nombre`'},
-                'tipo': {'type': 'string', 'description': ('RECURSOS: categoría que proponés VOS, texto libre, pero REUSÁ una de las que ya están en uso — la ficha del paso 1 te las devuelve en `tipos_en_uso` — antes de inventar una nueva; si no, el campo se llena de sinónimos y deja de servir para agrupar. HITOS: elegí uno de estos valores cerrados: '
-                                                          + ', '.join(gestion.TIPOS_HITO))},
+                'tipo': {'type': 'string', 'description': ('RECURSOS: categoría que proponés VOS, texto libre, pero REUSÁ una de las que ya están en uso — la ficha del paso 1 te las devuelve en `tipos_en_uso` — antes de inventar una nueva; si no, el campo se llena de sinónimos y deja de servir para agrupar. HITOS: elegí uno de estos valores cerrados (si lo que estás cargando es lo que antes se llamaba "proyecto", va como hito con "Proyecto" en `etiquetas`, no acá): '
+                                                          + ', '.join(historia.TIPOS_HITO))},
                 'cantidad': {'type': 'integer', 'description': 'Stock disponible. Solo recursos'},
                 'descripcion': {'type': 'string', 'description': 'Descripción redactada por VOS con lo que contó el usuario: para qué sirve, medidas, marca y modelo, en qué estado está. Una o dos frases, sin inventar lo que no te dijeron. Aplica a todos los slugs'},
                 'ubicacion': {'type': 'string', 'description': 'Dónde se guarda (ej: A2, Taller de Electricidad). Solo recursos'},
                 'estado': {'type': 'string',
-                           'enum': ['Disponible', 'Retirado', 'En uso', 'En reparación', 'De baja',
-                                    'Sin revisar', 'Activo', 'Pausado', 'Terminado'],
-                           'description': 'Valores cerrados y distintos según el slug. RECURSOS: Disponible, Retirado, En uso, En reparación, De baja, Sin revisar. PROYECTOS: Activo, Pausado, Terminado. No mezcles los de un slug con los del otro ni inventes otros'},
+                           'enum': ['Disponible', 'Retirado', 'En uso', 'En reparación', 'De baja', 'Sin revisar'],
+                           'description': 'Estado del recurso en el inventario. Solo recursos'},
                 'valor': {'type': 'string', 'enum': ['Básico', 'Secundario', 'Alto valor'],
                           'description': 'IMPORTANCIA del recurso dentro del inventario (qué tan crítico es), NO para qué sirve — eso va en descripcion. Solo recursos'},
                 'fecha_revision': {'type': 'string', 'description': 'Fecha del último control de inventario, en formato día/mes/año (ej: 08/08/2026). Solo recursos. NO hace falta que la mandes en un alta: si la omitís se completa sola con la de hoy y aparece en la ficha; mandala solo si el usuario dice otra fecha'},
@@ -2258,16 +2326,15 @@ TOOLS_SCHEMA = [
                 'objetivo': {'type': 'string', 'description': 'Objetivo pedagógico. Solo actividades'},
                 'duracion': {'type': 'string', 'description': 'Duración estimada, texto libre (ej: 2 módulos, 80 minutos). Solo actividades'},
                 'curso': {'type': 'string', 'description': 'Año al que apunta, texto libre (ej: 6° año). Solo actividades'},
-                'fecha': {'type': 'string', 'description': 'Fecha de realización en formato ISO AAAA-MM-DD (ej: 2025-11-20), que es como la guarda la base. Proyectos e hitos. En hitos es OBLIGATORIA: si el usuario no la dijo, preguntásela — un hito sin fecha no entra en la línea del tiempo'},
-                'participantes': {'type': 'string', 'description': 'Quiénes lo hicieron (ej: 6° año Electricidad). Solo proyectos'},
-                'nivel': {'type': 'string', 'enum': gestion.NIVELES_HITO,
+                'fecha': {'type': 'string', 'description': 'Fecha del hito en formato ISO AAAA-MM-DD (ej: 2025-11-20), que es como la guarda la base. Solo hitos, y ahí es OBLIGATORIA: si el usuario no la dijo, preguntásela — un hito sin fecha no entra en la línea del tiempo'},
+                'nivel': {'type': 'string', 'enum': historia.NIVELES_HITO,
                           'description': 'Importancia del hito en la línea del tiempo. Básico: evento o actividad común. Importante: logro, programa nuevo. Crítico: olimpiada, construcción significativa. Solo hitos'},
-                'etiquetas': {'type': 'string', 'description': 'Temas del hito separados por coma, para agrupar la línea del tiempo (ej: "Olimpiada, Matemática, Nacional"). REUSÁ las que ya existen — mirá las de otros hitos con buscar_hitos antes de inventar una nueva. Solo hitos'},
+                'etiquetas': {'type': 'string', 'description': 'Temas del hito separados por coma, para agrupar la línea del tiempo (ej: "Olimpiada, Matemática, Nacional"; para lo que antes era un "proyecto", agregá "Proyecto"). REUSÁ las que ya existen — mirá las de otros hitos con buscar_hitos antes de inventar una nueva. Solo hitos'},
                 'protagonistas': {'type': 'string', 'description': 'Personas o cursos involucrados, en texto (ej: "Pablo Errio, Ezequiel Toñanes"). Es un campo de texto suelto: para dejar el vínculo navegable entre una persona ya cargada y el hito, además usá vincular_entidad. Solo hitos'},
                 'drive_url': {'type': 'string', 'description': 'URL de la carpeta de Drive con documentación'}
             },
             # `nombre` no puede ir acá: hitos usa `titulo`. Cuál de los dos hace falta lo
-            # valida _crear_entidad contra gestion._campo_nombre, que es la única fuente.
+            # valida _crear_entidad contra _campo_nombre() del módulo dueño del slug.
             'required': ['slug']
         }
     },
@@ -2285,14 +2352,13 @@ TOOLS_SCHEMA = [
                 'nombre': {'type': 'string', 'description': 'Nombre. Todos los slugs MENOS hitos, que usa `titulo`: mandar `nombre` en un hito no cambia nada'},
                 'titulo': {'type': 'string', 'description': 'Título del hito. Es el campo que en el resto de los slugs se llama `nombre`. Solo hitos'},
                 'tipo': {'type': 'string', 'description': ('RECURSOS: categoría, texto libre sin lista fija (ej: Instrumento, Equipo, Estructura, Material). OJO: hoy está vacío en casi todo el inventario, así que no lo uses para filtrar ni asumas que tiene valor. HITOS: valores cerrados: '
-                                                          + ', '.join(gestion.TIPOS_HITO))},
+                                                          + ', '.join(historia.TIPOS_HITO))},
                 'cantidad': {'type': 'integer', 'description': 'Stock disponible. Solo recursos'},
                 'descripcion': {'type': 'string', 'description': 'Descripción libre. Aplica a todos los slugs'},
                 'ubicacion': {'type': 'string', 'description': 'Dónde está guardado (ej: A2, Taller de Electricidad). Solo recursos'},
                 'estado': {'type': 'string',
-                           'enum': ['Disponible', 'Retirado', 'En uso', 'En reparación', 'De baja',
-                                    'Sin revisar', 'Activo', 'Pausado', 'Terminado'],
-                           'description': 'Valores cerrados y distintos según el slug. RECURSOS: Disponible, Retirado, En uso, En reparación, De baja, Sin revisar. PROYECTOS: Activo, Pausado, Terminado. No mezcles los de un slug con los del otro ni inventes otros'},
+                           'enum': ['Disponible', 'Retirado', 'En uso', 'En reparación', 'De baja', 'Sin revisar'],
+                           'description': 'Estado del recurso en el inventario. Solo recursos'},
                 'valor': {'type': 'string', 'enum': ['Básico', 'Secundario', 'Alto valor'],
                           'description': 'IMPORTANCIA del recurso dentro del inventario (qué tan crítico es), NO para qué sirve — eso va en descripcion. Solo recursos'},
                 'fecha_revision': {'type': 'string', 'description': 'Fecha del último control de inventario, en formato día/mes/año (ej: 08/08/2026). Solo recursos. Actualizala cuando el usuario diga que revisó o controló el recurso. Ojo: el inventario viejo importado del sheet tiene fechas cortas sin año (24/4, 8/5) — no las reformatees por tu cuenta'},
@@ -2300,9 +2366,8 @@ TOOLS_SCHEMA = [
                 'objetivo': {'type': 'string', 'description': 'Objetivo pedagógico. Solo actividades'},
                 'duracion': {'type': 'string', 'description': 'Duración estimada, texto libre (ej: 2 módulos, 80 minutos). Solo actividades'},
                 'curso': {'type': 'string', 'description': 'Año al que apunta, texto libre (ej: 6° año). Solo actividades'},
-                'fecha': {'type': 'string', 'description': 'Fecha de realización en formato ISO AAAA-MM-DD (ej: 2025-11-20), que es como la guarda la base. Proyectos e hitos'},
-                'participantes': {'type': 'string', 'description': 'Quiénes lo hicieron (ej: 6° año Electricidad). Solo proyectos'},
-                'nivel': {'type': 'string', 'enum': gestion.NIVELES_HITO,
+                'fecha': {'type': 'string', 'description': 'Fecha del hito en formato ISO AAAA-MM-DD (ej: 2025-11-20), que es como la guarda la base. Solo hitos'},
+                'nivel': {'type': 'string', 'enum': historia.NIVELES_HITO,
                           'description': 'Importancia del hito en la línea del tiempo. Básico: evento o actividad común. Importante: logro, programa nuevo. Crítico: olimpiada, construcción significativa. Solo hitos'},
                 'etiquetas': {'type': 'string', 'description': 'Temas del hito separados por coma (ej: "Olimpiada, Matemática, Nacional"). Solo hitos'},
                 'protagonistas': {'type': 'string', 'description': 'Personas o cursos involucrados, en texto. Solo hitos'},
@@ -2316,7 +2381,7 @@ TOOLS_SCHEMA = [
         'description': ('Guarda la foto que el usuario adjuntó EN ESTE TURNO en la galería de un '
                         'registro que YA existe. Es lo que hay que usar cuando mandan una foto para '
                         'que quede en la ficha de algo ("guardá esta foto en el taladro", "esta es '
-                        'la foto del proyecto"). '
+                        'la foto del hito"). '
                         'NO necesitás leer la foto para adjuntarla: no llames a leer_foto para esto. '
                         'El id sale de buscar_entidad, nunca de tu memoria. '
                         'IMPORTANTE: si no tenés claro a qué registro va, o la búsqueda devuelve '
@@ -2336,14 +2401,12 @@ TOOLS_SCHEMA = [
     },
     {
         'name': 'vincular_entidad',
-        'description': ('Asocia dos entidades del inventario, por ejemplo agregar un recurso a un '
-                        'conjunto o a una actividad. La DIRECCIÓN importa: el origen es el que '
+        'description': ('Asocia dos entidades, por ejemplo agregar un recurso a un conjunto o a una '
+                        'actividad, o una persona a un hito. La DIRECCIÓN importa: el origen es el que '
                         'contiene y el destino el contenido. Para "agregar el panel solar al conjunto '
                         'Banco de ensayo" el origen es el conjunto y el destino el recurso. Si entre '
                         'esos dos tipos no existe relación, devuelve error: no reintentes dándolos '
-                        'vuelta sin pensarlo. Los dos ids salen de buscar_entidad. EXCEPCIONES a la '
-                        'regla del contenedor: personas → proyectos va SIEMPRE con la persona de '
-                        'origen (la relación está declarada de ese lado y del otro falla); y '
+                        'vuelta sin pensarlo. Los dos ids salen de buscar_entidad. EXCEPCIÓN: '
                         'personas ↔ hitos anda en las dos direcciones, dan lo mismo. Ojo: vincular '
                         'a alguien a un hito NO le escribe el nombre en `protagonistas` — si el '
                         'usuario quiere que figure en la ficha, editá también ese campo.'),
@@ -2351,7 +2414,7 @@ TOOLS_SCHEMA = [
             'type': 'object',
             'properties': {
                 'slug_origen': {'type': 'string', 'enum': SLUGS_ENTIDAD,
-                                'description': 'Tipo de la entidad que CONTIENE (el conjunto, la actividad, el proyecto)'},
+                                'description': 'Tipo de la entidad que CONTIENE (el conjunto, la actividad, el hito)'},
                 'id_origen': {'type': 'integer', 'description': 'ID de la entidad que contiene'},
                 'slug_destino': {'type': 'string', 'enum': SLUGS_ENTIDAD,
                                  'description': 'Tipo de la entidad CONTENIDA (normalmente "recursos")'},
@@ -2470,7 +2533,7 @@ TOOLS_SCHEMA = [
     },
     {
         'name': 'eliminar_entidad',
-        'description': ('Elimina un recurso, conjunto, actividad o proyecto. Requiere confirmación del '
+        'description': ('Elimina un recurso, conjunto, actividad, hito o persona. Requiere confirmación del '
                         'usuario en un turno previo Y el nombre exacto en nombre_confirmacion: el servidor '
                         'verifica que ese nombre coincida con el id, y rechaza el borrado si no coincide. '
                         'Nunca inventes un id: obtenelo con buscar_entidad.'),
@@ -2551,16 +2614,17 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None):
         elif tool_name == 'detalle_prestamo':
             resultado = _detalle_prestamo_fmt(tool_input.get('prestamo_id', 0))
         elif tool_name == 'consultar_historia':
-            # Si pasan ID directamente, carga esa historia
+            # Si pasan ID directamente, carga esa historia (de historias/*.json — lore, no
+            # confundir con el módulo `historia` de hitos/personas, ver dev-log/DECISIONS.md)
             if tool_input.get('id'):
-                historia = _cargar_historia_completa(tool_input.get('id'))
-                if historia:
+                historia_lore = _cargar_historia_completa(tool_input.get('id'))
+                if historia_lore:
                     instruccion_tono = _instruccion_tono(
-                        historia.get('tono', 'reflexivo'),
-                        historia.get('estilo', 'primera persona'))
+                        historia_lore.get('tono', 'reflexivo'),
+                        historia_lore.get('estilo', 'primera persona'))
                     resultado = {
                         'modo': 'directo',
-                        'historia': historia,
+                        'historia': historia_lore,
                         'instruccion_tono': instruccion_tono
                     }
                 else:
@@ -2935,8 +2999,8 @@ buscar la planilla: preguntan y les resolvés.
 Tenés seis áreas a cargo:
 1. HORARIOS — quién da clase, dónde y cuándo; qué aulas están libres; quién es el preceptor
    de un curso. Es información de consulta: la planilla la carga otra persona, vos no la editás.
-2. INVENTARIO — recursos (herramientas, instrumentos, materiales), conjuntos, actividades y
-   proyectos de los talleres. Acá sí das de alta, editás, vinculás y borrás.
+2. INVENTARIO — recursos (herramientas, instrumentos, materiales), conjuntos y actividades
+   de los talleres. Acá sí das de alta, editás, vinculás y borrás.
 3. PAÑOL / PRÉSTAMOS — quién se llevó qué, cuándo, y qué falta que devuelva. Es el registro
    que evita que las herramientas de la escuela desaparezcan.
 4. HISTORIA DE LA CASA — la memoria viva de la escuela. Cómo empezó, tradiciones, anécdotas,
@@ -2970,7 +3034,8 @@ Tenés seis áreas a cargo:
    NO ABRUMAR: estos datos son para contextualizar tu respuesta, no para listar todo.
    Una anécdota inventada es peor que nada. Una historia que no está acá, no existe.
 6. PERSONAS — quién es quién en la escuela. Una ficha por persona con una SEMBLANZA en prosa
-   (quién es, qué aporta, por qué importa) más los hilos que la unen a proyectos e hitos.
+   (quién es, qué aporta, por qué importa) más los hilos que la unen a hitos (incluye lo que
+   antes se cargaba como "proyecto": hoy es un hito con "Proyecto" en sus etiquetas).
    `detalle_entidad('personas', id)` te devuelve la semblanza Y esas participaciones juntas,
    en una sola llamada.
    - NO lo confundas con HISTORIA DE LA CASA: la semblanza es institucional y la redactás vos
@@ -2985,7 +3050,7 @@ Tenés seis áreas a cargo:
      lista de PERSONAS CONOCIDAS de los préstamos salen de los HORARIOS; las fichas de
      personas salen de la memoria de la escuela. Un alumno que ganó una olimpiada, un ex
      director o un egresado tienen ficha y NO dan clases: en los horarios no están. Cuando
-     el tema es un hito, un proyecto o la historia de alguien, la persona se resuelve con
+     el tema es un hito o la historia de alguien, la persona se resuelve con
      `buscar_entidad('personas', ...)`. Ofrecerle al usuario tres docentes que no tienen
      nada que ver, mientras la persona que nombró está cargada con ficha, es un error grave.
    - Con un nombre parcial o un apodo ("nati", "el Errio"), buscá igual: `buscar_entidad`
@@ -3103,6 +3168,9 @@ A) PARA GUARDARLA en la ficha de algo que ya existe ("guardá esta foto en el ta
    NO la leas: para guardarla no hace falta saber qué dice, y cada lectura cuesta plata.
 B) PARA CARGAR O ACTUALIZAR datos del inventario a partir de lo que dice la etiqueta ("cargá
    esto", "sumá 5 de estos", "¿este ya lo tenemos?"). Ahí sí llamás a leer_foto.
+   Si leer_foto contesta que no hay lector de imágenes configurado, no insistas ni la vuelvas
+   a llamar en ese turno: contale al usuario que no podés leer fotos, ofrecele que te dicte
+   los datos por texto, y recordale que guardarla en una ficha sí lo podés hacer.
 
 Si no te queda claro cuál de las dos es, PREGUNTÁ en una línea ("¿te la guardo en alguna ficha
 o querés que la lea para cargar el equipo?"). No leas por las dudas ni adivines a qué recurso
@@ -3584,17 +3652,11 @@ AVISO_NO_EJECUTADO = (
     "_Respuesta original del asistente:_\n\n"
 )
 
-AVISO_SIN_VISION = (
-    "📷 No puedo ver la foto: no tengo configurado un lector de imágenes. "
-    "Contame por texto qué dice la etiqueta (marca, modelo, potencia, medidas) y cuántos "
-    "hay, y lo cargo igual.\n\n"
-    "_(Para que lea fotos hay que cargar `AGENTE_VISION_API_KEY` en el servidor — "
-    "ver AGENTE_CONFIG.md.)_"
-)
-
-# El caso "el lector está configurado pero la llamada falló" ya no se resuelve acá: como
-# leer es una tool, el error vuelve como resultado de `leer_foto` y lo cuenta el modelo con
-# sus palabras (ver `_leer_foto_fmt`).
+# Los avisos de foto ya no se resuelven acá con un texto fijo. Como leer es una tool, tanto
+# "no hay lector configurado" como "el lector no respondió" vuelven como resultado de
+# `leer_foto` y los cuenta el modelo con sus palabras (ver `_leer_foto_fmt`). La ventaja no
+# es solo de tono: el corte fijo se disparaba ANTES de llamar al modelo, así que también
+# bloqueaba adjuntar, que no necesita lector.
 
 
 # ============================================================================
@@ -3610,7 +3672,7 @@ def chat_page():
     Pensada para el celular, que es donde más se usa: el widget de 380px flotando
     sobre una página que igual scrollea es incómodo en una pantalla chica.
     """
-    return render_template('gestion/agente_chat.html', activo='agente')
+    return render_template('agente/agente_chat.html', activo='agente')
 
 
 @bp.route('/chat', methods=['POST'])
@@ -3651,25 +3713,21 @@ def chat():
         if imagen_base64.startswith('iVBO'):     # PNG magic ('/9j/' es JPEG, el default)
             media_type = 'image/png'
 
-    # Qué se hace con la foto, por orden de preferencia:
-    #  1. Si hay lector configurado, la foto NO se lee acá. Se le avisa al modelo que la
-    #     tiene disponible y él decide: `leer_foto` si necesita los datos de la etiqueta,
-    #     `adjuntar_foto` si solo hay que guardarla en una ficha, o preguntar si no está
-    #     claro. Leer siempre era pagar una llamada de visión en cada foto para tirarla
-    #     cuando lo único que querían era adjuntarla.
-    #  2. Si no hay lector pero el proveedor del chat sí ve imágenes (AGENTE_PROVIDER=anthropic
-    #     o AGENTE_VISION=1), se manda la imagen al agente como antes.
-    #  3. Si no hay ninguno de los dos, la foto ni se manda: el modelo contestaría igual,
-    #     inventando lo que "vio". Se corta acá con un aviso, pero el turno se guarda en el
-    #     historial como cualquier otro.
-    if imagen_base64 and _get_vision_config():
-        contenido[0]['text'] = (
-            f"{msg_procesado}\n\n[El usuario adjuntó una foto en este turno. Todavía no la vio "
-            "nadie: si necesitás lo que dice, llamá a leer_foto; si solo hay que guardarla en "
-            "una ficha, llamá a adjuntar_foto. Si no sabés para qué te la mandaron o a qué "
-            "registro va, preguntale.]")
-
-    elif imagen_base64 and _get_config()['vision']:
+    # Qué se hace con la foto:
+    #  - Si el proveedor del chat ve imágenes (AGENTE_PROVIDER=anthropic o AGENTE_VISION=1) y
+    #    NO hay lector aparte, se le manda la imagen al agente directamente: es el único caso
+    #    donde el que razona puede mirarla.
+    #  - Si no, la foto no viaja: se le avisa al modelo que la tiene disponible y él decide
+    #    qué hacer con ella — `leer_foto` si necesita los datos de la etiqueta, `adjuntar_foto`
+    #    si solo hay que guardarla en una ficha, preguntar si no está claro. La foto sale de
+    #    `contexto_turno['foto_turno']` (ver más abajo), no de un parámetro.
+    #
+    # Antes, no tener lector cortaba el turno acá con un aviso fijo y el modelo no llegaba a
+    # correr. El razonamiento era "sin visión contestaría inventando lo que vio", pero se
+    # comía el caso más común: ADJUNTAR una foto no necesita verla, y con el corte
+    # `adjuntar_foto` era inalcanzable. Ahora el turno corre siempre y la distinción la hace
+    # el modelo; si pide leer sin lector, se lo dice el error de `leer_foto`.
+    if imagen_base64 and _get_config()['vision'] and not _get_vision_config():
         contenido.append({
             'type': 'image',
             'source': {
@@ -3680,15 +3738,11 @@ def chat():
         })
 
     elif imagen_base64:
-        contenido[0]['text'] = msg_procesado + ' [el usuario adjuntó una foto]'
-        mensajes.append({'role': 'user', 'content': contenido})
-        mensajes.append({'role': 'assistant',
-                         'content': [{'type': 'text', 'text': AVISO_SIN_VISION}]})
-        _conv_guardar(conv['historial'] + mensajes[-2:],
-                      conv['entidad_actual'], conv['fichas'])
-        return jsonify({'respuesta': AVISO_SIN_VISION, 'tools': [],
-                        'escritura_fantasma': False,
-                        'confirmaciones': _confirmaciones(conv['fichas'])})
+        contenido[0]['text'] = (
+            f"{msg_procesado}\n\n[El usuario adjuntó una foto en este turno. Todavía no la vio "
+            "nadie: si necesitás lo que dice, llamá a leer_foto; si solo hay que guardarla en "
+            "una ficha, llamá a adjuntar_foto. Si no sabés para qué te la mandaron o a qué "
+            "registro va, preguntale.]")
 
     # Agregar mensaje del usuario al historial
     mensajes.append({'role': 'user', 'content': contenido})
@@ -3791,7 +3845,7 @@ def _confirmaciones(fichas):
     for token, pendiente in (fichas or {}).items():
         slug = pendiente['slug']
         nombre = _nombre_de(slug, pendiente['campos'])
-        singular = (gestion.ENTIDADES.get(slug, {}).get('singular') or 'registro').lower()
+        singular = (_modulo(slug).ENTIDADES.get(slug, {}).get('singular') or 'registro').lower()
         por_entidad[(slug, gestion._norm(nombre))] = {
             'token': token, 'etiqueta': f'Guardar {singular}', 'nombre': nombre}
     return list(por_entidad.values())
@@ -3826,7 +3880,7 @@ def _adjuntar_foto_pendiente(token, slug, id_nuevo):
         return ''
     b64, tipo = foto
     try:
-        if gestion.agregar_foto(slug, id_nuevo, b64, tipo):
+        if _modulo(slug).agregar_foto(slug, id_nuevo, b64, tipo):
             return ' Le guardé también la foto.'
     except Exception:
         pass
@@ -3852,7 +3906,7 @@ def _enlazar_protagonistas(hito_id, protagonistas):
         nombradas = _personas_nombradas_en(protagonistas)
         enlazadas = []
         for pid, nombre in nombradas:
-            # La relación está declarada del lado de personas (ver gestion.ENTIDADES).
+            # La relación está declarada del lado de personas (ver historia.ENTIDADES).
             if _vincular_entidad('personas', pid, 'hitos', hito_id).get('ok'):
                 enlazadas.append(nombre)
     except Exception:
@@ -3934,4 +3988,4 @@ def agente_log():
     filas = [dict(row) for row in cur.fetchall()]
     con.close()
 
-    return render_template('gestion/agente_log.html', filas=filas)
+    return render_template('agente/agente_log.html', filas=filas)
