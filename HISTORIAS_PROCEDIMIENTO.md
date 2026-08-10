@@ -28,6 +28,9 @@ Texto: "Miriam Cañamas tiene fama de escuchar todo..."
   - Ejemplos: "primera persona, nervioso, como confesando un secreto"
   - "nostálgico, como recordando tu propia época"
   - "misterioso, como mostrando lugares que solo vos conocés"
+  - ⚠️ El `estilo` se le pasa **literal** al modelo, así que no uses palabras que suenen a
+    teatro: `"diálogos"`, `"dramático"`, `"escénico"`. Con esas, el modelo empieza a actuar el
+    personaje (`*se acomoda los anteojos*`, `EMILIO:`) en vez de contar charlando.
 
 ### 3. Claude crea dos archivos
 
@@ -95,7 +98,7 @@ Sin la fecha, sería un misterio sin peso emocional. Con la fecha, es "ese miste
 ### Estilo
 Describe cómo Emilio cuenta la historia:
 - Perspectiva: "primera persona" (testigo directo), "testigo presencial", "guardián de"
-- Atmósfera: "íntimo", "dramático", "conversacional", "solemne"
+- Atmósfera: "íntimo", "conversacional", "solemne", "tenso" (no "dramático" — ver aviso arriba)
 - Relación con lo narrado: "como confesando", "como mostrando", "como revelando"
 - Ejemplo completo: "primera persona, íntimo, como confesando un secreto en el pasillo"
 
@@ -151,7 +154,7 @@ Si **ninguna**: "no sé de eso".
 3. Propone `tipo: "historia"` (es un evento real)
 4. Propone `fecha: "2015"` (precisión completa, pero también acepta "mediados de 2010s")
 5. Propone `tono: "nervioso"` (un desastre es emocionante, pero hace años es nostálgico también)
-6. Propone `estilo: "primera persona, dramático, como revelando un caos que ya pasó"` (lo vivió, lo recuerda)
+6. Propone `estilo: "primera persona, tenso, como revelando un caos que ya pasó"` (lo vivió, lo recuerda)
 7. Propone `resumen: "El día que el taller se inundó sin aviso"`
 8. Crea `historias/hist_inundacion.json` con el texto + fecha
 9. Actualiza `historia_indice.json` con la entrada + fecha

@@ -38,6 +38,8 @@ en Google Drive; acá solo se guardan links (`drive_url`).
 | `conjuntos` | id, nombre, descripcion, uso_tipico, drive_url, **fotos** |
 | `actividades` | id, nombre, objetivo, descripcion, duracion, curso, drive_url, **fotos** |
 | `proyectos` | id, nombre, descripcion, fecha, participantes, estado, drive_url, **fotos** |
+| `hitos` | id, **titulo**, descripcion, fecha, tipo, nivel, etiquetas, protagonistas, drive_url, **fotos** |
+| `personas` | id, nombre, **nombre_norm**, descripcion, fecha_actualizada, drive_url, **fotos** |
 
 **Galería de fotos** (`fotos` en cada tabla): array JSON con objetos `{b64, tipo, fecha}`.
 - `b64`: imagen codificada en base64 (embedded, sin servicios externos)
@@ -47,7 +49,46 @@ en Google Drive; acá solo se guardan links (`drive_url`).
 - Renderizado: galería grid responsive (150px minmax) con preview nativo en el HTML
 
 M2M (con `UNIQUE` por par): `conjunto_recursos`, `actividad_recursos`,
-`actividad_conjuntos`, `proyecto_recursos`.
+`actividad_conjuntos`, `proyecto_recursos`, `persona_proyectos`, `persona_hitos`.
+Las dos últimas llevan además índice por `persona_id`.
+
+### Personas — la memoria de quién hizo la escuela
+
+`personas` es un grafo, no una lista: una fila por persona (con una **semblanza** en prosa en
+`descripcion`) y los hilos M2M que la unen a `proyectos` e `hitos`. La ficha de detalle muestra
+esos hilos en las dos direcciones, y `proyectos`/`hitos` muestran la inversa ("Personas que
+participaron" / "Personas involucradas").
+
+**`hitos` declara `rel_personas` además del texto libre `protagonistas`** — son dos cosas
+distintas y conviven a propósito: `protagonistas` es una línea de texto que admite cursos
+("6° B") y gente que no tiene ficha, y `rel_personas` es el vínculo navegable con la fila de
+`personas`. La relación está declarada **de los dos lados** sobre la misma tabla
+`persona_hitos` (`personas.rel_hitos` y `hitos.rel_personas`); es la única del sistema que es
+simétrica, y por eso el hito se puede editar desde su propio formulario y `vincular_entidad`
+acepta cualquiera de las dos direcciones.
+
+**La identidad es `nombre_norm`, no `nombre`** — columna derivada con un `UNIQUE` encima, que
+calcula `gestion.clave_persona()` (público): saca puntuación, normaliza con `_norm` y **ordena
+las palabras alfabéticamente**. Sin ese orden, "Juan Pablo Crivari" (como lo tipea una persona)
+y "CRIVARI JUAN PABLO" (como sale de `limpiar_profesor()` en los horarios) serían dos fichas de
+la misma persona con los hilos repartidos. `nombre` guarda la grafía para mostrar. El precio es
+que dos nombres que son la misma bolsa de palabras chocan; se prefirió ese error visible al
+duplicado silencioso — ver `dev-log/DECISIONS.md` 2026-08-08.
+
+**No hay sincronización con `escuela.db`.** Los horarios se regeneran desde Sheets; `personas`
+es memoria permanente y **tiene que sobrevivir** a que alguien salga del padrón. No hay FK entre
+las dos DBs: el puente es `clave_persona()` sobre el nombre.
+
+`fecha_actualizada` también es derivada (se pisa en cada guardado) — ninguna de las dos está en
+`campos`, las agrega `_derivados()` en los dos caminos de guardado (`_guardar` y
+`guardar_entidad_sin_request`).
+
+**No hay campo `rol`** (existió un rato y se sacó el 2026-08-08, con `DROP COLUMN` en
+`_migrar`): una taxonomía fija se queda corta enseguida — alguien es docente y ex alumno a la
+vez, o pasa de preceptor a directivo — y la semblanza ya lo dice mejor en prosa. Queda como
+recordatorio que `descripcion` es un juicio sobre una persona real, y que esto vive detrás de
+una clave compartida cuyo default está en un repo público: escribir semblanzas de alumnos
+menores pide una auth de verdad primero.
 
 | `prestamos` | id, persona, destino, notas, fecha_salida, fecha_devolucion |
 | `prestamo_items` | prestamo_id, recurso_id, cantidad, cantidad_devuelta (M2M con cantidad, `UNIQUE(prestamo_id, recurso_id)`) |
@@ -81,7 +122,21 @@ traía las fechas de revisión en formato corto sin año, incompatible con
 Cada entidad define: `tabla`, `singular`/`plural`, `descripcion` (card del home),
 `campos` (form: nombre, label, tipo `text|textarea|select|url|date|number`, opciones, ayuda),
 `columnas` (listado) y `relaciones` (M2M editables desde su form, campos con prefijo
-`rel_` para no colisionar con columnas). Para agregar un campo: sumarlo al `SCHEMA`,
+`rel_` para no colisionar con columnas).
+
+**`campo_nombre`** (opcional, default `'nombre'`): cómo se llama en la tabla la columna que
+hace de nombre visible. Sólo `hitos` la declara distinta (`'titulo'`). Todas las lecturas del
+CRUD genérico van por **`_select(cfg)`**, que agrega `titulo AS nombre` al `SELECT`, así que
+templates, `buscar_entidad_sin_request`, `snapshot_entidad` y `agente.py` siguen leyendo
+`fila['nombre']` sin enterarse. Las escrituras y la validación de obligatorio usan
+`_campo_nombre(cfg)`. Sin este mecanismo `/gestion/hitos` tiraba `no such column: nombre` y su
+alta fallaba siempre con "El nombre es obligatorio" (roto desde `829ea57`, arreglado 2026-08-08).
+
+Columnas **derivadas** (calculadas por la app, fuera de `campos` y del form): las agrega
+`_derivados(slug, valores)` en los dos caminos de guardado. Hoy sólo `personas`
+(`nombre_norm`, `fecha_actualizada`).
+
+Para agregar un campo: sumarlo al `SCHEMA`,
 a `campos` y a la lista de `_migrar()` — `init_db()` hace el `ALTER TABLE` aditivo
 automáticamente en DBs existentes (así entraron cantidad/valor/fecha_revision).
 Para **renombrar** uno, además del `SCHEMA` y `campos` va un `ALTER TABLE ... RENAME COLUMN`
@@ -103,7 +158,8 @@ crea la columna nueva vacía al lado de la vieja y se pierde el dato). Ver `util
 | `/gestion/<slug>/<id>/editar` | GET/POST | Edición (sincroniza M2M: delete + insert) |
 | `/gestion/<slug>/<id>/eliminar` | POST | Borra fila + sus filas M2M (confirm en el browser) |
 
-`slug` ∈ {recursos, conjuntos, actividades, proyectos}; otro valor → 404.
+`slug` ∈ {recursos, conjuntos, actividades, proyectos, hitos, personas}; otro valor → 404.
+(El agente, en cambio, sólo llega a los cuatro primeros — ver "Entidades que el agente no ve".)
 
 ## Búsqueda tolerante (`?q=` en `lista()`)
 
@@ -212,12 +268,40 @@ home tratan `slug == 'prestamos'` como caso especial al construir los links (usa
 `gestion.prestamos_lista`, no `gestion.lista`). El "+ nuevo retiro" del home y de la lista de
 préstamos apunta al **listado de recursos** (ahí arranca el carrito), no a un form de alta.
 
+## Respaldos (`backups/`)
+
+`gestion.db` es la única DB con datos propios: no se regenera desde Sheets y está en
+`.gitignore`, así que **si el archivo se pierde no hay commit ni fuente externa de la
+cual recuperarla**. Por eso `init_db()` arranca llamando a `respaldar_db()`.
+
+- Copia a `backups/gestion-YYYYMMDD-HHMMSS-ffffff.db` con la **API `backup()` de
+  sqlite3**, no `shutil.copy`: garantiza una copia consistente aunque otro proceso
+  esté escribiendo. Los microsegundos evitan que dos respaldos del mismo segundo se
+  pisen y mantienen el orden alfabético igual al cronológico.
+- **No respalda una DB sin recursos.** Un respaldo vacío encima de los buenos sería
+  justo lo que arruinaría la recuperación.
+- **No duplica**: si el contenido no cambió desde el último respaldo, lo descarta.
+- **Retención** (`_a_borrar`): los últimos `BACKUP_MAX` (20) **más el primero de cada
+  día**. Sin la regla diaria, una tarde de reinicios depurando empuja fuera de la
+  rotación todo lo viejo — que es exactamente lo que uno querría recuperar.
+
+Los respaldos caen bajo `*.db` del `.gitignore`; no se versionan ni se pushean.
+
 ## Seed
 
 `init_db()` crea las tablas y, si `recursos` está vacía, carga el ejemplo del documento
 de diseño: 5 recursos, conjunto "Banco de ensayo solar" (panel + estructura +
 inclinómetro), actividad "Medición de panel solar según inclinación" (usa el conjunto +
 multímetro + pinza) y proyecto "Construcción del banco de ensayo solar".
+
+**El seed no es incondicional.** Una DB vacía es ambigua: puede ser una instalación
+nueva o datos perdidos. Los respaldos desempatan — si `respaldos()` devuelve algo,
+`init_db()` **levanta `RuntimeError` con las instrucciones de restauración en vez de
+sembrar**, porque sembrar taparía la pérdida en silencio (que es lo que pasó el
+2026-08-08: se trabajó un día entero contra los 5 de ejemplo sin notarlo).
+
+Para empezar de cero a propósito: `GESTION_SEED=1`. En un deploy limpio (Render,
+PythonAnywhere) no hay respaldos, así que el primer arranque siembra normalmente.
 
 ## Auth provisoria (contraseña compartida)
 
@@ -234,7 +318,8 @@ El SPA de horarios y `/api/*` siguen sin auth.
 ## Asistente conversacional con tool-calling (agente.py)
 
 Módulo independiente (`agente.py`, blueprint `/gestion/agente`) que expone un chat
-conversacional via Claude (Anthropic API). El usuario puede hablar con la app en lenguaje
+conversacional contra el LLM configurado (DeepSeek por defecto, Anthropic/OpenAI/Groq/Ollama
+según `AGENTE_PROVIDER` — ver "Configuración"). El usuario puede hablar con la app en lenguaje
 natural en vez de hacer click en formularios: consultar horarios, crear recursos, fotografiar
 etiquetas y cargarlas, gestionar préstamos. Todo con auditoría de escrituras en `agente_log`.
 
@@ -250,16 +335,17 @@ etiquetas y cargarlas, gestionar préstamos. Todo con auditoría de escrituras e
 - **`agente.py`** — blueprint completo: gate de sesión, esquemas de tools JSON, ejecutores,
   loop de tool-calling contra Anthropic con manejo de tool use, endpoints Flask.
 - **`POST /gestion/agente/chat`** — acepta `{mensaje, imagen?}` (imagen en base64 o data URL);
-  retorna `{respuesta}`. El backend llama a Claude con el mensaje + tools disponibles, ejecuta
-  lo que Claude pida (tools de lectura y escritura), repite hasta respuesta final, audita
-  escrituras en `agente_log`.
-- **`GET /gestion/agente/historial`** — devuelve `{mensajes: [{rol, texto}], confirmacion}`
+  retorna `{respuesta}`. El backend llama al modelo con el mensaje + tools disponibles, ejecuta
+  lo que pida (tools de lectura y escritura), repite hasta respuesta final, audita
+  escrituras en `agente_log`. `mensaje` puede venir vacío **si viene `imagen`** (mandar solo
+  la foto de una etiqueta es un caso normal); vacío y sin foto es `400`. Ver "Alta desde foto".
+- **`GET /gestion/agente/historial`** — devuelve `{mensajes: [{rol, texto}], confirmaciones}`
   para repintar el chat al cargar la página. `gestion-agente.js` lo llama en el
   `DOMContentLoaded` (`cargarHistorial()`). **Hace falta desde que la conversación pasó a
   `gestion.db`**: el servidor la recuerda entre páginas, pero el chat se dibuja de cero en
-  cada carga, así que el historial existía y no se veía. Devuelve también el botón de un
-  alta que haya quedado sin confirmar — si no, navegar a otra página dejaba la ficha viva
-  en el servidor y sin forma de darle OK. `_texto_visible()` aplana los bloques de
+  cada carga, así que el historial existía y no se veía. Devuelve también los botones de las
+  altas que hayan quedado sin confirmar — si no, navegar a otra página dejaba las fichas
+  vivas en el servidor y sin forma de darles OK. `_texto_visible()` aplana los bloques de
   contenido y saca el `(refiriéndote a: X)` que `chat()` le agrega al mensaje del usuario,
   que es una pista para el modelo y no algo que el usuario escribió.
 - **`POST /gestion/agente/confirmar`** — acepta `{token}` de una ficha de alta pendiente y
@@ -336,7 +422,9 @@ El asistente se usa mayormente desde el teléfono, en el pasillo. Lo que eso imp
 ### Tools
 
 **Lectura** (no se auditan, siempre disponibles):
-- `buscar_profesor(query)` — resolución difusa de nombre
+- `buscar_profesor(query)` — resolución difusa de nombre, **sobre los docentes de los
+  horarios**. Si el nombre también coincide con una persona con ficha, devuelve
+  `{docentes, personas_con_ficha, aviso}` en vez de la lista pelada (ver "Dos padrones")
 - `horario_profesor(nombre)` / `horario_curso(curso, division)` / `horario_aula(aula)`
   — horarios agrupados por día
 - `aulas_libres()` — aulas desocupadas ahora, agrupadas por piso
@@ -347,10 +435,16 @@ El asistente se usa mayormente desde el teléfono, en el pasillo. Lo que eso imp
 - `detalle_entidad(slug, id)` — detalle completo + relaciones
 - `listar_prestamos(persona?)` / `detalle_prestamo(id)` — estados de préstamos
 - `consultar_historia(tema)` — lore de la escuela y guiños internos, ver abajo
+- `leer_foto()` — lee la foto adjuntada en ESTE turno y devuelve lo que dice, en texto. No
+  toca la base (por eso está acá) pero **sí gasta la API de visión**, así que el prompt le
+  pide llamarla solo cuando necesita los datos, nunca para adjuntar. Ver "Alta desde foto"
 
 **Escritura** (se auditan, requieren `session['gestion_ok']`, guardan snapshot "antes"):
 - `crear_entidad(slug, campos)` — alta **en dos pasos con ficha de confirmación**, ver abajo
 - `editar_entidad(slug, id, campos)` — update
+- `adjuntar_foto(slug, id)` — guarda la foto de ESTE turno en la galería de un registro que ya
+  existe. Sin ficha de confirmación (es aditivo); la imagen sale de `contexto_turno`, no de un
+  parámetro
 - `vincular_entidad` / `desvincular_entidad` — gestionar M2M
 - `crear_prestamo(persona, destino?, notas?, items)` — crear préstamo (cantidad topeada
   a stock, recurso por nombre o id con resolución ambigua)
@@ -367,22 +461,42 @@ quedar guardado. Circuito:
 
 1. El asistente llama a `crear_entidad`. **La primera llamada con un juego de campos no
    escribe nada**: devuelve `{requiere_confirmacion: true, ficha, campos_vacios,
-   redactados_por_vos, instruccion}` (y `tipos_en_uso` si el slug es `recursos`).
+   redactados_por_vos, instruccion}` (y `tipos_en_uso` si el slug es `recursos`, o
+   `antes_de_mostrar` si es `hitos` y la ficha salió con agujeros evitables).
 2. El asistente muestra la ficha y, debajo, 1 a 3 preguntas cortas por lo que falta
    ("¿de qué medida es?", "¿sabés la marca?"). **No son bloqueantes**: si el usuario no
    contesta, se guarda igual — está en el prompt y en el `instruccion` de la ficha.
 3. Si el usuario pide cambios, el asistente vuelve a llamar con los campos corregidos y
    sale otra ficha (con su botón). Se repite hasta el OK.
 4. **El OK es un botón, no una respuesta escrita.** `/chat` devuelve además
-   `confirmacion: {token, etiqueta, nombre}` cuando quedó una ficha pendiente, y
-   `gestion-agente.js` pinta un botón verde debajo del mensaje (`agregarConfirmacion()`).
-   El botón pega en **`POST /gestion/agente/confirmar`** con el token: el alta se resuelve
-   ahí, en Python, **sin llamar al modelo** — instantánea, gratis, y sin margen para que
-   el modelo escriba otra cosa. Los campos salen de la sesión, nunca del request.
-   El resultado se agrega al `agente_historial` como un turno más, para que el asistente
-   sepa después que eso ya se guardó.
+   `confirmaciones: [{token, etiqueta, nombre}, …]` con las fichas pendientes, y
+   `gestion-agente.js` pinta un botón verde por ficha debajo del mensaje
+   (`agregarConfirmaciones()`). El botón pega en **`POST /gestion/agente/confirmar`** con
+   su token: el alta se resuelve ahí, en Python, **sin llamar al modelo** — instantánea,
+   gratis, y sin margen para que el modelo escriba otra cosa. Los campos salen de la
+   sesión, nunca del request. El resultado se agrega al `agente_historial` como un turno
+   más, con el nombre de lo que se guardó, para que el asistente sepa después que eso ya
+   está y qué sigue pendiente.
 5. Escribir "dale, guardalo" también funciona: el modelo llama **otra vez con exactamente
    los mismos campos** y el hash coincide. Los dos caminos terminan en el mismo lugar.
+
+**Varias altas en un turno** (`_confirmaciones`). "Creá a Pablo y a Ezequiel" son dos
+llamadas a `crear_entidad` en la misma respuesta y **dos fichas con dos botones**. Antes se
+mandaba una sola confirmación —la última— y las anteriores quedaban vivas en la sesión sin
+ningún botón que las guardara: el usuario veía las dos fichas, confirmaba, y se daba de alta
+una sola sin que nada avisara. Tres reglas sostienen el caso:
+- `contexto_turno['fichas_mostradas']` es un dict con **todas** las del turno, y `/chat`
+  arma un botón por cada una.
+- Se devuelven **todas las pendientes, no solo las de este turno**: el front borra los
+  botones apenas el usuario escribe (`quitarConfirmaciones()`), así que una ficha sin
+  confirmar tiene que reaparecer debajo de la respuesta siguiente o se pierde igual.
+  Reaparecer no escribe nada: confirmar es siempre un click explícito.
+- Si dos fichas pendientes son de la **misma entidad** (el usuario pidió un cambio y el
+  modelo la rearmó), se muestra solo la última: son la misma alta, y dos botones con el
+  mismo nombre y distinto contenido no hay forma de distinguirlos.
+
+El nombre va **dentro** del botón ("✅ Guardar persona: Pablo Errio"): con dos o tres
+seguidos, "Guardar persona" repetido no dice cuál es cuál.
 
 **Cómo se sabe que el usuario aprobó** (`_token_ficha`): cada ficha se identifica por un
 SHA-1 de su contenido (`slug` + los campos normalizados). Una llamada escribe solo si su
@@ -416,6 +530,74 @@ descripción le pongo?"). Van marcados en la ficha como `redactados_por_vos` par
 usuario los lea sabiendo que son propuestos. `tipo` es texto libre, así que la ficha de
 `recursos` incluye `tipos_en_uso` (`SELECT DISTINCT tipo`) para que reuse una categoría
 existente en vez de inventar un sinónimo nuevo por cada alta.
+
+**`antes_de_mostrar` — la ficha de hito que se revisa sola.** La ficha de `hitos` puede
+volver con una lista extra de avisos dirigidos al modelo (`_recordatorio_hito()`), que el
+prompt le manda resolver **antes** de escribirle nada al usuario. Existe porque el modelo
+armaba el hito "Pablo Errio y Ezequiel Toñanes — Certamen Nacional OMA" con
+`protagonistas` **vacío** (los nombres quedaban solo en el título, así que el vínculo con
+las personas no lo creaba nadie) y con `nivel` vacío pese a que el usuario acababa de decir
+"crítico" — y encima se lo volvía a preguntar. Los avisos son dos:
+- Si `protagonistas` está vacío, se cruzan `titulo` + `descripcion` contra la tabla
+  `personas` (`_personas_nombradas_en()`, ver abajo) y el aviso **nombra a las que
+  encontró**: es un dato concreto, no un "acordate de completar".
+- Si ese cruce no encuentra a nadie, el aviso lista **el padrón entero de personas con
+  ficha** (hasta `PADRON_EN_AVISO` = 40; más que eso lo manda a `buscar_entidad`). Es para
+  que un "nati" o un "el Errio" lo resuelva con los nombres a la vista en vez de irse a
+  buscar docentes a los horarios, que es otro padrón.
+- Si falta `nivel`, `fecha` o `tipo`, el aviso le recuerda cargarlo si el usuario ya lo dijo
+  y preguntar solo si no.
+
+**`_personas_nombradas_en(texto)`** compara con `gestion._norm` y exige que estén **todas**
+las palabras del nombre (>2 letras), en cualquier orden — matchea "Errio Pablo" pero un
+"Pablo" suelto no alcanza: con dos Pablos, vincular al equivocado es peor que no vincular.
+**`_personas_parecidas(query)`** es su complemento suelto: acepta coincidencia parcial
+("nati" → "Natalia Boo Fiad"). Se puede permitir porque su resultado es un **aviso para que
+el modelo pregunte**, no un vínculo que se escriba solo — quien decide a quién se vincula
+sigue siendo la regla estricta.
+
+### Dos padrones de personas, y el cruce en las dos direcciones
+
+Los docentes salen de **`escuela.db`** (los horarios) y las fichas de personas de
+**`gestion.db`**. Son padrones que **no se superponen**: un alumno que ganó una olimpiada, un
+egresado o un ex director tienen ficha y no dan clases; una profesora que nadie cargó todavía
+da clases y no tiene ficha. El modelo los mezclaba, y el prompt empujaba para el lado de los
+horarios — la sección de préstamos le **inyecta** la lista de PERSONAS CONOCIDAS
+(`_personas_conocidas()`, docentes + no docentes) y nunca le mostraba las fichas. Ante "nati
+fue quien lo logró" llamaba a `buscar_profesor`, veía tres docentes llamadas Natalia y
+ofrecía esas tres, mientras "Natalia Boo Fiad" estaba cargada con ficha.
+
+**Buscar una persona mira siempre los dos padrones**, entre por donde entre:
+
+| Se llama | Busca en | Cruza y agrega |
+|---|---|---|
+| `buscar_profesor(query)` | horarios | `personas_con_ficha` + `aviso` (la respuesta pasa de lista a dict) |
+| `buscar_entidad('personas', query)` | fichas | `en_horarios` + `aviso_horarios` |
+
+Las dos solo agregan la clave **cuando hay coincidencia real**, así que los turnos normales
+—horarios por un lado, inventario por el otro— no cambian ni suman ruido. Y los dos avisos
+son distintos según el caso: si `personas` no encontró nada pero los horarios sí, el aviso le
+prohíbe explícitamente decir "no la tengo" y le ofrece dos salidas (resolver el horario con
+ese nombre, o proponer crearle la ficha).
+
+Va en el resultado de las tools y no (solo) en el system prompt porque para cuando el modelo
+llamó **ya eligió**: lo único que lo corrige a tiempo es lo que la herramienta le conteste.
+
+**`_coincide_fuerte(q_norm, nombre)`** es el filtro de los dos cruces, y es más estricto que
+las búsquedas normales: substring, o similitud **palabra por palabra** ≥ `UMBRAL_SIMILITUD`
+(0.68). No usa el 0.6 de `_buscar_profesor_scored`, que ofrece candidatos a propósito: con
+0.6 el cruce de "nati" traía PETRATE MATIAS (0.60 contra "matias") y el de "calei" traía
+PRIETO VALERIA. Tampoco alcanza con substring solo — los apodos del castellano no son
+prefijos: "nati" **no** es substring de "natalia" (0.73 de similitud, sí pasa el umbral), y
+ése era justo el caso a resolver.
+
+**`/confirmar` crea el vínculo persona↔hito solo** (`_enlazar_protagonistas()`): al guardar
+un hito cruza su `protagonistas` contra `personas` con la misma función y escribe
+`persona_hitos` para cada match, sumándole al mensaje " Lo vinculé con la ficha de X.".
+**Tiene que ser código y no una instrucción al modelo**: el botón de confirmar no pasa por
+el LLM, así que en el momento en que el hito se escribe el agente no tiene ningún turno para
+llamar a `vincular_entidad`, y el vínculo no lo creaba nadie. Solo vincula personas ya
+cargadas; nunca crea una ficha de persona nueva.
 
 ### Los id no se le muestran al usuario
 
@@ -547,9 +729,107 @@ Una historia de 2005 + tono reflexivo = profundamente nostálgica. Sin fecha, es
 **Personalidad de Emilio**: en modo `directo`, la `instruccion_tono` le recordar a Claude que es
 Emilio Mitre, el fantasma omnipotente, contando desde su perspectiva de siglos. Cada historia
 especifica un `tono` (emociones: nervioso, reflexivo, misterioso, conmocionado, nostálgico) y
-un `estilo` (narrativa: primera persona, íntimo, dramático, como confesando, etc.). El modelo
+un `estilo` (narrativa: primera persona, íntimo, cómplice, como confesando, etc.). El modelo
 respeta estas instrucciones y cuenta la historia con la voz de Emilio, no como un asistente
 que relata.
+
+La instrucción la arma **`_instruccion_tono(tono, estilo)`**, una sola fuente para las dos rutas
+de `consultar_historia` (por `tema` y por `id`). Es una función y no texto inline porque estuvo
+duplicada: la ruta por `id` — la que se usa cuando el usuario elige de un `listar`, o sea el
+camino más común — tenía una versión de dos líneas sin la regla anti-acotaciones.
+
+### La voz del personaje (`QUIEN_ES_EMILIO`, `EXCUSA_SIN_HISTORIA`)
+
+Con solo pedirle primera persona, las historias salían correctas pero **anónimas**: se presentaba,
+explicaba que era un fantasma, aclaraba que la escuela lleva su nombre y pedía permiso para
+empezar. Leídas seguidas parecían el conserje contando una anécdota, no el dueño del edificio.
+Dos constantes arreglan eso, y van **solo en el circuito de historias** (`_instruccion_tono` + la
+sección HISTORIA DE LA CASA del system prompt), no en las respuestas operativas:
+
+- **`QUIEN_ES_EMILIO`** — tres cosas juntas. *Con quién habla*: el otro ya sabe quién es, así que
+  no se presenta ni se explica; entra directo, con la familiaridad del que es dueño de la casa y
+  sabe que el otro está de visita. *Su orgullo*: sabe todo lo que pasa en la escuela y le encanta
+  que se note, cuenta como el único que estuvo ahí y deja caer que nadie más lo vio. La soberbia
+  es parte del personaje; maltratar al que pregunta, no — le halaga que le vengan a preguntar,
+  porque confirma que es el que sabe. *Y que no es una persona*, sin decirlo nunca: con solo
+  pedirle primera persona hablaba como un empleado con cuerpo ("yo estaba ahí parado"), que fue
+  el segundo problema reportado. Tres señales lo delatan y el prompt las nombra — no tiene cuerpo
+  ni lugar (no entró ni se acercó: **estaba**, porque está siempre y en todas partes a la vez),
+  nada lo tapa (escuchó lo que se dijo en voz baja, con la puerta cerrada, y no aclara cómo), y
+  el tiempo no le pesa (veinte años son "el otro día"; los que estaban ya no están y él sigue).
+
+  **De acá sale, además, el fundamento de la regla anti-acotaciones**: no describe lo que hace
+  con el cuerpo porque **no tiene cuerpo**. Las dos reglas dejaron de ser independientes, y en
+  `COMO_CUENTA_EMILIO` está escrito así — es una consecuencia del personaje, no una prohibición
+  de estilo caída del cielo.
+- **`EXCUSA_SIN_HISTORIA`** — qué hace cuando no tiene la historia: no admite un agujero en su
+  memoria de un siglo, zafa con una excusa obvia y absurda dicha con naturalidad ("justo esa
+  semana estaba en el subsuelo peleándome con la caldera"). Se interpola en las **tres** `nota`
+  de `no_encontrado` (índice vacío, sin coincidencias por tema, id inexistente). El chiste se
+  apoya en el punto anterior: la excusa **se contradice con el personaje** —está en todos lados
+  al mismo tiempo, así que "estaba ocupado en otra parte" no se lo cree nadie— y la dice igual,
+  sin inmutarse. Ahí está la gracia, y por eso el prompt le pide que no se haga cargo del chiste.
+
+**Dónde termina el personaje** — es el límite que sostiene todo lo demás, y está escrito en el
+system prompt además de acá:
+
+- La excusa **reemplaza el "no sé", nunca los hechos**. Es un chiste de personaje, no un permiso
+  para inventar: la respuesta tiene que seguir dejando clarísimo que esa historia no existe. Sin
+  esta línea, la excusa absurda es exactamente el borde por el que se cuela la fabricación de
+  anécdotas que el resto del prompt trabaja para evitar.
+- Y vale **solo para historias y lore**. Un horario, un stock, un préstamo o una persona que no
+  están cargados se contestan derecho: "no hay datos de eso". Al que busca una herramienta o va
+  corriendo a dar clase, un chiste le cuesta una vuelta al pañol al vacío. Ahí sigue valiendo el
+  agente bifásico de siempre (DECISIONS 2026-08-08): fantasma orgulloso en las historias,
+  herramienta neutra en lo operativo.
+
+### Emilio cuenta, no actúa (`_quitar_acotaciones`)
+
+Decirle al modelo que hable en primera persona como un fantasma le activa el registro de
+roleplay, y empieza a **actuar** el personaje: `*se acomoda los anteojos*`, `—mirando el
+patio—`, `EMILIO:` antes de hablar. Mismo esquema de defensa que los id — prompt **y** filtro
+de salida:
+
+- **`COMO_CUENTA_EMILIO`** (constante en `agente.py`): se interpola en el **system prompt** y en
+  cada `instruccion_tono`. Va en el system prompt porque **los resultados de tools no se
+  persisten en el historial**: en un turno de seguimiento ("¿y después qué pasó?") la
+  `instruccion_tono` ya no está en contexto y lo único que el modelo tiene a la vista es su
+  propia respuesta actuada del turno anterior, que imita.
+
+  Está redactada como **instructivo de qué hacer**, no como lista de prohibiciones: "escribís
+  únicamente las palabras que Emilio dice en voz alta", cómo transmitir el clima con lo dicho
+  (si es un secreto, "esto no lo repitas"; si da para resignarse, "y bueno, así es acá") y un
+  **test** que el modelo aplica solo — *¿esta oración se puede pronunciar?*. La primera versión
+  era negativa ("no escribas acotaciones de gestos, no marcas de guion") y funcionó peor por dos
+  razones: le dejaba al modelo deducir la forma correcta, y para nombrar lo prohibido había que
+  escribir el ejemplo malo en el prompt, que es justo lo que después copiaba. Hoy **no hay ni
+  una acotación de muestra** en el prompt.
+- **`_quitar_acotaciones()`**: filtro de salida en `chat()`, junto a `_ocultar_ids()` y también
+  **antes de persistir**, así el turno siguiente no arranca con el ejemplo malo en el historial.
+  Barre cursivas de una sola marca (`*...*`, no `**bold**`), corchetes, tramos entre rayas
+  (`—...—`) y la etiqueta `EMILIO:` / `**Emilio:**` al principio de línea.
+- **`_quitar_oraciones_gesto()` / `_es_oracion_gesto()`**: las acotaciones **sin marcar**.
+  Prohibirle las marcas no le quita la costumbre de actuar — encuentra la vuelta y escribe el
+  mismo gesto como prosa suelta ("Baja la voz, se acerca un poco." / "Se encoge de hombros."),
+  que fue exactamente lo que pasó al probar la primera versión. La señal que las delata es
+  gramatical: Emilio habla en primera persona y las historias están en pasado, así que una
+  oración corta, entera en tercera del presente y sin sujeto solo puede ser él describiéndose
+  desde afuera. Se borra la oración **solo si todas sus cláusulas son gesto**: "Baja la voz, se
+  acerca un poco." se va entera, pero "Sonríe y sigue la clase como si nada" se queda porque la
+  segunda mitad dice algo. Los núcleos de gesto están **listados a mano** (`_GESTO_NUCLEO`) en
+  vez de inferidos por conjugación: la lista se queda corta ante un gesto nuevo, pero no se come
+  una oración real, que es el error caro.
+- **`_parece_gesto()`** decide qué se borra, y es deliberadamente conservador: nunca toca un
+  tramo con números (los datos técnicos y las fechas los tienen: `*Panel solar 100 W*` es
+  contenido, y `—fundada en 1957—` es un paréntesis legítimo), y de ahí pide o una frase con
+  señal de gesto (reflexivo inicial, gerundio, palabra de la lista) o una sola palabra que ya
+  sea un gesto (`*suspira*`, `*riéndose*`). Se preferió que se escape una acotación rara antes
+  que borrar contenido real. Los verbos que existen en imperativo quedaron **fuera** de la
+  lista de una palabra: `*mirá*` es una cursiva válida.
+
+También se sacó el vocabulario de teatro de la doc de historias: el `estilo` se le pasa
+**literal** al modelo, así que `"diálogos"` o `"dramático"` en ese campo son un pedido de
+guion. Ver `HISTORIAS_PROCEDIMIENTO.md`.
 
 **Gatillo de personalidad**: Emilio solo cobra vida cuando se consultan historias. Para tareas
 prácticas (horarios, inventario, préstamos), sigue siendo una herramienta eficiente sin personaje.
@@ -564,6 +844,118 @@ no lista vacía que invita a rellenar.
 **Costo**: índice cachea siempre (~250 tokens por turno). Historias completas se pagan solo cuando se
 leen (varían, típicamente 200–500 tokens por historia).
 
+### Alta desde foto (datasheets, etiquetas, chapas de características)
+
+Caso de uso central del asistente en el taller: sacan la foto de la etiqueta de un panel
+solar, escriben "tenemos 5" y el recurso queda cargado sin tipear especificaciones.
+
+**Recorrido de la foto**:
+1. `gestion-agente.js` la lee con `FileReader`, la **achica en un canvas** a 1568 px de lado
+   largo / JPEG calidad 0.85 y la deja en `imagenSeleccionada` como data URL. Sin ese paso
+   una foto de celular (3–8 MB, ~11 MB en base64) no entra en el límite de la API de visión
+   y tarda una eternidad por el wifi de la escuela. 1568 px es lo que el modelo llega a
+   aprovechar y alcanza para leer la letra chica de un datasheet. Si el navegador no puede
+   decodificar el archivo (HEIC de iPhone), se manda tal cual en vez de perder la foto.
+2. `POST /chat` con `{mensaje, imagen}`. **La foto sola es un mensaje válido**: si no
+   escribieron nada, el front igual envía y el backend pone "Te mando esta foto." como texto.
+3. `chat()` **no le manda la foto al agente ni la lee**: la deja en
+   `contexto_turno['foto_turno']` y le agrega al mensaje del usuario una nota diciendo que hay
+   una foto disponible. El agente nunca ve un píxel.
+4. **El agente decide qué hacer con ella**, y ahí se abren los dos caminos (ver abajo): leerla
+   con `leer_foto` si necesita los datos, o guardarla con `adjuntar_foto` si va a una ficha que
+   ya existe. Si no está claro, pregunta.
+5. En el camino de alta, el modelo arma la ficha con `crear_entidad` → botón de confirmar, y la
+   foto queda en `agente_fotos_pendientes` atada al **token de la ficha**. Al confirmar,
+   `_adjuntar_foto_pendiente()` la pasa a la galería del registro nuevo con
+   `gestion.agregar_foto()` — el mismo camino que usa la subida manual desde el detalle.
+
+#### Los dos caminos de una foto
+
+| El usuario quiere… | Tool | ¿Cuesta visión? |
+|---|---|---|
+| Guardarla en una ficha que ya existe ("guardá esta foto en el taladro") | `adjuntar_foto(slug, id)` | **No** |
+| Cargar o actualizar el inventario con lo que dice la etiqueta | `leer_foto()` → `crear_entidad` / `editar_entidad` | Sí (~US$0,0004) |
+| No se entiende | — | No: el prompt le pide **preguntar**, no leer por las dudas |
+
+**Leer es una tool, no un paso automático.** La primera versión leía toda foto al entrar a
+`chat()`, y eso pagaba una llamada de visión también cuando lo único que querían era adjuntar —
+que es el caso más común y el que menos la necesita: para guardar una imagen no hace falta
+saber qué dice. El costo de la vuelta extra del loop es despreciable al lado de eso, porque
+DeepSeek cachea el prefijo (system prompt + tools): los cache hits salen US$0,003625/M contra
+US$0,435/M de un miss.
+
+Las dos tools sacan la imagen de `contexto_turno['foto_turno']`, nunca de un parámetro: el
+modelo no ve la foto, así que pedirle el base64 sería pedirle que lo invente. Si en el turno no
+vino ninguna, las dos devuelven un error que se lo explica en vez de fallar en silencio.
+
+`adjuntar_foto` **corre directo, sin ficha de confirmación**: es aditivo (no pisa ni borra
+nada) y el listón lo marca `editar_entidad`, que sobrescribe campos y tampoco la pide. Queda
+auditada en `agente_log`. `leer_foto` no se audita: no toca la base — lo que gasta es la API de
+visión, no el inventario.
+
+> **Ojo**: no hay forma de borrar una foto de una galería desde la app (`subir_foto` agrega,
+> nada saca). Por eso el prompt y la descripción de `adjuntar_foto` insisten en preguntar
+> cuando el destino es ambiguo: una foto en el recurso equivocado se saca editando la base.
+
+**Por qué la foto se guarda por token y no por turno**: la confirmación puede llegar mucho
+después, incluso desde otra página (el historial se repinta y el botón sigue ahí). El token
+de `_token_ficha()` es lo único que atraviesa esa distancia. Va en tabla propia y no dentro
+del JSON de `fichas` porque esa columna se reescribe entera en cada turno: con hasta
+`FICHAS_MAX` fotos en base64 adentro, cada mensaje del chat arrastraría varios MB de
+escritura. Las filas sin confirmar se barren a los `CONVERSACION_DIAS` días, y `/reset` las
+borra junto con la conversación.
+
+La imagen **sigue sin persistirse en el historial** (`_sin_imagenes`) — lo que queda ahí es
+la lectura en texto, que sí sirve en los turnos siguientes ("sí, tenemos 3"). Al repintar el
+chat, `_texto_visible()` reemplaza ese bloque por "📷 (foto)": es una pista para el modelo,
+no algo que el usuario haya tipeado.
+
+**Reglas en el system prompt** (sección "FOTOS DE DATASHEETS…"): el agente trabaja **solo con
+lo que dice la lectura**, nunca completando con lo que sabe de esa marca/modelo; la cantidad
+no sale nunca de la foto sino de lo que dice el usuario (si no la dijo, se pregunta antes de
+la ficha, junto con la ubicación); cinco unidades iguales son **un** recurso con `cantidad` 5,
+no cinco altas; antes de la ficha se busca por marca/modelo y por nombre genérico, porque con
+una foto lo más común es que el recurso ya exista y corresponda sumar stock con
+`editar_entidad`; las especificaciones van en `descripcion`, no amontonadas en el `nombre`.
+Si la lectura describe algo que no es una etiqueta (una máquina, un tablero, una planilla en
+papel), se cuenta qué se ve y se pregunta qué hacer, no se da de alta sola.
+
+#### El lector de imágenes (`_get_vision_config`, `_leer_imagen`)
+
+Config **aparte de la del chat**: `AGENTE_VISION_API_KEY` (fallback `GEMINI_API_KEY`),
+`AGENTE_VISION_MODEL` (default `gemini-2.5-flash-lite`), `AGENTE_VISION_API_BASE` (default
+el endpoint OpenAI-compatible de Google). Sin API key, `_get_vision_config()` devuelve `None`
+= no hay lector.
+
+Es una llamada suelta, **sin tools**, con `PROMPT_LECTOR_IMAGEN` (solo lectura: transcribir lo
+que se lee, no completar con conocimiento del producto, avisar si no se lee) y `max_tokens`
+500. Todo lo que viene *después* de leer —cantidad, buscar duplicados, circuito de ficha—
+sigue en el system prompt del agente, que es quien tiene las tools. **Solo se dispara desde la
+tool `leer_foto`**: nunca automáticamente al llegar una foto.
+
+**Por qué separado y no `AGENTE_PROVIDER=anthropic`**: el system prompt más `TOOLS_SCHEMA` son
+~15.000 tokens que viajan en **cada** turno del agente; la llamada del lector son ~2.000. Con
+el lector aparte una foto cuesta ~7× menos, el chat sigue en DeepSeek (más barato y mejor en
+el tool-calling de 20 tools que un modelo chico con visión), y no hay que elegir entre
+"proveedor bueno para chatear" y "proveedor que ve".
+
+Ante cualquier falla —cuota, 429 del tier gratuito, red— `_leer_imagen()` devuelve `None` y
+`leer_foto` le devuelve al modelo un error que le pide avisarle al usuario y **no inventar** lo
+que decía la etiqueta. No corta el turno: es una tool que falló, no el chat.
+
+**Las tres ramas de `chat()`**, por orden:
+1. Hay lector → la foto queda en `contexto_turno['foto_turno']` y el mensaje del usuario lleva
+   una nota diciendo que está disponible. **No se lee acá**: decide el modelo. Anda con
+   cualquier `AGENTE_PROVIDER`.
+2. No hay lector pero el chat ve imágenes (`_get_config()['vision']`: Anthropic siempre, el
+   resto con `AGENTE_VISION=1`) → camino viejo, el bloque `image` viaja al agente y
+   `_mensajes_openai(..., vision=True)` lo traduce a `image_url` si el proveedor es
+   OpenAI-compatible. En esta rama `leer_foto` no hace falta: el modelo ya la ve.
+3. Ninguno → `chat()` **corta antes de llamar al modelo** y responde `AVISO_SIN_VISION`. Es
+   deliberado: mandarle el turno igual hacía que contestara sobre una imagen que nunca vio,
+   inventando lo que "leyó" en la etiqueta — el peor resultado posible para un inventario. El
+   turno igual se guarda en el historial.
+
 ### Auditoría (agente_log)
 
 Tabla nueva en `gestion.db`:
@@ -577,6 +969,25 @@ agente_log (
 Se inserta una fila **por cada tool de escritura ejecutada** (no por lecturas, para no llenar
 la tabla de ruido). El snapshot "antes" permite restaurar a mano si el agente se equivocó en
 una devolución de préstamo o un borrado.
+
+### Otras tablas del agente en `gestion.db`
+
+```sql
+agente_conversaciones (sid PK, actualizado, historial JSON, entidad_actual, fichas JSON)
+agente_fotos_pendientes (token PK, sid, b64, tipo, fecha)
+```
+
+`agente_conversaciones`: una fila por navegador. La conversación vive acá y no en la cookie
+de Flask porque el historial la pasaba de los ~4 KB que aguanta un navegador y la cookie se
+descartaba **sin avisar**, dejando al usuario deslogueado y sin conversación. En la cookie
+queda solo `agente_sid`.
+
+`agente_fotos_pendientes`: la foto de la que salió una ficha, esperando que se confirme el
+alta (ver "Alta desde foto"). La clave es el token de contenido de `_token_ficha()`, no el
+turno, porque la confirmación puede llegar desde otra página o mucho después.
+
+Las dos se barren a los `CONVERSACION_DIAS` (30) días de inactividad, en la misma escritura
+que las usa — no en `init_db()`, porque el server puede estar meses sin reiniciar.
 
 ### Guardias de seguridad / guardrails de prompt
 
@@ -616,15 +1027,73 @@ una devolución de préstamo o un borrado.
 
 ### Configuración
 
-- **Env var** `ANTHROPIC_API_KEY` — necesaria para llamar a la API de Anthropic. Sin ella,
-  el chat devuelve un error claro ("ANTHROPIC_API_KEY no está configurada").
-- **Env var** `AGENTE_MODEL` — modelo a usar (default `claude-haiku-4-5-20251001`, que
-  soporta visión para fotografiar etiquetas y es costo bajo). Configurable igual que
-  `GESTION_CLAVE`.
-- **Costo**: cada mensaje del chat consume tokens de la API de Anthropic (aparte de Render
-  gratuito). Las lecturas (búsquedas, horarios) suelen ser baratas (~100–500 tokens). Las
-  escrituras (create/edit/préstamos) más caras porque la salida de la tool puede ser larga
-  y Claude la procesa de vuelta.
+- **Env var** `AGENTE_PROVIDER` — `deepseek` (default) | `anthropic` | `groq` | `openai` |
+  `ollama`. Define también qué loop de tool-calling corre: Anthropic tiene el suyo, el resto
+  comparte `_loop_openai`.
+- **Env var** de API key — `AGENTE_API_KEY`, o la del proveedor (`DEEPSEEK_API_KEY`,
+  `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `OPENAI_API_KEY`). Sin ella el chat devuelve un error
+  claro en vez de fallar en silencio. Ollama no la usa.
+- **Env var** `AGENTE_MODEL` — modelo a usar. Defaults por proveedor: `deepseek-v4-pro`,
+  `claude-haiku-4-5-20251001`, `mixtral-8x7b-32768`, `gpt-3.5-turbo`, `mistral`.
+- **Env var** `AGENTE_VISION` — `1` para declarar que el modelo del **chat** lee imágenes.
+  Anthropic ya viene en `1`; esto es para gpt-4o u ollama+llava, donde depende del modelo.
+  Solo se consulta si **no** hay lector configurado (rama 2 de `chat()`).
+- **Env vars del lector de fotos**, independientes de todo lo anterior:
+  `AGENTE_VISION_API_KEY` (fallback `GEMINI_API_KEY`) — sin ella no hay lectura de etiquetas;
+  `AGENTE_VISION_MODEL` (default `gemini-2.5-flash-lite`);
+  `AGENTE_VISION_API_BASE` (default el endpoint OpenAI-compatible de Google). Con la key
+  puesta, el alta desde foto anda con **cualquier** `AGENTE_PROVIDER`, incluido el default.
+- **Env var** `AGENTE_API_BASE` — para APIs custom (Ollama, self-hosted).
+- **Costo**: cada mensaje del chat arrastra el system prompt + `TOOLS_SCHEMA`, ~15.000 tokens
+  de entrada, tenga foto o no — eso domina la factura, no las respuestas. Por eso el lector de
+  fotos va aparte (~2.000 tokens por foto) en vez de mandarle la imagen al agente. Las
+  lecturas (búsquedas, horarios) agregan poco (~100–500 tokens); las escrituras
+  (create/edit/préstamos) más, porque la salida de la tool vuelve a entrar al modelo. El
+  lector en su default (Gemini Flash-Lite) entra en el tier gratuito de 1.000 requests/día.
+
+### Qué entidades alcanza el agente (`SLUGS_ENTIDAD`)
+
+**`agente.SLUGS_ENTIDAD = list(gestion.ENTIDADES)`** — el enum de `slug` de los esquemas de
+tools se **deriva**, no se escribe. Antes estaba hardcodeado como
+`['recursos', 'conjuntos', 'actividades', 'proyectos']` repetido en **10 lugares**
+(`buscar_entidad`, `listar_todos`, `detalle_entidad`, `crear_entidad`, `editar_entidad`,
+`eliminar_entidad`, `vincular_entidad`/`desvincular_entidad` con sus dos slugs cada una), y
+cuando se creó `hitos` nadie los actualizó: la entidad quedó invisible para el chat sin que
+nada fallara ni avisara. Agregar una entidad ahora es un cambio en `gestion.ENTIDADES` y nada
+más.
+
+Lo que hubo que destrabar además, porque el circuito de alta asumía una columna `nombre`:
+- **`_crear_entidad`** valida `gestion._campo_nombre(cfg)`, no `'nombre'` (en `hitos` es `titulo`).
+- **`_nombre_de(slug, campos)`** resuelve el nombre visible de una ficha. Hace falta porque
+  `campos` es el dict que armó el modelo, no una fila de la DB: ahí **no** llega el alias de
+  `_select()`. Sin esto el botón de confirmar y el "✅ Guardado" salían en blanco para `hitos`.
+- **`CAMPOS_REDACTADOS`** incluye `'titulo'` además de `'nombre'`.
+- **Los esquemas de `crear_entidad` / `editar_entidad` exponen `titulo`** (más `nivel`,
+  `etiquetas` y `protagonistas`, y `fecha` vale para proyectos **e** hitos). Derivar el enum
+  de `slug` hizo `hitos` elegible, pero los *campos* seguían siendo los de recursos: el
+  modelo solo podía mandar `nombre`, `_normalizar_borrador` lo descartaba por no existir en
+  el slug, y `_crear_entidad` cortaba con `El campo "titulo" es obligatorio` en **todas** las
+  altas de hito. El agente no podía crear ni un solo hito, y el error se leía como un bug
+  interno de la tool. `required` es `['slug']` a secas: si hace falta `nombre` o `titulo` lo
+  decide `_crear_entidad` contra `gestion._campo_nombre`, que es la única fuente.
+- **`vincular_entidad`** avisa en su descripción que con `proyectos` el origen es **siempre la
+  persona** (`personas → proyectos`), porque la relación está declarada de ese lado y del otro
+  falla. Con `hitos` ya no: desde 2026-08-09 `hitos` declara `rel_personas` (espejo de
+  `personas.rel_hitos`, misma tabla `persona_hitos`), así que la relación anda en las dos
+  direcciones y "sumá a Pablo al hito" tomado literal también funciona.
+
+Las lecturas ya funcionaban solas gracias al alias de `_select()`: `_buscar_entidad_fmt`,
+`_listar_todos_fmt` y `snapshot_entidad` devuelven `nombre` también para `hitos`.
+
+`hitos` tiene además una tool de lectura propia, **`buscar_hitos(etiqueta, desde_fecha,
+hasta_fecha)`**, que ordena por nivel y fecha — el CRUD genérico cubre la escritura, ésa cubre
+la consulta de la línea del tiempo.
+
+El system prompt describe **seis áreas** (horarios, inventario, préstamos, historia, línea del
+tiempo, personas). La sección de PERSONAS le marca dos cosas que el código no puede forzar:
+que la semblanza institucional **no** se mezcla con las anécdotas literales de
+`consultar_historia`, y que antes de crear una persona hay que buscarla, porque una segunda
+ficha del mismo docente le parte la historia en dos.
 
 ### Integración con módulo de /gestion
 

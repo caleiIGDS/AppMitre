@@ -110,24 +110,97 @@ python app.py
 
 ---
 
+## Fotos de etiquetas (lector de imágenes)
+
+Sacar una foto de la chapa de características es la forma más rápida de cargar algo al
+inventario. **El lector se configura aparte del chat**: no hace falta que el proveedor del
+chat tenga visión, y de hecho el default (DeepSeek) no la tiene.
+
+```bash
+export AGENTE_VISION_API_KEY=AIza...   # API key de Google AI Studio
+```
+
+Con eso alcanza. La key se saca gratis y sin tarjeta en https://aistudio.google.com/apikey.
+
+**Por qué va separado del chat**: la foto no se le manda al agente, se lee en una llamada
+suelta sin tools y con un prompt corto, y al chat le entra el resultado como texto. El
+system prompt más el esquema de tools son ~15.000 tokens que viajan en cada turno del
+agente; la llamada del lector son ~2.000. Además el chat sigue en su proveedor de siempre,
+sin cambiarle el modelo a las otras 20 tools.
+
+**Solo lee cuando hace falta.** Una foto puede venir por dos motivos, y el asistente los
+distingue:
+
+| Le decís… | Qué hace | ¿Consume lectura? |
+|---|---|---|
+| "guardá esta foto en el taladro" | Busca el taladro y le pega la foto a la ficha | **No** |
+| "cargá esto al inventario" | Lee la etiqueta y arma la ficha del recurso | Sí |
+| (mandás la foto sin decir nada) | **Pregunta** cuál de las dos querés | No |
+
+Adjuntar no cuesta nada porque para guardar una imagen no hace falta saber qué dice. Si no
+tiene claro a qué recurso va, pregunta en vez de adivinar — una foto guardada en la ficha
+equivocada no se puede sacar desde la app.
+
+**Costo**: el default es Gemini 2.5 Flash-Lite, que tiene **1.000 requests por día gratis**
+(15 por minuto). Una escuela no llega a eso. Pasado el tier gratuito son ~US$0,0004 por
+foto **leída** — las que solo se adjuntan no cuentan.
+
+> ⚠️ En el tier gratuito **Google usa las imágenes para mejorar sus productos**. Para chapas
+> de amoladoras da igual; si en alguna foto pudiera salir un alumno, pasá a tier pago (misma
+> key, agregando facturación) o cambiá de proveedor con las variables de abajo.
+
+**Cambiar de proveedor de visión** — el lector habla el protocolo de OpenAI, así que sirve
+cualquier API compatible:
+
+```bash
+# OpenAI (no entrena con tus datos, ~US$0,0014/foto)
+export AGENTE_VISION_API_KEY=sk-...
+export AGENTE_VISION_MODEL=gpt-5-mini
+export AGENTE_VISION_API_BASE=https://api.openai.com/v1
+
+# Ollama local con llava (gratis, necesita GPU decente)
+export AGENTE_VISION_API_KEY=ollama
+export AGENTE_VISION_MODEL=llava
+export AGENTE_VISION_API_BASE=http://localhost:11434/v1
+```
+
+**Si el alta salió de una foto, la foto queda guardada** en la galería del recurso cuando el
+usuario confirma con el botón. No hay que subirla aparte, ni pedirle al asistente que la
+adjunte.
+
+**Sin `AGENTE_VISION_API_KEY`**: si el proveedor del chat tiene visión propia
+(`AGENTE_PROVIDER=anthropic`, o `AGENTE_VISION=1` con un modelo que la tenga) la foto se le
+manda al agente como antes. Si no, el asistente avisa que no puede ver la foto y pide los
+datos por texto — nunca inventa lo que "vio".
+
+---
+
 ## Variables de entorno
 
 | Variable | Default | Descripción |
 |---|---|---|
-| `AGENTE_PROVIDER` | `anthropic` | Proveedor: `anthropic`, `groq`, `openai`, `ollama` |
+| `AGENTE_PROVIDER` | `deepseek` | Proveedor del chat: `deepseek`, `anthropic`, `groq`, `openai`, `ollama` |
 | `AGENTE_MODEL` | Depende del provider (ver arriba) | Nombre del modelo |
 | `AGENTE_API_KEY` | (vacío) | API key si el provider la requiere |
 | `AGENTE_API_BASE` | Para Ollama: `http://localhost:11434` | URL base de la API (para APIs custom o Ollama) |
+| `AGENTE_VISION` | (vacío) | `1` para declarar que el modelo del **chat** ve imágenes (gpt-4o, llava). Anthropic ya viene en 1 |
+| `AGENTE_VISION_API_KEY` | (vacío) | API key del **lector de fotos**. Sin esto no hay lectura de etiquetas. Fallback: `GEMINI_API_KEY` |
+| `AGENTE_VISION_MODEL` | `gemini-2.5-flash-lite` | Modelo del lector |
+| `AGENTE_VISION_API_BASE` | `https://generativelanguage.googleapis.com/v1beta/openai/` | URL base del lector (cualquier API compatible con OpenAI) |
 
 ---
 
 ## Comparativa rápida
 
-| Provider | Costo | Velocidad | Calidad | Fotos | Setup |
+La columna **Fotos** es del chat en sí. Con `AGENTE_VISION_API_KEY` configurada, las fotos
+andan con cualquier proveedor de la tabla, porque se leen aparte.
+
+| Provider | Costo | Velocidad | Calidad | Fotos sin lector | Setup |
 |---|---|---|---|---|---|
+| **DeepSeek** (default) | 💰 Muy bajo | ⚡ Media | ⭐⭐⭐⭐ | ❌ | API key |
 | **Anthropic** | 💰 Bajo | ⚡ Media | ⭐⭐⭐⭐⭐ | ✅ | API key |
 | **Groq** | 💰 Gratis | ⚡⚡⚡ Rápido | ⭐⭐⭐ | ❌ | API key |
-| **OpenAI** | 💰💰 Medio | ⚡ Media | ⭐⭐⭐⭐ | ✅ | API key |
+| **OpenAI** | 💰💰 Medio | ⚡ Media | ⭐⭐⭐⭐ | ✅ (gpt-4o) | API key |
 | **Ollama** | 💰 Gratis | ⚡ Lento | ⭐⭐ | ❌ | Local setup |
 
 ---
@@ -145,6 +218,20 @@ python app.py
 
 **Groq: "Error: Could not verify API key"**  
 → La API key es inválida. Regenerala desde https://console.groq.com.
+
+**"📷 No puedo ver la foto: no tengo configurado un lector de imágenes"**  
+→ Falta `AGENTE_VISION_API_KEY`. Ver la sección de fotos más arriba.
+
+**El asistente dice que no pudo leer la foto**  
+→ El lector está configurado pero la llamada falló. Casi siempre es el rate limit del tier
+gratuito de Gemini (15 requests por minuto): esperá un momento y mandala de nuevo. Si pasa
+siempre, la key puede estar vencida o el modelo de `AGENTE_VISION_MODEL` no existe.
+
+**Adjunta la foto al recurso equivocado**  
+→ No hay forma de borrar una foto de una galería desde la app. Se saca editando `gestion.db`
+(la columna `fotos` de la tabla, que es un JSON). Para que no pase, el asistente tiene
+instrucción de preguntar cuando no está seguro del destino: si igual se manda solo, decíselo
+más explícito ("guardala en el taladro Makita del pañol").
 
 ---
 

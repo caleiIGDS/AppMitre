@@ -5,10 +5,12 @@ python-dotenv
 # LLM providers del agente (agente.py)
 # El provider por DEFECTO es DeepSeek (deepseek-v4-pro), que usa la API compatible
 # con OpenAI → el paquete `openai` es OBLIGATORIO, no opcional.
+# También lo usa el LECTOR DE FOTOS (default Gemini 2.5 Flash-Lite, que expone endpoint
+# compatible con OpenAI), así que el alta desde foto no agrega ninguna dependencia.
 openai
 
-# Anthropic: alternativa vía AGENTE_PROVIDER=anthropic. Necesario si se quiere el
-# alta de recursos desde foto, porque DeepSeek no tiene visión.
+# Anthropic: alternativa vía AGENTE_PROVIDER=anthropic. Ya NO hace falta para leer fotos
+# — de eso se encarga el lector, que se configura aparte (ver AGENTE_CONFIG.md).
 anthropic
 
 # Otros providers soportados, instalar solo si se usan:

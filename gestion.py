@@ -9,6 +9,8 @@
 
 import base64
 import difflib
+import glob
+import hashlib
 import json
 import os
 import sqlite3
@@ -19,6 +21,12 @@ from flask import Blueprint, render_template, request, redirect, url_for, abort,
 from config import ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gestion.db')
+
+# Respaldos rotativos de gestion.db. Existen porque esta DB no se regenera desde
+# ninguna fuente externa y está en .gitignore: si el archivo se pierde, no hay
+# commit ni Sheet del que recuperarla (ver DECISIONS 2026-08-08).
+BACKUP_DIR = os.path.join(os.path.dirname(DB_PATH), 'backups')
+BACKUP_MAX = 20
 
 bp = Blueprint('gestion', __name__, url_prefix='/gestion')
 
@@ -150,6 +158,8 @@ ENTIDADES = {
         'tabla': 'hitos',
         'singular': 'Hito',
         'plural': 'Hitos',
+        # Única entidad cuya columna de nombre no se llama 'nombre' — ver _select().
+        'campo_nombre': 'titulo',
         'descripcion': 'Línea del tiempo institucional: eventos, logros, creaciones, participaciones y cambios significativos de la escuela',
         'campos': [
             {'nombre': 'titulo', 'label': 'Título del hito', 'tipo': 'text', 'requerido': True},
@@ -164,7 +174,33 @@ ENTIDADES = {
             {'nombre': 'drive_url', 'label': 'Fotos, documentos (Drive)', 'tipo': 'url'},
         ],
         'columnas': [('fecha', 'FECHA'), ('titulo', 'HITO'), ('etiquetas', 'ETIQUETAS'), ('tipo', 'TIPO'), ('nivel', 'NIVEL')],
-        'relaciones': [],
+        # Espejo de `personas.rel_hitos`: la misma tabla, declarada también de este lado para
+        # que el hito muestre y edite a su gente. Sin esto el vínculo existía pero solo se veía
+        # desde la ficha de la persona, y desde el hito parecía que no se había guardado nadie.
+        # `protagonistas` sigue siendo el texto libre (sirve para cursos y para gente sin ficha).
+        'relaciones': [
+            {'campo': 'rel_personas', 'label': 'Personas con ficha', 'tabla': 'persona_hitos',
+             'col_propia': 'hito_id', 'col_ajena': 'persona_id', 'slug_ajeno': 'personas'},
+        ],
+    },
+    'personas': {
+        'tabla': 'personas',
+        'singular': 'Persona',
+        'plural': 'Personas',
+        'descripcion': 'Quiénes hacen y hicieron la escuela: docentes, preceptores, no docentes. Una semblanza por persona y los hilos que la conectan con proyectos e hitos.',
+        'campos': [
+            {'nombre': 'nombre', 'label': 'Nombre y apellido', 'tipo': 'text', 'requerido': True},
+            {'nombre': 'descripcion', 'label': 'Semblanza', 'tipo': 'textarea',
+             'ayuda': 'Quién es y qué aporta a la escuela, en prosa. Ej: "Ingeniero del INTI; sus prácticas de armado de colector solar son un clásico de 6°." El rol no es un campo aparte: si importa, va acá.'},
+            {'nombre': 'drive_url', 'label': 'Carpeta de Drive (link)', 'tipo': 'url'},
+        ],
+        'columnas': [('nombre', 'NOMBRE'), ('fecha_actualizada', 'ACTUALIZADA')],
+        'relaciones': [
+            {'campo': 'rel_proyectos', 'label': 'Proyectos en los que participó', 'tabla': 'persona_proyectos',
+             'col_propia': 'persona_id', 'col_ajena': 'proyecto_id', 'slug_ajeno': 'proyectos'},
+            {'campo': 'rel_hitos', 'label': 'Hitos en los que aparece', 'tabla': 'persona_hitos',
+             'col_propia': 'persona_id', 'col_ajena': 'hito_id', 'slug_ajeno': 'hitos'},
+        ],
     },
 }
 
@@ -173,8 +209,9 @@ LIMPIEZA_M2M = {
     'recursos': [('conjunto_recursos', 'recurso_id'), ('actividad_recursos', 'recurso_id'), ('proyecto_recursos', 'recurso_id')],
     'conjuntos': [('conjunto_recursos', 'conjunto_id'), ('actividad_conjuntos', 'conjunto_id')],
     'actividades': [('actividad_recursos', 'actividad_id'), ('actividad_conjuntos', 'actividad_id')],
-    'proyectos': [('proyecto_recursos', 'proyecto_id')],
-    'hitos': [],
+    'proyectos': [('proyecto_recursos', 'proyecto_id'), ('persona_proyectos', 'proyecto_id')],
+    'hitos': [('persona_hitos', 'hito_id')],
+    'personas': [('persona_proyectos', 'persona_id'), ('persona_hitos', 'persona_id')],
 }
 
 SCHEMA = """
@@ -263,10 +300,36 @@ CREATE TABLE IF NOT EXISTS hitos (
     nivel TEXT DEFAULT 'Básico',
     etiquetas TEXT DEFAULT '',
     protagonistas TEXT DEFAULT '',
-    drive_url TEXT DEFAULT ''
+    drive_url TEXT DEFAULT '',
+    fotos TEXT DEFAULT '[]'
 );
 CREATE INDEX IF NOT EXISTS idx_hitos_fecha ON hitos(fecha DESC);
 CREATE INDEX IF NOT EXISTS idx_hitos_nivel ON hitos(nivel);
+CREATE TABLE IF NOT EXISTS personas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre TEXT NOT NULL,
+    nombre_norm TEXT NOT NULL DEFAULT '',
+    descripcion TEXT DEFAULT '',
+    fecha_actualizada TEXT DEFAULT '',
+    drive_url TEXT DEFAULT '',
+    fotos TEXT DEFAULT '[]'
+);
+-- La identidad de una persona es su nombre normalizado, no el que se tipeó: el mismo
+-- docente entra como "Juan Pablo Crivari" desde el chat y como "CRIVARI JUAN PABLO"
+-- desde los horarios. Sin este UNIQUE quedan dos nodos y los hilos M2M se reparten.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_personas_norm ON personas(nombre_norm);
+CREATE TABLE IF NOT EXISTS persona_proyectos (
+    persona_id INTEGER NOT NULL,
+    proyecto_id INTEGER NOT NULL,
+    UNIQUE(persona_id, proyecto_id)
+);
+CREATE TABLE IF NOT EXISTS persona_hitos (
+    persona_id INTEGER NOT NULL,
+    hito_id INTEGER NOT NULL,
+    UNIQUE(persona_id, hito_id)
+);
+CREATE INDEX IF NOT EXISTS idx_persona_proyectos ON persona_proyectos(persona_id);
+CREATE INDEX IF NOT EXISTS idx_persona_hitos ON persona_hitos(persona_id);
 """
 
 
@@ -322,13 +385,122 @@ def conectar():
     return con
 
 
+def _tiene_datos(ruta):
+    """True si la DB de `ruta` existe y tiene al menos un recurso cargado.
+    Tolera archivos a medio crear (sin tablas todavía): eso cuenta como 'sin datos'."""
+    if not os.path.exists(ruta) or os.path.getsize(ruta) == 0:
+        return False
+    try:
+        con = sqlite3.connect(f'file:{ruta}?mode=ro', uri=True)
+        try:
+            return con.execute("SELECT COUNT(*) FROM recursos").fetchone()[0] > 0
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return False
+
+
+def _hash_archivo(ruta):
+    h = hashlib.sha256()
+    with open(ruta, 'rb') as f:
+        for bloque in iter(lambda: f.read(1 << 20), b''):
+            h.update(bloque)
+    return h.hexdigest()
+
+
+def respaldos():
+    """Respaldos existentes, del más viejo al más nuevo. El nombre lleva la fecha,
+    así que el orden alfabético ya es el cronológico."""
+    return sorted(glob.glob(os.path.join(BACKUP_DIR, 'gestion-*.db')))
+
+
+def respaldar_db(max_copias=BACKUP_MAX):
+    """Copia gestion.db a backups/ y conserva las últimas `max_copias`.
+
+    Se llama desde init_db(), o sea en cada arranque de la app: el respaldo queda
+    hecho ANTES de cualquier migración de schema. Usa la API de backup de sqlite3
+    en vez de copiar el archivo porque garantiza una copia consistente aunque otro
+    proceso esté escribiendo.
+
+    No respalda una DB sin recursos: si el archivo se perdió, un respaldo vacío
+    encima de los buenos sería justamente lo que arruinaría la recuperación.
+    """
+    if not _tiene_datos(DB_PATH):
+        return None
+
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    # Los microsegundos van en el nombre para que dos respaldos del mismo segundo no
+    # se pisen (pasa si la app reinicia en loop). Al ser de ancho fijo, el orden
+    # alfabético de respaldos() sigue siendo el cronológico.
+    destino = os.path.join(BACKUP_DIR, f"gestion-{datetime.now():%Y%m%d-%H%M%S-%f}.db")
+
+    origen = sqlite3.connect(DB_PATH)
+    copia = sqlite3.connect(destino)
+    try:
+        origen.backup(copia)
+    finally:
+        copia.close()
+        origen.close()
+
+    # Si no cambió nada desde el último respaldo, no acumular duplicados.
+    previos = [r for r in respaldos() if r != destino]
+    if previos and _hash_archivo(previos[-1]) == _hash_archivo(destino):
+        os.remove(destino)
+        return previos[-1]
+
+    for viejo in _a_borrar(respaldos(), max_copias):
+        os.remove(viejo)
+    return destino
+
+
+def _dia(ruta):
+    """'gestion-20260808-231729-300184.db' -> '20260808'."""
+    return os.path.basename(ruta).split('-')[1]
+
+
+def _a_borrar(existentes, max_copias):
+    """Qué respaldos sobran.
+
+    Conserva los últimos `max_copias` MÁS el primero de cada día anterior. Sin esa
+    segunda regla, una tarde de reinicios depurando (cada arranque escribe en la DB,
+    así que cada arranque genera un respaldo nuevo) alcanzaba para empujar fuera de
+    la rotación todo lo viejo, que es justo lo que uno querría recuperar.
+    """
+    recientes = set(existentes[-max_copias:])
+    primero_del_dia = {}
+    for r in existentes:
+        primero_del_dia.setdefault(_dia(r), r)
+    conservar = recientes | set(primero_del_dia.values())
+    return [r for r in existentes if r not in conservar]
+
+
 def init_db():
-    """Crea las tablas si no existen, migra columnas nuevas y carga datos de ejemplo la primera vez."""
+    """Crea las tablas si no existen, migra columnas nuevas y carga datos de ejemplo la primera vez.
+
+    Respalda antes de tocar nada (ver respaldar_db).
+    """
+    respaldar_db()
+
     con = conectar()
     cur = con.cursor()
     cur.executescript(SCHEMA)
     _migrar(cur)
     if cur.execute("SELECT COUNT(*) FROM recursos").fetchone()[0] == 0:
+        # Una DB vacía es ambigua: puede ser una instalación nueva o datos perdidos.
+        # Los respaldos desempatan — si existen, esto ya estuvo cargado alguna vez y
+        # sembrar los datos de ejemplo taparía la pérdida en silencio (que es
+        # exactamente lo que pasó el 2026-08-08). Ante la duda, fallar ruidoso.
+        if respaldos() and os.environ.get('GESTION_SEED') != '1':
+            ultimo = respaldos()[-1]
+            con.close()
+            raise RuntimeError(
+                f"gestion.db está vacía pero hay {len(respaldos())} respaldo(s) en {BACKUP_DIR}.\n"
+                f"Probablemente se perdió el archivo — NO se cargaron los datos de ejemplo.\n\n"
+                f"Para restaurar el más reciente:\n"
+                f"    copy \"{ultimo}\" \"{DB_PATH}\"\n\n"
+                f"Si de verdad querés empezar de cero con los datos de ejemplo:\n"
+                f"    GESTION_SEED=1 python app.py"
+            )
         _seed(cur)
     con.commit()
     con.close()
@@ -351,7 +523,13 @@ def _migrar(cur):
     if 'cantidad_devuelta' not in cols_items:
         cur.execute("ALTER TABLE prestamo_items ADD COLUMN cantidad_devuelta TEXT DEFAULT '0'")
     # Agregar columna fotos a las demás tablas si no existe
-    for tabla in ('conjuntos', 'actividades', 'proyectos'):
+    # `personas.rol` se descartó: la semblanza ya dice qué es cada quien, y una taxonomía
+    # fija se quedaba corta enseguida (alguien es docente y ex alumno a la vez, o pasó de
+    # preceptor a directivo). Requiere SQLite 3.35+, que es de 2021.
+    cols_personas = {c[1] for c in cur.execute("PRAGMA table_info(personas)").fetchall()}
+    if 'rol' in cols_personas:
+        cur.execute("ALTER TABLE personas DROP COLUMN rol")
+    for tabla in ('conjuntos', 'actividades', 'proyectos', 'hitos'):
         cols = {c[1] for c in cur.execute(f"PRAGMA table_info({tabla})").fetchall()}
         if 'fotos' not in cols:
             cur.execute(f"ALTER TABLE {tabla} ADD COLUMN fotos TEXT DEFAULT '[]'")
@@ -411,6 +589,24 @@ def _cfg(slug):
     return ENTIDADES[slug]
 
 
+def _campo_nombre(cfg):
+    """Columna que hace de nombre visible de la entidad (`hitos` la llama `titulo`)."""
+    return cfg.get('campo_nombre', 'nombre')
+
+
+def _select(cfg):
+    """SELECT que SIEMPRE expone una columna `nombre`, se llame como se llame en la tabla.
+
+    Todo el módulo (templates genéricos, búsqueda, `agente.py`) lee `fila['nombre']`.
+    Con el alias, una entidad puede tener su columna con otro nombre sin que ninguno de
+    esos consumidores se entere. `hitos` usa `titulo` y sin esto el CRUD genérico
+    reventaba con "no such column: nombre".
+    """
+    campo = _campo_nombre(cfg)
+    alias = '' if campo == 'nombre' else f", {campo} AS nombre"
+    return f"SELECT *{alias} FROM {cfg['tabla']}"
+
+
 def buscar_entidad_sin_request(slug, query, con=None):
     """Búsqueda de entidades reusable por el agente (no depende de Flask request).
     Retorna lista de dicts {id, nombre, descripcion, ...} ya filtrados y ordenados."""
@@ -423,7 +619,7 @@ def buscar_entidad_sin_request(slug, query, con=None):
         con = conectar()
     cur = con.cursor()
 
-    filas = cur.execute(f"SELECT * FROM {cfg['tabla']} ORDER BY nombre COLLATE NOCASE").fetchall()
+    filas = cur.execute(f"{_select(cfg)} ORDER BY nombre COLLATE NOCASE").fetchall()
     con.close() if debe_cerrar else None
 
     if not query:
@@ -454,6 +650,9 @@ def guardar_entidad_sin_request(slug, campos_dict, id=None, con=None):
     try:
         nombres = [c['nombre'] for c in cfg['campos']]
         valores = [str(campos_dict.get(n, '')).strip() for n in nombres]
+        for columna, valor in _derivados(slug, dict(zip(nombres, valores))).items():
+            nombres.append(columna)
+            valores.append(valor)
 
         if id is None:
             placeholders = ','.join('?' * len(nombres))
@@ -498,7 +697,7 @@ def snapshot_entidad(slug, id, con=None):
         con = conectar()
     cur = con.cursor()
 
-    fila = cur.execute(f"SELECT * FROM {cfg['tabla']} WHERE id = ?", (id,)).fetchone()
+    fila = cur.execute(f"{_select(cfg)} WHERE id = ?", (id,)).fetchone()
 
     if fila is None:
         con.close() if debe_cerrar else None
@@ -564,8 +763,10 @@ def _opciones_relaciones(cfg, cur):
     """Opciones disponibles para cada relación M2M del formulario."""
     opciones = {}
     for rel in cfg['relaciones']:
-        tabla = ENTIDADES[rel['slug_ajeno']]['tabla']
-        opciones[rel['campo']] = cur.execute(f"SELECT id, nombre FROM {tabla} ORDER BY nombre COLLATE NOCASE").fetchall()
+        cfg_ajeno = ENTIDADES[rel['slug_ajeno']]
+        opciones[rel['campo']] = cur.execute(
+            f"SELECT id, {_campo_nombre(cfg_ajeno)} AS nombre FROM {cfg_ajeno['tabla']} "
+            f"ORDER BY nombre COLLATE NOCASE").fetchall()
     return opciones
 
 
@@ -578,10 +779,58 @@ def _seleccion_relaciones(cfg, id, cur):
     return seleccion
 
 
+# Qué decir cuando un UNIQUE de la DB rechaza el guardado (si no, sale un 500 pelado).
+_ERROR_DUPLICADO = {
+    'personas': 'Ya hay una persona cargada con ese nombre. Buscala en el listado y editala '
+                'en vez de crear una segunda ficha.',
+}
+
+
+def clave_persona(nombre):
+    """Identidad de una persona: sus palabras normalizadas y **ordenadas alfabéticamente**.
+
+    El orden importa porque el mismo docente llega escrito de las dos formas —
+    "Juan Pablo Crivari" cuando alguien lo tipea o lo dicta al chat, "CRIVARI JUAN PABLO"
+    cuando sale de los horarios (`limpiar_profesor()` los guarda apellido primero). Con
+    `_norm` a secas esas son dos claves distintas y quedan dos fichas de la misma persona,
+    con los hilos M2M repartidos entre las dos — que es justo lo que este modelo existe
+    para evitar. Ordenar las palabras las colapsa en una sola.
+
+    El costo: dos personas distintas cuyos nombres son la misma bolsa de palabras
+    ("María José Pérez" vs "José María Pérez") chocan y la segunda no se puede cargar.
+    Es raro, y cuando pasa el usuario ve un mensaje claro y puede desambiguar; el modo
+    de falla contrario (duplicados silenciosos) rompe el grafo sin que nadie se entere.
+
+    La puntuación se descarta por lo mismo: "Crivari, Juan Pablo" es la forma en que se
+    escribe un apellido primero, y `limpiar_profesor()` (database.py) ya le saca las
+    comas a los nombres que vienen de los horarios.
+    """
+    limpio = ''.join(c if (c.isalnum() or c.isspace()) else ' ' for c in nombre)
+    return ' '.join(sorted(_norm(limpio).split()))
+
+
+def _derivados(slug, valores):
+    """Columnas que la app calcula sola, por eso no están en `campos` ni en el form.
+
+    `personas.nombre_norm` es la identidad real de la fila (tiene un UNIQUE encima),
+    ver `clave_persona`. `fecha_actualizada` es un hecho sobre el registro, no un dato
+    que el usuario tipee: se pisa en cada guardado.
+    """
+    if slug != 'personas':
+        return {}
+    return {
+        'nombre_norm': clave_persona(valores.get('nombre', '')),
+        'fecha_actualizada': datetime.now().strftime(FORMATO_FECHA_REVISION),
+    }
+
+
 def _guardar(slug, cfg, cur, id=None):
     """Inserta o actualiza la fila y sincroniza sus relaciones M2M. Devuelve el id."""
     nombres = [c['nombre'] for c in cfg['campos']]
     valores = [request.form.get(n, '').strip() for n in nombres]
+    for columna, valor in _derivados(slug, dict(zip(nombres, valores))).items():
+        nombres.append(columna)
+        valores.append(valor)
     if id is None:
         placeholders = ','.join('?' * len(nombres))
         cur.execute(f"INSERT INTO {cfg['tabla']} ({','.join(nombres)}) VALUES ({placeholders})", valores)
@@ -650,6 +899,17 @@ def _secciones_detalle(slug, id, cur):
     elif slug == 'proyectos':
         agregar('Recursos generados o involucrados', 'recursos',
                 "SELECT x.id, x.nombre FROM recursos x JOIN proyecto_recursos r ON r.recurso_id = x.id WHERE r.proyecto_id = ? ORDER BY x.nombre COLLATE NOCASE")
+        agregar('Personas que participaron', 'personas',
+                "SELECT p.id, p.nombre FROM personas p JOIN persona_proyectos r ON r.persona_id = p.id WHERE r.proyecto_id = ? ORDER BY p.nombre COLLATE NOCASE")
+    elif slug == 'hitos':
+        agregar('Personas involucradas', 'personas',
+                "SELECT p.id, p.nombre FROM personas p JOIN persona_hitos r ON r.persona_id = p.id WHERE r.hito_id = ? ORDER BY p.nombre COLLATE NOCASE")
+    elif slug == 'personas':
+        # `titulo AS nombre` porque detalle.html lee it['nombre'] para todas las secciones.
+        agregar('Proyectos en los que participó', 'proyectos',
+                "SELECT x.id, x.nombre FROM proyectos x JOIN persona_proyectos r ON r.proyecto_id = x.id WHERE r.persona_id = ? ORDER BY x.fecha DESC, x.nombre COLLATE NOCASE")
+        agregar('Hitos en los que aparece', 'hitos',
+                "SELECT h.id, h.titulo AS nombre FROM hitos h JOIN persona_hitos r ON r.hito_id = h.id WHERE r.persona_id = ? ORDER BY h.fecha DESC")
     return secciones
 
 
@@ -687,7 +947,7 @@ def lista(slug):
     q = request.args.get('q', '').strip()
     con = conectar()
     cur = con.cursor()
-    filas = cur.execute(f"SELECT * FROM {cfg['tabla']} ORDER BY nombre COLLATE NOCASE").fetchall()
+    filas = cur.execute(f"{_select(cfg)} ORDER BY nombre COLLATE NOCASE").fetchall()
     con.close()
     if q:
         # Búsqueda tolerante (ver _puntaje_busqueda): acentos/mayúsculas no importan
@@ -735,13 +995,17 @@ def nuevo(slug):
     cur = con.cursor()
     error = None
     if request.method == 'POST':
-        if not request.form.get('nombre', '').strip():
+        if not request.form.get(_campo_nombre(cfg), '').strip():
             error = 'El nombre es obligatorio.'
         else:
-            id = _guardar(slug, cfg, cur)
-            con.commit()
-            con.close()
-            return redirect(url_for('gestion.detalle', slug=slug, id=id))
+            try:
+                id = _guardar(slug, cfg, cur)
+            except sqlite3.IntegrityError:
+                error = _ERROR_DUPLICADO.get(slug, 'Ya existe un registro igual.')
+            else:
+                con.commit()
+                con.close()
+                return redirect(url_for('gestion.detalle', slug=slug, id=id))
     opciones = _opciones_relaciones(cfg, cur)
     con.close()
     seleccion = {rel['campo']: {int(v) for v in request.form.getlist(rel['campo'])} for rel in cfg['relaciones']}
@@ -756,7 +1020,7 @@ def detalle(slug, id):
     cfg = _cfg(slug)
     con = conectar()
     cur = con.cursor()
-    fila = cur.execute(f"SELECT * FROM {cfg['tabla']} WHERE id = ?", (id,)).fetchone()
+    fila = cur.execute(f"{_select(cfg)} WHERE id = ?", (id,)).fetchone()
     if fila is None:
         con.close()
         abort(404)
@@ -775,19 +1039,23 @@ def editar(slug, id):
     cfg = _cfg(slug)
     con = conectar()
     cur = con.cursor()
-    fila = cur.execute(f"SELECT * FROM {cfg['tabla']} WHERE id = ?", (id,)).fetchone()
+    fila = cur.execute(f"{_select(cfg)} WHERE id = ?", (id,)).fetchone()
     if fila is None:
         con.close()
         abort(404)
     error = None
     if request.method == 'POST':
-        if not request.form.get('nombre', '').strip():
+        if not request.form.get(_campo_nombre(cfg), '').strip():
             error = 'El nombre es obligatorio.'
         else:
-            _guardar(slug, cfg, cur, id)
-            con.commit()
-            con.close()
-            return redirect(url_for('gestion.detalle', slug=slug, id=id))
+            try:
+                _guardar(slug, cfg, cur, id)
+            except sqlite3.IntegrityError:
+                error = _ERROR_DUPLICADO.get(slug, 'Ya existe un registro igual.')
+            else:
+                con.commit()
+                con.close()
+                return redirect(url_for('gestion.detalle', slug=slug, id=id))
     opciones = _opciones_relaciones(cfg, cur)
     seleccion = _seleccion_relaciones(cfg, id, cur)
     con.close()
@@ -809,10 +1077,32 @@ def eliminar(slug, id):
     return redirect(url_for('gestion.lista', slug=slug))
 
 
+def agregar_foto(slug, id, b64, tipo):
+    """Agrega una foto ya en base64 a la galería de una entidad.
+
+    Vive suelta y no dentro de `subir_foto` porque el agente también escribe la galería:
+    cuando el alta de un recurso salió de una foto del chat, esa foto termina acá por el
+    mismo camino que la que se sube desde el detalle (ver `agente.confirmar`).
+    """
+    cfg = _cfg(slug)
+    con = conectar()
+    cur = con.cursor()
+    fila = cur.execute(f"SELECT fotos FROM {cfg['tabla']} WHERE id = ?", (id,)).fetchone()
+    if fila is None:
+        con.close()
+        return False
+    fotos = json.loads(fila['fotos'] or '[]')
+    fotos.append({'b64': b64, 'tipo': tipo, 'fecha': datetime.now().isoformat()})
+    cur.execute(f"UPDATE {cfg['tabla']} SET fotos = ? WHERE id = ?", (json.dumps(fotos), id))
+    con.commit()
+    con.close()
+    return True
+
+
 @bp.route('/<slug>/<int:id>/foto', methods=['POST'])
 def subir_foto(slug, id):
     """Sube una foto, la convierte a base64 y la guarda en el JSON de fotos."""
-    cfg = _cfg(slug)
+    _cfg(slug)  # 404 temprano si el slug no existe
 
     if 'file' not in request.files:
         return jsonify({'ok': False, 'error': 'No hay archivo'}), 400
@@ -826,30 +1116,9 @@ def subir_foto(slug, id):
         return jsonify({'ok': False, 'error': 'Solo se aceptan imágenes'}), 400
 
     try:
-        # Leer y convertir a base64
-        datos_archivo = file.read()
-        b64 = base64.b64encode(datos_archivo).decode('utf-8')
-        content_type = file.content_type
-
-        # Cargar fotos actuales
-        con = conectar()
-        cur = con.cursor()
-        fila = cur.execute(f"SELECT fotos FROM {cfg['tabla']} WHERE id = ?", (id,)).fetchone()
-        fotos = json.loads(fila['fotos'] or '[]') if fila else []
-
-        # Agregar nueva foto
-        fotos.append({
-            'b64': b64,
-            'tipo': content_type,
-            'fecha': datetime.now().isoformat()
-        })
-
-        # Guardar
-        cur.execute(f"UPDATE {cfg['tabla']} SET fotos = ? WHERE id = ?",
-                   (json.dumps(fotos), id))
-        con.commit()
-        con.close()
-
+        b64 = base64.b64encode(file.read()).decode('utf-8')
+        if not agregar_foto(slug, id, b64, file.content_type):
+            return jsonify({'ok': False, 'error': 'No existe el registro'}), 404
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

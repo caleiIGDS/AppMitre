@@ -4,6 +4,391 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-08-09] — Buscar una persona cruza los dos padrones, y el aviso va en la tool "equivocada"
+
+**Contexto**: el agente maneja **dos padrones de personas que no se superponen**. Los
+docentes salen de `escuela.db` (los horarios); las fichas con semblanza, de `personas` en
+`gestion.db`. Un alumno que ganó una olimpiada, un egresado o un ex director tienen ficha y
+no dan clases; una profesora que nadie cargó todavía da clases y no tiene ficha. **Quien
+pregunta por alguien no sabe —ni tiene por qué saber— en cuál de los dos está.**
+
+El usuario dijo "nati fue quien lo logró" mientras se armaba un hito, y el agente contestó
+ofreciendo tres docentes —Natalia Suarez, Natalia Tosoroni, Natalia Vazquez— cuando la
+persona que había cargado dos turnos antes era **Natalia Boo Fiad**, con ficha. No es que el
+modelo buscara mal: buscó bien en el padrón equivocado. Y el prompt lo empuja para ese lado,
+porque la sección de préstamos le **inyecta** la lista de docentes y personal no docente
+(`_personas_conocidas()`) y nunca le muestra las fichas.
+
+**Decisión**: buscar una persona mira **siempre los dos padrones**, entre por donde entre.
+`buscar_profesor` suma `personas_con_ficha`; `buscar_entidad('personas', …)` suma
+`en_horarios`. Las dos solo agregan la clave cuando hay coincidencia real, así que los
+turnos normales no cambian ni suman ruido.
+
+Lo no obvio es **dónde** vive el aviso: en el resultado de la tool que el modelo eligió
+*mal*, no solo en el prompt. Para cuando llegó a `buscar_profesor` ya tomó la decisión; una
+regla en el prompt sobre cuál padrón usar solo sirve si la recuerda **antes** de elegir la
+herramienta, y este agente esas reglas las cumple a veces. Lo único que lo corrige a tiempo
+es lo que la herramienta mal elegida le conteste. El prompt igual se tocó, pero como
+refuerzo, no como mecanismo.
+
+**La dirección inversa importa igual**: sin ficha pero con docentes que coinciden, el agente
+respondía "no la tengo cargada" con la persona dando clases en la escuela. Ese aviso se lo
+prohíbe explícitamente y le da dos salidas: resolver el horario con ese nombre, o proponer
+crearle la ficha. Es la diferencia entre "no existe" y "todavía nadie la cargó".
+
+**Tres umbrales distintos, a propósito**, porque son tres consecuencias distintas:
+- `_personas_nombradas_en()` exige el **nombre completo**: de ahí salen los vínculos
+  `persona_hitos` que se escriben solos, y vincular a la persona equivocada es peor que no
+  vincular.
+- `_coincide_fuerte()` (los cruces) pide substring **o** similitud palabra por palabra ≥
+  `UMBRAL_SIMILITUD` (0.68). Lo peor que puede pasar es ofrecer un candidato de más, así que
+  se permite el difuso — pero no el de las búsquedas normales.
+- `_buscar_profesor_scored()` usa 0.6 y sigue igual: su trabajo *es* ofrecer candidatos.
+
+Ese punto medio no es cosmético. Con 0.6, el cruce de "nati" traía PETRATE MATIAS (0.60
+contra "matias") y el de "calei" traía PRIETO VALERIA — la misma clase de candidato absurdo
+que el aviso existe para evitar. Y con substring solo, se perdía "nati" → "Natalia": los
+apodos del castellano **no son prefijos**, y ése era justo el caso a resolver.
+
+---
+
+## [2026-08-09] — Los botones de confirmar vuelven todos, cada turno, deduplicados por entidad
+
+**Contexto**: el alta en dos pasos ya guardaba **todas** las fichas del turno en
+`agente_conversaciones.fichas`, pero `/chat` le mandaba al front una sola —`ultima_ficha`—.
+Pedir "creá a Pablo y a Ezequiel" mostraba las dos fichas y **un** botón: la de Pablo quedaba
+viva en el servidor, sin forma de guardarla, y nada lo avisaba. El usuario leyó dos fichas,
+confirmó, y se dio de alta una. Es la peor forma de fallar que puede tener este circuito,
+porque el síntoma es silencio.
+
+**Decisión**: `/chat` y `/historial` devuelven `confirmaciones`, una **lista**, con tres
+reglas que van juntas:
+
+1. **Un botón por ficha del turno.** Es el arreglo directo del bug.
+2. **Se devuelven todas las pendientes, no solo las del turno en curso.** El front borra los
+   botones apenas el usuario escribe (`quitarConfirmaciones()`, que existe porque seguir
+   escribiendo suele significar "cambiá algo"). Sin esta regla, confirmar una de tres y
+   después escribir cualquier cosa hacía desaparecer las otras dos — el mismo bug otra vez,
+   por otra puerta. Que reaparezcan no escribe nada: confirmar es siempre un click explícito
+   y el token sigue siendo un hash del contenido.
+3. **Deduplicadas por `slug` + nombre normalizado, gana la última.** Cuando el usuario pide
+   un cambio, el modelo rearma la ficha y quedan dos tokens vivos de la *misma* alta. Dos
+   botones con el mismo nombre y distinto contenido no hay forma de distinguirlos, y el
+   viejo guardaría la versión que el usuario mandó corregir.
+
+**Por qué no se resolvió pidiéndoselo al prompt**: la regla "acordate de ofrecer las dos
+fichas" es exactamente el tipo de instrucción que este agente cumple a veces. El estado ya
+estaba bien del lado del servidor; lo que faltaba era exponerlo. El prompt igual se tocó,
+pero para lo que solo él puede hacer: que llame a `crear_entidad` una vez por cada cosa en el
+mismo turno en vez de ir de a una.
+
+**Consecuencia buscada**: el nombre va **dentro** del botón ("✅ Guardar persona: Pablo
+Errio"). Con `etiqueta` sola, tres botones seguidos decían "Guardar persona" tres veces.
+
+---
+
+## [2026-08-09] — El vínculo persona↔hito lo hace el servidor al confirmar, no el modelo
+
+**Contexto**: probando el alta de hitos, el agente armó la ficha de "Pablo Errio y Ezequiel
+Toñanes — Certamen Nacional OMA" con **Personas/cursos involucrados vacío**. Los dos nombres
+estaban escritos en el título y en la descripción, y las dos personas ya tenían ficha: el
+modelo los tenía delante y no llenó el campo. En la misma ficha dejó `nivel` vacío y después
+le preguntó al usuario una importancia que el usuario le acababa de decir ("crítico").
+
+Las dos cosas son la misma falla: el modelo trata la ficha como prosa (el título "ya lo dice")
+en vez de como un formulario, y las preguntas de cortesía del paso 3 del circuito de alta se
+comen datos que ya estaban en la conversación.
+
+Y aunque hubiera llenado `protagonistas`, el vínculo navegable no se creaba igual:
+`protagonistas` es texto suelto, el que conecta con la ficha de la persona es `persona_hitos`,
+y **el botón de confirmar no pasa por el LLM** (esa fue una decisión anterior, y buena: el
+alta sale gratis y es determinística). En el instante en que el hito se escribe, el agente no
+tiene ningún turno donde llamar a `vincular_entidad`. Nadie iba a crear ese vínculo nunca.
+
+**Decisión**: tres capas, de la más blanda a la más dura.
+1. **Prompt** — bloque "AL CARGAR UN HITO" y una regla en el paso 3 del circuito de alta: un
+   dato que el usuario ya dio no puede quedar vacío en la ficha, y preguntar de nuevo por él
+   es el peor error de esa pantalla.
+2. **Aviso en el resultado de la tool** (`antes_de_mostrar`) — llega en el mismo turno, con
+   los nombres concretos que se encontraron cruzando el título contra `personas`. Es mucho más
+   efectivo que una regla lejana en el prompt porque es específico y llega justo cuando importa.
+3. **Código en `/confirmar`** (`_enlazar_protagonistas`) — el vínculo se escribe solo. Esta es
+   la única capa que no se puede saltear, y es la que garantiza que el hito quede conectado.
+
+**Por qué no solo prompt**: es la regla que este agente cumple a veces (mismo criterio que
+`_normalizar_borrador` con la fecha de revisión, y que `_ocultar_ids`). Lo que se puede hacer
+determinístico se hace determinístico; el prompt queda para lo que el código no puede saber.
+
+**Por qué el match exige el nombre completo**: `_personas_nombradas_en()` pide todas las
+palabras del nombre (>2 letras) en cualquier orden. Un "Pablo" suelto no vincula. Con dos
+Pablos en la escuela, colgarle un hito al que no fue es peor que dejarlo sin vincular — y se
+descubre tarde, porque nadie revisa la ficha de alguien buscando logros ajenos.
+
+**Se agregó además `hitos.rel_personas`**, espejo de `personas.rel_hitos` sobre la misma tabla:
+sin eso el vínculo existía pero no se veía desde el hito, y el bug parecía seguir ahí. Es la
+única relación declarada de los dos lados; `guardar_entidad_sin_request` solo la toca si le
+mandan la clave `rel_*`, así que ningún camino del agente la pisa.
+
+---
+
+## [2026-08-09] — La foto se lee en una llamada aparte, no se le manda al agente
+
+**Contexto**: el alta desde foto estaba escrita entera —resize en el front, bloques `image`,
+una sección del system prompt sobre chapas de características— y no funcionaba, porque el
+proveedor por defecto (DeepSeek) no tiene visión. La salida documentada era
+`AGENTE_PROVIDER=anthropic`, o sea cambiarle el modelo a **todo** el chat para una función que
+se usa en una fracción de los turnos.
+
+Al medirlo, el costo estaba en otro lado del que parecía. El system prompt (~15K caracteres) más
+`TOOLS_SCHEMA` (~40K) son **~15.000 tokens que viajan en cada turno**, tenga foto o no. Una
+imagen de 1568 px son ~1.700 tokens: el 10% de un turno. La pregunta cara no era "¿cuánto sale
+ver una foto?" sino "¿le paso la foto al agente completo o la leo aparte?".
+
+**Decisión**: lector separado, y **leer es una tool que el modelo decide llamar**, no un paso
+automático de `chat()`. La foto va a una llamada suelta —sin tools, con un prompt de ~600
+tokens que solo sabe transcribir etiquetas— y el resultado entra al chat como texto.
+
+Lo de la tool salió de una corrección al primer diseño, que leía **toda** foto al entrar:
+el caso más común no es "cargá esto al inventario" sino "guardá esta foto en el taladro", y
+para guardar una imagen no hace falta saber qué dice. Se estaba pagando una llamada de visión
+por foto para tirar el resultado. Ahora el modelo elige: `leer_foto` si necesita los datos,
+`adjuntar_foto` si solo va a una ficha, y **preguntar** si no está claro — leer "por las dudas"
+está explícitamente desaconsejado en el prompt y en la descripción de la tool.
+
+El costo de la vuelta extra del loop no lo cambia: DeepSeek cachea el prefijo (system prompt +
+tools), y un cache hit sale US$0,003625/M contra US$0,435/M de un miss, o sea ~US$0,00005 por
+iteración. Es un orden de magnitud menos que la lectura que se ahorra.
+
+Tres cosas se ganan a la vez con el lector aparte:
+
+1. **~7× más barato por foto** (~2.000 tokens contra ~15.000).
+2. **El chat no cambia de proveedor.** DeepSeek es más barato y anda mejor con las 20 tools y
+   el alta en dos pasos que un modelo chico con visión. Ya no hay que elegir entre "el que
+   chatea bien" y "el que ve".
+3. **Separa responsabilidades donde ya estaban separadas en el prompt**: leer la etiqueta
+   (puntos 1–2 de la sección de datasheets) contra decidir qué hacer con lo leído (puntos 3–6:
+   la cantidad la dice el usuario, buscar duplicados, el circuito de ficha). Lo primero se fue
+   al lector; lo segundo se quedó con el agente, que es el que tiene las tools.
+
+**Por qué Gemini 2.5 Flash-Lite de default**: se comparó contra GPT-5 Nano/Mini, Claude Haiku
+4.5, Google Cloud Vision (OCR puro) y Qwen3-VL self-hosted. A la escala de la escuela la
+diferencia de precio entre todos ellos es de centavos al año, así que no decidió el precio:
+decidió que Flash-Lite tiene **1.000 requests/día gratis sin tarjeta** y que habla el protocolo
+de OpenAI, con lo cual entra por el cliente `openai` que ya era dependencia obligatoria — cero
+paquetes nuevos. El OCR puro se descartó aunque cueste parecido: devuelve texto crudo y no
+interpreta (no distingue marca de modelo, ni entiende que cinco paneles iguales son un recurso
+con `cantidad` 5), o sea que habría que escribir a mano justo lo que el prompt ya resuelve.
+Qwen3-VL se descartó porque necesita GPU y el deploy es Render free tier.
+
+**Contra asumido**: en el tier gratuito Google usa las imágenes para mejorar sus productos. Para
+chapas de amoladoras es irrelevante; queda documentado en `AGENTE_CONFIG.md` con las variables
+para cambiar de proveedor si algún día importa.
+
+**Lo que NO se hizo**: no se sacó el camino viejo. Si hay un proveedor con visión configurado y
+no hay lector, la imagen le sigue llegando al agente como antes. Son tres líneas y evita
+romperle el chat a un deploy que ya tenga `AGENTE_PROVIDER=anthropic`.
+
+---
+
+## [2026-08-09] — La foto pendiente se ata al token de la ficha, en tabla propia
+
+**Contexto**: la foto llega en un turno y el alta se confirma en otro — a veces desde otra
+página, después de que el historial se repinta y el botón vuelve a aparecer. Hay que guardarla
+en el medio, y la pregunta es contra qué se la ata.
+
+**Decisión**: contra el **token de contenido de la ficha** (`_token_ficha()`), en una tabla
+propia `agente_fotos_pendientes`.
+
+- **Contra el token y no contra el turno o el `sid`**: el token es lo único que sobrevive la
+  distancia entre "te muestro la ficha" y "confirmaste". Y como el token es un hash del
+  contenido exacto que el usuario leyó, la foto queda atada a *esa* ficha: si el usuario pide
+  cambios y se arma una ficha nueva, es otro token — la foto se vuelve a guardar contra el
+  nuevo y la vieja se barre sola.
+- **En tabla propia y no dentro del JSON de `fichas`**: esa columna se reescribe entera en cada
+  turno de `_conv_guardar()`. Con hasta `FICHAS_MAX` (20) fotos en base64 adentro, cada mensaje
+  del chat pasaría a arrastrar varios MB de escritura.
+
+**Si `agregar_foto` falla, el alta igual se da por buena** y se avisa que la foto quedó afuera.
+Para cuando se llama, el registro ya está creado y el token ya se consumió: revertir el alta por
+una imagen sería peor que perder la imagen.
+
+---
+
+## [2026-08-09] — La excusa absurda de Emilio vive solo en las historias
+
+**Contexto**: se pidió subirle el carácter al personaje — que hable como si el otro ya supiera
+quién es (sin presentarse), con un tono leve de soberbia y orgullo de saber todo lo que pasa en
+la escuela, y que **cuando no sabe algo invente una excusa obvia y absurda**, en tono cómico.
+Las dos primeras son voz (`QUIEN_ES_EMILIO`); la tercera toca el guardrail más sensible del
+agente.
+
+**El riesgo**: "si no sabés, inventá una excusa" está a un paso de "si no sabés, inventá". Todo
+el módulo de historias existe con la forma que tiene para evitar la fabricación de anécdotas
+(ver la decisión de los textos literales), y el `no_encontrado` estaba escrito justamente para
+cerrar esa puerta.
+
+**Decisión**: se implementa, con dos límites explícitos en el prompt.
+
+1. **La excusa reemplaza el "no sé", nunca los hechos.** La respuesta puede ser graciosa, pero
+   tiene que seguir dejando clarísimo que esa historia no existe. `EXCUSA_SIN_HISTORIA` lo dice
+   en la misma frase que pide el chiste, no como una aclaración aparte.
+2. **Vale solo para historias y lore.** Un horario, un stock, un préstamo o una persona que no
+   están cargados se contestan derecho: "no hay datos de eso". El que pregunta por una
+   herramienta o corre a dar clase no está pidiendo un personaje, y una excusa graciosa ahí le
+   cuesta una vuelta al pañol al vacío. Es el agente bifásico de siempre (decisión del
+   2026-08-08), ahora con un borde más filoso: la gracia es un permiso de la faceta fantasma, y
+   el system prompt lo dice con esas palabras ("DÓNDE TERMINA EL PERSONAJE").
+
+**Por qué en las `nota` de la tool y además en el system prompt**: la excusa se dispara en un
+`no_encontrado`, así que su lugar natural es la `nota` de las tres ramas que lo devuelven. Pero
+el límite (para qué **no** vale) tiene que estar en el system prompt: si viviera solo en la
+respuesta de `consultar_historia`, no estaría presente en el turno donde el usuario pregunta por
+un préstamo que no existe, que es justo donde importa.
+
+---
+
+## [2026-08-09] — Al personaje se le da un instructivo de cómo hablar, no una lista de prohibiciones (y el resto lo saca código)
+
+**Contexto**: Emilio cuenta las historias en primera persona como el fantasma de la escuela
+(ver la decisión del 2026-08-08 sobre su personalidad). El costo de ese personaje es que le
+activa al modelo el registro de roleplay, y en vez de contar **actúa**:
+`*se acomoda los anteojos*`, `—mirando el patio—`, `EMILIO:` antes de hablar. La regla que lo
+prohibía ya existía en `instruccion_tono`, y aun así seguía pasando, por tres razones:
+
+1. Estaba en **una sola de las dos rutas** de `consultar_historia`. La ruta por `id` — la que se
+   usa cuando el usuario elige una historia de un `listar`, o sea la más frecuente — tenía una
+   instrucción de dos líneas sin la regla.
+2. Viaja como **resultado de tool, y esos no se persisten en el historial** (decisión de
+   2026-08-08 sobre tonos: la instrucción es contextual para no cargar peso en todos los turnos).
+   En un turno de seguimiento ("¿y después qué pasó?") la regla ya no está, y lo único que el
+   modelo tiene a la vista como modelo de respuesta es su propia respuesta actuada anterior.
+3. El campo **`estilo` se interpola literal** en el prompt, y la doc recomendaba llenarlo con
+   `"diálogos"` y `"dramático"`. Es decir: la regla decía "no actúes" y el mismo prompt, tres
+   líneas más abajo, pedía teatro.
+
+**Decisión**: mismo esquema de dos capas que los id (ver "Los id no se le muestran al usuario"):
+prompt + **filtro de salida determinístico** `_quitar_acotaciones()`. La instrucción se extrae a
+`COMO_CUENTA_EMILIO` y se interpola en el system prompt **y** en la `instruccion_tono` ahora
+unificada en `_instruccion_tono()`.
+
+**El prompt se escribe en positivo, y esto no es cosmético.** La primera versión era una lista de
+prohibiciones ("no escribas acotaciones de gestos, no marcas de guion de teatro") y falló de dos
+maneras distintas:
+
+- Para nombrar lo prohibido hay que **escribir el ejemplo malo en el prompt**. O sea que la regla
+  anti-`*se acomoda los anteojos*` metía `*se acomoda los anteojos*` en el contexto de todos los
+  turnos. Es la peor forma posible de pedir algo a un modelo que completa por imitación.
+- Decir qué no hacer le deja **deducir la forma correcta**, y la deduce mal. Probado: prohibidas
+  las marcas, escribió los mismos gestos como prosa suelta ("Baja la voz, se acerca un poco." /
+  "Se encoge de hombros."). Cumplió la letra y esquivó la intención, porque nunca se le dijo
+  cuál era.
+
+La versión que quedó describe el procedimiento — escribís solo lo que Emilio dice en voz alta;
+el clima se transmite con lo dicho ("esto no lo repitas" en vez de contar que baja la voz) — y
+cierra con un **test que el modelo aplica solo**: *¿esta oración se puede pronunciar?*. No hay ni
+una acotación de muestra en el prompt.
+
+**Por qué además filtro de código**: no alcanza con esperar que lo entienda del texto. El
+provider por defecto (DeepSeek) imita el registro del contexto más de lo que razona sobre una
+instrucción de estilo — el mismo motivo por el que existen `_escritura_no_ejecutada()` y
+`_ocultar_ids()`. Y acá el prompt tiene una desventaja extra: el ejemplo malo se lo genera él
+mismo y se lo persiste, así que la única forma de cortar el bucle es que la acotación **no llegue
+al historial**. Por eso el filtro corre antes de guardar, no al pintar.
+
+**Cómo se detecta un gesto sin marcas**: por gramática, no por lista de frases. Emilio habla en
+primera persona y las historias están en pasado, así que una oración corta, entera en tercera
+persona del presente y sin sujeto solo puede ser él describiéndose desde afuera. Se borra solo si
+**todas** las cláusulas de la oración son gesto: "Baja la voz, se acerca un poco." se va entera,
+"Sonríe y sigue la clase como si nada" se queda.
+
+**Por qué el filtro es conservador**: falso positivo y falso negativo no cuestan lo mismo. Que se
+escape una acotación es ruido; borrar `*Panel solar 100 W*` de una respuesta de inventario es
+perder un dato. De ahí que nunca se toque un tramo con números, que los núcleos de gesto estén
+listados a mano (`_GESTO_NUCLEO`) en vez de inferidos por conjugación, y que los verbos con
+imperativo queden afuera de la lista de una palabra: `*mirá*` es una cursiva válida.
+
+---
+
+## [2026-08-08] — Personas: la identidad es el nombre con las palabras ordenadas, no el nombre
+
+**Contexto**: la memoria de la escuela (quién es quién, qué proyectos e hitos protagonizó) se
+modela como un grafo: una fila por persona y relaciones M2M hacia `proyectos` e `hitos` —
+"cosas en la pared unidas con hilos". Todo el valor del modelo depende de que **una persona sea
+un solo nodo**. Y el nombre entra por caminos que lo escriben distinto: el chat y el form
+reciben "Juan Pablo Crivari"; los horarios lo tienen como "CRIVARI JUAN PABLO", porque
+`limpiar_profesor()` (database.py) guarda apellido primero, en mayúsculas y sin acentos.
+
+**Decisión**: `personas.nombre_norm` con un **UNIQUE**, calculado por `clave_persona()`:
+descartar puntuación → `_norm` (minúsculas, sin acentos, espacios colapsados) → **ordenar las
+palabras alfabéticamente** → volver a unir. `nombre` guarda la grafía linda para mostrar;
+`nombre_norm` decide identidad. Verificado: las cinco formas que aparecen en la práctica
+(incluida la que sale de `limpiar_profesor()`) colapsan en `crivari juan pablo`.
+
+**Por qué ordenar las palabras y no sólo normalizar**: sin eso, "Juan Pablo Crivari" y
+"CRIVARI JUAN PABLO" son claves distintas y quedan dos fichas de la misma persona con los
+hilos repartidos entre ambas — exactamente la falla que el grafo existe para evitar, y la más
+difícil de notar, porque las dos fichas se ven bien por separado.
+
+**El costo, asumido a conciencia**: dos personas distintas cuyos nombres son la misma bolsa de
+palabras ("María José Pérez" vs "José María Pérez") colisionan, y la segunda no se puede
+cargar. Es raro; cuando pase, el usuario ve el mensaje de `_ERROR_DUPLICADO` y puede
+desambiguar. Se eligió ese modo de falla — **ruidoso y recuperable** — sobre el contrario
+(duplicados silenciosos que corrompen el grafo sin que nadie se entere). Si algún día molesta,
+lo que hay que cambiar es `clave_persona()`, no el schema.
+
+**No se sincroniza con `escuela.db`**: los horarios son datos operativos que se regeneran desde
+Sheets cada año; `personas` es memoria permanente. Un docente que deja la escuela desaparece de
+Sheets y **debe** seguir en la memoria — que sobreviva al padrón es el punto. Por eso no hay FK
+entre ambas: el puente, cuando haga falta, es `clave_persona()` sobre el nombre.
+
+**Sin campo `rol`**: se probó con una lista fija de roles y se sacó el mismo día. Una taxonomía
+cerrada se queda corta enseguida (alguien es docente y ex alumno a la vez, o pasa de preceptor a
+directivo) y la semblanza en prosa lo dice mejor. La columna se elimina en `_migrar` con
+`DROP COLUMN` (SQLite 3.35+). Queda en pie la cautela que motivaba el rol: `descripcion` es un
+juicio sobre una persona real y `/gestion` está detrás de una clave compartida cuyo default
+está hardcodeado en un repo público — semblanzas de alumnos menores piden auth de verdad
+primero.
+
+---
+
+## [2026-08-08] — `gestion.db`: respaldo automático y seed condicionado (a raíz de una pérdida real)
+
+**Contexto**: se perdió el inventario completo — 87 recursos, 7 préstamos, 26 ítems y las relaciones. El archivo `gestion.db` fue **borrado del disco**, no vaciado: `sqlite_sequence` de `recursos` había vuelto a 5 (ese contador no baja con `DELETE` ni con `VACUUM`), un escaneo de bytes crudos no encontró rastros de los nombres reales en páginas liberadas, y la `CreationTime` seguía siendo la vieja porque NTFS la reusa al recrear un archivo con el mismo nombre en el mismo directorio. **No se determinó qué lo borró**: no hay `os.remove`/`shutil`/`DROP TABLE` sobre esa DB en el repo, ni hooks en `.claude/settings.json`, ni scripts de sesión destructivos; el reflog muestra un `reset: moving to HEAD` a las 18:33 pero `git reset --hard` no toca archivos ignorados (sí lo haría un `git clean -xdf`, que no deja rastro). Se recuperó de casualidad, desde un `.bak` que una sesión había dejado en `%TEMP%` horas antes.
+
+**Dos fallas se combinaron**, y ninguna era el borrado en sí:
+
+1. **`gestion.db` no tenía ninguna red.** Está en `.gitignore` (`*.db`) y no se regenera desde ninguna fuente — a diferencia de `escuela.db`, que se reconstruye desde Sheets. Un `.gitignore` no protege de un `rm`; git no es backup.
+2. **El seed convertía la pérdida en algo silencioso.** `init_db()` sembraba siempre que `recursos` estuviera vacía, así que un archivo faltante se volvía "base nueva" en vez de error. Se trabajó un día entero contra los 5 recursos de ejemplo sin notar nada.
+
+**Decisión**:
+
+- **Respaldo rotativo en `init_db()`**, o sea en cada arranque, antes de cualquier migración de schema. Con la **API `backup()` de sqlite3** y no `shutil.copy`, para que la copia sea consistente aunque otro proceso esté escribiendo.
+- **Nunca respaldar una DB sin recursos.** Es la regla que hace que el sistema no se autodestruya: si el archivo se perdió, respaldar el vacío encima de los buenos sería peor que no tener respaldos.
+- **Retención = últimos 20 + el primero de cada día.** La regla diaria no es adorno: cada arranque escribe en la DB (`_migrar()`, el barrido de conversaciones de `agente.init_db()`), así que cada arranque genera un respaldo nuevo y la deduplicación por hash no alcanza. Sin retención diaria, una tarde de reinicios depurando empuja fuera de la rotación justo lo que uno querría recuperar.
+- **El seed pasa a ser condicional**: si la DB está vacía **y existen respaldos**, `init_db()` levanta `RuntimeError` con el comando de restauración en vez de sembrar. Los respaldos son el desempate entre "instalación nueva" y "perdí datos" — la señal más barata y confiable disponible. `GESTION_SEED=1` fuerza el seed a propósito; un deploy limpio no tiene respaldos, así que sigue sembrando solo.
+
+**Consecuencia**: la app **no arranca** con la DB vacía si hay respaldos. Es deliberado — fallar ruidoso es el punto, y el mensaje trae la ruta exacta a copiar. Queda un `gestion.db` vacío en disco cuando el guard dispara (`conectar()` lo crea antes del raise); no molesta porque el guard vuelve a disparar en el arranque siguiente y la restauración lo pisa.
+
+**Nota**: `importar_inventario.py` (borrado en `0dbfbee`) se recuperó del historial como red secundaria. **No reemplaza al respaldo**: el Sheet no guarda relaciones, fotos, préstamos ni las ediciones hechas en la app, y hoy tiene menos filas que recursos hay en la DB. Correrlo sin comparar antes pisa datos.
+
+---
+
+## [2026-08-08] — Foto sin visión: cortar antes del modelo, no degradar a texto
+
+**Contexto**: el alta desde foto (sacar la etiqueta de un panel solar, decir "tenemos 5", que quede en el inventario) estaba a medio camino: el front subía la imagen y el loop de Anthropic la pasaba, pero el proveedor por defecto es **DeepSeek, que no tiene visión**. En ese caso `_mensajes_openai` reemplazaba la imagen por la nota "[el usuario adjuntó una imagen, pero este proveedor no soporta visión]" y **le mandaba el turno igual al modelo**.
+
+**Decisión**: si llega una imagen y `_get_config()['vision']` es falso, `chat()` responde `AVISO_SIN_VISION` **sin llamar al modelo**.
+
+**Por qué**: el modelo con la nota igual contestaba, y no siempre decía "no la veo" — con la frase "tenemos 5 de estos" al lado, lo más probable es que arme una ficha con las especificaciones típicas de un panel solar cualquiera. Un dato inventado en el inventario es peor que no cargar nada: nadie lo vuelve a verificar y queda como verdad para el que venga después (misma lógica que la regla "nunca afirmes algo que no ejecutaste"). Cortar antes además no gasta tokens y le dice al usuario qué hacer en su lugar (dictar los datos por texto).
+
+**Alternativa descartada — pasar el default a Anthropic para que funcione siempre**: el default DeepSeek se eligió con una batería de 30 preguntas y por costo; cambiarlo para habilitar un flujo es una decisión de despliegue, no de código. Queda como una env var (`AGENTE_PROVIDER=anthropic`) documentada en `agent_docs/gestion-conocimiento.md`.
+
+**Por qué `AGENTE_VISION` es una env var y no una tabla de modelos con visión**: la lista de modelos que ven imágenes cambia todo el tiempo y `AGENTE_MODEL` es texto libre (incluye self-hosted). Una tabla hardcodeada envejece mal y falla justo al revés de lo que conviene: negándole visión a un modelo que sí la tiene. El que configura el servidor sabe qué modelo puso.
+
+**Achicar la foto en el navegador y no en el servidor**: el cuello de botella es la subida (wifi de la escuela, datos del celular), así que comprimir después de subir no ahorra lo que importa. Además evita meter Pillow en el request de chat. 1568 px de lado largo es el tope que el modelo aprovecha; más grande se paga el envío para nada.
+
+---
+
 ## [2026-08-08] — Personalidad de Emilio: fantasma omnipotente en historias, herramienta neutral en tareas
 
 **Contexto**: El agente se llamaba "Emilio" por el nombre de la escuela, pero sin identidad — respondía todo con el mismo tono neutral. Se pidió darle **personaje**: que cuando cuente historias sea Emilio Mitre en persona, el ingeniero cuyo nombre lleva la escuela, un fantasma que habita desde su construcción y vio todo lo que pasó. Pero solo en historias — para horarios y búsquedas operativas, debe seguir siendo una herramienta eficiente.

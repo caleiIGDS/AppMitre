@@ -4,6 +4,135 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-09] — Buscar una persona mira los dos padrones (fichas + horarios), en las dos direcciones
+
+**Tipo**: cambio de forma en la respuesta de dos tools de lectura (condicional) + funciones nuevas en `agente.py`
+**Archivos**: `agente.py`, `agent_docs/gestion-conocimiento.md`, `dev-log/DECISIONS.md`
+**Contexto**: son **dos padrones que no se superponen** — los docentes salen de `escuela.db` (horarios) y las fichas de `personas` de `gestion.db`. Ante "nati fue quien lo logró" el agente ofrecía tres docentes llamadas Natalia mientras "Natalia Boo Fiad" estaba cargada con ficha; y al revés, buscar a una docente en `personas` devolvía vacío y el agente concluía "no la tengo".
+**Cambios**:
+- **`buscar_profesor` puede devolver un dict en vez de una lista.** Si el query también coincide con una fila de `personas`, pasa de `[{nombre}, …]` a `{docentes: [{nombre}, …], personas_con_ficha: [{id, nombre}, …], aviso: str}`. Único consumidor: el dispatcher de `ejecutar_tool`, que solo la serializa a JSON.
+- **`buscar_entidad` con `slug='personas'` puede sumar `en_horarios: [nombre, …]` y `aviso_horarios`.** Las claves de siempre (`slug`, `query`, `total`, `resultados`, `aviso`) no cambian. Cuando no hay ficha pero sí docentes, el aviso le prohíbe explícitamente responder "no la tengo" y le ofrece dos salidas: resolver el horario con ese nombre, o proponer crear la ficha.
+- Las dos solo agregan la clave **cuando hay coincidencia real**, así que los turnos normales de horarios y de inventario no cambian ni suman ruido.
+- **Funciones nuevas**: `_coincide_fuerte(q_norm, nombre)` (filtro de los cruces: substring o similitud palabra por palabra ≥ `gestion.UMBRAL_SIMILITUD`, más estricto que el 0.6 de `_buscar_profesor_scored`), `_personas_parecidas(query)` y `_docentes_parecidos(query)`. `_personas_nombradas_en()` no cambia: sigue exigiendo nombre completo y sigue siendo la única que decide los vínculos `persona_hitos` reales.
+- **`_recordatorio_hito()`**: cuando `protagonistas` está vacío y no hubo match por nombre completo, el aviso ahora lista el padrón de personas con ficha (tope `PADRON_EN_AVISO` = 40; más que eso lo deriva a `buscar_entidad`).
+- **Constante nueva** `PADRON_EN_AVISO = 40`.
+
+---
+
+## [2026-08-09] — Los hitos se llevan a su gente: `hitos.rel_personas` + vínculo automático al confirmar
+
+**Tipo**: relación M2M nueva declarada en `gestion.ENTIDADES` (campo nuevo en el form y en el detalle de hitos) + clave nueva en la respuesta de `crear_entidad` + efecto nuevo de `POST /gestion/agente/confirmar`
+**Archivos**: `gestion.py`, `agente.py`, `agent_docs/gestion-conocimiento.md`, `dev-log/DECISIONS.md`
+**Cambios**:
+- **`hitos` declara `rel_personas`** (`{campo: 'rel_personas', tabla: 'persona_hitos', col_propia: 'hito_id', col_ajena: 'persona_id', slug_ajeno: 'personas'}`), espejo de `personas.rel_hitos` sobre la **misma tabla**. Es la única relación simétrica del sistema. Consecuencias hacia afuera:
+  - El formulario de alta/edición de `/gestion/hitos` gana un multi-select "Personas con ficha", y la ficha de detalle del hito lista a su gente. Antes el vínculo solo se veía desde la persona.
+  - **`vincular_entidad` / `desvincular_entidad` ahora aceptan `hitos → personas`**, que antes devolvía `No hay relación entre hitos y personas`. Su descripción ya no dice que con personas el origen es *siempre* la persona: eso sigue valiendo para `proyectos` y ya no para `hitos`.
+  - Sin riesgo para el agente: `guardar_entidad_sin_request` solo toca la M2M `if campo in campos_dict`, y ni `_crear_entidad` ni `_editar_entidad` mandan claves `rel_*`.
+- **`crear_entidad` puede devolver `antes_de_mostrar: [str, …]`** cuando el slug es `hitos` y la ficha viene con `protagonistas`, `nivel`, `fecha` o `tipo` vacíos (`_recordatorio_hito()`). Son instrucciones para el modelo, no texto para el usuario: el prompt le manda resolverlas y volver a llamar antes de contestar. Si `protagonistas` está vacío, el aviso **nombra a las personas ya cargadas que aparecen en el título/descripción**.
+- **`POST /gestion/agente/confirmar` ahora escribe en `persona_hitos`** al guardar un hito: cruza `protagonistas` contra `personas` (`_personas_nombradas_en()`, match por nombre completo normalizado, cualquier orden) y vincula los que existan. La respuesta suma " Lo vinculé con la ficha de X." — el front ya pinta ese texto tal cual. **Es el único momento posible**: el botón no pasa por el LLM, así que el agente no tiene turno para llamar a `vincular_entidad` cuando el hito se crea.
+- **Funciones nuevas en `agente.py`**: `_personas_cargadas()`, `_personas_nombradas_en(texto)`, `_recordatorio_hito(borrador)`, `_enlazar_protagonistas(hito_id, protagonistas)`.
+
+---
+
+## [2026-08-09] — Un botón de confirmar por ficha: `confirmacion` → `confirmaciones` (lista)
+
+**Tipo**: cambio incompatible en la respuesta JSON de dos endpoints del agente + campos nuevos en los esquemas de `crear_entidad` / `editar_entidad`
+**Archivos**: `agente.py`, `static/gestion-agente.js`, `agent_docs/gestion-conocimiento.md`, `dev-log/DECISIONS.md`
+**Cambios**:
+- **`POST /gestion/agente/chat` y `GET /gestion/agente/historial` devuelven `confirmaciones: [{token, etiqueta, nombre}, …]`** en vez de `confirmacion: {…} | null`. Es incompatible: la clave vieja ya no existe y quien la lea recibe `undefined`. El único consumidor es `gestion-agente.js`, actualizado en el mismo commit (`agregarConfirmacion()` → `agregarConfirmaciones(lista)`).
+  - La lista trae **todas las fichas pendientes**, no solo las del turno en curso, y viene deduplicada por entidad (`slug` + nombre normalizado): si el modelo rearmó una ficha porque el usuario pidió un cambio, gana la última.
+  - Motivo: un turno puede armar varias fichas ("creá a Pablo y a Ezequiel") y se mandaba solo la última. Las otras quedaban vivas en `agente_conversaciones.fichas` **sin ningún botón que las guardara**, así que se perdían sin que nada avisara.
+- **`crear_entidad` acepta `titulo`, `nivel`, `etiquetas` y `protagonistas`**, y `fecha` pasa a valer para proyectos **e** hitos. `required` baja de `['slug', 'nombre']` a `['slug']`: cuál de los dos campos de nombre hace falta lo decide `_crear_entidad` contra `gestion._campo_nombre`. Sin esto **ninguna alta de hito podía completarse** — el modelo no tenía forma de mandar `titulo` y el servidor lo exigía. `editar_entidad` recibe los mismos campos.
+- **`/confirmar` cambia el texto que deja en el historial**: `(confirmé el alta con el botón)` → `(confirmé con el botón el alta de: <nombre>)`, y la respuesta suma "Quedan N sin confirmar." cuando corresponde. Con varios botones a la vez, la línea genérica no le decía al modelo cuál se guardó.
+
+---
+
+## [2026-08-09] — Lector de fotos aparte del chat + la foto queda en la ficha del recurso
+
+**Tipo**: tabla nueva en `gestion.db` + env vars nuevas + función pública nueva en `gestion.py` + cambio en lo que se persiste del mensaje del usuario
+**Archivos**: `agente.py`, `gestion.py`, `requirements.txt`, `AGENTE_CONFIG.md`, `agent_docs/gestion-conocimiento.md`, `dev-log/DECISIONS.md`
+**Cambios**:
+- **Tabla nueva** `agente_fotos_pendientes (token PK, sid, b64, tipo, fecha)`. Guarda la foto de la que salió una ficha hasta que el usuario confirma el alta. Se crea sola (`IF NOT EXISTS` en `SCHEMA`, y `agente.init_db()` corre en import desde `app.py`). Se barre a los `CONVERSACION_DIAS` días y en `/reset`.
+- **`gestion.agregar_foto(slug, id, b64, tipo)`**: función pública nueva, extraída del cuerpo de `subir_foto()`. Devuelve `False` si no existe el registro. Ahora es el único lugar que escribe la columna `fotos`, lo use el form web o el agente. `subir_foto()` pasa a ser un wrapper de HTTP sobre ella.
+- **Env vars nuevas**, independientes de `AGENTE_PROVIDER`: `AGENTE_VISION_API_KEY` (fallback `GEMINI_API_KEY`), `AGENTE_VISION_MODEL` (default `gemini-2.5-flash-lite`), `AGENTE_VISION_API_BASE` (default el endpoint OpenAI-compatible de Google). Sin la key, `_get_vision_config()` devuelve `None`.
+- **Tools nuevas: `leer_foto()` y `adjuntar_foto(slug, id)`.** Las dos operan sobre la foto adjuntada en el turno, que viaja por `contexto_turno['foto_turno']` y **no** como parámetro (el modelo no ve la imagen; pedirle el base64 sería pedirle que lo invente). `adjuntar_foto` entra en `TOOLS_ESCRITURA` (se audita, cuenta para el detector de escritura fantasma); `leer_foto` es de lectura — no toca la base, lo que gasta es la API de visión.
+- **`chat()` ya no le manda la imagen al agente ni la lee sola** cuando hay lector configurado: deja la foto en `contexto_turno` y le agrega al mensaje del usuario una nota de que está disponible. **Leer pasó a ser una decisión del modelo**, porque el caso más común —"guardá esta foto en el taladro"— no necesita leer nada, y leer por las dudas era pagar una llamada de visión por foto para tirarla.
+  - **Esto cambia lo que se persiste en el historial**: donde antes iba `[el usuario adjuntó una imagen]` ahora va la nota con las instrucciones. `_texto_visible()` la reemplaza por `📷 (foto)` al repintar el chat, así que la UI no cambia.
+  - Se conservan las otras dos ramas: proveedor con visión propia (`AGENTE_VISION=1` / Anthropic) sigue andando igual, y sin ninguno de los dos sigue cortando antes del modelo.
+- **`AVISO_LECTURA_FALLIDA` se eliminó**: si la lectura falla, ahora el error vuelve como resultado de `leer_foto` y lo cuenta el modelo, en vez de cortar el turno con un texto fijo.
+- **`/confirmar`** ahora puede sumarle a la respuesta " Le guardé también la foto." — el front ya pinta ese texto tal cual, no hace falta tocarlo.
+- **`AGENTE_PROVIDER=anthropic` deja de ser necesario para el alta desde foto.** Es el contrato que más se rompe hacia afuera: cualquier doc o deploy que lo tuviera puesto *solo* por las fotos puede volver al default.
+
+---
+
+## [2026-08-09] — Emilio cuenta, no actúa: voz del personaje + instructivo positivo + filtro de acotaciones
+
+**Tipo**: filtro de salida nuevo en `chat()` (afecta el texto que ve y que se persiste) + `instruccion_tono` unificada + voz del personaje en el circuito de historias
+**Archivos**: `agente.py`, `historia_indice.json`, `HISTORIAS_PROCEDIMIENTO.md`, `agent_docs/gestion-conocimiento.md`, `dev-log/DECISIONS.md`
+**Cambios**:
+- **`COMO_CUENTA_EMILIO`**: constante compartida por el system prompt y `_instruccion_tono`. Es un **instructivo de qué hacer** ("escribís únicamente las palabras que Emilio dice en voz alta", cómo dar clima con lo dicho, y un test: *¿esta oración se puede pronunciar?*), no una lista de prohibiciones. Reemplaza a la primera versión, negativa, que enumeraba lo que no había que escribir — y por eso mismo **traía los ejemplos malos dentro del prompt**, que era lo que el modelo copiaba.
+  - Va también en el **system prompt** (no solo en la instrucción de la tool): es lo que la hace valer en los turnos de seguimiento, donde los resultados de tools ya no están en contexto.
+- **`_instruccion_tono(tono, estilo)`**: única fuente para las dos rutas de `consultar_historia`. Antes la ruta por `id` (la del `listar` → el usuario elige, o sea el camino más común) tenía una instrucción de dos líneas **sin** nada de esto, que sí tenía la ruta por `tema`.
+- **`_quitar_acotaciones()`**: filtro de salida en `chat()`, aplicado después de `_ocultar_ids()` y también **antes de persistir** (si la acotación queda en el historial, el modelo la imita al turno siguiente). Cubre dos formas:
+  - **Marcadas**: cursivas de una marca (nunca `**bold**`), corchetes, tramos entre rayas, y la etiqueta `EMILIO:` / `**Emilio:**` a principio de línea. Qué se borra lo decide `_parece_gesto()`: **nunca** un tramo con números (`*Panel solar 100 W*` es contenido, `—fundada en 1957—` es un paréntesis legítimo). Los verbos con imperativo quedan afuera: `*mirá*` no se toca.
+  - **Sin marcar** (`_quitar_oraciones_gesto` / `_es_oracion_gesto`): el gesto escrito como prosa suelta ("Se encoge de hombros."), que es a lo que el modelo se pasa cuando le prohibís las marcas. Borra la oración solo si **todas** sus cláusulas son gesto, con los núcleos listados a mano en `_GESTO_NUCLEO`.
+- **Campo `estilo`**: se le pasa literal al modelo, así que se saca el vocabulario de teatro de los ejemplos (`"diálogos"` en `historia_indice.json`, `"dramático"` en `HISTORIAS_PROCEDIMIENTO.md` → `"tenso"`). Los `estilo` de las 5 historias ya cargadas no usaban ninguno de los dos.
+- **`QUIEN_ES_EMILIO`**: la voz del personaje, aparte de la forma. El que pregunta ya sabe quién es (no se presenta, no explica que es un fantasma), cuenta con orgullo de ser el único que vio todo, y **se nota que no es una persona sin que lo diga**: no tiene cuerpo ni lugar (está siempre y en todas partes a la vez), nada lo tapa, y el tiempo no le pesa. Va solo en el circuito de historias, no en las respuestas operativas.
+  - De ahí sale el fundamento de la regla anti-acotaciones: no describe lo que hace con el cuerpo **porque no tiene cuerpo**. En `COMO_CUENTA_EMILIO` quedó escrito como consecuencia del personaje, no como prohibición de estilo suelta.
+  - La sección QUIÉN SOS del system prompt también se reescribió: "no sos una persona que trabaja en el edificio: sos el edificio". Se sacaron las frases que le daban cuerpo sin querer ("su fantasma **recorre** los pasillos", "alguien que **te cruzás** en el pasillo").
+- **`EXCUSA_SIN_HISTORIA`**: interpolada en las **tres** `nota` de `no_encontrado` (índice vacío, sin match por tema, id inexistente). Cuando no tiene la historia, zafa con una excusa absurda en vez de admitir el hueco — pero la excusa reemplaza el "no sé", **nunca los hechos**, y el system prompt acota que no vale para horarios, stock, préstamos ni personas ("DÓNDE TERMINA EL PERSONAJE"). Ver DECISIONS.
+
+---
+
+## [2026-08-08] — Entidad `personas` + el CRUD genérico deja de exigir una columna `nombre`
+
+**Tipo**: schema nuevo en `gestion.db` + cambio de contrato en la config de `ENTIDADES`
+**Archivos**: `gestion.py`, `templates/gestion/detalle.html`, `agent_docs/gestion-conocimiento.md`, `dev-log/DECISIONS.md`
+**Cambios**:
+- **Tablas nuevas**: `personas` (id, nombre, `nombre_norm`, descripcion, fecha_actualizada, drive_url, fotos), y las M2M `persona_proyectos` / `persona_hitos`, ambas con índice por `persona_id`.
+  - `nombre_norm` tiene un **UNIQUE** y no se pide en el form: lo calcula `gestion.clave_persona()` (público). Ver DECISIONS.
+  - `fecha_actualizada` también es derivada: se pisa sola en cada guardado, no es un campo del form.
+- **`ENTIDADES` acepta `campo_nombre`** (default `'nombre'`) para entidades cuya columna de nombre se llama distinto. `hitos` la declara como `'titulo'`.
+  - **Todas las lecturas del CRUD genérico pasan por `_select(cfg)`**, que agrega `titulo AS nombre`. El contrato para los consumidores (templates genéricos, `agente.py`, `buscar_entidad_sin_request`, `snapshot_entidad`) **no cambia**: siguen leyendo `fila['nombre']`.
+  - Esto arregla `/gestion/hitos`, que estaba **roto desde que se agregó la entidad** (commit `829ea57`): `lista()` hacía `ORDER BY nombre` sobre una tabla sin esa columna → `OperationalError`, y el alta validaba `request.form.get('nombre')`, que en el form de hitos nunca llega → "El nombre es obligatorio" siempre.
+- **`hitos` gana columna `fotos`** (aditiva vía `_migrar`): `detalle.html` muestra el botón 📷 para toda entidad, y sin la columna `subir_foto` tiraba 500.
+- **`LIMPIEZA_M2M`** ahora cubre `personas`, y suma las inversas a `proyectos` (`persona_proyectos`) e `hitos` (`persona_hitos`).
+- **`nuevo`/`editar` capturan `sqlite3.IntegrityError`** y muestran el mensaje de `_ERROR_DUPLICADO` en vez de un 500.
+- **El agente ya alcanza las 6 entidades**: `agente.SLUGS_ENTIDAD = list(gestion.ENTIDADES)` reemplaza el enum hardcodeado que se repetía en **10** esquemas de tools. Agregar una entidad ya no requiere tocar `agente.py`.
+  - `_crear_entidad` valida `gestion._campo_nombre(cfg)` en vez de `'nombre'`; `_nombre_de(slug, campos)` (nuevo) resuelve el nombre visible de una ficha, porque el dict del modelo no pasa por el alias de `_select()`; `CAMPOS_REDACTADOS` suma `'titulo'`.
+  - System prompt: sección **PERSONAS** nueva (son seis áreas, no cuatro).
+
+---
+
+## [2026-08-08] — `gestion.init_db()` puede fallar: seed condicionado + respaldos automáticos
+
+**Tipo**: cambio de contrato en el arranque (sin cambio de schema)
+**Archivos**: `gestion.py`, `agent_docs/gestion-conocimiento.md`, `dev-log/DECISIONS.md`
+**Cambios**:
+- **`init_db()` ya no siembra incondicionalmente.** Si `recursos` está vacía **y** existe al menos un respaldo en `backups/`, levanta `RuntimeError` con las instrucciones de restauración. Antes cargaba los 5 de ejemplo, lo que convertía una pérdida de datos en algo silencioso (ver DECISIONS 2026-08-08).
+  - **Quien llame a `init_db()` tiene que contar con que puede tirar excepción**: hoy son `app.py` (en el import, o sea afecta a gunicorn/WSGI) e `init_gestion.py`. Es intencional que la app no arranque en ese caso.
+  - Escape hatch: `GESTION_SEED=1`. Un deploy limpio no tiene respaldos, así que sigue sembrando en el primer arranque sin necesidad del flag.
+- **`init_db()` ahora respalda antes de tocar nada** vía `respaldar_db()`, que es público por si hace falta llamarlo a mano antes de una operación riesgosa.
+- **Directorio nuevo `backups/`** al lado de `gestion.db`, con `gestion-YYYYMMDD-HHMMSS-ffffff.db`. Cae bajo `*.db` del `.gitignore`: no se versiona ni se pushea.
+- **API pública nueva en `gestion.py`**: `respaldar_db(max_copias=20)` y `respaldos()` (lista ordenada del más viejo al más nuevo).
+- `importar_inventario.py` vuelve al repo (se había borrado en `0dbfbee`) como fuente secundaria del inventario. **No es un backup** — no tiene relaciones, fotos ni préstamos.
+
+---
+
+## [2026-08-08] — Alta desde foto: contrato de `/chat` con imagen, flag de visión por proveedor
+
+**Tipo**: cambio de contrato en `POST /gestion/agente/chat` + config nueva (sin cambio de schema)
+**Archivos**: `agente.py`, `static/gestion-agente.js`, `agent_docs/gestion-conocimiento.md`
+**Cambios**:
+- **`mensaje` deja de ser obligatorio si viene `imagen`**: antes `{mensaje:'', imagen:'…'}` era `400`. Mandar solo la foto de una etiqueta es el caso normal en el taller; el backend completa el texto con "Te mando esta foto." y el front deja de bloquear el envío. Vacío **y** sin imagen sigue siendo `400`.
+- **`_get_config()` devuelve una clave nueva `vision`** (bool). `true` siempre para `anthropic`; para el resto sale de la env var nueva **`AGENTE_VISION`** (`1`/`true`/`si`), porque ahí la visión depende del modelo y no del proveedor (gpt-4o sí, gpt-3.5 no).
+- **Sin visión, `/chat` corta antes de llamar al modelo** y responde `AVISO_SIN_VISION` (`{respuesta, tools:[], escritura_fantasma:false, confirmacion:null}`, HTTP 200). Antes la imagen se reemplazaba por una nota y el modelo contestaba igual — con el default DeepSeek eso significaba inventar lo que "leyó" en la etiqueta. El turno se guarda en el historial como cualquier otro (sin la imagen).
+- **`_mensajes_openai(mensajes, vision=False)` toma un parámetro nuevo**: con `vision=True` traduce el bloque `image`/`source` de Anthropic al `image_url` con data URI de OpenAI, en vez de aplanarlo a la nota de texto. Habilita el flujo con gpt-4o u ollama+llava.
+- **El front achica la foto antes de mandarla** (canvas, 1568 px de lado largo, JPEG 0.85): una foto de celular en base64 no entraba en el límite de la API de visión. Si el navegador no puede decodificarla (HEIC), se manda el original.
+- **System prompt**: sección nueva "FOTOS DE DATASHEETS, ETIQUETAS Y CHAPAS DE CARACTERÍSTICAS" con el circuito completo (no inventar lo ilegible, la cantidad la dice el usuario, N unidades = un recurso con `cantidad` N, buscar duplicados antes, specs en `descripcion`). La regla 2 de "REGLAS IMPORTANTES" ahora apunta ahí.
+
+---
+
 ## [2026-08-08] — Tool nueva `listar_todos`: fallback de lectura completa para sinónimos
 
 **Tipo**: tool nueva del agente (sin cambio de schema)

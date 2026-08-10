@@ -13,14 +13,24 @@
 # Anthropic usa su propio loop de tool-calling; el resto comparte `_loop_openai`
 # (API compatible con OpenAI). El default requiere el paquete `openai` instalado.
 #
-# OJO — DeepSeek NO tiene visión: con el provider por defecto, el alta de recursos
-# desde foto no funciona. Para esa función hay que pasar a AGENTE_PROVIDER=anthropic.
+# FOTOS — el lector de imágenes se configura APARTE del chat (ver `_get_vision_config`).
+# La foto no se le manda al agente: se lee en una llamada suelta, sin tools, y al chat le
+# entra el resultado como texto. Con eso el alta desde foto anda con cualquier provider,
+# incluido el default (DeepSeek no tiene visión), y una foto cuesta ~2.000 tokens en vez
+# de los ~15.000 que arrastra cada turno del agente.
+# Si no hay lector configurado ni el provider ve imágenes, la foto ni se manda: `chat()`
+# corta antes y le avisa al usuario, en vez de dejar que el modelo conteste sobre una
+# imagen que nunca vio.
 #
 # Config general:
 #   - AGENTE_PROVIDER: 'deepseek' (default) | 'anthropic' | 'groq' | 'openai' | 'ollama'
 #   - AGENTE_API_KEY: para providers que la requieren (ignored para Ollama)
 #   - AGENTE_API_BASE: para APIs custom (Ollama, self-hosted)
 #   - AGENTE_MODEL: nombre del modelo (defaults por provider arriba)
+#   - AGENTE_VISION: '1' para declarar que el modelo del CHAT ve imágenes. Anthropic ya
+#     viene en 1; sirve para gpt-4o (openai) o llava (ollama), donde depende del modelo
+#     elegido y no del provider. Solo se usa si NO hay lector configurado.
+#   - AGENTE_VISION_API_KEY / _MODEL / _API_BASE: el lector de fotos (ver AGENTE_CONFIG.md)
 
 import os
 import re
@@ -92,13 +102,63 @@ def _get_config():
             # sin aviso y acá queremos el que se validó con la batería de 30 preguntas.
             model = 'deepseek-v4-pro'
 
+    # Visión: Anthropic la tiene siempre; en el resto depende del modelo (gpt-4o sí,
+    # gpt-3.5 no; llava sí, mistral no), así que se declara a mano con AGENTE_VISION.
+    vision = provider == 'anthropic' or _es_verdadero(os.environ.get('AGENTE_VISION', ''))
+
     _config_cache = {
         'provider': provider,
         'model': model,
         'api_key': api_key,
-        'api_base': api_base
+        'api_base': api_base,
+        'vision': vision
     }
     return _config_cache
+
+
+def _es_verdadero(valor):
+    return str(valor).strip().lower() in ('1', 'true', 'si', 'sí', 'yes', 'on')
+
+
+# ============================================================================
+# Lector de imágenes (config aparte de la del chat)
+# ============================================================================
+# La foto NO se le manda al agente: se lee en una llamada suelta, sin tools y con un
+# prompt corto, y al chat le entra el resultado como texto. El motivo es el costo — el
+# system prompt más TOOLS_SCHEMA son ~15.000 tokens que viajan en cada turno del agente,
+# contra ~2.000 de la llamada del lector — y de paso el chat sigue en su proveedor de
+# siempre, sin degradar el tool-calling ni obligar a que tenga visión.
+#
+# Default: Gemini 2.5 Flash-Lite por su tier gratuito (1.000 requests/día). Se habla por
+# el endpoint compatible con OpenAI, así que alcanza el paquete `openai` que ya es
+# dependencia obligatoria, y cambiando las tres variables se apunta a OpenAI, Groq o un
+# Ollama local sin tocar código.
+
+VISION_MODEL_DEFAULT = 'gemini-2.5-flash-lite'
+VISION_API_BASE_DEFAULT = 'https://generativelanguage.googleapis.com/v1beta/openai/'
+
+_vision_config_cache = False  # False = sin leer todavía; None = no hay lector configurado
+
+
+def _get_vision_config():
+    """Config del lector de imágenes, o None si no hay API key (= no hay lector)."""
+    global _vision_config_cache
+    if _vision_config_cache is not False:
+        return _vision_config_cache
+
+    api_key = (os.environ.get('AGENTE_VISION_API_KEY', '')
+               or os.environ.get('GEMINI_API_KEY', ''))
+    if not api_key:
+        _vision_config_cache = None
+        return None
+
+    _vision_config_cache = {
+        'model': os.environ.get('AGENTE_VISION_MODEL', '') or VISION_MODEL_DEFAULT,
+        'api_key': api_key,
+        'api_base': os.environ.get('AGENTE_VISION_API_BASE', '') or VISION_API_BASE_DEFAULT,
+    }
+    return _vision_config_cache
+
 
 # Variables globales por compatibilidad
 def _get_agente_provider():
@@ -156,6 +216,14 @@ CREATE TABLE IF NOT EXISTS agente_conversaciones (
     entidad_actual TEXT,
     fichas TEXT
 );
+
+CREATE TABLE IF NOT EXISTS agente_fotos_pendientes (
+    token TEXT PRIMARY KEY,
+    sid TEXT NOT NULL,
+    b64 TEXT NOT NULL,
+    tipo TEXT NOT NULL,
+    fecha TEXT NOT NULL
+);
 """
 
 # La conversación vive acá y no en la sesión de Flask, que es una cookie firmada: los
@@ -165,6 +233,7 @@ CREATE TABLE IF NOT EXISTS agente_conversaciones (
 HISTORIAL_GUARDADO = 60    # mensajes que se conservan en la DB (30 turnos)
 HISTORIAL_AL_MODELO = 24   # mensajes que se le mandan al LLM por turno (12 turnos)
 FICHAS_MAX = 20            # altas sin confirmar que se recuerdan a la vez
+PADRON_EN_AVISO = 40       # personas con ficha que se listan enteras en un aviso de tool
 CONVERSACION_DIAS = 30     # a los N días sin uso, la conversación se descarta
 
 def conectar():
@@ -267,8 +336,51 @@ def _sin_imagenes(mensajes):
 def _conv_borrar():
     con = conectar()
     con.execute("DELETE FROM agente_conversaciones WHERE sid = ?", (_sid(),))
+    con.execute("DELETE FROM agente_fotos_pendientes WHERE sid = ?", (_sid(),))
     con.commit()
     con.close()
+
+
+# ---------------------------------------------------------------------------
+# Fotos esperando que se confirme el alta
+# ---------------------------------------------------------------------------
+# La foto llega en un turno y el alta se confirma en otro (o desde otra página, después
+# de repintar el historial), así que hay que guardarla en el medio atada a la ficha que
+# el usuario vio: la clave es el mismo token de contenido que usa `_crear_entidad`.
+#
+# Va en tabla propia y no dentro del JSON de `fichas` porque esa columna se reescribe
+# entera en cada turno; con hasta FICHAS_MAX fotos en base64 adentro, cada mensaje del
+# chat pasaría a arrastrar varios MB de escritura.
+
+def _foto_pendiente_guardar(token, b64, tipo):
+    con = conectar()
+    con.execute(
+        "INSERT INTO agente_fotos_pendientes (token, sid, b64, tipo, fecha) VALUES (?,?,?,?,?) "
+        "ON CONFLICT(token) DO UPDATE SET b64=excluded.b64, tipo=excluded.tipo, "
+        "fecha=excluded.fecha",
+        (token, _sid(), b64, tipo, _ahora())
+    )
+    # Barrido de las que quedaron sin confirmar, con el mismo criterio que las
+    # conversaciones abandonadas (ver _conv_guardar).
+    con.execute("DELETE FROM agente_fotos_pendientes WHERE fecha < ?",
+                ((datetime.now() - timedelta(days=CONVERSACION_DIAS)).strftime('%Y-%m-%d %H:%M:%S'),))
+    con.commit()
+    con.close()
+
+
+def _foto_pendiente_tomar(token):
+    """Devuelve (b64, tipo) de la foto de esa ficha y la borra. None si no hay."""
+    con = conectar()
+    fila = con.execute(
+        "SELECT b64, tipo FROM agente_fotos_pendientes WHERE token = ? AND sid = ?",
+        (token, _sid())
+    ).fetchone()
+    if fila:
+        con.execute("DELETE FROM agente_fotos_pendientes WHERE token = ?", (token,))
+        con.commit()
+    con.close()
+    return (fila['b64'], fila['tipo']) if fila else None
+
 
 # ============================================================================
 # Funciones adaptadoras: traducen llamadas de tool al código ya existente
@@ -318,8 +430,36 @@ def _buscar_profesor_scored(query):
 
 
 def _buscar_profesor(query):
-    """Resolución difusa de nombre de profesor."""
-    return [{'nombre': p} for _, p in _buscar_profesor_scored(query)]
+    """Resolución difusa de nombre de profesor.
+
+    Devuelve además las personas CON FICHA (`gestion.db`) que se parecen al nombre, cuando
+    las hay. Son dos padrones distintos y el modelo tiende a olvidarlo: los docentes salen
+    de los horarios (`escuela.db`) y ahí no está el alumno que ganó una olimpiada ni el
+    ex director. Pidiendo "el hito lo logró nati" el modelo llamaba acá, veía tres docentes
+    llamadas Natalia y ofrecía esas tres — mientras "Natalia Boo Fiad" estaba cargada como
+    persona y no aparecía por ningún lado.
+
+    El aviso va en el resultado de la tool y no en el system prompt porque el fallo pasa
+    JUSTO acá: el modelo ya eligió mal la herramienta, y lo único que lo puede corregir a
+    tiempo es lo que esta herramienta le conteste.
+    """
+    docentes = [{'nombre': p} for _, p in _buscar_profesor_scored(query)]
+    con_ficha = _personas_parecidas(query)
+    if not con_ficha:
+        return docentes
+
+    return {
+        'docentes': docentes,
+        'personas_con_ficha': [{'id': pid, 'nombre': n} for pid, n in con_ficha],
+        'aviso': (
+            'OJO: "' + query + '" también se parece a personas que tienen FICHA propia en la '
+            'memoria de la escuela (' + ', '.join(n for _, n in con_ficha) + '). Son dos '
+            'padrones distintos: `docentes` sale de los horarios, `personas_con_ficha` de las '
+            'semblanzas. Si estás hablando de un hito, un proyecto o la historia de alguien, '
+            'casi seguro te referís a una de `personas_con_ficha` — usá esa y NO ofrezcas solo '
+            'la lista de docentes. Si no estás seguro, mostrale las dos y preguntá.'
+        ),
+    }
 
 def _personas_conocidas():
     """Nombres conocidos (profesores + personal no docente), para que el modelo pueda
@@ -506,6 +646,96 @@ def _cargar_historia_completa(id_historia):
         return None
 
 
+# Se repite en el system prompt y en la instrucción de cada historia: el modelo tiende a
+# "actuar" el personaje de Emilio en cuanto le decís que hable en primera persona. Ojo: como
+# los resultados de tools NO se persisten en el historial, en los turnos de seguimiento
+# ("¿y después qué pasó?") lo único que queda en contexto es la copia del system prompt.
+#
+# Está redactado como instructivo de qué hacer, no como lista de prohibiciones, por dos
+# motivos: una regla negativa le deja al modelo el trabajo de deducir la forma correcta (y lo
+# deduce mal), y para explicar qué NO hacer hay que escribir el ejemplo malo en el prompt —
+# que es exactamente lo que después imita. Acá no aparece ni una acotación de muestra: la
+# regla se aplica sola con el test de la última línea. Las formas mecánicas que igual se le
+# escapan las levanta `_quitar_acotaciones()`, que es el otro lado de la defensa.
+COMO_CUENTA_EMILIO = (
+    'CÓMO CONTÁS: escribís únicamente las palabras que Emilio dice en voz alta. La respuesta es '
+    'lo que escucharía alguien parado al lado tuyo en el pasillo, nada más. '
+    'Arrancá directo por el hecho: el primer renglón ya cuenta algo que pasó. '
+    'Hablás en primera persona, como en una charla ("eso lo vi yo", "me acuerdo del ruido"). '
+    'No tenés cuerpo, así que no hay nada que hacer con él mientras hablás: el clima y la emoción '
+    'los transmitís con lo que decís y cómo lo decís. Si la historia es un secreto, decí "esto no '
+    'lo repitas"; si el final da para resignarse, decí "y bueno, así es acá". '
+    'TEST antes de responder: leé cada oración y preguntate si se puede pronunciar. Lo que se '
+    'hace en vez de decirse no entra, y tu nombre no va adelante de lo que hablás: acá el único '
+    'que habla sos vos.'
+)
+
+# La voz del personaje, aparte de la forma. Va solo en el circuito de historias: para horarios
+# y préstamos Emilio sigue siendo una herramienta neutra (ver DECISIONS 2026-08-08, "agente
+# bifásico"). Sin esto las historias salían correctas pero anónimas — leídas seguidas parecían
+# el conserje contando una anécdota, no el fantasma que se cree dueño del edificio.
+QUIEN_ES_EMILIO = (
+    'CON QUIÉN HABLÁS: el que pregunta ya sabe quién sos. No te presentes, no expliques que sos '
+    'un fantasma ni cómo llegaste a estar acá, no aclares que la escuela lleva tu nombre y no '
+    'pidas permiso para empezar. Entrás directo, con la familiaridad del que es dueño de la casa '
+    'y sabe que el otro está de visita. '
+    'TU ORGULLO: sabés todo lo que pasa en esta escuela y te encanta que se note. Contás como el '
+    'único que estuvo ahí, y dejás caer que nadie más lo vio ("de eso no queda nadie que se '
+    'acuerde, salvo yo"). Un poco de soberbia te queda bien; maltratar al que pregunta, no: te '
+    'halaga que te vengan a preguntar, porque confirma que sos el que sabe. '
+    'SE TIENE QUE NOTAR QUE NO SOS UNA PERSONA, sin que lo digas nunca. No lo aclarás, no te '
+    'justificás: se nota por cómo contás. Tres cosas te delatan, usalas: '
+    '(1) No tenés cuerpo ni lugar. No entraste, no estabas parado ahí, no te acercaste a mirar: '
+    'estabas, porque estás siempre y en todas partes al mismo tiempo. En vez de "yo estaba ahí '
+    'parado", decí "eso pasó en el taller de abajo, y yo estoy siempre en el taller de abajo". '
+    '(2) Nada te tapa. Escuchaste lo que se dijo en voz baja, viste lo que pasó con la puerta '
+    'cerrada, sabés lo que nadie contó. No aclares cómo: dalo por obvio. '
+    '(3) El tiempo no te pesa como al que pregunta. Veinte años son "el otro día", los años se te '
+    'mezclan y no te molesta; los que estaban ahí ya no están, y vos seguís. '
+    'Al que pregunta lo tratás como a alguien que va a pasar: está de visita en tu escuela, y vos '
+    'ya viste entrar y salir a varias generaciones como él.'
+)
+
+# Lo que hace cuando NO tiene la historia. Es un chiste de personaje, no un permiso para
+# inventar: la excusa reemplaza el "no sé", nunca los hechos. Y está acotada a las historias
+# —el otro lado de esa línea lo fija la regla del system prompt— porque un horario o un
+# préstamo sin datos se contestan derecho: al que busca una herramienta el chiste le cuesta
+# una vuelta al pañol al vacío.
+EXCUSA_SIN_HISTORIA = (
+    'Vos no admitís un agujero en tu memoria de un siglo: zafás con una excusa obvia y absurda, '
+    'dicha con total naturalidad, del estilo "justo esa semana estaba en el subsuelo peleándome '
+    'con la caldera" o "ese año lo pasé casi entero en el laboratorio de química, no me hablés". '
+    'La gracia está en que la excusa se contradice con vos mismo — estás en todos lados al mismo '
+    'tiempo, así que "estaba ocupado en otra parte" no se lo cree nadie —, y vos la decís igual, '
+    'sin inmutarte, como si cerrara perfecto. No te disculpes ni te hagas cargo del chiste. '
+    'La excusa tapa el "no sé", pero la respuesta tiene que dejar igual de claro que esa historia '
+    'no la tenés — y NO inventes la anécdota ni la completes con algo verosímil.'
+)
+
+
+def _instruccion_tono(tono, estilo):
+    """Instrucción de cómo contar una historia, para el modelo.
+
+    Única fuente: la usan las DOS rutas de `consultar_historia` (por tema y por id).
+    Antes había una versión larga en la búsqueda por tema y una de dos líneas en la ruta
+    por id, y la corta no decía nada de cómo contar — justo el camino que se usa cuando el
+    usuario elige una historia de la lista.
+    """
+    return (
+        f'Sos Emilio Mitre, el ingeniero. Moriste a principios de 1900, pero tu espíritu vive en esta escuela '
+        f'que lleva tu nombre. Hace más de un siglo estás acá, viéndolo todo, escuchando todo. La escuela es tu casa, '
+        f'tu memoria: no la recorrés, la ocupás entera y al mismo tiempo. Contás esta historia como se la '
+        f'contarías a alguien que se quedó escuchándote en el pasillo. '
+        f'{QUIEN_ES_EMILIO} '
+        f'{COMO_CUENTA_EMILIO} '
+        f'Tono emocional: {tono}. Estilo narrativo: {estilo}. '
+        f'El texto de la historia es el límite de los hechos: podés sumar el clima de ese momento (el ruido del '
+        f'taller, la cara que puso alguien), pero no eventos nuevos. La diferencia: "todos lo miraron con sorpresa" '
+        f'está bien; "y luego se fue del aula" está mal si no está en la historia. Contale lo que viste y pará ahí — '
+        f'el usuario pregunta si quiere saber más.'
+    )
+
+
 def _historia_fmt(tema):
     """Busca historias por tema y devuelve modo + contenido.
 
@@ -523,7 +753,7 @@ def _historia_fmt(tema):
         if not indice:
             return {
                 'modo': 'no_encontrado',
-                'nota': 'No hay historias guardadas todavía.'
+                'nota': f'No hay ninguna historia guardada todavía. {EXCUSA_SIN_HISTORIA}'
             }
         return {
             'modo': 'listar',
@@ -576,8 +806,8 @@ def _historia_fmt(tema):
     if not matches:
         return {
             'modo': 'no_encontrado',
-            'nota': f'No hay historias sobre "{tema}". Decíselo al usuario en una frase. '
-                    'NO inventes anécdotas ni datos: si no está acá, no existe.'
+            'nota': f'No hay ninguna historia sobre "{tema}": eso no lo tenés. {EXCUSA_SIN_HISTORIA} '
+                    'Si no está acá, no existe. Cerrá ofreciéndole preguntar por otra cosa.'
         }
 
     # Ordena por puntaje
@@ -596,18 +826,7 @@ def _historia_fmt(tema):
         # Construir instrucción de tono/estilo
         tono = mejor_entrada.get('tono', 'reflexivo')
         estilo = mejor_entrada.get('estilo', 'primera persona')
-        instruccion_tono = (
-            f'Sos Emilio Mitre, el ingeniero. Moriste a principios de 1900, pero tu espíritu vive en esta escuela '
-            f'que lleva tu nombre. Hace más de un siglo estás acá, viéndolo todo, escuchando todo. La escuela es tu casa, '
-            f'tu memoria. Cuando cuentas una historia, es como si estuvieras en el pasillo hablando con alguien — charla '
-            f'natural entre dos personas. Nada de narrativa de acción (NO escribas —mirando—, —se acomoda—, descripciones '
-            f'de gestos). Solo vos hablando, contando directo, conversacional. '
-            f'Tono emocional: {tono}. Estilo narrativo: {estilo}. '
-            f'Podés endulzar la narrativa (agregar reacciones, atmósfera, detalles pequeños que realcen lo que pasó), '
-            f'pero NUNCA inventar hechos nuevos ni cambiar eventos. La diferencia: "todos lo miraron con sorpresa" está bien; '
-            f'"y luego se fue del aula" está mal si no está en la historia. Cuéntale lo que viste. El usuario puede hacer preguntas después; '
-            f'no las anticipes.'
-        )
+        instruccion_tono = _instruccion_tono(tono, estilo)
 
         return {
             'modo': 'directo',
@@ -786,6 +1005,31 @@ def _buscar_entidad_fmt(slug, query):
                            'NINGUNO sea lo que se busca. No ofrezcas el más parecido como si '
                            f'fuera el correcto. Llamá a listar_todos("{slug}") para ver la lista '
                            'completa y recién ahí decidí si está o no.')
+
+    # Buscar una persona mira SIEMPRE los dos padrones, en las dos direcciones. Este es el
+    # espejo del cruce que hace `buscar_profesor`: quien pregunta por alguien no sabe —ni
+    # tiene por qué saber— si esa persona tiene ficha propia o si solo figura en los
+    # horarios. Sin esto, buscar "vazquez" en `personas` no devolvía nada y el modelo
+    # concluía "no la tengo cargada", con VAZQUEZ NATALIA dando clases en la escuela.
+    if slug == 'personas' and query:
+        docentes = _docentes_parecidos(query)
+        if docentes:
+            salida['en_horarios'] = docentes
+            if resultados:
+                salida['aviso_horarios'] = (
+                    'Además, en los HORARIOS hay docentes que coinciden con "' + query + '": '
+                    + ', '.join(docentes) + '. Son otro padrón: pueden ser la misma persona '
+                    'o no. Si de cuál se trata cambia lo que vas a hacer, preguntale al usuario.'
+                )
+            else:
+                salida['aviso_horarios'] = (
+                    'NO hay ficha de persona que coincida, pero en los HORARIOS sí hay: '
+                    + ', '.join(docentes) + '. O sea que existe en la escuela, solo que sin '
+                    'ficha propia. NO le digas al usuario que no la tenés. Si te está hablando '
+                    'de horarios, resolvelo con esos nombres; si está armando un hito, un '
+                    'proyecto o una semblanza, avisale que todavía no tiene ficha y ofrecé '
+                    'crearla con crear_entidad.'
+                )
     return salida
 
 
@@ -956,16 +1200,33 @@ def _detalle_prestamo_fmt(prestamo_id):
 # Alta en dos pasos: ficha → confirmación del usuario → escritura
 # ---------------------------------------------------------------------------
 
+# Entidades que el agente puede tocar. Se DERIVA de gestion.ENTIDADES a propósito: los
+# esquemas de tools repiten este enum en diez lugares, y cuando se agregó `hitos` nadie
+# los actualizó — la entidad quedó invisible para el chat sin que nada fallara. Derivarlo
+# hace que sumar una entidad sea un cambio en un solo archivo.
+SLUGS_ENTIDAD = list(gestion.ENTIDADES)
+
 # Campos que el asistente REDACTA a partir de lo que contó el usuario, en vez de
 # pedirlos literalmente ("¿qué descripción le pongo?"). Se marcan en la ficha para que
 # el usuario sepa que ese texto lo escribió el asistente y lo lea con esa expectativa.
-CAMPOS_REDACTADOS = ('nombre', 'tipo', 'descripcion')
+# 'titulo' es el 'nombre' de los hitos (ver gestion._campo_nombre).
+CAMPOS_REDACTADOS = ('nombre', 'titulo', 'tipo', 'descripcion')
 
 
 def _campos_validos(slug):
     """Nombres de campo de la entidad, en el orden del formulario de /gestion."""
     cfg = gestion.ENTIDADES.get(slug) or {}
     return [c['nombre'] for c in cfg.get('campos', [])]
+
+
+def _nombre_de(slug, campos):
+    """El nombre visible de una ficha de alta.
+
+    `campos` es el dict que armó el modelo, no una fila de la DB, así que acá **no** llega
+    el alias de `gestion._select()`: en `hitos` la clave es 'titulo'. Sin esto el botón de
+    confirmar y el "✅ Guardado" salían con el nombre en blanco.
+    """
+    return campos.get(gestion._campo_nombre(gestion.ENTIDADES.get(slug, {})), '')
 
 
 def _normalizar_borrador(slug, campos_dict):
@@ -1023,6 +1284,141 @@ def _tipos_en_uso():
     return [f[0] for f in filas]
 
 
+def _personas_cargadas():
+    """[(id, nombre)] de todas las personas, para cruzar nombres contra texto libre."""
+    con = conectar()
+    filas = con.execute("SELECT id, nombre FROM personas WHERE TRIM(nombre) <> ''").fetchall()
+    con.close()
+    return [(f[0], f[1]) for f in filas]
+
+
+def _coincide_fuerte(q_norm, nombre):
+    """¿`nombre` coincide con lo buscado lo bastante como para cruzarlo de padrón?
+
+    Los cruces entre los dos padrones de personas (ver `_buscar_profesor` y
+    `_buscar_entidad_fmt`) usan esto en vez del puntaje de las búsquedas normales. Un cruce
+    es una sugerencia lateral: si no es fuerte, conviene callarse.
+
+    Substring alcanza, pero no basta con eso: los apodos del castellano no son prefijos
+    ("nati" no es substring de "natalia"), y ese era justo el caso que motivó todo esto. Así
+    que se compara **palabra por palabra** con `UMBRAL_SIMILITUD`, el mismo del resto del
+    sistema — no con el 0.6 laxo de `_buscar_profesor_scored`, que ofrece candidatos a
+    propósito. La diferencia se nota: con 0.6, "nati" traía PETRATE MATIAS (0.60 contra
+    "matias") y "calei" traía PRIETO VALERIA; con 0.68, "nati" sigue trayendo Natalia (0.73)
+    y esos dos se caen.
+    """
+    n = gestion._norm(nombre or '')
+    if not q_norm or not n:
+        return False
+    if q_norm in n:
+        return True
+    palabras = n.split()
+    for parte in q_norm.split():
+        if len(parte) < 3:
+            continue
+        if any(difflib.SequenceMatcher(None, parte, p).ratio() >= gestion.UMBRAL_SIMILITUD
+               for p in palabras):
+            return True
+    return False
+
+
+def _personas_parecidas(query):
+    """Personas con ficha que coinciden con `query`, de mejor a peor. [(id, nombre)].
+
+    Es el complemento suelto de `_personas_nombradas_en`: acá alcanza con que matchee
+    parcialmente ("nati" → "Natalia Boo Fiad"), porque el resultado es un AVISO para que el
+    modelo pregunte, no un vínculo que se escriba solo. La regla estricta de nombre completo
+    sigue siendo la que decide a quién se vincula de verdad.
+    """
+    q = gestion._norm(query or '')
+    if not q:
+        return []
+    puntuadas = []
+    for pid, nombre in _personas_cargadas():
+        if not _coincide_fuerte(q, nombre):
+            continue
+        puntuadas.append((gestion._puntaje_busqueda(q, nombre) or 1.0, pid, nombre))
+    puntuadas.sort(key=lambda x: (-x[0], x[2]))
+    return [(pid, nombre) for _, pid, nombre in puntuadas]
+
+
+def _docentes_parecidos(query):
+    """Docentes de los horarios que coinciden con `query`. Espejo de `_personas_parecidas`."""
+    q = gestion._norm(query or '')
+    if not q:
+        return []
+    return [n for _, n in _buscar_profesor_scored(query) if _coincide_fuerte(q, n)]
+
+
+def _personas_nombradas_en(texto):
+    """Personas ya cargadas cuyo nombre aparece en `texto`.
+
+    Compara normalizado (sin acentos ni mayúsculas) y acepta el orden dado vuelta
+    ("Errio Pablo"), que es como aparece medio inventario. Devuelve [(id, nombre)].
+    Solo matchea nombres COMPLETOS: un "Pablo" suelto no alcanza, porque puede haber
+    dos y vincular a la persona equivocada es peor que no vincular.
+    """
+    t = gestion._norm(texto or '')
+    if not t:
+        return []
+    encontradas = []
+    for pid, nombre in _personas_cargadas():
+        partes = [p for p in gestion._norm(nombre).split() if len(p) > 2]
+        if partes and all(p in t for p in partes):
+            encontradas.append((pid, nombre))
+    return encontradas
+
+
+def _recordatorio_hito(borrador):
+    """Aviso para el modelo cuando una ficha de hito sale con agujeros evitables.
+
+    Va acá y no (solo) en el system prompt porque llega como resultado de tool, en el
+    mismo turno y con los nombres concretos: el modelo escribía "Pablo Errio y Ezequiel
+    Toñanes" en el título y dejaba `protagonistas` vacío, y después le preguntaba al
+    usuario la importancia que el usuario le acababa de decir.
+    """
+    avisos = []
+
+    if not borrador.get('protagonistas'):
+        texto = (borrador.get('titulo', '') + ' ' + borrador.get('descripcion', ''))
+        nombradas = _personas_nombradas_en(texto)
+        if nombradas:
+            avisos.append(
+                'En el título/descripción de este hito nombrás a personas que YA están '
+                'cargadas: ' + ', '.join(n for _, n in nombradas) + '. El campo '
+                '`protagonistas` está VACÍO: completalo con esos nombres y volvé a llamar a '
+                'crear_entidad. No se lo preguntes al usuario, ya te lo dijo.'
+            )
+        else:
+            aviso = ('El campo `protagonistas` está vacío. Si el usuario nombró personas o '
+                     'cursos (aunque los hayas puesto en el título), van ahí: completalo y '
+                     'volvé a llamar a crear_entidad.')
+            # El padrón completo, no una búsqueda: el usuario dice "nati" o "el Errio" y el
+            # modelo no tiene con qué resolverlo. Teniendo los nombres a la vista, ata el
+            # apodo solo, en vez de irse a buscar docentes a los horarios — que es otro
+            # padrón y donde estas personas no están.
+            cargadas = _personas_cargadas()
+            if cargadas and len(cargadas) <= PADRON_EN_AVISO:
+                aviso += (' Las personas CON FICHA hoy son: '
+                          + ', '.join(n for _, n in cargadas) + '.')
+            elif cargadas:
+                aviso += (' Si nombró a alguien en particular, buscalo con '
+                          "buscar_entidad('personas', ...).")
+            if cargadas:
+                aviso += (' Si el usuario nombró a una de ellas (aunque sea por apodo o solo '
+                          'el nombre de pila), es esa: no la busques con buscar_profesor, que '
+                          'son los docentes de los horarios y es otro padrón.')
+            avisos.append(aviso)
+
+    for campo, etiqueta in (('nivel', 'nivel'), ('fecha', 'fecha'), ('tipo', 'tipo')):
+        if not borrador.get(campo):
+            avisos.append(
+                f'Falta `{etiqueta}`. Si el usuario ya lo dijo en la conversación, cargalo y '
+                f'volvé a llamar a crear_entidad; recién si NO lo dijo, preguntáselo.'
+            )
+    return avisos
+
+
 def _ficha_confirmacion(slug, borrador, token, contexto_turno):
     """Paso 1 del alta: la ficha para mostrarle al usuario. No escribe nada."""
     cfg = gestion.ENTIDADES.get(slug) or {}
@@ -1039,9 +1435,10 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno):
     # Se anota la ficha generada en este turno: sirve para rechazar una confirmación que
     # llegue sin que el usuario haya podido verla (ver _crear_entidad) y para que el
     # endpoint de chat le pase al front el botón de confirmar.
+    #
+    # Es un dict con TODAS las del turno, no la última: "creá a Pablo y a Ezequiel" arma dos
+    # fichas en un solo turno y las dos necesitan su botón (ver _confirmaciones).
     contexto_turno.setdefault('fichas_mostradas', {})[token] = {'slug': slug, 'campos': borrador}
-    contexto_turno['ultima_ficha'] = {'token': token, 'slug': slug,
-                                      'nombre': borrador.get('nombre', '')}
 
     resultado = {
         'ok': False,
@@ -1057,11 +1454,19 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno):
             'guarda igual. NO le pidas que escriba "sí" ni "confirmo": debajo de tu mensaje '
             'le aparece un botón para guardar. Cerrá diciéndole que si está bien, lo confirme '
             'con ese botón. Si pide cambios, volvé a llamar a crear_entidad con los campos '
-            'corregidos y te devuelve la ficha nueva (con su botón).'
+            'corregidos y te devuelve la ficha nueva (con su botón). '
+            'Si te pidió dar de alta VARIAS cosas, llamá a crear_entidad una vez por cada una '
+            'en este mismo turno y mostrá las fichas una abajo de la otra: cada una lleva su '
+            'propio botón, así que el usuario las confirma por separado. Nunca dejes una sin '
+            'armar "para el próximo turno".'
         ),
     }
     if slug == 'recursos':
         resultado['tipos_en_uso'] = _tipos_en_uso()
+    if slug == 'hitos':
+        avisos = _recordatorio_hito(borrador)
+        if avisos:
+            resultado['antes_de_mostrar'] = avisos
     return resultado
 
 
@@ -1090,9 +1495,11 @@ def _crear_entidad(slug, campos_dict, contexto_turno=None):
         contexto_turno = {}
 
     if slug not in gestion.ENTIDADES:
-        return {'ok': False, 'error': f'Slug desconocido: {slug}. Usá recursos, conjuntos, actividades o proyectos.'}
-    if not campos_dict.get('nombre'):
-        return {'ok': False, 'error': 'El nombre es obligatorio.'}
+        return {'ok': False, 'error': f'Slug desconocido: {slug}. Usá {", ".join(SLUGS_ENTIDAD)}.'}
+    # No es siempre 'nombre': en `hitos` el campo obligatorio se llama 'titulo'.
+    campo_nombre = gestion._campo_nombre(gestion.ENTIDADES[slug])
+    if not campos_dict.get(campo_nombre):
+        return {'ok': False, 'error': f'El campo "{campo_nombre}" es obligatorio.'}
 
     borrador = _normalizar_borrador(slug, campos_dict)
     token = _token_ficha(slug, borrador)
@@ -1115,6 +1522,70 @@ def _crear_entidad(slug, campos_dict, contexto_turno=None):
     if id_nuevo:
         return {'ok': True, 'id': id_nuevo, 'mensaje': f'Creado {slug} id={id_nuevo}'}
     return {'ok': False, 'error': f'Error al crear {slug}'}
+
+
+# ---------------------------------------------------------------------------
+# Fotos: leer (opcional) y adjuntar
+# ---------------------------------------------------------------------------
+# La foto NO se lee sola al llegar. Leerla es una tool que el modelo llama solo cuando
+# hace falta sacarle datos, porque el caso más común —"guardá esta foto en el taladro"—
+# no necesita leer nada: necesita saber a qué recurso va, y eso lo dice el usuario.
+# Leer por las dudas era pagar una llamada de visión en cada foto para tirarla a la basura.
+#
+# En los dos casos la imagen sale de `contexto_turno['foto_turno']` y no de un parámetro:
+# el modelo nunca ve la foto (ve, como mucho, su lectura en texto), así que pedirle el
+# base64 sería pedirle que lo invente.
+
+def _leer_foto_fmt(contexto_turno=None):
+    """Lee la foto de ESTE turno con el modelo de visión. Solo lee: no escribe nada."""
+    foto = (contexto_turno or {}).get('foto_turno')
+    if not foto:
+        return {'error': 'En este turno el usuario no adjuntó ninguna foto. Si querés que te '
+                         'mande una, pedísela; no llames a esta tool de nuevo hasta que la mande.'}
+
+    b64, tipo = foto
+    lectura = _leer_imagen(b64, tipo, (contexto_turno or {}).get('texto_usuario', ''))
+    if not lectura:
+        return {'error': 'No se pudo leer la foto (el servicio que las lee no respondió). '
+                         'Decíselo al usuario y ofrecele que te dicte los datos por texto o '
+                         'que la mande de nuevo en un rato. NO inventes lo que decía.'}
+
+    return {
+        'lectura': lectura,
+        'instruccion': ('Esto es TODO lo que se lee en la foto. Lo que no está acá no lo sabés: '
+                        'no lo completes con lo que sepas de esa marca o modelo. Si la lectura '
+                        'dice que no se lee o pide otra foto, transmitíselo al usuario y no '
+                        'armes ninguna ficha.')
+    }
+
+
+def _adjuntar_foto_entidad(slug, id, contexto_turno=None):
+    """Pega la foto de ESTE turno a la galería de un registro que ya existe.
+
+    Corre directo, sin ficha de confirmación: es aditivo (no pisa ni borra nada) y el listón
+    lo marca `editar_entidad`, que sobrescribe campos y tampoco la pide. Queda auditada en
+    `agente_log` como cualquier escritura.
+    """
+    foto = (contexto_turno or {}).get('foto_turno')
+    if not foto:
+        return {'ok': False,
+                'error': 'En este turno el usuario no adjuntó ninguna foto. Esta tool guarda '
+                         'la foto que acaba de mandar; si quiere subir otra, que la adjunte y '
+                         'te lo vuelva a pedir.'}
+
+    if slug not in gestion.ENTIDADES:
+        return {'ok': False, 'error': f'Slug inválido: {slug}. Válidos: {", ".join(SLUGS_ENTIDAD)}'}
+
+    b64, tipo = foto
+    try:
+        if not gestion.agregar_foto(slug, id, b64, tipo):
+            return {'ok': False,
+                    'error': f'No existe {slug} id={id}. Buscalo con buscar_entidad.'}
+    except Exception as e:
+        return {'ok': False, 'error': f'No se pudo guardar la foto: {e}'}
+
+    return {'ok': True, 'id': id, 'mensaje': f'Foto agregada a {slug} id={id}'}
+
 
 def _editar_entidad(slug, id, campos_dict):
     """Editar recurso/conjunto/actividad/proyecto (edición PARCIAL).
@@ -1519,11 +1990,17 @@ TOOLS_SCHEMA = [
     # LECTURA
     {
         'name': 'buscar_profesor',
-        'description': ('Busca docentes por nombre aproximado y devuelve los candidatos que más se '
-                        'parecen, ordenados por puntaje. Tolera errores de tipeo, falta de tildes y '
-                        'nombre invertido ("andrea alvares" encuentra "ALVAREZ ANDREA"). Usala cuando '
-                        'el usuario da un nombre incompleto o dudoso y querés ofrecerle opciones. Si '
-                        'ya tenés el nombre, no hace falta: horario_profesor también busca difuso.'),
+        'description': ('Busca DOCENTES DE LOS HORARIOS por nombre aproximado y devuelve los '
+                        'candidatos que más se parecen, ordenados por puntaje. Tolera errores de '
+                        'tipeo, falta de tildes y nombre invertido ("andrea alvares" encuentra '
+                        '"ALVAREZ ANDREA"). Usala cuando el usuario da un nombre incompleto o dudoso '
+                        'y querés ofrecerle opciones. Si ya tenés el nombre, no hace falta: '
+                        'horario_profesor también busca difuso. OJO: es el padrón de los HORARIOS, '
+                        'no el de las personas con ficha (alumnos, ex docentes, gente de la memoria '
+                        'institucional). Si el tema es un hito, un proyecto o la semblanza de '
+                        "alguien, la persona se busca con buscar_entidad('personas', ...). Cuando el "
+                        'nombre coincide con las dos cosas, esta tool te devuelve además '
+                        '`personas_con_ficha` y un `aviso`: hacele caso.'),
         'input_schema': {
             'type': 'object',
             'properties': {
@@ -1608,11 +2085,15 @@ TOOLS_SCHEMA = [
                         'Y si no hay ningún "exacto", NO concluyas todavía que no está: esta '
                         'búsqueda compara letras, no significados, así que no encuentra el '
                         'Multímetro si te pidieron un "tester". En ese caso llamá a '
-                        'listar_todos con el mismo slug y decidí mirando la lista completa.'),
+                        'listar_todos con el mismo slug y decidí mirando la lista completa. '
+                        'CON slug="personas" mira TAMBIÉN el padrón de los horarios: si hay '
+                        'docentes que coinciden te los devuelve en `en_horarios` con un '
+                        '`aviso_horarios`. Que no haya ficha NO significa que la persona no '
+                        'exista en la escuela — puede estar dando clases y no tener ficha todavía.'),
         'input_schema': {
             'type': 'object',
             'properties': {
-                'slug': {'type': 'string', 'enum': ['recursos', 'conjuntos', 'actividades', 'proyectos'],
+                'slug': {'type': 'string', 'enum': SLUGS_ENTIDAD,
                          'description': 'Qué tipo de entidad buscar'},
                 'query': {'type': 'string', 'description': 'Parte del nombre. Tolera errores de tipeo y falta de tildes'}
             },
@@ -1635,7 +2116,7 @@ TOOLS_SCHEMA = [
         'input_schema': {
             'type': 'object',
             'properties': {
-                'slug': {'type': 'string', 'enum': ['recursos', 'conjuntos', 'actividades', 'proyectos'],
+                'slug': {'type': 'string', 'enum': SLUGS_ENTIDAD,
                          'description': 'Qué tipo de entidad listar (el mismo que usaste en buscar_entidad)'}
             },
             'required': ['slug']
@@ -1651,11 +2132,24 @@ TOOLS_SCHEMA = [
         'input_schema': {
             'type': 'object',
             'properties': {
-                'slug': {'type': 'string', 'enum': ['recursos', 'conjuntos', 'actividades', 'proyectos']},
+                'slug': {'type': 'string', 'enum': SLUGS_ENTIDAD},
                 'id': {'type': 'integer', 'description': 'ID exacto obtenido de buscar_entidad'}
             },
             'required': ['slug', 'id']
         }
+    },
+    {
+        'name': 'leer_foto',
+        'description': ('Lee la foto que el usuario adjuntó EN ESTE TURNO y te devuelve, en texto, '
+                        'lo que dice: marca, modelo, potencia, tensión, medidas. Para etiquetas, '
+                        'chapas de características y datasheets. '
+                        'Llamala SOLO cuando necesites datos de la imagen para cargar o actualizar '
+                        'algo. Si el usuario solo quiere GUARDAR la foto en una ficha, NO la '
+                        'llames: no hace falta leerla para adjuntarla, usá adjuntar_foto. '
+                        'Tampoco la llames "por las dudas": cada lectura cuesta. '
+                        'Si no tenés claro para qué te mandaron la foto, preguntale al usuario '
+                        'antes de leer nada.'),
+        'input_schema': {'type': 'object', 'properties': {}}
     },
     {
         'name': 'listar_prestamos',
@@ -1735,16 +2229,21 @@ TOOLS_SCHEMA = [
                         'campos corregidos: te devuelve la ficha nueva para que la apruebe. '
                         'Cualquier campo que agregues, saques o cambies al confirmar vuelve a '
                         'mostrar la ficha — no se puede guardar algo distinto de lo que el '
-                        'usuario leyó. nombre, tipo y descripcion los redactás VOS a partir de '
-                        'lo que contó el usuario, no se los pidas literalmente; el resto, si no '
+                        'usuario leyó. nombre/titulo, tipo y descripcion los redactás VOS a partir '
+                        'de lo que contó el usuario, no se los pidas literalmente; el resto, si no '
                         'te lo dieron, va vacío — no inventes. Antes de dar de alta un recurso, '
-                        'buscá con buscar_entidad para no duplicar uno que ya existe.'),
+                        'buscá con buscar_entidad para no duplicar uno que ya existe. Si te piden '
+                        'dar de alta varias cosas de una, llamala una vez por cada una en el mismo '
+                        'turno: cada ficha sale con su propio botón y el usuario las confirma por '
+                        'separado.'),
         'input_schema': {
             'type': 'object',
             'properties': {
-                'slug': {'type': 'string', 'enum': ['recursos', 'conjuntos', 'actividades', 'proyectos']},
-                'nombre': {'type': 'string', 'description': 'Nombre, redactado por VOS con lo que dijo el usuario: corto y reconocible para quien lo busque en el pañol (ej: "Taladro percutor Bosch GSB 550"). ÚNICO campo obligatorio. Aplica a todos los slugs'},
-                'tipo': {'type': 'string', 'description': 'Categoría del recurso, la proponés VOS. Es texto libre, pero REUSÁ una de las que ya están en uso — la ficha del paso 1 te las devuelve en `tipos_en_uso` — antes de inventar una nueva; si no, el campo se llena de sinónimos y deja de servir para agrupar. Solo recursos'},
+                'slug': {'type': 'string', 'enum': SLUGS_ENTIDAD},
+                'nombre': {'type': 'string', 'description': 'Nombre, redactado por VOS con lo que dijo el usuario: corto y reconocible para quien lo busque en el pañol (ej: "Taladro percutor Bosch GSB 550"). OBLIGATORIO en todos los slugs MENOS hitos, que usa `titulo` en su lugar'},
+                'titulo': {'type': 'string', 'description': 'Título del hito, redactado por VOS: qué pasó, corto y reconocible en una línea de tiempo (ej: "Olimpiada Matemática Argentina — Certamen Nacional"). OBLIGATORIO en hitos, y solo aplica a hitos: es el campo que en el resto de los slugs se llama `nombre`'},
+                'tipo': {'type': 'string', 'description': ('RECURSOS: categoría que proponés VOS, texto libre, pero REUSÁ una de las que ya están en uso — la ficha del paso 1 te las devuelve en `tipos_en_uso` — antes de inventar una nueva; si no, el campo se llena de sinónimos y deja de servir para agrupar. HITOS: elegí uno de estos valores cerrados: '
+                                                          + ', '.join(gestion.TIPOS_HITO))},
                 'cantidad': {'type': 'integer', 'description': 'Stock disponible. Solo recursos'},
                 'descripcion': {'type': 'string', 'description': 'Descripción redactada por VOS con lo que contó el usuario: para qué sirve, medidas, marca y modelo, en qué estado está. Una o dos frases, sin inventar lo que no te dijeron. Aplica a todos los slugs'},
                 'ubicacion': {'type': 'string', 'description': 'Dónde se guarda (ej: A2, Taller de Electricidad). Solo recursos'},
@@ -1759,11 +2258,17 @@ TOOLS_SCHEMA = [
                 'objetivo': {'type': 'string', 'description': 'Objetivo pedagógico. Solo actividades'},
                 'duracion': {'type': 'string', 'description': 'Duración estimada, texto libre (ej: 2 módulos, 80 minutos). Solo actividades'},
                 'curso': {'type': 'string', 'description': 'Año al que apunta, texto libre (ej: 6° año). Solo actividades'},
-                'fecha': {'type': 'string', 'description': 'Fecha de realización en formato ISO AAAA-MM-DD (ej: 2025-11-20), que es como la guarda la base. Solo proyectos'},
+                'fecha': {'type': 'string', 'description': 'Fecha de realización en formato ISO AAAA-MM-DD (ej: 2025-11-20), que es como la guarda la base. Proyectos e hitos. En hitos es OBLIGATORIA: si el usuario no la dijo, preguntásela — un hito sin fecha no entra en la línea del tiempo'},
                 'participantes': {'type': 'string', 'description': 'Quiénes lo hicieron (ej: 6° año Electricidad). Solo proyectos'},
+                'nivel': {'type': 'string', 'enum': gestion.NIVELES_HITO,
+                          'description': 'Importancia del hito en la línea del tiempo. Básico: evento o actividad común. Importante: logro, programa nuevo. Crítico: olimpiada, construcción significativa. Solo hitos'},
+                'etiquetas': {'type': 'string', 'description': 'Temas del hito separados por coma, para agrupar la línea del tiempo (ej: "Olimpiada, Matemática, Nacional"). REUSÁ las que ya existen — mirá las de otros hitos con buscar_hitos antes de inventar una nueva. Solo hitos'},
+                'protagonistas': {'type': 'string', 'description': 'Personas o cursos involucrados, en texto (ej: "Pablo Errio, Ezequiel Toñanes"). Es un campo de texto suelto: para dejar el vínculo navegable entre una persona ya cargada y el hito, además usá vincular_entidad. Solo hitos'},
                 'drive_url': {'type': 'string', 'description': 'URL de la carpeta de Drive con documentación'}
             },
-            'required': ['slug', 'nombre']
+            # `nombre` no puede ir acá: hitos usa `titulo`. Cuál de los dos hace falta lo
+            # valida _crear_entidad contra gestion._campo_nombre, que es la única fuente.
+            'required': ['slug']
         }
     },
     {
@@ -1775,10 +2280,12 @@ TOOLS_SCHEMA = [
         'input_schema': {
             'type': 'object',
             'properties': {
-                'slug': {'type': 'string', 'enum': ['recursos', 'conjuntos', 'actividades', 'proyectos']},
+                'slug': {'type': 'string', 'enum': SLUGS_ENTIDAD},
                 'id': {'type': 'integer', 'description': 'ID de la entidad a editar, obtenido de buscar_entidad'},
-                'nombre': {'type': 'string', 'description': 'Nombre. Aplica a todos los slugs'},
-                'tipo': {'type': 'string', 'description': 'Categoría del recurso, texto libre sin lista fija (ej: Instrumento, Equipo, Estructura, Material). Solo recursos. OJO: hoy está vacío en casi todo el inventario, así que no lo uses para filtrar ni asumas que tiene valor'},
+                'nombre': {'type': 'string', 'description': 'Nombre. Todos los slugs MENOS hitos, que usa `titulo`: mandar `nombre` en un hito no cambia nada'},
+                'titulo': {'type': 'string', 'description': 'Título del hito. Es el campo que en el resto de los slugs se llama `nombre`. Solo hitos'},
+                'tipo': {'type': 'string', 'description': ('RECURSOS: categoría, texto libre sin lista fija (ej: Instrumento, Equipo, Estructura, Material). OJO: hoy está vacío en casi todo el inventario, así que no lo uses para filtrar ni asumas que tiene valor. HITOS: valores cerrados: '
+                                                          + ', '.join(gestion.TIPOS_HITO))},
                 'cantidad': {'type': 'integer', 'description': 'Stock disponible. Solo recursos'},
                 'descripcion': {'type': 'string', 'description': 'Descripción libre. Aplica a todos los slugs'},
                 'ubicacion': {'type': 'string', 'description': 'Dónde está guardado (ej: A2, Taller de Electricidad). Solo recursos'},
@@ -1793,9 +2300,36 @@ TOOLS_SCHEMA = [
                 'objetivo': {'type': 'string', 'description': 'Objetivo pedagógico. Solo actividades'},
                 'duracion': {'type': 'string', 'description': 'Duración estimada, texto libre (ej: 2 módulos, 80 minutos). Solo actividades'},
                 'curso': {'type': 'string', 'description': 'Año al que apunta, texto libre (ej: 6° año). Solo actividades'},
-                'fecha': {'type': 'string', 'description': 'Fecha de realización en formato ISO AAAA-MM-DD (ej: 2025-11-20), que es como la guarda la base. Solo proyectos'},
+                'fecha': {'type': 'string', 'description': 'Fecha de realización en formato ISO AAAA-MM-DD (ej: 2025-11-20), que es como la guarda la base. Proyectos e hitos'},
                 'participantes': {'type': 'string', 'description': 'Quiénes lo hicieron (ej: 6° año Electricidad). Solo proyectos'},
+                'nivel': {'type': 'string', 'enum': gestion.NIVELES_HITO,
+                          'description': 'Importancia del hito en la línea del tiempo. Básico: evento o actividad común. Importante: logro, programa nuevo. Crítico: olimpiada, construcción significativa. Solo hitos'},
+                'etiquetas': {'type': 'string', 'description': 'Temas del hito separados por coma (ej: "Olimpiada, Matemática, Nacional"). Solo hitos'},
+                'protagonistas': {'type': 'string', 'description': 'Personas o cursos involucrados, en texto. Solo hitos'},
                 'drive_url': {'type': 'string', 'description': 'URL de la carpeta de Drive con documentación'}
+            },
+            'required': ['slug', 'id']
+        }
+    },
+    {
+        'name': 'adjuntar_foto',
+        'description': ('Guarda la foto que el usuario adjuntó EN ESTE TURNO en la galería de un '
+                        'registro que YA existe. Es lo que hay que usar cuando mandan una foto para '
+                        'que quede en la ficha de algo ("guardá esta foto en el taladro", "esta es '
+                        'la foto del proyecto"). '
+                        'NO necesitás leer la foto para adjuntarla: no llames a leer_foto para esto. '
+                        'El id sale de buscar_entidad, nunca de tu memoria. '
+                        'IMPORTANTE: si no tenés claro a qué registro va, o la búsqueda devuelve '
+                        'varios parecidos, PREGUNTALE al usuario cuál es. No elijas por tu cuenta: '
+                        'una foto guardada en el recurso equivocado no se puede sacar desde la app. '
+                        'Para un alta nueva no la uses: la foto de un alta se guarda sola cuando el '
+                        'usuario confirma la ficha.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'slug': {'type': 'string', 'enum': SLUGS_ENTIDAD,
+                         'description': 'Tipo de registro al que va la foto'},
+                'id': {'type': 'integer', 'description': 'ID exacto obtenido de buscar_entidad'}
             },
             'required': ['slug', 'id']
         }
@@ -1807,14 +2341,19 @@ TOOLS_SCHEMA = [
                         'contiene y el destino el contenido. Para "agregar el panel solar al conjunto '
                         'Banco de ensayo" el origen es el conjunto y el destino el recurso. Si entre '
                         'esos dos tipos no existe relación, devuelve error: no reintentes dándolos '
-                        'vuelta sin pensarlo. Los dos ids salen de buscar_entidad.'),
+                        'vuelta sin pensarlo. Los dos ids salen de buscar_entidad. EXCEPCIONES a la '
+                        'regla del contenedor: personas → proyectos va SIEMPRE con la persona de '
+                        'origen (la relación está declarada de ese lado y del otro falla); y '
+                        'personas ↔ hitos anda en las dos direcciones, dan lo mismo. Ojo: vincular '
+                        'a alguien a un hito NO le escribe el nombre en `protagonistas` — si el '
+                        'usuario quiere que figure en la ficha, editá también ese campo.'),
         'input_schema': {
             'type': 'object',
             'properties': {
-                'slug_origen': {'type': 'string', 'enum': ['recursos', 'conjuntos', 'actividades', 'proyectos'],
+                'slug_origen': {'type': 'string', 'enum': SLUGS_ENTIDAD,
                                 'description': 'Tipo de la entidad que CONTIENE (el conjunto, la actividad, el proyecto)'},
                 'id_origen': {'type': 'integer', 'description': 'ID de la entidad que contiene'},
-                'slug_destino': {'type': 'string', 'enum': ['recursos', 'conjuntos', 'actividades', 'proyectos'],
+                'slug_destino': {'type': 'string', 'enum': SLUGS_ENTIDAD,
                                  'description': 'Tipo de la entidad CONTENIDA (normalmente "recursos")'},
                 'id_destino': {'type': 'integer', 'description': 'ID de la entidad contenida'}
             },
@@ -1831,10 +2370,10 @@ TOOLS_SCHEMA = [
         'input_schema': {
             'type': 'object',
             'properties': {
-                'slug_origen': {'type': 'string', 'enum': ['recursos', 'conjuntos', 'actividades', 'proyectos'],
+                'slug_origen': {'type': 'string', 'enum': SLUGS_ENTIDAD,
                                 'description': 'Tipo de la entidad que CONTIENE'},
                 'id_origen': {'type': 'integer', 'description': 'ID de la entidad que contiene'},
-                'slug_destino': {'type': 'string', 'enum': ['recursos', 'conjuntos', 'actividades', 'proyectos'],
+                'slug_destino': {'type': 'string', 'enum': SLUGS_ENTIDAD,
                                  'description': 'Tipo de la entidad CONTENIDA'},
                 'id_destino': {'type': 'integer', 'description': 'ID de la entidad contenida'}
             },
@@ -1938,7 +2477,7 @@ TOOLS_SCHEMA = [
         'input_schema': {
             'type': 'object',
             'properties': {
-                'slug': {'type': 'string', 'enum': ['recursos', 'conjuntos', 'actividades', 'proyectos']},
+                'slug': {'type': 'string', 'enum': SLUGS_ENTIDAD},
                 'id': {'type': 'integer', 'description': 'ID de la entidad a borrar, obtenido de buscar_entidad en ESTA conversación'},
                 'nombre_confirmacion': {
                     'type': 'string',
@@ -1986,7 +2525,8 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None):
     lectura = tool_name in [
         'buscar_profesor', 'horario_profesor', 'horario_curso', 'horario_aula',
         'aulas_libres', 'buscar_entidad', 'listar_todos', 'detalle_entidad',
-        'listar_prestamos', 'detalle_prestamo', 'consultar_historia', 'buscar_hitos'
+        'listar_prestamos', 'detalle_prestamo', 'consultar_historia', 'buscar_hitos',
+        'leer_foto'   # no toca la base; lo que gasta es la API de visión, no el inventario
     ]
 
     try:
@@ -2015,12 +2555,9 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None):
             if tool_input.get('id'):
                 historia = _cargar_historia_completa(tool_input.get('id'))
                 if historia:
-                    tono = historia.get('tono', 'reflexivo')
-                    estilo = historia.get('estilo', 'primera persona')
-                    instruccion_tono = (
-                        f'Eres Emilio. Cuéntala en PRIMERA PERSONA. '
-                        f'Tono: {tono}. Estilo: {estilo}. No agregues hechos que no estén en el texto.'
-                    )
+                    instruccion_tono = _instruccion_tono(
+                        historia.get('tono', 'reflexivo'),
+                        historia.get('estilo', 'primera persona'))
                     resultado = {
                         'modo': 'directo',
                         'historia': historia,
@@ -2029,7 +2566,8 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None):
                 else:
                     resultado = {
                         'modo': 'no_encontrado',
-                        'nota': f'No encontré la historia con ID "{tool_input.get("id")}"'
+                        'nota': f'No existe la historia con ID "{tool_input.get("id")}". '
+                                f'{EXCUSA_SIN_HISTORIA}'
                     }
             else:
                 resultado = _historia_fmt(tool_input.get('tema', ''))
@@ -2045,6 +2583,11 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None):
                 tool_input.get('slug', ''),
                 {k: v for k, v in tool_input.items() if k != 'slug'},
                 contexto_turno)
+        elif tool_name == 'leer_foto':
+            resultado = _leer_foto_fmt(contexto_turno)
+        elif tool_name == 'adjuntar_foto':
+            resultado = _adjuntar_foto_entidad(
+                tool_input.get('slug', ''), tool_input.get('id', 0), contexto_turno)
         elif tool_name == 'editar_entidad':
             resultado = _editar_entidad(tool_input.get('slug', ''), tool_input.get('id', 0), {k: v for k, v in tool_input.items() if k not in ['slug', 'id']})
         elif tool_name == 'vincular_entidad':
@@ -2103,6 +2646,69 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None):
             con.commit()
             con.close()
         return resultado
+
+# ============================================================================
+# Lector de imágenes: una llamada suelta, sin tools
+# ============================================================================
+
+# Este prompt es a propósito solo de LECTURA. Todo lo que viene después de leer la
+# etiqueta —que la cantidad la dice el usuario, que conviene fijarse si el recurso ya
+# está cargado, el circuito de ficha y botón— sigue viviendo en el system prompt del
+# agente, que es quien tiene las tools para hacerlo.
+PROMPT_LECTOR_IMAGEN = """Sos un lector de etiquetas para el inventario de una escuela técnica.
+Te llega una foto y devolvés, en texto plano y en castellano, ÚNICAMENTE lo que se lee en ella.
+
+Reglas:
+1. Transcribí lo que se lee de verdad: marca, modelo, potencia, tensión, corriente, capacidad,
+   medidas, número de serie, año. Un dato por línea, con el nombre del campo adelante.
+2. NUNCA completes con lo que sepas de ese producto o de esa marca por fuera de la foto. Si en
+   la chapa no dice la potencia, la potencia no va. Preferí quedarte corto antes que inventar.
+3. Si algo se lee a medias, ponelo con la duda explícita (ej: "Modelo: GA5030 (¿o GA5D30?)").
+4. Si casi no se lee nada, decilo en una línea y pedí otra foto más cerca o con mejor luz.
+5. Si la foto NO es una etiqueta (una máquina entera, un tablero, un cartel, una herramienta
+   suelta), describí en una o dos frases qué se ve y qué objeto parece ser.
+6. No saludes, no expliques lo que vas a hacer, no cierres con preguntas de cortesía. Solo la
+   lectura."""
+
+# Tope de la respuesta del lector. Una etiqueta bien leída son ~150 tokens; con 500 entra
+# holgada y se acota lo que puede llegar a costar una foto rara.
+VISION_MAX_TOKENS = 500
+
+
+def _leer_imagen(imagen_base64, media_type, texto_usuario=''):
+    """Lee una foto con el modelo de visión configurado. Devuelve el texto, o None.
+
+    Devuelve None ante cualquier falla (sin API key, cuota agotada, 429 del tier gratuito,
+    red caída) en vez de propagar: que no se pueda leer una foto no tiene por qué voltear
+    el turno del chat — el que llama muestra el aviso y sigue.
+    """
+    config = _get_vision_config()
+    if not config:
+        return None
+
+    contenido = [{'type': 'image_url',
+                  'image_url': {'url': f'data:{media_type};base64,{imagen_base64}'}}]
+    # Lo que escribió el usuario al mandar la foto ("esta es la amoladora del taller") ayuda
+    # a desambiguar qué está mirando, pero no lo autoriza a inventar: el prompt manda.
+    if texto_usuario:
+        contenido.append({'type': 'text',
+                          'text': f'El usuario escribió al mandarla: {texto_usuario}'})
+
+    try:
+        from openai import OpenAI
+        cliente = OpenAI(api_key=config['api_key'], base_url=config['api_base'])
+        respuesta = cliente.chat.completions.create(
+            model=config['model'],
+            max_tokens=VISION_MAX_TOKENS,
+            messages=[
+                {'role': 'system', 'content': PROMPT_LECTOR_IMAGEN},
+                {'role': 'user', 'content': contenido},
+            ],
+        )
+        return (respuesta.choices[0].message.content or '').strip() or None
+    except Exception:
+        return None
+
 
 # ============================================================================
 # Loop de tool-calling agnóstico del LLM
@@ -2172,13 +2778,14 @@ def _tools_openai():
     ]
 
 
-def _mensajes_openai(mensajes):
-    """Historial en bloques de contenido (formato Anthropic) → mensajes planos de OpenAI.
+def _mensajes_openai(mensajes, vision=False):
+    """Historial en bloques de contenido (formato Anthropic) → mensajes de OpenAI.
 
     El historial se guarda en sesión como [{'role':..., 'content':[{'type':'text',...}]}].
-    OpenAI espera `content` como string. Las imágenes se mencionan pero no se envían:
-    deepseek-chat no tiene visión, así que el alta de recursos desde foto solo funciona
-    con Anthropic.
+    Sin visión se aplana todo a un string y las imágenes quedan como una nota: el default
+    (deepseek) no las ve. Con visión (`AGENTE_VISION=1`, ej. gpt-4o o llava) se manda el
+    formato multimodal de OpenAI, que es `image_url` con un data URI — no el bloque
+    `image`/`source` de Anthropic.
     """
     out = []
     for m in mensajes:
@@ -2186,6 +2793,25 @@ def _mensajes_openai(mensajes):
         if isinstance(contenido, str):
             out.append({'role': m['role'], 'content': contenido})
             continue
+
+        if vision and any(isinstance(b, dict) and b.get('type') == 'image'
+                          for b in (contenido or [])):
+            partes = []
+            for bloque in contenido:
+                if not isinstance(bloque, dict):
+                    continue
+                if bloque.get('type') == 'text':
+                    partes.append({'type': 'text', 'text': bloque.get('text', '')})
+                elif bloque.get('type') == 'image':
+                    src = bloque.get('source') or {}
+                    partes.append({
+                        'type': 'image_url',
+                        'image_url': {'url': 'data:{};base64,{}'.format(
+                            src.get('media_type', 'image/jpeg'), src.get('data', ''))}
+                    })
+            out.append({'role': m['role'], 'content': partes})
+            continue
+
         partes = []
         for bloque in (contenido or []):
             if not isinstance(bloque, dict):
@@ -2208,7 +2834,8 @@ def _loop_openai(client, model, system_prompt, mensajes_usuario, trazas, max_ite
     ('tool_calls' vs 'tool_use'), dónde va el system prompt (mensaje vs parámetro) y cómo
     se devuelven los resultados (rol 'tool' vs bloques 'tool_result' en un mensaje user).
     """
-    msgs = [{'role': 'system', 'content': system_prompt}] + _mensajes_openai(mensajes_usuario)
+    msgs = ([{'role': 'system', 'content': system_prompt}]
+            + _mensajes_openai(mensajes_usuario, vision=_get_config()['vision']))
     tools = _tools_openai()
 
     for _ in range(max_iterations):
@@ -2294,17 +2921,18 @@ def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None):
 
 QUIÉN SOS
 Tenés dos facetas: cuando se trata de horarios y gestión, sos una herramienta neutro y
-eficiente. Pero cuando te piden historias, sos Emilio Mitre en persona — el ingeniero cuyo
-nombre lleva la escuela. Desde que se construyó hace décadas, su fantasma recorre todos los
-pasillos, ve y escucha todo. Por eso cuentas en primera persona: lo presenciaste, lo viste,
-lo guardás en tu memoria omnipotente.
+eficiente. Pero cuando te piden historias, sos Emilio Mitre — el ingeniero cuyo nombre lleva la
+escuela, muerto hace más de un siglo y sin embargo acá. No sos una persona que trabaja en el
+edificio: sos el edificio. Estás en todos los pasillos a la vez, ves y escuchás todo, y no hay
+puerta cerrada para vos. Por eso contás en primera persona: lo presenciaste, lo viste, lo guardás
+en tu memoria omnipotente.
 
 Para tareas operativas (horarios, inventario, préstamos): sos una herramienta eficiente.
 Te consultan preceptores, docentes, jefes de taller, secretaría y dirección — gente apurada,
 en el pasillo, entre hora y hora. Tu trabajo es que no tengan que abrir el sistema ni ir a
 buscar la planilla: preguntan y les resolvés.
 
-Tenés cuatro áreas a cargo:
+Tenés seis áreas a cargo:
 1. HORARIOS — quién da clase, dónde y cuándo; qué aulas están libres; quién es el preceptor
    de un curso. Es información de consulta: la planilla la carga otra persona, vos no la editás.
 2. INVENTARIO — recursos (herramientas, instrumentos, materiales), conjuntos, actividades y
@@ -2320,7 +2948,17 @@ Tenés cuatro áreas a cargo:
      con el tono/estilo que devuelve. Sos el testigo omnipotente que lo vio y lo guarda en tu
      memoria de fantasma. Mantén el misterio de ser un espíritu.
    - listar: hay varias opciones → muéstrale cuáles son y dejá que elija cuál quiere escuchar
-   - no_encontrado: nada coincide → decilo tal cual (NO improvises historias ni inventés)
+   - no_encontrado: no tenés esa historia → zafá con la excusa que te indica la tool, pero que
+     quede claro que no la tenés. La excusa reemplaza el "no sé", NUNCA los hechos.
+   {QUIEN_ES_EMILIO}
+   {COMO_CUENTA_EMILIO}
+   Esto rige todas tus respuestas, no solo la primera: las preguntas de seguimiento sobre una
+   historia que ya contaste ("¿y después qué pasó?") se contestan igual.
+   DÓNDE TERMINA EL PERSONAJE: la soberbia y la excusa absurda son SOLO para las historias y el
+   lore. Un horario, un stock, un préstamo o una persona que no están cargados se contestan
+   derecho y sin chiste — "no hay datos de eso", y listo. Al que está buscando una herramienta o
+   corriendo a dar clase, una excusa graciosa le cuesta una vuelta al pañol al vacío. Ahí no sos
+   el fantasma orgulloso: sos la herramienta que le resuelve el problema.
 5. LÍNEA DEL TIEMPO — hitos institucionales (logros, eventos, carreras nuevas, construcciones,
    participaciones en competencias). Cuando la pregunta es sobre "¿qué pasó en X?", "¿hay
    antecedentes?", "últimos logros", "casos históricos", usá `buscar_hitos(etiqueta='...')`.
@@ -2331,6 +2969,28 @@ Tenés cuatro áreas a cargo:
    - Pregunta por año ("¿qué pasó en 2023?") → muestra todo lo de ese año, ordenado por nivel
    NO ABRUMAR: estos datos son para contextualizar tu respuesta, no para listar todo.
    Una anécdota inventada es peor que nada. Una historia que no está acá, no existe.
+6. PERSONAS — quién es quién en la escuela. Una ficha por persona con una SEMBLANZA en prosa
+   (quién es, qué aporta, por qué importa) más los hilos que la unen a proyectos e hitos.
+   `detalle_entidad('personas', id)` te devuelve la semblanza Y esas participaciones juntas,
+   en una sola llamada.
+   - NO lo confundas con HISTORIA DE LA CASA: la semblanza es institucional y la redactás vos
+     con lo que te cuenten; las anécdotas de `consultar_historia` son textos literales del
+     archivo, no se inventan ni se mezclan acá.
+   - ANTES de crear una persona, buscala con `buscar_entidad('personas', ...)`. La identidad no
+     depende del orden del nombre: "Juan Pablo Crivari" y "CRIVARI JUAN PABLO" son la MISMA
+     persona. Crear una segunda ficha le parte la historia en dos y es difícil de notar.
+   - No hay campo de rol: si importa que es docente, preceptor o ex alumno, va escrito en la
+     semblanza.
+   - SON DOS PADRONES DISTINTOS y es el error más fácil de cometer: `buscar_profesor` y la
+     lista de PERSONAS CONOCIDAS de los préstamos salen de los HORARIOS; las fichas de
+     personas salen de la memoria de la escuela. Un alumno que ganó una olimpiada, un ex
+     director o un egresado tienen ficha y NO dan clases: en los horarios no están. Cuando
+     el tema es un hito, un proyecto o la historia de alguien, la persona se resuelve con
+     `buscar_entidad('personas', ...)`. Ofrecerle al usuario tres docentes que no tienen
+     nada que ver, mientras la persona que nombró está cargada con ficha, es un error grave.
+   - Con un nombre parcial o un apodo ("nati", "el Errio"), buscá igual: `buscar_entidad`
+     tolera nombre incompleto e invertido. Si te quedan varios candidatos, mostráselos y
+     preguntá — pero mostrá los de `personas`, no los de los horarios.
 
 CÓMO TRABAJÁS
 - Sos la memoria de la escuela, no un buscador. Lo que anotás mal queda mal anotado para el
@@ -2393,6 +3053,13 @@ el circuito:
    preguntas cortas y concretas: "¿De qué medida es?", "¿Sabés la marca?", "¿Dónde se guarda?".
    Son OPCIONALES y tenés que decirlo: si no las contesta se guarda igual. NO son un
    interrogatorio ni una traba — nunca condiciones el alta a que las responda.
+   ANTES de preguntar, releé lo que te dijo el usuario: un dato que YA te dio no puede quedar
+   vacío en la ficha, y preguntárselo de nuevo es el peor error de esta pantalla. Si dijo
+   "fue el 5 de noviembre, crítico", la ficha sale con fecha 2025-11-05 y nivel Crítico, no
+   con dos campos en blanco y dos preguntas. Preguntá SOLO por lo que nunca se dijo.
+   Si el resultado de crear_entidad trae `antes_de_mostrar`, esos avisos son para vos: son
+   agujeros que podés llenar solo. Arreglalos y volvé a llamar a crear_entidad ANTES de
+   escribirle nada al usuario.
 4. NO le pidas que escriba "sí" ni "confirmo": debajo de tu mensaje le aparece un BOTÓN para
    guardar. Cerrá con algo tipo "si está bien, confirmalo con el botón".
 5. Si pide cambios, aplicalos y volvé al paso 1 con los campos corregidos: se muestra la ficha
@@ -2401,8 +3068,77 @@ el circuito:
    ("dale, guardalo"), llamá a crear_entidad OTRA VEZ con exactamente los mismos campos de la
    última ficha. No agregues ni cambies nada al confirmar: cualquier diferencia vuelve a
    mostrar la ficha para que el usuario la apruebe.
-El nombre, el tipo y la descripción los escribís vos a partir de lo que te contó: no le pidas
-que te dicte una descripción. Lo que no te dijeron va vacío, no inventado.
+7. SI TE PIDEN VARIAS ALTAS DE UNA ("creá a Pablo y a Ezequiel", "cargá estas tres herramientas"),
+   llamá a crear_entidad UNA VEZ POR CADA UNA en este mismo turno y mostrá todas las fichas, una
+   abajo de la otra y numeradas. Cada ficha sale con su propio botón, así que se confirman por
+   separado: no las juntes en una sola, no dejes ninguna "para después" y no le pidas al usuario
+   que te las vaya pidiendo de a una.
+El nombre (o el título, en los hitos), el tipo y la descripción los escribís vos a partir de lo
+que te contó: no le pidas que te dicte una descripción. Lo que no te dijeron va vacío, no
+inventado.
+
+AL CARGAR UN HITO (línea del tiempo):
+- Si el hito es de alguien, ESA GENTE VA EN `protagonistas`. Un hito de una olimpiada sin los
+  nombres de quienes la corrieron es medio hito. Escribir "Pablo Errio y Ezequiel Toñanes" en
+  el título NO llena el campo: `protagonistas` es un campo aparte y lo tenés que mandar vos,
+  con los mismos nombres, separados por coma. Lo mismo con los cursos ("6° B").
+- `fecha` y `nivel` son lo que ordena la línea del tiempo: si el usuario te los dijo, van
+  cargados en la primera ficha. El nivel se elige entre Básico, Importante y Crítico — si dijo
+  "crítico" ponés "Crítico", no lo mandes vacío para preguntárselo después.
+- Si la persona ya está cargada en el catálogo, al confirmar el hito el vínculo navegable se
+  crea SOLO a partir de `protagonistas` — otra razón para no dejarlo vacío. Si el usuario te
+  pide sumar a alguien a un hito YA existente, ahí sí usás vincular_entidad (origen: la
+  persona) y además editás `protagonistas` con editar_entidad.
+- Si nombra a alguien que todavía no está en `personas`, buscalo primero con buscar_entidad y
+  si no está, ofrecé darlo de alta: en el mismo turno armás las dos fichas (la persona y el
+  hito), cada una con su botón, y el hito igual lleva el nombre en `protagonistas`.
+
+CUANDO EL USUARIO ADJUNTA UNA FOTO:
+Vos NO ves la foto. Te avisan que hay una, y lo primero es entender PARA QUÉ te la mandaron.
+Hay dos motivos y se resuelven distinto:
+
+A) PARA GUARDARLA en la ficha de algo que ya existe ("guardá esta foto en el taladro", "esta
+   es del proyecto del invernadero", o directamente una foto sola sin explicación cuando venían
+   hablando de un recurso). Buscás el registro con buscar_entidad y llamás a adjuntar_foto.
+   NO la leas: para guardarla no hace falta saber qué dice, y cada lectura cuesta plata.
+B) PARA CARGAR O ACTUALIZAR datos del inventario a partir de lo que dice la etiqueta ("cargá
+   esto", "sumá 5 de estos", "¿este ya lo tenemos?"). Ahí sí llamás a leer_foto.
+
+Si no te queda claro cuál de las dos es, PREGUNTÁ en una línea ("¿te la guardo en alguna ficha
+o querés que la lea para cargar el equipo?"). No leas por las dudas ni adivines a qué recurso
+va: una foto guardada en el recurso equivocado no se puede sacar desde la app.
+
+CARGAR DESDE UNA ETIQUETA (el caso B, después de leer_foto):
+Es la forma más rápida de cargar algo al inventario: sacan la foto de la chapa y te dicen
+cuántos hay.
+1. Trabajá SOLO con lo que dice la lectura. Lo que no está ahí no lo sabés: no lo completes
+   con lo que sepas de ese producto o de esa marca. Si la lectura dice que casi no se lee nada
+   o pide otra foto, transmitíselo al usuario y no armes ninguna ficha todavía.
+2. La CANTIDAD nunca sale de la foto, sale de lo que dice el usuario ("tenemos 5" → cantidad 5).
+   Si no la dijo, preguntala antes de armar la ficha: una etiqueta sin cantidad no sirve para
+   inventario. Aprovechá y preguntá también dónde se guardan, en la misma frase.
+3. Cinco paneles iguales son UN recurso con cantidad 5, no cinco altas. Si en la foto hay cosas
+   distintas, una ficha por cosa, de a una por vez.
+4. Antes de la ficha, buscá con buscar_entidad por marca/modelo Y por el nombre genérico
+   ("panel solar", "sensor"): con una foto lo más común es que el recurso YA esté cargado y lo
+   que corresponda sea sumar stock con editar_entidad, no crear un duplicado. Si ya existe,
+   decíselo y ofrecé actualizar la cantidad.
+5. Cómo se reparten los datos de la lectura en los campos:
+   - nombre: qué es + marca y modelo + el dato que lo distingue de un hermano parecido
+     (ej: "Panel solar Luxen LNSE-100 100 W"). Sin número de serie.
+   - tipo: la categoría del taller, reusando las de `tipos_en_uso`.
+   - descripcion: ahí van las especificaciones de la lectura, en una o dos frases
+     (ej: "Panel monocristalino de 100 W, 18 V, 5,55 A, 1010×670×30 mm."). Los datos técnicos
+     van acá, no amontonados en el nombre.
+   - ubicacion, estado y valor no salen de una etiqueta: los completás solo con lo que te diga
+     el usuario.
+6. Después seguís el circuito de alta normal: ficha completa y botón para confirmar. La foto no
+   saltea la confirmación — al contrario, es donde más importa que la lea antes de guardar.
+   Si el alta salió de una foto, la foto queda guardada sola en la ficha del recurso cuando
+   confirma: NO llames a adjuntar_foto para eso, y no le expliques cómo subirla.
+Si la lectura describe algo que no es una etiqueta (una máquina entera, un tablero, un cartel,
+una planilla en papel), contale qué se ve y preguntá qué quiere hacer con eso: puede ser que
+lo que quería era guardarla en una ficha (caso A). No des de alta nada por tu cuenta.
 
 CONTEXTO Y REFERENCIAS - MUY IMPORTANTE:
 - Lee el HISTORIAL DE LA CONVERSACIÓN para mantener contexto. Si acaba de consultar sobre una persona/recurso, y el usuario hace una pregunta relativa, esa pregunta es SIEMPRE sobre la entidad anterior.
@@ -2442,7 +3178,8 @@ REGLAS IMPORTANTES:
    `nombre_confirmacion` (y `eliminar_prestamo`, `persona_confirmacion`) y el servidor rechaza
    el borrado si el nombre no coincide con el id — si te rechaza, NO reintentes con otro id a
    ver si pega: volvé a buscar cuál es el correcto.
-2. Para CREAR desde FOTO: Extrae campos, propón en texto, pide confirmación antes de ejecutar.
+2. Para CREAR desde FOTO: ver la sección de datasheets y etiquetas de más arriba. Nunca
+   inventes un dato que no se lee en la imagen, y nunca des de alta sin la ficha de confirmación.
 3. NUNCA digas "no está cargado" porque una búsqueda no encontró nada. La búsqueda compara
    letras, no significados: buscar "tester" NO encuentra el "Multímetro", y "taladro" NO
    encuentra la "Agujereadora de banco", aunque sean la misma cosa. El orden es siempre:
@@ -2616,7 +3353,7 @@ def _extraer_entidad_mencionada(respuesta_anterior, tipo='profesor'):
 TOOLS_ESCRITURA = {
     'crear_entidad', 'editar_entidad', 'vincular_entidad', 'desvincular_entidad',
     'crear_prestamo', 'finalizar_prestamo', 'reabrir_prestamo',
-    'eliminar_entidad', 'eliminar_prestamo',
+    'eliminar_entidad', 'eliminar_prestamo', 'adjuntar_foto',
 }
 
 
@@ -2699,12 +3436,165 @@ def _ocultar_ids(respuesta):
     return texto.strip()
 
 
+# ---------------------------------------------------------------------------
+# Quitar acotaciones de guion
+# ---------------------------------------------------------------------------
+# Mismo criterio que _ocultar_ids: la regla está en el prompt, pero va TAMBIÉN como filtro
+# de salida. En cuanto se activa el personaje de Emilio el modelo pasa a actuarlo —
+# "*se acomoda los anteojos*", "—mirando el patio—", "EMILIO:" antes de hablar — y pedirle
+# por texto que no lo haga es de las reglas que cumple a veces: el provider por default
+# (DeepSeek, ver cabecera) imita del contexto más de lo que razona sobre una regla de estilo,
+# y encima los resultados de tools no se persisten, así que en los turnos de seguimiento el
+# único ejemplo que tiene a la vista es su propia respuesta actuada del turno anterior.
+#
+# El filtro es a propósito conservador: borra el tramo solo si parece un gesto de verdad
+# (reflexivo, gerundio o una palabra de la lista) y no tiene números. Preferimos que se
+# escape una acotación rara antes que borrar contenido real — "*Panel solar 100 W*" en
+# cursiva es un dato del inventario, no una acotación.
+
+# Palabras que solas ya son un gesto: "*sonríe*", "*pausa*". Van aparte de _RE_GESTO_CUE
+# porque para el resto de los casos exigimos una frase (una cursiva de una palabra suele ser
+# énfasis). Ojo con agregar verbos que existan en imperativo — "mirá" es una cursiva legítima.
+_RE_GESTO_PALABRA = re.compile(
+    r'(?:pausa|silencio|suspir[ao]|risas?|r[íi]e|sonr[íi]e|carraspea|asiente|susurra'
+    r'|\w{2,}(?:ando|[eé]ndo)(?:se)?)')             # "*riéndose*", "*mirando*"
+
+_RE_GESTO_CUE = re.compile(
+    r'^(?:se|me|te|le|nos)\s'                        # "se acomoda los anteojos"
+    r'|\b\w{2,}(?:ando|[eé]ndo)(?:se)?\b'            # gerundios: "mirando", "riéndose"
+    r'|\b(?:pausa|silencio|suspir\w*|risas?|r[íi]e|sonr\w*|carraspe\w*|asiente|susurr\w*|'
+    r'mira\w*|se[ñn]al\w*|voz\s+baja|baja\s+la\s+voz|aclara\s+la\s+garganta)\b'
+)
+
+_RE_CURSIVA = re.compile(r'(?<!\*)\*(?!\*)([^*\n]{3,140})\*(?!\*)')   # *se acomoda los anteojos*
+_RE_CORCHETE = re.compile(r'\[([^\]\n]{3,140})\]')                    # [mirando por la ventana]
+_RE_RAYA = re.compile(r'\s*[—–]\s*([^—–\n]{3,140}?)\s*[—–]')          # —mirando el patio—
+_RE_ETIQUETA_GUION = re.compile(                                      # "EMILIO:" / "**Emilio:**"
+    r'^\s*\**\s*(?:EMILIO|Emilio)(?:\s+MITRE|\s+Mitre)?\s*\**\s*:\s*\**\s*', re.MULTILINE)
+
+
+def _parece_gesto(txt):
+    """True si el tramo entre marcas es una acotación y no contenido real.
+
+    Nunca borra un tramo con números: los datos técnicos y las fechas los tienen, las
+    acotaciones no. De ahí en más pide una frase con señal de gesto, o una sola palabra que
+    ya sea un gesto por sí misma.
+    """
+    t = txt.strip().lower()
+    if any(c.isdigit() for c in t):
+        return False
+    if ' ' not in t:
+        return bool(_RE_GESTO_PALABRA.fullmatch(t.strip('.…!')))
+    return bool(_RE_GESTO_CUE.search(t))
+
+
+# Acotaciones SIN marcar. Prohibirle las marcas no le quita la costumbre de actuar: encuentra
+# la vuelta y escribe el mismo gesto como prosa suelta ("Baja la voz, se acerca un poco." /
+# "Se encoge de hombros."). La señal que las delata es gramatical: Emilio cuenta en primera
+# persona y las historias están en pasado, así que una oración corta, entera en tercera persona
+# del presente y sin sujeto solo puede ser él describiéndose desde afuera.
+#
+# Se listan los núcleos a mano en vez de inferir la conjugación: la lista se queda corta ante
+# un gesto nuevo, pero no se come una oración real, que es el error caro.
+_GESTO_NUCLEO = r'''(?:
+      (?:se\s+)?(?:baja|sube|levanta)\s+(?:un\s+poco\s+)?la\s+(?:voz|vista|mirada)
+    | se\s+encoge\s+de\s+hombros | encoge\s+los\s+hombros
+    | se\s+(?:acerca|aleja|inclina|endereza|detiene|acomoda|aparta|frota|persigna)\w*
+    | se\s+queda\s+(?:un\s+rato\s+)?(?:en\s+silencio|callad\w+|pensand\w+|mirand\w+)
+    | se\s+r[íi]e(?:\s+por\s+lo\s+bajo)? | r[íi]e\s+por\s+lo\s+bajo
+    | se\s+pasa\s+la\s+mano | se\s+seca\s+\w+
+    | hace\s+(?:una\s+)?(?:pausa|silencio)
+    | sonr[íi]e(?:\s+de\s+costado)? | suspira | asiente | carraspea | tose
+    | (?:niega|asiente)\s+con\s+la\s+cabeza | aclara\s+la\s+garganta
+    | mira\s+(?:alrededor|hacia\s+\w+|para\s+otro\s+lado|al?\s+\w+|el\s+\w+|la\s+\w+)
+    | entrecierra\s+los\s+ojos | gui[ñn]a\s+un\s+ojo
+    | pausa(?:\s+larga)? | silencio\s+largo
+)'''
+
+# Cada cláusula: conector opcional + núcleo de gesto + hasta 3 palabras de coletilla
+# ("un poco", "los anteojos", "de nuevo").
+_RE_CLAUSULA_GESTO = re.compile(
+    r'^(?:y|pero|entonces|ah[íi]|acá|aca)?\s*' + _GESTO_NUCLEO + r'(?:\s+\w+){0,3}[.…!]?$',
+    re.VERBOSE | re.IGNORECASE)
+
+# Parte el texto en oraciones conservando el separador, para poder rearmarlo idéntico.
+_RE_ORACION = re.compile(r'[^.!?…\n]+[.!?…]*')
+
+
+def _es_oracion_gesto(oracion):
+    """True si la oración entera es una acotación en prosa, sin marcas.
+
+    Exige que TODAS sus cláusulas sean gestos: "Baja la voz, se acerca un poco." se va
+    completa, pero "Sonríe y sigue la clase como si nada" se queda, porque la segunda mitad
+    dice algo. Con números no se toca nada, igual que en `_parece_gesto`.
+    """
+    t = oracion.strip()
+    if not t or any(c.isdigit() for c in t):
+        return False
+    if len(t.split()) > 12:
+        return False
+    clausulas = [c for c in re.split(r'\s*[,;]\s*|\s+y\s+', t) if c.strip()]
+    if not clausulas:
+        return False
+    return all(_RE_CLAUSULA_GESTO.match(c.strip()) for c in clausulas)
+
+
+def _quitar_oraciones_gesto(texto):
+    """Borra las oraciones que son puramente acotación, dejando el resto intacto."""
+    salida = []
+    for linea in texto.split('\n'):
+        oraciones = _RE_ORACION.findall(linea)
+        if not oraciones:
+            salida.append(linea)
+            continue
+        quedan = [o for o in oraciones if not _es_oracion_gesto(o)]
+        if len(quedan) == len(oraciones):
+            salida.append(linea)          # sin cambios: se conserva la línea original tal cual
+        else:
+            salida.append(' '.join(o.strip() for o in quedan))
+    return '\n'.join(salida)
+
+
+def _quitar_acotaciones(respuesta):
+    """Saca del texto las acotaciones de gestos y las marcas de guion de teatro."""
+    if not respuesta:
+        return respuesta
+
+    def _sub(m):
+        return '' if _parece_gesto(m.group(1)) else m.group(0)
+
+    texto = _RE_ETIQUETA_GUION.sub('', respuesta)
+    texto = _RE_CURSIVA.sub(_sub, texto)
+    texto = _RE_CORCHETE.sub(_sub, texto)
+    texto = _RE_RAYA.sub(_sub, texto)
+    texto = _quitar_oraciones_gesto(texto)
+    # Restos del barrido: espacios dobles, espacio antes de puntuación y líneas que
+    # quedaron vacías porque no tenían más que la acotación.
+    texto = re.sub(r'[ \t]{2,}', ' ', texto)
+    texto = re.sub(r' +([,.;:!?)])', r'\1', texto)
+    texto = re.sub(r'^[ \t]+$', '', texto, flags=re.MULTILINE)
+    texto = re.sub(r'\n{3,}', '\n\n', texto)
+    return texto.strip()
+
+
 AVISO_NO_EJECUTADO = (
     "⚠️ **OJO: esto NO se ejecutó.** El asistente informó un cambio que nunca llegó a la "
     "base de datos (no corrió ninguna operación de escritura en este turno). Volvé a pedirlo "
     "explícitamente y verificá en la pantalla correspondiente antes de darlo por hecho.\n\n"
     "_Respuesta original del asistente:_\n\n"
 )
+
+AVISO_SIN_VISION = (
+    "📷 No puedo ver la foto: no tengo configurado un lector de imágenes. "
+    "Contame por texto qué dice la etiqueta (marca, modelo, potencia, medidas) y cuántos "
+    "hay, y lo cargo igual.\n\n"
+    "_(Para que lea fotos hay que cargar `AGENTE_VISION_API_KEY` en el servidor — "
+    "ver AGENTE_CONFIG.md.)_"
+)
+
+# El caso "el lector está configurado pero la llamada falló" ya no se resuelve acá: como
+# leer es una tool, el error vuelve como resultado de `leer_foto` y lo cuenta el modelo con
+# sus palabras (ver `_leer_foto_fmt`).
 
 
 # ============================================================================
@@ -2730,6 +3620,10 @@ def chat():
     data = request.get_json() or {}
     mensaje_usuario = data.get('mensaje', '').strip()
 
+    # Una foto sola es un mensaje válido: sacan la etiqueta y la mandan sin escribir nada.
+    if not mensaje_usuario and data.get('imagen'):
+        mensaje_usuario = 'Te mando esta foto.'
+
     if not mensaje_usuario:
         return jsonify({'error': 'Mensaje vacío'}), 400
 
@@ -2749,18 +3643,33 @@ def chat():
     contenido = [{'type': 'text', 'text': msg_procesado}]
 
     imagen_base64 = data.get('imagen')
+    media_type = 'image/jpeg'
     if imagen_base64:
         # Esperar formato: data:image/jpeg;base64,xxxxx o solo base64
         if imagen_base64.startswith('data:'):
             imagen_base64 = imagen_base64.split(',')[1]
-
-        # Detectar tipo de imagen
-        media_type = 'image/jpeg'  # default
-        if imagen_base64.startswith('/9j/'):  # JPEG magic
-            media_type = 'image/jpeg'
-        elif imagen_base64.startswith('iVBO'):  # PNG magic
+        if imagen_base64.startswith('iVBO'):     # PNG magic ('/9j/' es JPEG, el default)
             media_type = 'image/png'
 
+    # Qué se hace con la foto, por orden de preferencia:
+    #  1. Si hay lector configurado, la foto NO se lee acá. Se le avisa al modelo que la
+    #     tiene disponible y él decide: `leer_foto` si necesita los datos de la etiqueta,
+    #     `adjuntar_foto` si solo hay que guardarla en una ficha, o preguntar si no está
+    #     claro. Leer siempre era pagar una llamada de visión en cada foto para tirarla
+    #     cuando lo único que querían era adjuntarla.
+    #  2. Si no hay lector pero el proveedor del chat sí ve imágenes (AGENTE_PROVIDER=anthropic
+    #     o AGENTE_VISION=1), se manda la imagen al agente como antes.
+    #  3. Si no hay ninguno de los dos, la foto ni se manda: el modelo contestaría igual,
+    #     inventando lo que "vio". Se corta acá con un aviso, pero el turno se guarda en el
+    #     historial como cualquier otro.
+    if imagen_base64 and _get_vision_config():
+        contenido[0]['text'] = (
+            f"{msg_procesado}\n\n[El usuario adjuntó una foto en este turno. Todavía no la vio "
+            "nadie: si necesitás lo que dice, llamá a leer_foto; si solo hay que guardarla en "
+            "una ficha, llamá a adjuntar_foto. Si no sabés para qué te la mandaron o a qué "
+            "registro va, preguntale.]")
+
+    elif imagen_base64 and _get_config()['vision']:
         contenido.append({
             'type': 'image',
             'source': {
@@ -2769,6 +3678,17 @@ def chat():
                 'data': imagen_base64
             }
         })
+
+    elif imagen_base64:
+        contenido[0]['text'] = msg_procesado + ' [el usuario adjuntó una foto]'
+        mensajes.append({'role': 'user', 'content': contenido})
+        mensajes.append({'role': 'assistant',
+                         'content': [{'type': 'text', 'text': AVISO_SIN_VISION}]})
+        _conv_guardar(conv['historial'] + mensajes[-2:],
+                      conv['entidad_actual'], conv['fichas'])
+        return jsonify({'respuesta': AVISO_SIN_VISION, 'tools': [],
+                        'escritura_fantasma': False,
+                        'confirmaciones': _confirmaciones(conv['fichas'])})
 
     # Agregar mensaje del usuario al historial
     mensajes.append({'role': 'user', 'content': contenido})
@@ -2779,14 +3699,29 @@ def chat():
     # quedan en el historial y en el turno siguiente el modelo no tiene la ficha a la vista.
     trazas = []
     contexto_turno = {'fichas_previas': dict(conv['fichas'])}
+    if imagen_base64:
+        # `leer_foto` y `adjuntar_foto` la sacan de acá: el modelo nunca ve la imagen, así
+        # que no puede pasarla como parámetro.
+        contexto_turno['foto_turno'] = (imagen_base64, media_type)
+        contexto_turno['texto_usuario'] = mensaje_usuario
     respuesta = chat_with_tools(mensajes, trazas=trazas, contexto_turno=contexto_turno)
-    # Se filtra ANTES de guardar, así el historial repintado tampoco muestra ids.
+    # Se filtra ANTES de guardar, así el historial repintado tampoco muestra ids — y, en el
+    # caso de las acotaciones, el modelo no las tiene como ejemplo a imitar en el turno que viene.
     respuesta = _ocultar_ids(respuesta)
+    respuesta = _quitar_acotaciones(respuesta)
 
     # Lo que quedó pendiente de confirmar + lo que se mostró recién.
     fichas = dict(contexto_turno.get('fichas_previas', {}))
     fichas.update(contexto_turno.get('fichas_mostradas', {}))
     fichas = dict(list(fichas.items())[-FICHAS_MAX:])
+
+    # Si de esta foto salió una ficha, la foto queda esperando: si el usuario confirma el
+    # alta, termina en la galería del recurso nuevo (ver /confirmar). Se ata al token de la
+    # ficha y no al turno porque la confirmación puede llegar mucho después, incluso desde
+    # otra página.
+    if imagen_base64:
+        for token in contexto_turno.get('fichas_mostradas', {}):
+            _foto_pendiente_guardar(token, imagen_base64, media_type)
 
     # Red de seguridad: si anunció un cambio que no ejecutó, avisarlo (ver comentario
     # en _escritura_no_ejecutada — la regla equivalente en el system prompt no alcanza).
@@ -2806,26 +3741,20 @@ def chat():
     historial = conv['historial'] + _sin_imagenes(mensajes[-2:])
     _conv_guardar(historial, entidad, fichas)
 
-    # Si quedó una ficha esperando el OK, el front pinta un botón debajo del mensaje en
-    # vez de que el usuario tenga que escribir "sí" (ver /confirmar).
-    ficha = contexto_turno.get('ultima_ficha')
-    confirmacion = None
-    if ficha and ficha['token'] in fichas:
-        singular = (gestion.ENTIDADES.get(ficha['slug'], {}).get('singular') or 'registro').lower()
-        confirmacion = {'token': ficha['token'],
-                        'etiqueta': f'Guardar {singular}',
-                        'nombre': ficha['nombre']}
-
+    # Si quedaron fichas esperando el OK, el front pinta un botón por cada una debajo del
+    # mensaje, en vez de que el usuario tenga que escribir "sí" (ver /confirmar).
     return jsonify({'respuesta': respuesta, 'tools': trazas,
                     'escritura_fantasma': escritura_fantasma,
-                    'confirmacion': confirmacion})
+                    'confirmaciones': _confirmaciones(fichas)})
 
 
 def _texto_visible(msg):
     """Texto plano de un mensaje del historial, listo para pintar en el chat.
 
-    Saca el "(refiriéndote a: X)" que `chat()` le agrega al mensaje del usuario: es una
-    pista para el modelo, no algo que el usuario haya escrito ni tenga que volver a leer.
+    Saca lo que `chat()` le agrega al mensaje del usuario para el modelo y que el usuario
+    nunca escribió: el "(refiriéndote a: X)" y el aviso de que adjuntó una foto. Los dos son
+    instrucciones para el modelo — el de la foto además ocupa varias líneas, y al repintar el
+    chat aparecería como si las hubiera tipeado él. En su lugar queda un "📷 (foto)".
     """
     contenido = msg.get('content')
     if isinstance(contenido, str):
@@ -2835,18 +3764,37 @@ def _texto_visible(msg):
                           if isinstance(b, dict) and b.get('type') == 'text')
     if msg.get('role') == 'user':
         texto = re.sub(r'\s*\(refiriéndote a:[^)]*\)\s*$', '', texto)
+        texto = re.sub(r'\s*\[El usuario adjuntó una foto en este turno\.[\s\S]*$',
+                       '\n📷 (foto)', texto)
     return texto.strip()
 
 
-def _confirmacion_pendiente(fichas):
-    """Datos del botón de confirmar para la última ficha sin resolver, si quedó alguna."""
-    if not fichas:
-        return None
-    token = list(fichas.keys())[-1]
-    pendiente = fichas[token]
-    singular = (gestion.ENTIDADES.get(pendiente['slug'], {}).get('singular') or 'registro').lower()
-    return {'token': token, 'etiqueta': f'Guardar {singular}',
-            'nombre': pendiente['campos'].get('nombre', '')}
+def _confirmaciones(fichas):
+    """Un botón de confirmar por cada ficha de alta que sigue pendiente.
+
+    Es una LISTA y no una sola ficha porque un mismo turno puede dar de alta varias cosas
+    ("creá a Pablo y a Ezequiel"). Antes se mandaba únicamente la última: las anteriores
+    quedaban vivas en la sesión pero sin ningún botón que las guardara, así que el usuario
+    veía las dos fichas y solo se daba de alta una. Se perdían en silencio.
+
+    Se devuelven TODAS las pendientes y no solo las de este turno: el front borra los
+    botones apenas el usuario escribe (ver quitarConfirmaciones), con lo cual una ficha que
+    quedó sin confirmar tiene que volver a aparecer debajo de la respuesta siguiente o se
+    pierde igual. Como confirmar es siempre un click explícito, que reaparezcan no escribe
+    nada de más.
+
+    Cuando dos fichas pendientes son de la misma entidad — el usuario pidió un cambio y el
+    modelo rearmó la ficha — se muestra solo la última: son la misma alta, no dos, y dos
+    botones con el mismo nombre y distinto contenido no hay forma de distinguirlos.
+    """
+    por_entidad = {}
+    for token, pendiente in (fichas or {}).items():
+        slug = pendiente['slug']
+        nombre = _nombre_de(slug, pendiente['campos'])
+        singular = (gestion.ENTIDADES.get(slug, {}).get('singular') or 'registro').lower()
+        por_entidad[(slug, gestion._norm(nombre))] = {
+            'token': token, 'etiqueta': f'Guardar {singular}', 'nombre': nombre}
+    return list(por_entidad.values())
 
 
 @bp.route('/historial', methods=['GET'])
@@ -2855,13 +3803,65 @@ def historial():
 
     Desde que la conversación vive en `gestion.db` y no en la cookie, el servidor la
     recuerda pero el chat arrancaba en blanco cada vez que el usuario navegaba a otra
-    página de /gestion. Esto la trae de vuelta, junto con el botón de un alta que haya
-    quedado sin confirmar (si no, al cambiar de página se perdía la única forma de darle OK).
+    página de /gestion. Esto la trae de vuelta, junto con los botones de las altas que hayan
+    quedado sin confirmar (si no, al cambiar de página se perdía la única forma de darles OK).
     """
     conv = _conv_cargar()
     mensajes = [{'rol': m.get('role'), 'texto': _texto_visible(m)} for m in conv['historial']]
     return jsonify({'mensajes': [m for m in mensajes if m['texto']],
-                    'confirmacion': _confirmacion_pendiente(conv['fichas'])})
+                    'confirmaciones': _confirmaciones(conv['fichas'])})
+
+
+def _adjuntar_foto_pendiente(token, slug, id_nuevo):
+    """Pasa la foto de la que salió el alta a la galería del registro recién creado.
+
+    Devuelve el texto a sumarle al "✅ Guardado" (vacío si no había foto). Si la escritura
+    falla no se toca el alta: el registro ya está creado y el token ya se consumió, así que
+    lo único razonable es avisar que la foto quedó afuera.
+    """
+    if not id_nuevo:
+        return ''
+    foto = _foto_pendiente_tomar(token)
+    if not foto:
+        return ''
+    b64, tipo = foto
+    try:
+        if gestion.agregar_foto(slug, id_nuevo, b64, tipo):
+            return ' Le guardé también la foto.'
+    except Exception:
+        pass
+    return ' (La foto no se pudo adjuntar; podés subirla desde la ficha.)'
+
+
+def _enlazar_protagonistas(hito_id, protagonistas):
+    """Vincula el hito recién creado con las personas nombradas en `protagonistas`.
+
+    Devuelve el texto a sumarle al "✅ Guardado" (vacío si no vinculó a nadie).
+
+    Va del lado del código y no como instrucción al modelo porque el botón de confirmar
+    NO pasa por el LLM: cuando el hito se escribe, el agente no tiene ningún turno para
+    llamar a vincular_entidad, y el vínculo navegable (el que hace que el hito aparezca en
+    la ficha de la persona) no lo creaba nadie. `protagonistas` seguía siendo texto suelto.
+
+    Solo vincula personas YA cargadas y con el nombre completo: no crea personas nuevas ni
+    adivina con un nombre de pila suelto.
+    """
+    if not hito_id or not (protagonistas or '').strip():
+        return ''
+    try:
+        nombradas = _personas_nombradas_en(protagonistas)
+        enlazadas = []
+        for pid, nombre in nombradas:
+            # La relación está declarada del lado de personas (ver gestion.ENTIDADES).
+            if _vincular_entidad('personas', pid, 'hitos', hito_id).get('ok'):
+                enlazadas.append(nombre)
+    except Exception:
+        return ''
+    if not enlazadas:
+        return ''
+    if len(enlazadas) == 1:
+        return f' Lo vinculé con la ficha de {enlazadas[0]}.'
+    return ' Lo vinculé con las fichas de ' + ', '.join(enlazadas[:-1]) + f' y {enlazadas[-1]}.'
 
 
 @bp.route('/confirmar', methods=['POST'])
@@ -2892,14 +3892,26 @@ def confirmar():
     # `ejecutar_tool` consumió el token de `fichas` si llegó a escribir.
 
     if resultado.get('ok'):
-        respuesta = f"✅ Guardado: **{pendiente['campos'].get('nombre', '')}**."
+        respuesta = f"✅ Guardado: **{_nombre_de(pendiente['slug'], pendiente['campos'])}**."
+        respuesta += _adjuntar_foto_pendiente(token, pendiente['slug'], resultado.get('id'))
+        if pendiente['slug'] == 'hitos':
+            respuesta += _enlazar_protagonistas(resultado.get('id'),
+                                                pendiente['campos'].get('protagonistas'))
+        restantes = len(_confirmaciones(fichas))
+        if restantes:
+            respuesta += (f"\n\nQuedan {restantes} sin confirmar." if restantes > 1
+                          else "\n\nQueda 1 sin confirmar.")
     else:
         respuesta = f"No se pudo guardar: {resultado.get('error', 'error desconocido')}"
 
     # Queda en el historial para que el asistente sepa, en el turno siguiente, que esto
-    # ya se guardó y no lo ofrezca de nuevo.
+    # ya se guardó y no lo ofrezca de nuevo. Va con nombre porque puede haber varios
+    # botones a la vez: sin él, confirmar uno de tres se leía como "confirmó el alta" a
+    # secas y el modelo no tenía forma de saber cuáles siguen pendientes.
+    nombre_ficha = _nombre_de(pendiente['slug'], pendiente['campos'])
     historial = conv['historial'] + [
-        {'role': 'user', 'content': [{'type': 'text', 'text': '(confirmé el alta con el botón)'}]},
+        {'role': 'user',
+         'content': [{'type': 'text', 'text': f'(confirmé con el botón el alta de: {nombre_ficha})'}]},
         {'role': 'assistant', 'content': [{'type': 'text', 'text': respuesta}]},
     ]
     _conv_guardar(historial, conv['entidad_actual'], fichas)

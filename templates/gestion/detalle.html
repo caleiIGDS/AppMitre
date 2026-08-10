@@ -59,8 +59,9 @@
     </div>
 
     <dl class="g-props">
+        {# El campo que hace de nombre ya se muestra como título (h2), no se repite acá. #}
         {% for c in cfg.campos %}
-        {% if c.nombre not in ('nombre', 'drive_url') and fila[c.nombre] %}
+        {% if c.nombre not in (cfg.campo_nombre or 'nombre', 'drive_url') and fila[c.nombre] %}
         <div class="g-prop">
             <dt>{{ c.label | upper }}</dt>
             {% if c.nombre == 'estado' %}

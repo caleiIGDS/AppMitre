@@ -54,11 +54,26 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // Abrir/cerrar widget
+  // Abrir/cerrar widget — persistir estado en localStorage
+  function guardarEstadoWidget(abierto) {
+    localStorage.setItem('agente-widget-open', abierto ? 'true' : 'false');
+  }
+
+  function restaurarEstadoWidget() {
+    // Restaurar el estado guardado cuando el widget existe en el DOM.
+    // Si el widget no está presente (ej: en /gestion/agente), la próxima vez
+    // que se renderice (al volver a otra página) lo restaurará.
+    const abierto = localStorage.getItem('agente-widget-open') === 'true';
+    if (widget) {
+      widget.hidden = !abierto;
+    }
+  }
+
   if (toggleBtn) {
     toggleBtn.addEventListener('click', function(e) {
       e.preventDefault();
       widget.hidden = !widget.hidden;
+      guardarEstadoWidget(!widget.hidden);
       if (!widget.hidden) {
         enfocarInput();
       }
@@ -69,14 +84,17 @@ document.addEventListener('DOMContentLoaded', function() {
     closeBtn.addEventListener('click', function(e) {
       e.preventDefault();
       widget.hidden = true;
+      guardarEstadoWidget(false);
     });
   }
+
+  // Restaurar estado del widget al cargar la página
+  restaurarEstadoWidget();
 
   if (resetBtn) {
     resetBtn.addEventListener('click', function(e) {
       e.preventDefault();
       if (enviando) return;
-      if (!confirm('¿Reiniciar la conversación? Se perderá el contexto actual.')) return;
 
       fetch('/gestion/agente/reset', { method: 'POST' })
         .catch(() => {})
@@ -95,6 +113,48 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // Manejo de imágenes
+  //
+  // La foto se achica ANTES de mandarla. Una foto de celular sale de 3-8 MB y en base64
+  // pesa un tercio más: no entra en el límite de la API de visión y encima tarda una
+  // eternidad por el wifi de la escuela. 1568 px de lado largo es lo que el modelo llega
+  // a aprovechar; más grande lo reescala él y solo se paga el envío. Alcanza de sobra
+  // para leer la letra chica de un datasheet.
+  const IMAGEN_LADO_MAX = 1568;
+  const IMAGEN_CALIDAD = 0.85;
+
+  function achicarImagen(file) {
+    return new Promise(function(resolve, reject) {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = function(evt) {
+        const dataUrl = evt.target.result;
+        const img = new Image();
+        // Si el navegador no puede decodificarla (HEIC de iPhone, formato raro), se manda
+        // tal cual: que decida el servidor, mejor que perder la foto.
+        img.onerror = function() { resolve(dataUrl); };
+        img.onload = function() {
+          const lado = Math.max(img.width, img.height);
+          if (lado <= IMAGEN_LADO_MAX) {
+            resolve(dataUrl);
+            return;
+          }
+          const escala = IMAGEN_LADO_MAX / lado;
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * escala);
+          canvas.height = Math.round(img.height * escala);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          try {
+            resolve(canvas.toDataURL('image/jpeg', IMAGEN_CALIDAD));
+          } catch (e) {
+            resolve(dataUrl);
+          }
+        };
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
   if (imageBtn) {
     imageBtn.addEventListener('click', function(e) {
       e.preventDefault();
@@ -105,16 +165,22 @@ document.addEventListener('DOMContentLoaded', function() {
   if (imageFile) {
     imageFile.addEventListener('change', function(e) {
       const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-          imagenSeleccionada = evt.target.result;
-          imagenNombre = file.name;
-          imagePreview.textContent = '✓ ' + file.name.substring(0, 20);
-          imagePreview.classList.add('active');
-        };
-        reader.readAsDataURL(file);
-      }
+      if (!file) return;
+
+      imagePreview.textContent = '⏳ preparando…';
+      imagePreview.classList.add('active');
+
+      achicarImagen(file).then(function(dataUrl) {
+        imagenSeleccionada = dataUrl;
+        imagenNombre = file.name;
+        imagePreview.textContent = '✓ ' + file.name.substring(0, 20);
+        imagePreview.classList.add('active');
+      }).catch(function() {
+        imagenSeleccionada = null;
+        imagenNombre = null;
+        imagePreview.textContent = '✕ no se pudo leer';
+        imageFile.value = '';
+      });
     });
   }
 
@@ -123,13 +189,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (enviando) return;
 
     const mensaje = inputField.value.trim();
-    if (!mensaje) return;
+    // Una foto sola vale como mensaje: sacan la etiqueta y la mandan sin escribir nada.
+    if (!mensaje && !imagenSeleccionada) return;
 
     limpiarBienvenida();
     // Un botón de confirmar de un mensaje anterior deja de valer: si el usuario siguió
     // escribiendo, lo más probable es que quiera cambiar algo, no guardar eso de antes.
     quitarConfirmaciones();
-    agregarMensaje(mensaje, 'user');
+    agregarMensaje(imagenSeleccionada ? ('📷 ' + (mensaje || imagenNombre || 'foto')) : mensaje,
+                   'user');
 
     // Preparar payload
     const payload = { mensaje };
@@ -172,7 +240,7 @@ document.addEventListener('DOMContentLoaded', function() {
           agregarMensaje('Error: ' + data.error, 'error');
         } else {
           agregarMensaje(data.respuesta, 'assistant');
-          if (data.confirmacion) agregarConfirmacion(data.confirmacion);
+          agregarConfirmaciones(data.confirmaciones);
         }
       })
       .catch(error => {
@@ -231,27 +299,31 @@ document.addEventListener('DOMContentLoaded', function() {
     irAlFinal();
   }
 
-  // --- Botón de confirmar alta ---
-  // El alta en el catálogo no se confirma escribiendo "sí": el backend manda `confirmacion`
-  // con el token de la ficha que se acaba de mostrar y acá se pinta el botón. Al tocarlo,
-  // /confirmar guarda directo desde lo que quedó en la sesión — sin pasar por el modelo,
-  // así que es instantáneo, gratis, y guarda exactamente lo que el usuario leyó.
+  // --- Botones de confirmar alta ---
+  // El alta en el catálogo no se confirma escribiendo "sí": el backend manda
+  // `confirmaciones` con el token de cada ficha pendiente y acá se pinta un botón por
+  // ficha. Al tocarlo, /confirmar guarda directo desde lo que quedó en la sesión — sin
+  // pasar por el modelo, así que es instantáneo, gratis, y guarda exactamente lo que el
+  // usuario leyó.
+  //
+  // Es una LISTA y no una sola: "creá a Pablo y a Ezequiel" arma dos fichas en un turno y
+  // antes solo se pintaba el botón de la última, así que la otra quedaba viva en el
+  // servidor sin forma de guardarla y el usuario creía que se habían dado de alta las dos.
 
   function quitarConfirmaciones() {
     messagesDiv.querySelectorAll('.agente-confirm').forEach(el => el.remove());
   }
 
-  function agregarConfirmacion(conf) {
-    const caja = document.createElement('div');
-    caja.className = 'agente-confirm';
+  function textoBoton(conf) {
+    // El nombre va en el botón, no al lado: con dos o tres botones seguidos, "Guardar
+    // persona" repetido no dice cuál es cuál.
+    return '✅ ' + (conf.etiqueta || 'Guardar') + (conf.nombre ? ': ' + conf.nombre : '');
+  }
 
+  function botonConfirmar(conf, caja) {
     const btn = document.createElement('button');
     btn.className = 'agente-confirm-btn';
-    btn.textContent = '✅ ' + (conf.etiqueta || 'Guardar');
-
-    const nota = document.createElement('span');
-    nota.className = 'agente-confirm-nota';
-    nota.textContent = 'o seguí escribiendo para cambiar algo';
+    btn.textContent = textoBoton(conf);
 
     btn.addEventListener('click', function() {
       if (enviando) return;
@@ -266,12 +338,20 @@ document.addEventListener('DOMContentLoaded', function() {
       })
         .then(r => r.json().then(data => ({ ok: r.ok, data })))
         .then(({ data }) => {
-          caja.remove();
+          btn.remove();
           agregarMensaje(data.respuesta || 'Sin respuesta', data.ok ? 'assistant' : 'error');
+          // Si quedan altas sin confirmar, la caja se remonta al final para que sus
+          // botones sigan abajo del "✅ Guardado" y no queden perdidos más arriba.
+          if (caja.querySelector('.agente-confirm-btn')) {
+            messagesDiv.appendChild(caja);
+          } else {
+            caja.remove();
+          }
+          irAlFinal();
         })
         .catch(error => {
           btn.disabled = false;
-          btn.textContent = '✅ ' + (conf.etiqueta || 'Guardar');
+          btn.textContent = textoBoton(conf);
           agregarMensaje('Error de conexión: ' + error.message, 'error');
         })
         .finally(() => {
@@ -280,7 +360,22 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    caja.appendChild(btn);
+    return btn;
+  }
+
+  function agregarConfirmaciones(lista) {
+    if (!lista || !lista.length) return;
+
+    const caja = document.createElement('div');
+    caja.className = 'agente-confirm';
+
+    const nota = document.createElement('span');
+    nota.className = 'agente-confirm-nota';
+    nota.textContent = lista.length > 1
+      ? 'confirmá las que estén bien, una por una — o seguí escribiendo para cambiar algo'
+      : 'o seguí escribiendo para cambiar algo';
+
+    lista.forEach(conf => caja.appendChild(botonConfirmar(conf, caja)));
     caja.appendChild(nota);
     messagesDiv.appendChild(caja);
     irAlFinal();
@@ -301,9 +396,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!data || !data.mensajes || !data.mensajes.length) return;
         limpiarBienvenida();
         data.mensajes.forEach(m => agregarMensaje(m.texto, m.rol === 'user' ? 'user' : 'assistant'));
-        // Un alta que quedó sin confirmar recupera su botón: si no, cambiar de página
-        // dejaba la ficha viva en el servidor y sin forma de darle OK.
-        if (data.confirmacion) agregarConfirmacion(data.confirmacion);
+        // Las altas que quedaron sin confirmar recuperan su botón: si no, cambiar de
+        // página dejaba las fichas vivas en el servidor y sin forma de darles OK.
+        agregarConfirmaciones(data.confirmaciones);
       })
       .catch(() => {});  // sin historial el chat igual funciona: no vale molestar con un error
   }
