@@ -4,6 +4,114 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-08-10] — Las migraciones que cruzan las dos DBs van a un script, no al hook `migrar()`
+
+**Contexto**: el hosting (PythonAnywhere) conserva los `.db` entre deploys y los `.db` están en `.gitignore`. Eso es lo que salva los datos en cada `git pull`, pero también significa que el archivo puede venir de un schema de hace tres refactors. Al preparar el deploy del split en cuatro áreas apareció que dos migraciones ya hechas en desarrollo no tenían forma de llegar al servidor.
+
+**Por qué no van en `migrar(cur)`**: el hook recibe un cursor de la DB del área y nada más. Mudar `hitos` de `gestion.db` a `historia.db` necesita las dos abiertas a la vez, y que un área abra la DB de la otra rompe justo la regla que sostiene la separación (`historia.py` no importa `gestion.py`, y viceversa). Meterlo igual habría convertido el hook en la primera excepción, que es como se empiezan a filtrar las demás.
+
+**Por qué un script de consola y no un módulo de capa 0**: no es maquinaria reutilizable, es un procedimiento fechado — nombra `proyectos`, `persona_proyectos` y el mapeo exacto de sus columnas. Capa 0 es explícitamente lo que **no** nombra nada del dominio. Vive arriba de todo, como `init_gestion.py` / `init_historia.py`, y se corre a mano.
+
+**Por qué se mantiene en vez de borrarlo como el anterior**: la migración `proyectos` → hito ya se había hecho una vez con `migrar_proyecto_a_hito.py`, borrado después "porque queda en el historial de git". No quedó: nunca se commiteó, y al preparar el deploy hubo que reconstruir el mapeo leyendo schemas viejos con `git show`. Un script de migración se conserva mientras pueda existir una instalación que no lo corrió, y eso no se sabe hasta que todas están al día.
+
+**Por qué la limpieza compara contra el `SCHEMA` del código y no contra una lista**: una lista de "tablas que sobran" hay que acordarse de actualizarla, y el día que no pasa, la sobra queda. Ejecutar el `SCHEMA` en una DB en memoria y preguntarle con los mismos `PRAGMA` que a la DB real hace que la comparación sea exacta por construcción y no envejezca. El precio es que la referencia tiene que incluir **todos** los dueños de esa DB: `gestion.db` la comparten `gestion.SCHEMA` y `agente.db.SCHEMA`, y con uno solo la limpieza borraría las tablas del asistente.
+
+**Por qué borrar lo vacío pero pedir `--limpiar` para lo que tiene datos**: es el mismo criterio con el que se eliminó `drive_url` (se verificó que estaba vacía en las 89 filas antes de tocarla). Una tabla que sobra pero tiene filas es casi siempre una migración que nadie corrió; borrarla en silencio sería exactamente el accidente que el script existe para evitar.
+
+---
+
+## [2026-08-10] — Un solo reloj (`config.ahora()`), y la hora también pegada a cada mensaje del chat
+
+**Contexto**: el agente contestaba con la hora 3 horas adelantada. La causa no era el prompt: `datetime.now()` en Render devuelve UTC, y toda la app la usaba directo.
+
+**Por qué el reloj va en `config.py` y no en un `reloj.py` nuevo**: no nombra ninguna tabla ni ruta, así que es capa 0; y la zona horaria es configuración de la institución, del mismo tipo que `DIAS` o el branding. Un archivo nuevo por una función de cuatro líneas es peor que la línea de más en el archivo que ya existe. Si algún día hay más lógica de calendario escolar (feriados, turnos), ahí sí conviene separarla.
+
+**Por qué devuelve un datetime naive**: todo el código compara y formatea contra fechas guardadas en SQLite como texto sin tzinfo. Devolver un datetime consciente hace que cualquier resta contra una fecha de la DB tire `TypeError`, y el bug aparecería en un préstamo viejo, no al probar.
+
+**Por qué hay fallback a offset fijo −3**: `zoneinfo` en Windows necesita el paquete `tzdata` y no está en `requirements.txt`. Antes que agregar una dependencia para el entorno de desarrollo, se cae a `-3`: Argentina no aplica horario de verano desde 2009, así que es el mismo valor. Si eso cambia, el fallback deja de servir y hay que instalar `tzdata`.
+
+**Por qué la hora va TAMBIÉN pegada al mensaje y no solo en el system prompt**: el prompt ya la interpolaba y se rearma en cada turno, así que el dato estaba fresco. El problema es de atención: son ~15.000 tokens de prompt y la hora queda arriba de todo, lejos de lo último que el modelo lee. Con la conversación crecida contestaba "ahora" con la hora del primer mensaje. El sello al final del mensaje del usuario es lo último en el contexto y, como se persiste en el historial, además le da algo que el prompt no puede darle: **cuánto tiempo pasó entre un mensaje y otro**.
+
+**Por qué el sello se filtra en `_texto_visible()` y no se guarda aparte**: la misma razón que el `(refiriéndote a: X)` — tiene que estar dentro del texto para que el modelo lo lea en su lugar, y afuera de lo que se repinta para que el usuario no vea algo que no escribió.
+
+## [2026-08-10] — `agente.py` pasa a paquete `agente/`, cortado por cohesión y no por capa
+
+**Contexto**: el asistente era un único archivo de ~4.000 líneas. No estaba desordenado —tenía secciones marcadas y naming consistente— pero encontrar algo requería grepear, y era 2× más grande que cualquier otro módulo del proyecto.
+
+**Por qué NO se separó "un archivo de descripciones de tools" de "un archivo de código de tools"**, que era la propuesta inicial: una tool vive en dos lugares que tienen que coincidir (su esquema, que es lo único que el modelo ve, y su ejecutor). Mandarlos a archivos distintos convierte "agregar una tool" en tocar dos archivos en vez de uno: **empeora** justo el problema que el corte quiere resolver. Organizar por capa (schemas / código / prompts) maximiza cuántos archivos se tocan por cambio. Se cortó por **lo que cambia junto**: `tools/horarios.py`, `tools/prestamos.py`, etc. llevan esquema y ejecutor adentro.
+
+**Por qué `padrones.py` está fuera de `tools/`**: los dos padrones de personas se usan desde las tools (horarios, entidades, fichas, préstamos) **y** desde el system prompt, que inyecta la lista de personas conocidas. Además `_docentes_parecidos` necesita `_buscar_profesor_scored` y `_buscar_profesor` necesita `_personas_parecidas`: dejarlos en dos módulos distintos crea un ciclo de imports. Juntos, el grafo queda en una sola dirección.
+
+**Por qué el módulo de config se llama `proveedores.py`**: hay un `config.py` en la raíz del proyecto (SHEET_ID, DIAS, branding) que el paquete también importa. Con imports absolutos de Python 3 no se pisan, pero leer `from config import DIAS` al lado de `from .config import _get_config` es una trampa para el que viene después.
+
+**Lo único que cambió de comportamiento**: nada. Se verificó que los 135 nombres top-level siguen existiendo, que ninguna de las 91 funciones referencia un global inexistente, que las rutas Flask son las mismas y que el system prompt renderiza **byte a byte idéntico**. Se eliminó una reasignación duplicada de `HISTORIA_UMBRAL` (mismo valor, código muerto).
+
+**`RAIZ` (en `dominio.py`) es obligatorio**: las rutas a las DB y a `historias/` se calculaban con `dirname(abspath(__file__))`. Dentro del paquete eso apunta a `AppMitre/agente/`, y SQLite **no falla**: crea una `gestion.db` vacía ahí. Es el error que no se nota hasta que falta el inventario entero.
+
+## [2026-08-10] — El horario no docente se **suma** al de clases, y los preceptores quedan afuera del padrón difuso
+
+**Contexto**: `horario_profesor` leía solo `clases`. El personal de `personal_no_docente` (EMATP, jefaturas) quedaba invisible para el agente, aunque el SPA ya lo fusiona en su autocompletado.
+
+**Por qué merge y no fallback**: la lectura fácil era "si no hay clases, buscá en no docentes". No alcanza: hay gente en las dos tablas (RODRIGUEZ VIRGINIA da física y es EMATP de biología, RAPP CARINA da sociales y es jefa de preceptores). Con fallback, esa gente seguía perdiendo la mitad de su agenda y encima de forma silenciosa. Por eso `_horario_no_docente()` se consulta **siempre** y sus claves van al lado de `clases`, nunca en lugar de ellas.
+
+**Por qué van en claves separadas y no mezcladas por día**: son cosas distintas —una clase tiene materia, curso y aula; un turno no docente es presencia— y aplanarlas en el mismo `{día: [...]}` invita al modelo a inventar una materia. Separadas, más el `aviso_no_docente`, tiene que contar los dos horarios y no puede confundirlos.
+
+**Por qué los preceptores (`horarios_preceptores`) NO entran al padrón**: sus nombres vienen del Sheet sin normalizar y a veces sin apellido — "ANGELINA", "KARINA (M RIOS)", "PTRICIA MAGALLANES", "FALTA". Metidos en `_padron_horarios()` contaminarían las sugerencias de `buscar_profesor` con entradas que no son personas identificables, y el umbral 0.6 las traería seguido. Si algún día se limpian en origen, entran sin más cambio que agregarlas ahí.
+
+## [2026-08-10] — El celular no tiene un layout propio: el mismo HTML, con el nav movido a un panel
+
+**Contexto**: el shell de `/gestion`, `/historia` y `/agente` estaba pensado para monitor: header con 5 botones, nav de hasta 8 pestañas, tablas de 5 columnas. En un teléfono eso son tres filas de botones antes de ver contenido, y listados que se leen scrolleando de costado con los botones de acción afuera de la pantalla. La escuela los usa mayormente desde el teléfono.
+
+**Decisión**: **no** hay templates ni rutas para celular. Es el mismo HTML servido a todos, con dos capas encima que solo existen abajo de 900px: media queries en `gestion.css` y `static/mobile-nav.js`, que arma un menú lateral ocultable. Arriba de 900px el escritorio queda **exactamente** como estaba — era el requisito explícito del pedido.
+
+**Por qué mover los nodos y no clonarlos**: la alternativa obvia (renderizar el nav dos veces, una visible en desktop y otra en el panel) duplica `#agente-toggle-btn` y el badge del carrito, y obliga a que `gestion.js` y `gestion-agente.js` sepan que ahora hay dos de cada cosa. Moviendo el nodo, los listeners que ya se engancharon viajan con él y no hay ningún id repetido. El costo es un acoplamiento de orden: `mobile-nav.js` tiene que cargar **después** de los scripts que enganchan cosas adentro de esos bloques (así está en los tres `base.html`), porque los `DOMContentLoaded` corren en orden de registro.
+
+**Por qué un panel lateral y no un nav colapsable en su lugar**: en el chat (`/agente`) la pantalla es el recurso escaso — el nav en la página se comía una franja permanente aunque estuviera plegado. Sacándolo del flujo, el chat se queda con toda la altura. Y al ser un panel, entran también los botones del header (SALIR, PRÉSTAMO, cambiar de área), que es lo que antes envolvía en tres filas.
+
+**Por qué los listados pasan a tarjetas abajo de 700px**: el scroll horizontal dentro de `.g-table-wrap` "funciona" pero esconde justo la última columna, que es la de acciones (RETIRAR, Ver, Editar). En una tarjeta entra todo sin scroll. Se implementó con `display: block` sobre la tabla y `content: attr(data-label)` — la tabla real no se toca, así que el escritorio, el `[hidden]` de la búsqueda en vivo y el HTML semántico siguen intactos. Entre 700 y 900px (tablet) sigue siendo tabla: ahí las columnas entran.
+
+**Se mantiene el fallback sin JS**: sin `mobile-nav.js` no hay panel y el nav queda en la página envolviendo, que es el comportamiento de siempre. Por eso también sobrevive la regla vieja `body.g-chat-page .g-nav` que lo hacía scrollear en horizontal.
+
+---
+
+## [2026-08-10] — Las fotos de una ficha se miran en un visor y se borran por posición
+
+**Contexto**: la galería del detalle era solo miniaturas recortadas (`object-fit: cover`) y nada más: no se podía ver la foto entera —justo lo que uno necesita cuando la foto es la etiqueta de un equipo o el número de serie— ni sacarla si se subió al recurso equivocado. Subir era un camino de una sola dirección.
+
+**Decisión**: un lightbox en la propia ficha (click en la miniatura → foto completa, contador `n / total`, flechas ‹ ›/teclado, Esc o click en el fondo para cerrar) con el botón **ELIMINAR** adentro. Sin página aparte ni ruta nueva de lectura: la foto ya está en el HTML como data URI, así que abrirla no cuesta un request.
+
+**Por qué borrar por índice y no por id de foto**: `fotos` es un array JSON dentro de la fila (`{b64, tipo, fecha}`), no una tabla — las fotos no tienen id. La alternativa era darles uno y migrar todas las galerías existentes, para resolver un solo caso: dos pestañas borrando a la vez sobre la misma ficha, que en una escuela con una persona cargando inventario no pasa. `POST /<slug>/<id>/foto/<indice>/eliminar` con índice fuera de rango **no es error**: ignora y vuelve a la ficha, que es el resultado correcto igual.
+
+**Por qué el borrado es un `<form>` con redirect y no `fetch`**: el resto del módulo es server-rendered con forms + redirects; el `POST` → `redirect` al detalle deja la galería consistente sin tener que reindexar nada en el DOM. El único JS es el visor.
+
+**El botón ELIMINAR vive solo adentro del visor**, no como una ✕ sobre cada miniatura: en un grid denso de fotos chicas, una cruz al lado del thumb se toca sin querer, y borrar sin haber visto la foto entera es exactamente cómo se borra la que no era.
+
+**Duplicado en `/historia`**, como todo el motor CRUD (ver la entrada de las cuatro áreas): misma ruta, mismo JS inline en su `detalle.html`. El CSS sí es compartido (`gestion.css`).
+
+---
+
+## [2026-08-10] — Gestión e historia dejan Drive: la DB es la fuente de verdad. Horarios no cambia
+
+**Contexto**: el diseño original repartía la verdad en dos lugares. Los archivos —fotos, planos, guías— vivían en Google Drive y cada entidad guardaba un `drive_url` apuntando a su carpeta; la DB era un índice de metadatos. La escuela dejó de usar Drive.
+
+**Decisión**: **`gestion.db` e `historia.db` son la fuente de verdad de sus dominios.** Lo que no está en la base, no está. Se eliminó `drive_url` de las cinco tablas.
+
+**Por qué eliminar la columna y no dejarla vacía**: un campo muerto en el formulario no es gratis. Alguien lo va a completar, y a partir de ahí hay datos que la app muestra pero que nadie mantiene ni respalda — exactamente el problema que se quería cerrar. Además la columna arrastraba una explicación en cada lugar donde aparecía (ayuda del form, botón de la ficha, texto del home, descripción de la tool del agente). Se verificó antes de correrla: **0 de 95 filas** tenían link cargado, así que el DROP no perdió nada. Es la primera migración destructiva del proyecto; se apoya en que `respaldar_db()` corre en `init_db()` **antes** de `_migrar()`, o sea que el respaldo con la columna queda hecho justo antes de eliminarla.
+
+**Lo que NO cambia, a propósito: el sistema de horarios.** `escuela.db` se sigue generando desde Google Sheets con `/api/actualizar` y **Sheets sigue siendo su fuente de verdad**. Son dos modelos opuestos conviviendo en la misma app, y está bien: la planilla de horarios la cargan y editan varias personas fuera del sistema, con herramientas que ya usan, y la app es un visor; el inventario y la historia se cargan *desde* la app y no existen en ningún otro lado. Regenerar `escuela.db` desde cero es la operación normal; hacer lo mismo con `gestion.db` sería perder todo.
+
+**Consecuencia a vigilar**: al pasar a ser la única copia, `gestion.db` e `historia.db` dejan de tener red externa. Ya estaban en `.gitignore` y se pierden en un hosting efímero (Render). Los respaldos rotativos de `backups/` (20 copias, con dedup por hash) pasan de ser una comodidad a ser lo único que hay — y ahora también cargan con las fotos en base64, que es lo que más pesa. Ver la discusión sobre el almacenamiento de fotos en `agent_docs/gestion-conocimiento.md`.
+
+**Contexto**: `app.run(..., use_reloader=False)` obligaba a reiniciar a mano después de cada cambio en un `.py`, y el olvido no se manifiesta como un error sino como **"el cambio no funciona"**: el proceso viejo sigue sirviendo el código anterior. En Windows se disimula todavía más, porque Werkzeug abre el socket con `SO_REUSEADDR` y un segundo `python app.py` **arranca sin error** aunque el 5000 ya esté tomado — queda sin tráfico, y contesta el más viejo de los dos. Pasó de verdad al verificar el arreglo de fotos del agente: el código nuevo estaba en disco, el proceso de dos horas antes contestaba con una constante que ya no existía.
+
+**Decisión**: `use_reloader=True`, y el bloque de arranque (`init_tablas` + carga desde Sheets) detrás de `if not os.environ.get('WERKZEUG_RUN_MAIN')`.
+
+**Por qué la guarda**: con el reloader, Werkzeug corre el proceso padre y levanta un hijo —marcado con `WERKZEUG_RUN_MAIN`— que es el que sirve y el que se relanza entero en cada guardado. Sin la guarda, el bloque de arranque se ejecutaría en cada Ctrl+S. `init_tablas()` es idempotente y lo aguantaría, pero revisar la base y eventualmente **bajar todo de Google Sheets** en cada guardado no. Con la guarda corre una sola vez, en el padre. Sin reloader la variable no existe, así que el bloque corre igual y producción (gunicorn, que ni pasa por acá) no se entera.
+
+**El costo aceptado**: si un `.py` queda guardado con un error de sintaxis, el reloader lo detecta, falla al importar y el server queda esperando el próximo guardado en vez de morir — pero si el error es en tiempo de import de un módulo pesado, hay que relanzarlo a mano. Es mucho más barato que depurar un cambio que "no aplica".
+
+---
+
 ## [2026-08-10] — Quién decide qué hacer con una foto: el modelo, no un `if` en el backend
 
 **Contexto**: `chat()` cortaba el turno con un aviso fijo cuando llegaba una foto y no había con qué leerla. El razonamiento original era sólido —sin visión el modelo contestaría igual, inventando lo que "leyó" en la etiqueta, que es el peor resultado posible para un inventario— pero descansaba en una premisa falsa: **que toda foto se manda para ser leída**. No es así. El caso más común en el taller es adjuntar una foto a la ficha de algo que ya existe, y para eso no hace falta ver la imagen: el base64 va del `contexto_turno` a la galería sin pasar por el modelo. El corte dejaba `adjuntar_foto` inalcanzable, y con el default del proyecto (DeepSeek, sin key de visión) eso significaba que mandar una foto no servía para nada.
@@ -16,17 +124,62 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 **Se distingue "no hay lector" de "el lector falló"** aunque `_leer_imagen()` devuelva `None` en los dos casos: para el usuario son cosas distintas —una se arregla cargando una API key en el servidor, la otra se arregla esperando un rato— y mandarle "el servicio no respondió" a alguien que nunca configuró un lector lo deja esperando algo que no va a pasar.
 
-**El riesgo que queda**: una foto adjuntada al recurso equivocado no se puede sacar desde la app. Se mitiga en el prompt y en la descripción de `adjuntar_foto`, que insisten en preguntar cuando el destino es ambiguo, no en volver a poner un candado en el backend.
+**El riesgo que queda**: una foto puede terminar en el recurso equivocado. Se mitiga en el prompt y en la descripción de `adjuntar_foto`, que insisten en preguntar cuando el destino es ambiguo, no en volver a poner un candado en el backend. Desde el visor de fotos de la ficha (ver la entrada del mismo día, más abajo) el error **se puede deshacer**: antes la foto quedaba pegada para siempre.
 
 ---
 
-## [2026-08-10] — Cuatro áreas separadas físicamente, con el motor CRUD duplicado
+## [2026-08-10] — Cero duplicación, con un criterio de pertenencia por capas
+
+**Reemplaza a la decisión de más abajo del mismo día** ("Cuatro áreas separadas físicamente, con el motor CRUD duplicado"). Aquella se implementó y funcionó; el requisito cambió el mismo día.
+
+**Contexto**: la separación en cuatro áreas dejó ~378 líneas de Python repetidas entre `gestion.py` e `historia.py` (motor CRUD, respaldos, galería de fotos, gate de sesión, normalización) más ~270 de Jinja entre sus templates genéricos. Se aceptaba a cambio de que borrar un área no rompiera la otra.
+
+Lo que hizo caer esa decisión no fue el volumen sino **un problema activo que la duplicación ya estaba causando**: `agente.py` llamaba 14 veces a `gestion._norm` y 1 vez a `historia._norm`, sin criterio — pedía la misma función privada a un módulo o al otro según cuál tuviera más a mano quien escribió la línea (`agente.py:791` usaba la de gestión sobre lore; `:1357` la usaba sobre nombres de personas, que son datos de historia). Funcionaba **sólo porque las dos copias eran idénticas carácter por carácter**. El día que alguien tocara una, el agente iba a devolver peores resultados de búsqueda en la mitad de los casos, sin tirar excepción. Eso no es duplicación prolija: es una dependencia compartida sin dueño declarado.
+
+**Decisión**: eliminar la duplicación con tres capas y **una sola pregunta para ubicar cualquier función: ¿qué nombra?**
+
+| Capa | Regla | Archivos |
+|---|---|---|
+| 0 | No nombra tablas, ni entidades, ni rutas, ni Flask | `config.py`, `texto.py`, `respaldos.py` |
+| 1 | Conoce el *concepto* de entidad, ninguna concreta | `crud.py`, `templates/crud/` |
+| 2 | Nombra tablas y entidades reales; sólo declara | `gestion.py`, `historia.py`, `database.py`+`app.py`, `agente.py` |
+
+**Las tres DBs siguen separadas y sin FK cruzadas.** Lo que se comparte es el código, no los datos: el pedido fue explícito en que `escuela.db`, `gestion.db` e `historia.db` siguen siendo tres.
+
+**Por qué un módulo hoja no viola el criterio anterior**: el criterio real nunca fue "cero archivos compartidos" sino "cero dependencias *entre áreas*". `config.py` ya era la prueba — lo importan los cinco archivos, no importa a nadie, y borrar `historia.py` no lo afecta. `crud.py` mantiene esa propiedad de la única forma que la sostiene: **no importa `gestion` ni `historia`, las recibe como argumento**. Si algún día `crud.py` necesita importar un área, la función que lo obligó está en la capa equivocada.
+
+**Por qué los archivos se llaman `texto.py` y `respaldos.py` y no `util.py`**: un archivo llamado "util" no tiene forma de decirte que algo no pertenece ahí, y termina siendo el cajón donde vuelve a acumularse todo — que es exactamente el acoplamiento del que se venía. Con el nombre describiendo el contenido, nadie mete una función de backup en `texto.py`.
+
+**Todo lo específico de un área entra por hooks declarados** (`migrar`, `seed`, `derivados`, `secciones_detalle`, `valores_iniciales`, `extras_template`, `tarjetas_extra`, `contexto_extra`, `NAV_EXTRA`, `ERROR_DUPLICADO`), nunca por un `if slug == '...'` dentro de `crud.py`. Esa lista **es** la frontera entre capa 1 y capa 2: si algo no entra por un hook, está mal ubicado.
+
+**Lo que NO se movió, a propósito**: los ~380 renglones de préstamos/carrito se quedan enteros en `gestion.py`. No estaban duplicados —son dominio puro de gestión, con ítems por cantidad y ciclo prestado→devuelto que no entra en la config declarativa— así que no había nada que extraer. Sacarlos hubiera sido mover código por prolijidad, no por duplicación.
+
+**El costo aceptado**: `historia.py` ya no funciona sin `crud.py`. Borrar un área dejó de ser borrar sus archivos. A cambio, un fix al motor se hace una vez y no dos, y desaparece la clase de bug que motivó el cambio.
+
+**Se verificó por diff, no por inspección**: se capturó un snapshot en JSON del comportamiento observable (HTML de las 14 rutas, 115 búsquedas con typos, el contenido íntegro de las 6 tablas de dominio, la salida de 18 tools del agente y la normalización de horarios) **antes** de tocar nada, y se comparó después de cada etapa. El riesgo de este refactor nunca fue romper ruidosamente: era correr el orden de un listado, el ranking de una búsqueda o un `nombre_norm` sin que nadie se enterara.
+
+---
+
+## [2026-08-10] — ~~Cuatro áreas separadas físicamente, con el motor CRUD duplicado~~ (SUPERADA)
+
+> **Superada el mismo día por la entrada de arriba** ("Cero duplicación, con un criterio de pertenencia por capas"). Se deja porque explica por qué las cuatro áreas tienen archivo, DB, prefijo y gate propios — eso **sigue vigente**. Lo que ya no vale es la parte del motor duplicado: hoy `gestion.py` e `historia.py` comparten `crud.py`. No "restaurar" la duplicación creyendo que es intencional.
 
 **Contexto**: todo convivía en `gestion.py` (1509 líneas, una DB, un blueprint): el inventario del taller, la línea del tiempo institucional (hitos, personas, proyectos) y —adentro de su prefijo— el asistente. Querer tocar la parte de historia, que es más anecdótica y se retoca seguido, ponía en riesgo la gestión de inventario, que es la que la escuela usa todos los días.
 
 **Decisión**: partir en cuatro áreas con frontera física — horarios (`app.py`), recursos (`/gestion`), historia institucional (`/historia`, `historia.py`, `historia.db`) y asistente (`/agente`) — cada una con su archivo, su prefijo, sus templates y su gate de sesión. **Ningún módulo de dominio importa a otro.**
 
-**El motor CRUD se duplicó en vez de extraerse a una librería común.** `gestion.py` e `historia.py` tienen cada uno su copia completa de: `conectar`, `_norm`/`_puntaje_busqueda`, respaldos, `init_db`/`_migrar`, `_cfg`/`_campo_nombre`/`_select`, `_guardar`, los helpers `*_sin_request`, y las rutas genéricas. Son ~350 líneas repetidas.
+**El motor CRUD se duplicó en vez de extraerse a una librería común.** El inventario completo de lo que quedó repetido —medido después, función por función, ignorando comentarios— era mayor de lo que decía esta entrada originalmente ("~350 líneas", que se leía como si fuera todo):
+
+| Bloque duplicado | Líneas × 2 |
+|---|---|
+| Motor CRUD (`_cfg`, `_select`, `_guardar`, helpers `*_sin_request`, M2M, rutas genéricas) | ~200 |
+| Respaldos (`_tiene_datos`, `_hash_archivo`, `respaldos`, `respaldar_db`, `_dia`, `_a_borrar`) | ~47 |
+| **Galería de fotos** (`agregar_foto`, `subir_foto`, `eliminar_foto`) | ~45 |
+| Gate de sesión | ~19 (×3, también en `agente.py`) |
+| Normalización y búsqueda difusa | ~24 |
+| **Templates genéricos** (`lista/form/detalle/login.html`) | ~270 de Jinja |
+
+O sea ~378 líneas de Python (82% de `historia.py`) más ~270 de Jinja: unas 650 en total, no 350.
 
 **Por qué duplicar y no compartir**: el criterio del pedido era "casi que borrás los archivos de una parte y todo el resto sigue funcionando". Un `entidad_crud.py` compartido cumple el DRY pero no ese criterio: los dos módulos pasarían a depender de un tercero que no se puede borrar ni tocar sin pensar en ambos, que es exactamente el acoplamiento del que se venía. El costo aceptado y conocido: **un bug en el motor (por ejemplo, el umbral de la búsqueda difusa) hay que arreglarlo en los dos archivos**. Con dos copias es manejable; si algún día hay una tercera, conviene revisar esta decisión.
 

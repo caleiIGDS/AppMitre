@@ -4,6 +4,164 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-10] — `actualizar.py`: poner al día las DBs de una instalación vieja
+
+**Tipo**: herramienta de despliegue (no cambia ningún contrato — los aplica)
+**Archivos**: `actualizar.py` (nuevo), `agent_docs/crud-motor.md`, `CLAUDE.md`
+
+Los `.db` están en `.gitignore`, así que un `git pull` actualiza el código pero deja la base como
+estaba. Los `ALTER` aditivos se resuelven solos (`migrar()` corre en cada arranque), pero **lo que
+cruza las dos DBs no**: la mudanza de `hitos`/`personas`/`persona_hitos` de `gestion.db` a
+`historia.db` y la conversión `proyectos` → hitos se corrieron una sola vez en desarrollo. Una
+instalación desplegada antes de eso conserva esas tablas físicamente y sus filas dejan de aparecer
+en la web.
+
+`python actualizar.py` (con `--dry-run` para ver sin tocar) hace, en orden: diagnóstico → copia de
+seguridad fuera de la rotación (`*.pre-actualizacion-*`) → mudanza a `historia.db` conservando ids
+→ `proyectos` → hitos → `init_db()` de las tres áreas → **limpieza de sobras**. Es idempotente.
+
+- **La limpieza compara la DB real contra el `SCHEMA` declarado en el código** (ejecutado en una DB
+  en memoria), no contra una lista escrita a mano: lo que sobra se detecta solo. Para `gestion.db`
+  la referencia son **dos** schemas, `gestion.SCHEMA` + `agente.db.SCHEMA`, porque el asistente
+  guarda ahí sus tablas; con uno solo se comería `agente_log` y compañía.
+- **Lo vacío se borra solo; lo que tiene datos requiere `--limpiar`.** Una tabla que sobra pero
+  tiene filas es casi siempre una migración que nadie corrió, no basura.
+- Los vínculos de `proyecto_recursos` no sobreviven como relación (cruzaban las dos DBs): se anexan
+  en texto a la descripción del hito, igual que el `estado`.
+
+**Corrección al registro del 2026-08-10 de más abajo**: ahí dice que `migrar_proyecto_a_hito.py`
+"está en el historial de git". No está — nunca se commiteó. `actualizar.py` reemplaza esa ruta y sí
+se mantiene.
+
+---
+
+## [2026-08-10] — La hora sale de `config.ahora()`, y el chat la manda en cada mensaje
+
+**Tipo**: contrato nuevo de capa 0 + formato del mensaje que recibe el modelo
+**Archivos**: `config.py`, `app.py`, `database.py`, `crud.py`, `respaldos.py`, `gestion.py`,
+`historia.py`, `agente/llm.py`, `agente/db.py`, `agente/rutas.py`, `agente/prompt.py`,
+`agente/tools/fichas.py`
+
+- **`config.ahora()`** (nueva, capa 0): devuelve la hora de Buenos Aires como datetime **naive**.
+  Reemplaza a `datetime.now()` en toda la app — en Render el server corre en UTC y todo salía
+  3 horas adelantado (la hora que decía el agente, `fecha_salida` de préstamos,
+  `fecha_revision`, `fecha_actualizada`, la fecha del pie de los PDF y el nombre de los
+  respaldos). Constantes nuevas: `ZONA_HORARIA`, `UTC_OFFSET_HORAS` (fallback sin `tzdata`).
+  **Regla: no volver a escribir `datetime.now()`.**
+- **Sello de hora por mensaje**: `POST /agente/chat` ahora le agrega al texto del usuario un
+  `[Hora de este mensaje: Lunes 10/08/2026 18:40]` antes de mandarlo al modelo, y queda en el
+  historial persistido. `_texto_visible()` lo saca al repintar el chat, así que no cambia lo
+  que ve el usuario ni la respuesta del endpoint. La hora del system prompt sigue estando.
+
+## [2026-08-10] — `agente.py` ahora es el paquete `agente/`
+
+**Tipo**: reorganización de archivos (sin cambio de comportamiento)
+**Archivos**: `agente.py` (eliminado) → `agente/` (13 módulos + `agente/tools/` con 7 más)
+
+La superficie pública **no cambió**: `app.py` sigue con `import agente`, `agente.bp` y
+`agente.init_db()`. Nada más importaba del módulo, así que ningún otro archivo se tocó.
+
+Lo que cambia para quien edite el asistente:
+
+- Los esquemas de tools están en `agente/tools/esquemas.py`; los ejecutores, en un módulo
+  por área (`horarios.py`, `entidades.py`, `prestamos.py`, `fichas.py`, `fotos.py`,
+  `hitos.py`). El dispatch (`ejecutar_tool`) está en `agente/tools/__init__.py`.
+- El system prompt salió de adentro de `chat_with_tools` y es
+  `agente/prompt.py:construir_system_prompt(nombres_conocidos, hoy, dia_semana)`.
+- Las rutas a archivos (DB, `historias/`) se calculan desde `agente.dominio.RAIZ`, no desde
+  `__file__`: el paquete está un nivel más abajo que la raíz del proyecto.
+- `agente/proveedores.py` es lo que antes era la config del LLM. Se renombró para no
+  confundirlo con el `config.py` de la raíz.
+
+Verificado: mismos 135 nombres top-level, mismas rutas Flask, mismas 23 tools en el mismo
+orden, system prompt idéntico byte a byte, y las tools de lectura devolviendo datos reales.
+
+## [2026-08-10] — `horario_profesor` del agente incluye al personal no docente
+
+**Tipo**: contrato de tool (campos nuevos en la respuesta) + padrón de nombres ampliado
+**Archivos**: `agente.py`
+
+El agente resolvía nombres y horarios mirando solo `clases.profesor`, así que el personal de
+`personal_no_docente` no existía para él: preguntar por CALEI (EMATP EERR) no devolvía nada, y
+de RODRIGUEZ VIRGINIA —que da clases **y** es EMATP— devolvía solo las clases.
+
+- **`_padron_horarios()`** (nueva, en `agente.py`): `nombre → rol no docente | None`, fusiona
+  `clases` + `personal_no_docente`. Es la fuente de `_buscar_profesor_scored()` y de
+  `_personas_conocidas()`, que antes armaban su propia lista. `_personas_conocidas()` devuelve
+  lo mismo que antes; `buscar_profesor` ahora puede sugerir no docentes.
+- **`horario_profesor` suma tres claves opcionales**: `rol_no_docente` (str),
+  `horario_no_docente` (`{día: "HH:MM–HH:MM"}`) y `aviso_no_docente` (solo cuando además da
+  clases). Quien consuma la respuesta no puede seguir asumiendo que `clases: {}` significa
+  "no existe": puede traer `horario_no_docente`.
+
+## [2026-08-10] — El CRUD se comparte: nacen `crud.py`, `texto.py` y `respaldos.py`; se van las APIs privadas de `gestion`/`historia`
+
+**Tipo**: módulos nuevos + API pública movida y con firma nueva + templates reorganizados
+**Archivos**: `crud.py`, `texto.py`, `respaldos.py`, `templates/crud/` (nuevos); `gestion.py`, `historia.py`, `agente.py`, `database.py`, `importar_inventario.py`, `templates/gestion/*`, `templates/historia/*`
+
+**Sin cambios de schema ni de datos**: las tres DBs siguen separadas, con las mismas tablas y sin FK cruzadas. Lo que se movió es el código.
+
+**Funciones que DEJAN DE EXISTIR** en `gestion` y en `historia` (un `import` de cualquiera de estas ahora falla con `AttributeError`):
+
+| Antes | Ahora |
+|---|---|
+| `gestion._norm`, `gestion._puntaje_busqueda`, `gestion.UMBRAL_SIMILITUD` | `texto.norm`, `texto.puntaje_busqueda`, `texto.UMBRAL_SIMILITUD` |
+| `database.eliminar_acentos` (implementación) | `texto.sin_acentos` — el nombre viejo queda como alias local en `database.py` |
+| `*.respaldar_db()`, `*.respaldos()`, `*.BACKUP_DIR`, `*.BACKUP_MAX` | `respaldos.respaldar(db_path, prefijo, tabla_testigo)`, `respaldos.listar(prefijo)`, `respaldos.BACKUP_DIR` |
+| `*.buscar_entidad_sin_request(slug, q)` | `crud.buscar_entidad(area, slug, q)` |
+| `*.guardar_entidad_sin_request(slug, campos, id=)` | `crud.guardar_entidad(area, slug, campos, id=)` |
+| `*.snapshot_entidad(slug, id)` | `crud.snapshot_entidad(area, slug, id)` |
+| `*.agregar_relacion_m2m(...)` / `*.quitar_relacion_m2m(...)` | idem con `area` como primer argumento |
+| `*.agregar_foto(slug, id, b64, tipo)` | `crud.agregar_foto(area, slug, id, b64, tipo)` |
+| `*._campo_nombre(cfg)`, `*._select(cfg)`, `*._cfg(slug)` | `crud.campo_nombre(cfg)`, `crud.select(cfg)`, `crud.cfg(area, slug)` |
+| `historia.conectar()` | `crud.conectar(historia)` — `gestion.conectar()` sobrevive como atajo para el bloque de préstamos |
+
+**El patrón nuevo**: `area` (el módulo `gestion` o `historia`) es siempre el primer argumento. `agente.py` ya tenía `_modulo(slug)` para saber quién es dueño de cada slug; ahora ese módulo se le pasa a `crud`.
+
+**Hooks renombrados a público** en los módulos de área, porque ahora los invoca `crud`: `_migrar`→`migrar`, `_seed`→`seed`, `_secciones_detalle`→`secciones_detalle`, `_derivados`→`derivados`, `_valores_iniciales`→`valores_iniciales`, `_ERROR_DUPLICADO`→`ERROR_DUPLICADO`. Se suman `PREFIJO_BACKUP`, `TABLA_TESTIGO`, `NAV_EXTRA`, `tarjetas_extra`, `contexto_extra`, `extras_template`. **Un área nueva tiene que exponer este contrato** — está documentado en `agent_docs/crud-motor.md`.
+
+**Templates**: `lista/form/detalle/login.html` viven ahora en `templates/crud/` y cada área deja un stub que los extiende. Los genéricos usan dos variables nuevas del context processor, `base_template` y `area_nombre`, en vez de tener el nombre del blueprint escrito a mano. Lo propio de un área se inyecta por bloques (`acciones_fila`, `acciones`, `seccion`), declarados **`scoped`** los que están dentro de un `for`.
+
+**Gate de sesión**: lo monta `crud.registrar_acceso(bp, endpoints_pagina=None, endpoint_default='home')`. `/agente` lo llama con sus endpoints HTML para conservar el comportamiento que ya tenía: las páginas redirigen al login y **los endpoints JSON siguen contestando 401**.
+
+**Sin cambios de comportamiento observable**: verificado por diff contra un snapshot previo (HTML de las 14 rutas, 115 búsquedas incluidas las de typo, contenido íntegro de las 6 tablas de dominio, salida de 18 tools del agente, normalización de horarios). Resultado idéntico.
+
+---
+
+## [2026-08-10] — Shell de celular compartido: `mobile-nav.js` + `data-label` en los listados
+
+**Tipo**: archivo compartido nuevo entre las tres áreas del shell + contrato nuevo en los templates de listado
+**Archivos**: `static/mobile-nav.js` (nuevo), `static/gestion.css`, `templates/{gestion,historia,agente}/base.html`, `templates/{gestion,historia}/lista.html`, `templates/gestion/prestamos_lista.html`
+
+**Contexto**: en el celular el header (5 botones) y el nav (hasta 8 pestañas) envolvían en varias filas y se comían la pantalla, y las tablas de 5 columnas obligaban a scrollear de costado dejando RETIRAR / Ver / Editar fuera de vista. Escritorio no se toca: todo lo nuevo vive en media queries.
+
+**Cambios que afectan contratos:**
+
+- **`static/mobile-nav.js` es un archivo compartido más**, junto a `gestion.css` y `gestion-agente.js`. Lo cargan con `defer` los tres `base.html` (`/gestion`, `/historia`, `/agente`). Abajo de 900px **mueve** `.g-nav` y `.g-header-actions` adentro de un `.g-sidebar` que crea él mismo, y los devuelve a su lugar si la ventana se agranda. **Mueve los nodos, no los clona**: cualquier código que enganche listeners o busque por id dentro de esos bloques (`gestion.js` con el carrito, `gestion-agente.js` con `#agente-toggle-btn`) sigue funcionando, pero **tiene que registrarse antes** — o sea, cargarse antes que `mobile-nav.js` en el `<head>`. Si en el futuro un script busca `.g-header .g-header-actions` por su posición en el DOM, en celular no lo va a encontrar.
+- **Los `<td>` de los listados llevan `data-label`** con el texto del encabezado de su columna. Abajo de 700px `gestion.css` los usa como etiqueta de cada valor cuando la fila se muestra como tarjeta. Una columna nueva sin `data-label` se ve sin etiqueta en celular. Aplica a `gestion/lista.html`, `historia/lista.html` (donde sale de `cfg.columnas`, así que es automático) y a `gestion/prestamos_lista.html` (donde los `<th>` son fijos y el `data-label` se escribe a mano).
+- Los `<td>` genéricos pasaron a usar `{%- -%}`: una celda sin dato ahora queda **realmente vacía** en el HTML (antes tenía saltos de línea e indentación), para que `td:empty` la esconda en la vista de tarjetas. El HTML renderizado de esas celdas cambió; nada lo parsea, pero un diff de templates lo va a mostrar.
+- `gestion.css` pasa de `?v=13` a `?v=14` en los tres `base.html`.
+
+---
+
+## [2026-08-10] — Se elimina `drive_url` de las cinco tablas: la DB pasa a ser la fuente de verdad
+
+**Tipo**: **migración destructiva de schema** (DROP COLUMN) en las dos DBs + campo quitado de la UI y de las tools del agente
+**Archivos**: `gestion.py`, `historia.py`, `agente.py`, `importar_inventario.py`, `templates/{gestion,historia}/{detalle,form,home}.html`, `agent_docs/gestion-conocimiento.md`, `agent_docs/historia-institucional.md`
+
+**Contexto**: el modelo era "los archivos reales viven en Google Drive, la app guarda el link". La escuela dejó de usar Drive. De acá en más la verdad de gestión e historia vive en `gestion.db` / `historia.db`. **El sistema de horarios no cambia: `escuela.db` se sigue generando desde Google Sheets y esa sigue siendo su fuente de verdad.**
+
+**Cambios que rompen contratos:**
+
+- **`ALTER TABLE ... DROP COLUMN drive_url`** en `recursos`, `conjuntos`, `actividades` (`gestion.db`) y en `hitos`, `personas` (`historia.db`). Corre desde `_migrar()` de cada módulo, o sea en el próximo arranque. Cualquier query que la seleccione ahora falla con `no such column`. Los respaldos previos en `backups/` **sí la tienen**: restaurar uno viejo la reintroduce, y `_migrar()` la volverá a eliminar en el arranque siguiente.
+- **Se corrió con la columna vacía**: 0 de 95 filas tenían link cargado (87 recursos, 1 conjunto, 1 actividad, 2 hitos, 4 personas). No se perdió ningún dato.
+- **`crear_entidad` y `editar_entidad` ya no aceptan `drive_url`.** Se quitó de las dos `input_schema` en `agente.py`.
+- **`drive_url` salió de `ENTIDADES`** en los dos módulos, así que desaparece del alta, de la edición y de la ficha de detalle sin tocar los templates genéricos.
+- **El botón "📁 CARPETA EN DRIVE"** ya no existe en ninguna ficha. Como era el único campo `tipo: 'url'`, se eliminó también el `placeholder` de `drive.google.com` de los dos `form.html`.
+- **`importar_inventario.py`** dejó de insertar la columna en su `INSERT`.
+
+---
+
 ## [2026-08-10] — `POST /agente/chat` con foto ya no corta el turno cuando no hay lector de imágenes
 
 **Tipo**: cambio de comportamiento de un endpoint (misma forma de request y de response) + error nuevo de una tool

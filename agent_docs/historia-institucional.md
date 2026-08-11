@@ -21,40 +21,60 @@ system prompt del agente le pide explícitamente no mezclarlas.
 
 ## Arquitectura
 
-- **`historia.py`** — todo el módulo: blueprint Flask (`bp`, prefix `/historia`), schema, y
-  rutas. Server-rendered con Jinja, mismo patrón que `gestion.py`.
+- **`historia.py`** — el área, en ~200 líneas de pura declaración: blueprint Flask (`bp`, prefix
+  `/historia`), `ENTIDADES`, `SCHEMA` y sus hooks (`migrar`, `derivados`, `secciones_detalle`,
+  `ERROR_DUPLICADO`) más `clave_persona`. Las rutas CRUD las monta `crud.registrar_rutas(bp, ...)`
+  y el gate `crud.registrar_acceso(bp)` — ver `agent_docs/crud-motor.md`.
 - **`historia.db`** — SQLite propia. No se regenera desde ninguna fuente externa y está en
   `.gitignore`: si se pierde el archivo no hay commit del cual recuperarla, por eso
   `init_db()` arranca respaldando (ver "Respaldos").
-- **`templates/historia/`** — `base.html` (layout + nav propia: INICIO / HITOS / PERSONAS),
-  `home.html`, `login.html`, y el trío genérico `lista.html` / `form.html` / `detalle.html`,
-  que se renderizan desde la config declarativa de cada entidad.
-- **No importa `gestion.py`.** El motor CRUD (conexión, búsqueda tolerante, `_select`,
-  `_guardar`, respaldos, rutas genéricas) está **duplicado** en los dos archivos a propósito:
-  se puede borrar uno entero sin tocar el otro ni una librería común. El costo aceptado es que
-  un fix al motor hay que aplicarlo en los dos lugares. Ver `dev-log/DECISIONS.md` 2026-08-10.
+- **`templates/historia/`** — `base.html` (layout + nav propia: INICIO / HITOS / PERSONAS) y
+  `home.html`, que son lo propio del área. `lista.html`, `form.html`, `detalle.html` y
+  `login.html` son stubs de dos líneas que extienden los genéricos de `templates/crud/`:
+  historia no necesita sobreescribir ningún bloque.
+- **No importa `gestion.py`.** El motor CRUD (conexión, búsqueda tolerante, `select`, guardado,
+  respaldos, rutas genéricas) es **compartido**: vive en `crud.py`, que a su vez **no importa
+  ninguna área** — las recibe como argumento. Todo lo que nombra una tabla de `historia.db` entra
+  por un hook declarado, nunca por un `if` dentro del motor. Ver `agent_docs/crud-motor.md` y
+  `dev-log/DECISIONS.md` 2026-08-10 ("Cero duplicación, con un criterio de pertenencia por capas").
 - Sí comparte con `/gestion` lo que **no** es lógica de dominio: `static/gestion.css` (paleta),
-  `static/gestion-agente.js` y el widget flotante del asistente
+  `static/gestion-agente.js`, `static/mobile-nav.js` y el widget flotante del asistente
   (`templates/agente/_agente_widget.html`).
 - Integración: `app.py` hace `app.register_blueprint(historia.bp)` + `historia.init_db()` en
   import (funciona bajo gunicorn/WSGI). El header linkea a las otras tres áreas.
+
+**Celular**: el shell mobile (menú lateral ocultable con ☰, listados como tarjetas, objetivos
+táctiles) es el mismo de `/gestion` y está documentado allá, en la sección "Celular" de
+`agent_docs/gestion-conocimiento.md`. Lo único que hay que recordar acá: los `<td>` de
+`lista.html` llevan **`data-label`** con el nombre de la columna, que es lo que la vista de
+tarjetas muestra como etiqueta. Si agregás una columna, ponele `data-label`. Escritorio no
+cambia: todo vive en media queries de ≤900px / ≤700px.
 
 ## Modelo de datos (historia.db)
 
 | Tabla | Campos |
 |-------|--------|
-| `hitos` | id, **titulo**, descripcion, fecha, tipo, nivel, etiquetas, protagonistas, drive_url, **fotos** |
-| `personas` | id, nombre, **nombre_norm**, descripcion, fecha_actualizada, drive_url, **fotos** |
+| `hitos` | id, **titulo**, descripcion, fecha, tipo, nivel, etiquetas, protagonistas, **fotos** |
+| `personas` | id, nombre, **nombre_norm**, descripcion, fecha_actualizada, **fotos** |
 | `persona_hitos` | persona_id, hito_id (`UNIQUE` por par, índice por `persona_id`) |
 
 Índices: `idx_hitos_fecha` (fecha DESC), `idx_hitos_nivel`, `idx_personas_norm` (UNIQUE).
+
+`historia.db` es la fuente de verdad: no hay archivos afuera. La columna `drive_url` que tenían
+las dos tablas se eliminó el 2026-08-10, junto con la de `gestion.db` — la escuela dejó de usar
+Google Drive (ver `dev-log/DECISIONS.md`).
 
 Valores cerrados: `tipo` ∈ Evento / Logro / Carrera nueva / Construcción / Participación /
 Programa / Otro. `nivel` ∈ Básico / Importante / Crítico.
 
 **Galería de fotos** (`fotos`): array JSON con objetos `{b64, tipo, fecha}`, igual que en
 `/gestion` — base64 embebido, upload por `POST /<slug>/<id>/foto`, grid responsive en el
-detalle. `agregar_foto()` vive suelta porque el agente también escribe la galería.
+detalle. `crud.agregar_foto()` vive suelta (fuera de la ruta) porque el agente también escribe la galería.
+Click en una miniatura abre el **visor** (lightbox: foto entera, contador, flechas ‹ ›/teclado,
+Esc para cerrar) y desde ahí se borra con `POST /<slug>/<id>/foto/<indice>/eliminar`. Igual que
+el resto del motor, es una copia de lo de `/gestion`: mismo CSS (`gestion.css`), JS inline
+duplicado en cada `detalle.html`, y el borrado referencia la **posición en el array** porque
+las fotos no tienen id propio.
 
 **No hay relaciones que crucen a `gestion.db`.** Las había (`proyecto_recursos` ataba proyectos
 con recursos) y se eliminaron: hoy las dos DBs son independientes.
@@ -96,8 +116,9 @@ las DBs: el puente es `clave_persona()` sobre el nombre. Son **dos padrones dist
 agente tiene reglas específicas para no confundirlos (ver `agent_docs/agente-asistente.md`).
 
 `fecha_actualizada` también es derivada (se pisa en cada guardado) — ninguna de las dos está en
-`campos`, las agrega `_derivados()` en los dos caminos de guardado (`_guardar` y
-`guardar_entidad_sin_request`).
+`campos`, las agrega el hook `derivados()`, que `crud` aplica en los dos caminos de guardado (el
+formulario web y el del agente). La fecha sale de `config.ahora()`, no de `datetime.now()`: el
+server de producción corre en UTC (ver "El reloj" en `agent_docs/crud-motor.md`).
 
 **No hay campo `rol`**: una taxonomía fija se queda corta enseguida — alguien es docente y ex
 alumno a la vez, o pasa de preceptor a directivo — y la semblanza ya lo dice mejor en prosa.
@@ -107,14 +128,15 @@ alumnos menores pide una auth de verdad primero.
 
 ## Config declarativa (`ENTIDADES` en historia.py)
 
-Mismo contrato que `gestion.ENTIDADES`: cada entidad define `tabla`, `singular`/`plural`,
-`descripcion` (card del home), `campos` (form), `columnas` (listado) y `relaciones` (M2M
-editables desde su form, con prefijo `rel_`).
+Mismo contrato que `gestion.ENTIDADES` — está documentado una sola vez, en
+`agent_docs/crud-motor.md`: cada entidad define `tabla`, `singular`/`plural`, `descripcion`
+(card del home), `campos` (form), `columnas` (listado) y `relaciones` (M2M editables desde su
+form, con prefijo `rel_`).
 
 **`campo_nombre`** (opcional, default `'nombre'`): `hitos` la declara como `'titulo'`. Todas
-las lecturas van por **`_select(cfg)`**, que agrega `titulo AS nombre`, así que templates,
-`buscar_entidad_sin_request`, `snapshot_entidad` y `agente.py` leen siempre `fila['nombre']`.
-Las escrituras y la validación de obligatorio usan `_campo_nombre(cfg)`.
+las lecturas van por **`crud.select(cfg)`**, que agrega `titulo AS nombre`, así que templates,
+`crud.buscar_entidad`, `crud.snapshot_entidad` y el agente leen siempre `fila['nombre']`.
+Las escrituras y la validación de obligatorio usan `crud.campo_nombre(cfg)`.
 
 `LIMPIEZA_M2M` mapea qué tablas de relación limpiar al eliminar cada tipo de entidad.
 
@@ -134,22 +156,23 @@ Para agregar un campo: sumarlo al `SCHEMA`, a `campos` y al loop aditivo de `_mi
 | `/historia/<slug>/<id>/editar` | GET/POST | Edición (sincroniza M2M: delete + insert) |
 | `/historia/<slug>/<id>/eliminar` | POST | Borra fila + sus filas M2M (confirm en el browser) |
 | `/historia/<slug>/<id>/foto` | POST | Sube una imagen a la galería (base64) |
+| `/historia/<slug>/<id>/foto/<indice>/eliminar` | POST | Borra la foto de esa posición y vuelve a la ficha |
 
 `slug` ∈ {hitos, personas}; otro valor → 404.
 
 ## Auth
 
 Misma env var (`GESTION_CLAVE`) y misma clave de sesión (`session['gestion_ok']`) que
-`/gestion` y `/agente`: una contraseña abre las tres áreas. Pero el gate está **duplicado** en
-`historia.py`, sin importar el de `gestion.py` — es lo que sostiene la independencia física.
-Vale la misma advertencia: es una traba de desarrollo, no seguridad completa (sin usuarios,
+`/gestion` y `/agente`: una contraseña abre las tres áreas. El gate lo monta
+`crud.registrar_acceso(bp)`, una línea al final del módulo. Vale la misma advertencia: es una traba de desarrollo, no seguridad completa (sin usuarios,
 sin CSRF, sin límite de intentos), y el default está en un repo público.
 
 ## Búsqueda tolerante (`?q=`)
 
-Idéntica a la de `/gestion` (código duplicado): trae todas las filas y las filtra/ordena en
-Python con `_puntaje_busqueda()`. Perdona acentos y mayúsculas (`_norm`) y typos (similitud
-difusa con `difflib`, umbral `UMBRAL_SIMILITUD` = 0.68, solo para queries de 3+ caracteres).
+Idéntica a la de `/gestion` porque es literalmente la misma función (`crud.lista` +
+`texto.puntaje_busqueda`): trae todas las filas y las filtra/ordena en Python. Perdona acentos y
+mayúsculas (`texto.norm`) y typos (similitud difusa con `difflib`, umbral
+`texto.UMBRAL_SIMILITUD` = 0.68, solo para queries de 3+ caracteres).
 El substring normalizado siempre puntúa por encima de los difusos. Con decenas de filas el
 costo es despreciable.
 
@@ -160,16 +183,17 @@ la búsqueda es solo server-side. Si se quiere el filtrado en vivo, alcanza con 
 
 ## Respaldos (`backups/`)
 
-Mismo mecanismo que `gestion.db`, con prefijo propio para no mezclarse: copias a
+Mismo mecanismo que `gestion.db` porque es el mismo código (`respaldos.py`), con prefijo propio
+(`PREFIJO_BACKUP = 'historia'`) para no mezclarse: copias a
 `backups/historia-YYYYMMDD-HHMMSS-ffffff.db` con la API `backup()` de sqlite3 (copia
 consistente aunque otro proceso esté escribiendo). No respalda una DB sin hitos, no duplica si
 el contenido no cambió, y conserva los últimos `BACKUP_MAX` (20) más el primero de cada día.
-`init_db()` respalda antes de tocar nada.
+`crud.init_db()` respalda antes de tocar nada.
 
 ## Seed
 
 **No hay datos de ejemplo**: una instalación nueva arranca vacía y se carga desde la web o el
-chat. Igual que en `gestion.py`, si la DB está vacía **pero hay respaldos**, `init_db()` levanta
+chat. Igual que en `gestion.py`, si la DB está vacía **pero hay respaldos**, `crud.init_db()` levanta
 `RuntimeError` con las instrucciones de restauración en vez de seguir — una DB vacía con
 respaldos es una pérdida de archivo, no una instalación nueva. Para forzarlo: `GESTION_SEED=1`.
 

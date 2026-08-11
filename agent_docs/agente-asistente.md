@@ -3,7 +3,7 @@
 Cuarta área de la app, al mismo nivel que horarios, `/gestion` (recursos) e `/historia`
 (línea del tiempo institucional) — y la única transversal: **lee las tres y escribe en dos**
 (recursos e historia institucional; los horarios son solo de consulta). Vive en su propio
-archivo (`agente.py`), su propio prefijo (`/agente`) y su propia carpeta de templates
+paquete (`agente/`), su propio prefijo (`/agente`) y su propia carpeta de templates
 (`templates/agente/`).
 
 Es **un solo asistente** para todas las áreas, no uno por área: en la misma conversación se
@@ -17,7 +17,8 @@ horarios, crear recursos, fotografiar etiquetas y cargarlas, gestionar préstamo
 hitos y personas. Todo con auditoría de escrituras en `agente_log`.
 
 **Acceso**: dos vistas del mismo chat, ambas detrás del login (`session['gestion_ok']`, la
-misma sesión y la misma `GESTION_CLAVE` que `/gestion` e `/historia`, con gate propio en cada
+misma sesión y la misma `GESTION_CLAVE` que `/gestion` e `/historia`, montado con
+`crud.registrar_acceso` en cada
 módulo):
 - Botón "🤖 ASISTENTE" en el header de `/gestion` y `/historia` → widget flotante, para
   consultar sin salir de la página en la que se está.
@@ -41,10 +42,11 @@ El agente cruza **dos DBs de dominio** más los horarios:
 - **`_modulo(slug)`** devuelve `gestion` o `historia` según en cuál `ENTIDADES` está el slug.
   Todas las tools genéricas (`buscar_entidad`, `listar_todos`, `detalle_entidad`,
   `crear_entidad`, `editar_entidad`, `eliminar_entidad`, `vincular_entidad`,
-  `desvincular_entidad`, `adjuntar_foto`) pasan por ahí para resolver conexión, `ENTIDADES`,
-  `_select`, `_campo_nombre` y `LIMPIEZA_M2M`. Los dos módulos exponen la misma superficie a
-  propósito (el motor CRUD está duplicado, ver `dev-log/DECISIONS.md`), así que el agente los
-  trata igual sin saber en cuál está parado.
+  `desvincular_entidad`, `adjuntar_foto`) pasan por ahí y le entregan ese módulo al motor:
+  `crud.buscar_entidad(_modulo(slug), slug, q)`, `crud.guardar_entidad(...)`, etc. **El área es
+  siempre el primer argumento de `crud`.** Los dos módulos cumplen el mismo contrato de área
+  (ver `agent_docs/crud-motor.md`), así que el agente los trata igual sin saber en cuál está
+  parado.
 - **Las relaciones M2M son siempre intra-módulo**: desde que se eliminó `proyecto_recursos` no
   hay ninguna que cruce recursos ↔ historia, así que `_vincular_entidad` resuelve todo con el
   módulo del slug de origen.
@@ -54,8 +56,32 @@ El agente cruza **dos DBs de dominio** más los horarios:
 
 ### Arquitectura
 
-- **`agente.py`** — blueprint completo: gate de sesión propio (login/salir), esquemas de
-  tools JSON, ejecutores, loop de tool-calling con manejo de tool use, endpoints Flask.
+El área es un **paquete** (`agente/`), no un módulo suelto. Hacia afuera no cambia nada:
+`app.py` sigue haciendo `import agente` y usando `agente.bp` e `agente.init_db()`, que es
+toda la superficie pública.
+
+| Módulo | Rol |
+|---|---|
+| `agente/__init__.py` | Crea el `bp` e importa `rutas` (que lo registra). El mapa del paquete y la config por env var están documentados acá. |
+| `dominio.py` | `RAIZ` del proyecto + `_modulo(slug)` y `SLUGS_ENTIDAD`. Lo importa casi todo. |
+| `proveedores.py` | Config del LLM del chat **y** del lector de imágenes, que son independientes. Se llama así y no `config` para no confundirse con el `config.py` de la raíz. |
+| `db.py` | Las tres tablas propias en `gestion.db`: auditoría, conversación, fotos pendientes. |
+| `padrones.py` | Los dos padrones de personas y el cruce entre ellos. Fuera de `tools/` porque lo usan las tools **y** el system prompt. |
+| `lore.py` | La historia de la escuela y la voz de Emilio (`QUIEN_ES_EMILIO`, `COMO_CUENTA_EMILIO`, `EXCUSA_SIN_HISTORIA`). |
+| `vision.py` | El lector de etiquetas: una llamada suelta, sin tools. |
+| `prompt.py` | `construir_system_prompt()` — ~280 líneas de contenido, aparte del motor. |
+| `llm.py` | Clientes por proveedor y los **dos** loops de tool-calling. |
+| `filtros.py` | `_ocultar_ids`, `_quitar_acotaciones` y las utilidades de contexto. |
+| `rutas.py` | Los endpoints Flask + el gate de acceso + el context processor. |
+| `tools/` | Lo que el agente sabe hacer: `esquemas.py` (lo único que el modelo ve) y un módulo por área con los ejecutores. `tools/__init__.py` tiene `ejecutar_tool`, el dispatch. |
+
+**El criterio del corte es la cohesión, no la capa**: el esquema de una tool y su ejecutor
+quedan en el mismo módulo de área siempre que se pueda, porque son lo que cambia junto. Por
+eso no hay un "archivo de descripciones" separado de un "archivo de código" — eso obligaría a
+tocar dos archivos para agregar una tool en vez de uno. Ver `dev-log/DECISIONS.md` 2026-08-10.
+
+Las dependencias van en una sola dirección y **no hay ciclos**:
+`dominio → proveedores/db → padrones/lore/vision → tools → prompt/llm → rutas`.
 - **`POST /agente/chat`** — acepta `{mensaje, imagen?}` (imagen en base64 o data URL);
   retorna `{respuesta}`. El backend llama al modelo con el mensaje + tools disponibles, ejecuta
   lo que pida (tools de lectura y escritura), repite hasta respuesta final, audita
@@ -68,8 +94,8 @@ El agente cruza **dos DBs de dominio** más los horarios:
   cada carga, así que el historial existía y no se veía. Devuelve también los botones de las
   altas que hayan quedado sin confirmar — si no, navegar a otra página dejaba las fichas
   vivas en el servidor y sin forma de darles OK. `_texto_visible()` aplana los bloques de
-  contenido y saca el `(refiriéndote a: X)` que `chat()` le agrega al mensaje del usuario,
-  que es una pista para el modelo y no algo que el usuario escribió.
+  contenido y saca lo que `chat()` le agrega al mensaje del usuario y él no escribió: el
+  `(refiriéndote a: X)` y el `[Hora de este mensaje: ...]` (ver "La hora en cada mensaje").
 - **`POST /agente/confirmar`** — acepta `{token}` de una ficha de alta pendiente y
   la guarda sin pasar por el modelo. `409` si el token ya se usó, se reinició la
   conversación, o quedó desplazado por fichas más nuevas. Ver "Alta con ficha de
@@ -82,15 +108,22 @@ El agente cruza **dos DBs de dominio** más los horarios:
 - **`GET /agente/log`** — tabla de auditoría (últimas 50 escrituras), con snapshot
   "antes" visible para poder restaurar manualmente si el agente cometió un error.
 
-**Gate de sesión propio** (`_requiere_clave` + `/agente/login` + `/agente/salir`): los
-endpoints JSON (`/chat`, `/reset`, `/confirmar`, `/historial`) devuelven `401` sin sesión, que
-es lo que el `fetch` del frontend sabe manejar. Los endpoints que devuelven HTML —listados en
-`_ENDPOINTS_PAGINA`— redirigen a `/agente/login?next=...`, porque entrar por link directo a
-`/agente` desde el celular es el caso normal y un 401 pelado ahí es un callejón sin salida.
-El login es una copia del de `gestion.py`/`historia.py` (misma `GESTION_CLAVE`, misma
-`session['gestion_ok']`, `next` scopeado a `/agente` contra open redirect): iniciar sesión en
-cualquiera de las tres áreas habilita las otras, pero **ningún módulo importa el login del
-otro**, que es lo que los deja borrables por separado.
+**Gate de sesión**: lo monta el motor compartido, en una línea al final del módulo —
+
+```python
+crud.registrar_acceso(bp, endpoints_pagina=_ENDPOINTS_PAGINA, endpoint_default='chat_page')
+```
+
+`/agente` es el único blueprint que **mezcla páginas HTML con endpoints JSON**, y por eso pasa
+`endpoints_pagina`: los endpoints JSON (`/chat`, `/reset`, `/confirmar`, `/historial`) devuelven
+`401` sin sesión, que es lo que el `fetch` del frontend sabe manejar; un redirect a HTML le
+llegaría como un 200 sin sentido. Los que devuelven HTML —los de `_ENDPOINTS_PAGINA`— redirigen
+a `/agente/login?next=...`, porque entrar por link directo a `/agente` desde el celular es el
+caso normal y un 401 pelado ahí es un callejón sin salida.
+
+Misma `GESTION_CLAVE`, misma `session['gestion_ok']` y mismo `next` scopeado al prefijo propio
+(contra open redirect) que `/gestion` e `/historia`: iniciar sesión en cualquiera de las tres
+áreas habilita las otras, porque es el mismo staff.
 
 **Context processor propio**: `agente.bp` construye su `_contexto_base()` localmente
 (`escuela_nombre`/`escuela_logo`/`escuela_version` salen de `config.py`). Antes delegaba en
@@ -147,17 +180,23 @@ El asistente se usa mayormente desde el teléfono, en el pasillo. Lo que eso imp
   (`window.onresize` no dispara en iOS).
 - `env(safe-area-inset-bottom)` en el área de input (requiere el `viewport-fit=cover` que
   agrega el `<meta viewport>` de `base.html`) para no quedar abajo de la barra gestual.
-- Objetivos táctiles de 44px, header comprimido, footer oculto, y el nav de 8 pestañas
-  scrollea horizontalmente en vez de envolver en tres filas.
+- Objetivos táctiles de 44px, header comprimido y footer oculto.
+- **El nav ya no está en la página en celular**: abajo de 900px `static/mobile-nav.js` lo
+  mueve —junto con los botones del header— al menú lateral que se abre con ☰, así el chat
+  se queda con toda la altura. Ver la sección "Celular" de
+  `agent_docs/gestion-conocimiento.md`. La regla vieja que lo hacía scrollear en
+  horizontal (`body.g-chat-page .g-nav`) sigue en `gestion.css` como fallback para cuando
+  no hay JS y el nav se queda en su lugar.
 
 ### Tools
 
 **Lectura** (no se auditan, siempre disponibles):
-- `buscar_profesor(query)` — resolución difusa de nombre, **sobre los docentes de los
-  horarios**. Si el nombre también coincide con una persona con ficha, devuelve
+- `buscar_profesor(query)` — resolución difusa de nombre, **sobre el padrón de los
+  horarios**: docentes de `clases` **y personal no docente** (ver abajo). Si el nombre también
+  coincide con una persona con ficha, devuelve
   `{docentes, personas_con_ficha, aviso}` en vez de la lista pelada (ver "Dos padrones")
 - `horario_profesor(nombre)` / `horario_curso(curso, division)` / `horario_aula(aula)`
-  — horarios agrupados por día
+  — horarios agrupados por día. `horario_profesor` cubre también al personal no docente
 - `aulas_libres()` — aulas desocupadas ahora, agrupadas por piso
 - `buscar_entidad(slug, query)` — búsqueda de recursos/conjuntos/actividades (gestion.db) y
   de hitos/personas (historia.db); el módulo lo resuelve `_modulo(slug)`
@@ -280,13 +319,45 @@ las personas no lo creaba nadie) y con `nivel` vacío pese a que el usuario acab
 - Si falta `nivel`, `fecha` o `tipo`, el aviso le recuerda cargarlo si el usuario ya lo dijo
   y preguntar solo si no.
 
-**`_personas_nombradas_en(texto)`** compara con `gestion._norm` y exige que estén **todas**
+**`_personas_nombradas_en(frase)`** compara con `texto.norm` y exige que estén **todas**
 las palabras del nombre (>2 letras), en cualquier orden — matchea "Errio Pablo" pero un
 "Pablo" suelto no alcanza: con dos Pablos, vincular al equivocado es peor que no vincular.
 **`_personas_parecidas(query)`** es su complemento suelto: acepta coincidencia parcial
 ("nati" → "Natalia Boo Fiad"). Se puede permitir porque su resultado es un **aviso para que
 el modelo pregunte**, no un vínculo que se escriba solo — quien decide a quién se vincula
 sigue siendo la regla estricta.
+
+### El padrón de horarios son dos tablas: docentes y no docentes
+
+`escuela.db` guarda a la gente de los horarios en tablas distintas: los que dan clase en
+`clases.profesor`, y los EMATP, jefaturas de departamento y demás en `personal_no_docente`
+(nombre, rol y una franja de presencia por día, sin materia ni curso). El agente miraba
+**solo `clases`**, así que CALEI (EMATP EERR) simplemente no existía para él, y de RODRIGUEZ
+VIRGINIA —que da física **y** es EMATP de biología— contaba únicamente las clases.
+
+**`_padron_horarios()`** (en `agente/padrones.py`) es ahora la única fuente del
+padrón: devuelve `nombre → rol no docente` (o `None` si solo da clases) fusionando las dos
+tablas, igual que ya hacía el autocompletado del SPA. De ahí comen `_buscar_profesor_scored`
+(y por lo tanto `buscar_profesor` y la resolución difusa de `horario_profesor`) y
+`_personas_conocidas()`.
+
+**`horario_profesor` devuelve los dos horarios, no uno u otro**, porque los cargos conviven:
+
+| Caso | Qué devuelve |
+|---|---|
+| Solo da clases | `clases` |
+| Solo no docente | `clases: {}` + `rol_no_docente` + `horario_no_docente` + `nota` explicando que no da clases |
+| Las dos cosas | `clases` + `rol_no_docente` + `horario_no_docente` + `aviso_no_docente` |
+
+El `aviso_no_docente` existe porque el riesgo es que el modelo lea el segundo horario como
+una corrección del primero y muestre uno solo: le dice explícitamente que es **además** de
+las clases. Y en el caso "solo no docente" el early return viejo (`"no tiene clases
+cargadas"`) llevaba al modelo a darlo por inexistente, que es exactamente el bug: ahora esa
+rama responde el horario de presencia.
+
+Los **preceptores** (`horarios_preceptores`) siguen fuera: sus nombres están cargados sin
+normalizar ("ANGELINA", "KARINA (M RIOS)", "FALTA") y meterlos al padrón difuso ensuciaría
+las sugerencias de `buscar_profesor`. Su horario se consulta por el SPA, no por el agente.
 
 ### Dos padrones de personas, y el cruce en las dos direcciones
 
@@ -331,6 +402,26 @@ el LLM, así que en el momento en que el hito se escribe el agente no tiene ning
 llamar a `vincular_entidad`, y el vínculo no lo creaba nadie. Solo vincula personas ya
 cargadas; nunca crea una ficha de persona nueva.
 
+### La hora en cada mensaje
+
+El agente sabe qué hora es por **dos vías, y las dos hacen falta**:
+
+1. **En el system prompt** (`prompt.py`, bloque `FECHA Y HORA ACTUAL`). Se arma de nuevo en cada
+   turno: `llm.chat_with_tools()` pide `config.ahora()` al empezar, no al arrancar el server.
+2. **Pegado a cada mensaje del usuario** (`rutas._sello_hora()`): `chat()` le agrega
+   `[Hora de este mensaje: Lunes 10/08/2026 18:40]` al texto antes de mandarlo.
+
+El sello existe porque el system prompt es largo y queda lejos: con la conversación crecida, el
+modelo contestaba "ahora" con la hora del primer mensaje del chat. Pegada al final del mensaje, la
+hora es lo último que leyó, y como el historial se persiste con el sello, en un turno de
+seguimiento se ve cuánto pasó entre un mensaje y otro. La regla del prompt dice explícitamente que
+el sello del **último** mensaje manda sobre cualquier otra hora de la conversación y que no se
+repite ni se comenta (lo pone el sistema, no el usuario). `_texto_visible()` lo saca antes de
+repintar el chat, igual que el `(refiriéndote a: X)`.
+
+Las dos vías salen de `config.ahora()`, no de `datetime.now()`: en Render el server corre en UTC y
+la hora venía 3 horas adelantada. Ver "El reloj" en `agent_docs/crud-motor.md`.
+
 ### Los id no se le muestran al usuario
 
 Los id son plumbing: enganchan filas entre tablas y le sirven al modelo para llamar a las
@@ -361,12 +452,12 @@ vacíos), pendientes de préstamos ya calculados. Reduce tokens de API y errores
 
 ### Calidad del match en `buscar_entidad`
 
-La búsqueda es la misma de la web (`buscar_entidad_sin_request` → `_puntaje_busqueda`), que
+La búsqueda es la misma de la web (`crud.buscar_entidad` → `texto.puntaje_busqueda`), que
 ordena por puntaje pero **lo descarta al devolver**. Para el agente eso era un problema real:
 buscar "taladro" (que no existe en el inventario) devolvía *Caladora*, *Sierra de calar
 manual* y *Cinta de aisladora* — todos difusos de ~0.6 — y Claude los recibía con el mismo
 peso que un match literal, así que ofrecía el primero como si fuera el pedido. Por eso
-`_buscar_entidad_fmt` (en `agente.py`, capa de presentación, no toca la búsqueda compartida)
+`_buscar_entidad_fmt` (en `agente/tools/entidades.py`, capa de presentación: no toca la búsqueda compartida)
 agrega por resultado:
 
 - **`match`**: `exacto` (substring en el nombre) · `descripcion` (substring en la descripción,
@@ -522,7 +613,7 @@ roleplay, y empieza a **actuar** el personaje: `*se acomoda los anteojos*`, `—
 patio—`, `EMILIO:` antes de hablar. Mismo esquema de defensa que los id — prompt **y** filtro
 de salida:
 
-- **`COMO_CUENTA_EMILIO`** (constante en `agente.py`): se interpola en el **system prompt** y en
+- **`COMO_CUENTA_EMILIO`** (constante en `agente/lore.py`): se interpola en el **system prompt** y en
   cada `instruccion_tono`. Va en el system prompt porque **los resultados de tools no se
   persisten en el historial**: en un turno de seguimiento ("¿y después qué pasó?") la
   `instruccion_tono` ya no está en contexto y lo único que el modelo tiene a la vista es su
@@ -599,7 +690,7 @@ solar, escriben "tenemos 5" y el recurso queda cargado sin tipear especificacion
 5. En el camino de alta, el modelo arma la ficha con `crear_entidad` → botón de confirmar, y la
    foto queda en `agente_fotos_pendientes` atada al **token de la ficha**. Al confirmar,
    `_adjuntar_foto_pendiente()` la pasa a la galería del registro nuevo con
-   `gestion.agregar_foto()` — el mismo camino que usa la subida manual desde el detalle.
+   `crud.agregar_foto()` — el mismo camino que usa la subida manual desde el detalle.
 
 #### Los dos caminos de una foto
 
@@ -811,16 +902,16 @@ que las usa — no en `init_db()`, porque el server puede estar meses sin reinic
 
 El circuito de alta asumía una columna `nombre`, y `hitos` la llama `titulo`. Lo que sostiene
 que el agente trate a todas las entidades igual:
-- **`_crear_entidad`** valida `_campo_nombre(cfg)` del módulo dueño del slug, no `'nombre'`.
+- **`_crear_entidad`** valida `crud.campo_nombre(cfg)` de la entidad, no `'nombre'`.
 - **`_nombre_de(slug, campos)`** resuelve el nombre visible de una ficha. Hace falta porque
   `campos` es el dict que armó el modelo, no una fila de la DB: ahí **no** llega el alias de
-  `_select()`. Sin esto el botón de confirmar y el "✅ Guardado" salían en blanco para `hitos`.
+  `crud.select()`. Sin esto el botón de confirmar y el "✅ Guardado" salían en blanco para `hitos`.
 - **`CAMPOS_REDACTADOS`** incluye `'titulo'` además de `'nombre'`.
 - **Los esquemas de `crear_entidad` / `editar_entidad` exponen `titulo`**, más `nivel`,
   `etiquetas`, `protagonistas` y `fecha`. `required` es `['slug']` a secas: si hace falta
-  `nombre` o `titulo` lo decide `_crear_entidad` contra `_campo_nombre`, que es la única fuente.
-- **Las lecturas van por `_select()`**, que agrega `titulo AS nombre`: `_buscar_entidad_fmt`,
-  `_listar_todos_fmt`, `_detalle_entidad_fmt` y `snapshot_entidad` devuelven `nombre` en todos
+  `nombre` o `titulo` lo decide `_crear_entidad` contra `crud.campo_nombre`, la única fuente.
+- **Las lecturas van por `crud.select()`**, que agrega `titulo AS nombre`: `_buscar_entidad_fmt`,
+  `_listar_todos_fmt`, `_detalle_entidad_fmt` y `crud.snapshot_entidad` devuelven `nombre` en todos
   los slugs. `_listar_todos_fmt` y `_detalle_entidad_fmt` tenían la query cruda
   (`SELECT id, nombre …` / `SELECT * …`) y con `hitos` daban `no such column: nombre` y una
   ficha sin `nombre` respectivamente — arreglado 2026-08-10 al separar los módulos.
@@ -840,16 +931,19 @@ ficha del mismo docente le parte la historia en dos.
 ### Integración con los módulos de dominio
 
 - Reusan `ENTIDADES` de los dos módulos (config declarativa), resueltos por `_modulo(slug)`.
-- Reusan los helpers sin dependencia de Flask `request`/`session`, que **los dos módulos
-  exponen con la misma firma**: `buscar_entidad_sin_request`, `guardar_entidad_sin_request`,
-  `snapshot_entidad`, `agregar_relacion_m2m`, `quitar_relacion_m2m`, `_select`,
-  `_campo_nombre`, `_secciones_detalle`, `agregar_foto`, `LIMPIEZA_M2M`. Si se agrega un
-  tercer módulo de dominio, tiene que exponer esa misma superficie.
+- **Toda la lectura/escritura genérica pasa por `crud.py`** (capa 1), con el área como primer
+  argumento: `crud.conectar`, `crud.buscar_entidad`, `crud.guardar_entidad`,
+  `crud.snapshot_entidad`, `crud.agregar_relacion_m2m`, `crud.quitar_relacion_m2m`,
+  `crud.agregar_foto`, `crud.select`, `crud.campo_nombre`. Del módulo de área sólo se leen
+  `ENTIDADES`, `LIMPIEZA_M2M` y el hook `secciones_detalle`. **Un área nueva tiene que cumplir el
+  contrato de `agent_docs/crud-motor.md`** para que el agente la vea.
 - De `gestion.py` (y solo de ahí) salen además los helpers de préstamos y carrito:
   `_resumen_items`, `_recalcular_estado`, `_stock`, `_int`, `_ahora`, `FORMATO_FECHA_REVISION`.
-  Los préstamos son exclusivos del área de recursos.
-- `gestion._norm` / `gestion._puntaje_busqueda` se usan como utilidades de texto en todo el
-  archivo (incluso para datos de `historia.db`): las dos copias son idénticas, se toma una.
+  Los préstamos son exclusivos del área de recursos y no pasan por el motor.
+- **`texto.norm` / `texto.puntaje_busqueda` / `texto.UMBRAL_SIMILITUD`** son la única fuente de
+  normalización y búsqueda difusa del archivo, para las tres fuentes de datos. Antes esto se le
+  pedía a `gestion._norm` o a `historia._norm` según el call site, sin criterio — funcionaba sólo
+  porque las dos copias eran idénticas (ver `dev-log/DECISIONS.md` 2026-08-10).
 - Reusan queries de `database.py`: `aulas_libres()` (calcula libres vs ocupadas en `clases` a
   tiempo real, agrupadas por piso de `FLOOR_MAPPING`).
 - El agente **no tiene acceso a escribir en `escuela.db`** (horarios) — solo lectura;

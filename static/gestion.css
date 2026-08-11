@@ -1268,6 +1268,42 @@ body {
     gap: 8px;
 }
 
+/* La miniatura es un <button> para que el visor se abra también con teclado. */
+.g-foto-thumb {
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    display: block;
+    position: relative;
+}
+
+.g-foto-thumb::after {
+    content: '⤢';
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    background: rgba(15, 23, 42, 0.72);
+    color: #fff;
+    font-size: 12px;
+    line-height: 1;
+    padding: 3px 5px;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+
+.g-foto-thumb:hover::after,
+.g-foto-thumb:focus-visible::after {
+    opacity: 1;
+}
+
+.g-foto-thumb:focus-visible {
+    outline: 2px solid var(--g-accent);
+    outline-offset: 2px;
+}
+
 .g-foto {
     width: 100%;
     height: 120px;
@@ -1278,9 +1314,147 @@ body {
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
+.g-foto-thumb:hover .g-foto,
 .g-foto:hover {
     transform: scale(1.05);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* ---------- Visor de fotos (lightbox) ---------- */
+/* Se abre al clickear una miniatura. Ver el <script> de gestion/detalle.html. */
+
+.g-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(15, 23, 42, 0.96);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 56px 64px 24px;  /* deja lugar a las flechas, que van absolutas */
+}
+
+/* El atributo hidden tiene que ganarle al display:flex de arriba. */
+.g-lightbox[hidden] {
+    display: none;
+}
+
+.g-lightbox-img {
+    /* min-width/height auto es el default de un flex item y le gana al max-width:
+       sin estos ceros una foto grande desborda la pantalla en vez de achicarse. */
+    min-width: 0;
+    min-height: 0;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 3px;
+    background: var(--g-dark);
+}
+
+.g-lightbox-barra {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(15, 23, 42, 0.75);
+}
+
+.g-lightbox-contador {
+    font-family: var(--g-font);
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: #cbd5e1;
+}
+
+.g-lightbox-acciones {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.g-lightbox-btn {
+    font-family: var(--g-font);
+    font-size: 12px;
+    letter-spacing: 1px;
+    background: transparent;
+    color: #e2e8f0;
+    border: 1px solid rgba(226, 232, 240, 0.4);
+    border-radius: 3px;
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.g-lightbox-btn:hover {
+    background: rgba(226, 232, 240, 0.12);
+    border-color: #e2e8f0;
+}
+
+.g-lightbox-btn-danger:hover {
+    background: var(--g-alert);
+    border-color: var(--g-alert);
+    color: #fff;
+}
+
+/* Absolutas y no en el flujo flex: si fueran hermanas de la imagen, en pantallas
+   angostas se la comerían hasta desaparecer ellas mismas. */
+.g-lightbox-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(226, 232, 240, 0.12);
+    color: #e2e8f0;
+    border: none;
+    border-radius: 3px;
+    font-size: 32px;
+    line-height: 1;
+    width: 44px;
+    height: 72px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.g-lightbox-nav:hover {
+    background: rgba(226, 232, 240, 0.28);
+}
+
+.g-lightbox-prev {
+    left: 8px;
+}
+
+.g-lightbox-next {
+    right: 8px;
+}
+
+/* Con el visor abierto la página de atrás no debe scrollear. */
+body.g-sin-scroll {
+    overflow: hidden;
+}
+
+@media (max-width: 640px) {
+    .g-lightbox {
+        padding: 52px 40px 12px;
+    }
+
+    .g-lightbox-nav {
+        width: 30px;
+        height: 56px;
+        font-size: 24px;
+    }
+
+    .g-lightbox-prev {
+        left: 4px;
+    }
+
+    .g-lightbox-next {
+        right: 4px;
+    }
 }
 
 .g-foto-toolbar {
@@ -1550,4 +1724,424 @@ body {
     .g-detail { grid-template-columns: 1fr; }
     .g-titles h1 { font-size: 18px; }
     .g-logo { height: 46px; }
+}
+
+/* ========== CELULAR: menú lateral ocultable + ajustes táctiles ========== */
+/* Todo lo de acá abajo vive dentro de @media (max-width: 900px): en escritorio el
+   header, el nav y las fichas quedan EXACTAMENTE como estaban.
+   El panel lateral lo arma mobile-nav.js moviendo adentro el .g-nav y el
+   .g-header-actions del header (los mueve, no los clona). Sin JS no hay panel y
+   ambos bloques siguen en el header, envolviendo en varias filas. */
+
+/* Fuera de celular no existen: ni el botón ☰ ni el panel ni el fondo oscuro. */
+.g-menu-btn,
+.g-sidebar,
+.g-sidebar-overlay { display: none; }
+
+@media (max-width: 900px) {
+
+    /* ---------- Botón hamburguesa ---------- */
+    .g-menu-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        /* 44px: mínimo usable con el dedo. */
+        width: 44px;
+        height: 44px;
+        flex-shrink: 0;
+        margin-left: auto;
+        padding: 0;
+        background: transparent;
+        border: 2px solid rgba(255, 255, 255, 0.5);
+        color: white;
+        cursor: pointer;
+    }
+
+    .g-menu-bars,
+    .g-menu-bars::before,
+    .g-menu-bars::after {
+        display: block;
+        width: 20px;
+        height: 2px;
+        background: white;
+    }
+
+    .g-menu-bars { position: relative; }
+
+    .g-menu-bars::before,
+    .g-menu-bars::after {
+        content: '';
+        position: absolute;
+        left: 0;
+    }
+
+    .g-menu-bars::before { top: -6px; }
+    .g-menu-bars::after { top: 6px; }
+
+    /* ---------- Panel lateral ---------- */
+    /* Arriba del widget del asistente (z-index 9999) para que no lo tape. */
+    .g-sidebar {
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 10001;
+        width: min(82vw, 320px);
+        background: var(--g-primary);
+        border-right: 4px solid var(--g-accent);
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.g-sidebar-abierto .g-sidebar { transform: none; }
+
+    .g-sidebar-overlay {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        background: rgba(15, 23, 42, 0.55);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+    }
+
+    body.g-sidebar-abierto .g-sidebar-overlay {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    /* Con el panel abierto la página de atrás no scrollea. */
+    body.g-sidebar-abierto { overflow: hidden; }
+
+    .g-sidebar-head {
+        position: sticky;
+        top: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 14px 16px;
+        background: var(--g-primary);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .g-sidebar-title {
+        color: white;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 3px;
+    }
+
+    .g-sidebar-close {
+        width: 40px;
+        height: 40px;
+        flex-shrink: 0;
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        color: white;
+        font-family: var(--g-font);
+        font-size: 16px;
+        cursor: pointer;
+    }
+
+    .g-sidebar-body {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        padding: 16px;
+        /* Barra gestual del iPhone. */
+        padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Nav adentro del panel: pestañas apiladas a lo ancho.
+       Va con `body` adelante para ganarle a body.g-chat-page .g-nav (≤700px), que
+       lo pone en fila con scroll horizontal cuando NO está en el panel. */
+    body .g-sidebar .g-nav {
+        display: flex;
+        flex-direction: column;
+        flex-wrap: nowrap;
+        gap: 6px;
+        margin: 0;
+        padding: 0;
+        overflow: visible;
+    }
+
+    body .g-sidebar .g-nav-tag {
+        width: 100%;
+        padding: 13px 16px;
+        clip-path: none;
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.18);
+        color: #e2e8f0;
+    }
+
+    body .g-sidebar .g-nav-tag.active {
+        background: var(--g-accent);
+        border-color: var(--g-accent);
+        color: white;
+        border-bottom: 3px solid white;
+    }
+
+    /* Acciones del header adentro del panel: botones a lo ancho, separados del nav. */
+    .g-sidebar .g-header-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .g-sidebar .g-header-actions > * {
+        width: 100%;
+        text-align: center;
+    }
+
+    /* ---------- Header compacto ---------- */
+    .g-container { padding: 14px 12px; }
+
+    .g-header { padding: 10px 0; }
+
+    .g-header-flex {
+        gap: 12px;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    .g-brand {
+        gap: 12px;
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .g-logo { height: 42px; }
+
+    .g-titles { min-width: 0; }
+
+    .g-titles h1 {
+        font-size: 15px;
+        letter-spacing: 1px;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .g-serial { font-size: 10px; }
+
+    .g-titles p {
+        font-size: 11px;
+        letter-spacing: 0;
+    }
+
+    /* ---------- Objetivos táctiles ---------- */
+    .g-btn,
+    .g-btn-outline,
+    .g-btn-outline-dark,
+    .g-btn-danger {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 12px 16px;
+    }
+
+    .g-btn-mini {
+        min-height: 36px;
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+
+    /* 16px EXACTOS en los campos: con menos, iOS hace zoom al enfocarlos y
+       descuadra todo el layout. No bajar este valor. */
+    .g-search input,
+    .g-search button,
+    .g-field input,
+    .g-field textarea,
+    .g-field select,
+    .g-item-row input,
+    .g-devol-cant {
+        font-size: 16px;
+    }
+
+    .g-search input,
+    .g-search button,
+    .g-field input,
+    .g-field select { min-height: 44px; }
+
+    .g-devol-cant { width: 72px; }
+
+    /* ---------- Toolbar: título, búsqueda y acción, apilados ---------- */
+    .g-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .g-toolbar h2 {
+        font-size: 18px;
+        letter-spacing: 1px;
+    }
+
+    .g-search {
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+    }
+
+    .g-toolbar-actions { width: 100%; }
+
+    /* ---------- Listados y fichas ---------- */
+    /* Entre 700 y 900 la tabla sigue siendo tabla, pero scrollea de costado. */
+    .g-table-wrap { -webkit-overflow-scrolling: touch; }
+
+    .g-table { font-size: 12px; }
+
+    .g-table th,
+    .g-table td { padding: 9px 10px; }
+
+    .g-td-actions { text-align: left; }
+
+    .g-td-actions .g-link {
+        display: inline-block;
+        margin: 0 12px 0 0;
+        padding: 6px 0;
+    }
+
+    .g-detail { gap: 14px; }
+
+    .g-props,
+    .g-relation-box { padding: 16px; }
+
+    .g-intro { padding: 14px 16px; }
+
+    .g-hint { padding: 14px 16px; }
+
+    .g-cards { gap: 14px; }
+
+    .g-card-actions > * { flex: 1 1 auto; }
+
+    .g-galeria-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+
+    .g-foto { height: 96px; }
+
+    /* Ítems de un préstamo: info arriba, botones abajo a lo ancho. */
+    .g-item-devol {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .g-item-devol-actions { flex-wrap: wrap; }
+
+    .g-prestamo-tabla { font-size: 12px; }
+
+    /* ---------- Formularios ---------- */
+    .g-form {
+        padding: 16px;
+        gap: 14px;
+    }
+
+    .g-checks { grid-template-columns: 1fr; }
+
+    .g-check { padding: 4px 0; }
+
+    .g-form-actions { flex-direction: column; }
+
+    .g-form-actions > * { width: 100%; }
+
+    .g-footer { padding: 14px 12px calc(14px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* ---------- Listados como tarjetas en celular ---------- */
+/* Una tabla de 5 columnas en 360px obliga a scrollear de costado y deja los botones
+   (RETIRAR, Ver, Editar) fuera de la pantalla. Abajo de 700px cada fila pasa a ser
+   una tarjeta: el nombre como título, el resto como pares ETIQUETA/valor —la etiqueta
+   sale del data-label de cada <td>, que repite el encabezado de la columna— y los
+   botones al pie. La tabla no se toca: solo cambia el display. */
+@media (max-width: 700px) {
+    .g-table-wrap {
+        border: none;
+        background: transparent;
+        overflow-x: visible;
+    }
+
+    .g-table thead { display: none; }
+
+    .g-table,
+    .g-table tbody,
+    .g-table tr,
+    .g-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .g-table tr {
+        background: var(--g-surface);
+        border: 1px solid var(--g-border);
+        border-left: 4px solid var(--g-primary);
+        margin-bottom: 10px;
+        padding: 6px 0;
+    }
+
+    .g-table tbody tr:hover { background: var(--g-surface); }
+
+    .g-table td {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 5px 12px;
+        border-bottom: none;
+        text-align: right;
+    }
+
+    /* Sin valor no hay línea: la etiqueta sola no dice nada. */
+    .g-table td:empty { display: none; }
+
+    .g-table td::before {
+        content: attr(data-label);
+        flex: 0 0 auto;
+        font-size: 10px;
+        font-weight: bold;
+        letter-spacing: 1px;
+        color: var(--g-muted);
+        text-align: left;
+    }
+
+    /* Primera celda = título de la tarjeta (ya se entiende sin etiqueta). */
+    .g-table td:first-child {
+        justify-content: flex-start;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        font-size: 15px;
+        text-align: left;
+    }
+
+    .g-table td:first-child::before { display: none; }
+
+    /* Última celda = barra de acciones al pie de la tarjeta. */
+    .g-table .g-td-actions {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        align-items: center;
+        gap: 10px;
+        margin-top: 4px;
+        padding-top: 10px;
+        border-top: 1px dashed var(--g-border);
+    }
+
+    .g-table .g-td-actions::before { display: none; }
+
+    .g-table .g-td-actions .g-link { margin: 0; }
+}
+
+/* Celulares angostos: el header entra en una sola línea (logo + nombre + ☰). */
+@media (max-width: 420px) {
+    .g-logo { height: 36px; }
+    .g-titles h1 { font-size: 14px; }
+    .g-titles p { display: none; }
+    .g-container { padding: 12px 10px; }
 }

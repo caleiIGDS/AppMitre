@@ -2,18 +2,27 @@
 
 Una de las cuatro áreas de la app (las otras: el SPA de horarios, `/historia` y `/agente`).
 Es el **inventario técnico** de la escuela: recursos, conjuntos y actividades, conectados entre
-sí, más el registro de préstamos. Los archivos reales (fotos, planos, guías) viven en Google
-Drive; acá solo se guardan links (`drive_url`).
+sí, más el registro de préstamos. **`gestion.db` es la fuente de verdad**: lo que no está acá,
+no está. Las fotos viven en la propia base (columna `fotos`, ver abajo).
+
+> Hasta el 2026-08-10 el modelo era otro: los archivos reales vivían en Google Drive y cada
+> entidad guardaba un link en `drive_url`. La escuela dejó de usar Drive y la columna se
+> eliminó de las tres tablas. Si ves `drive_url` en un respaldo viejo de `backups/`, es de
+> antes de ese corte.
 
 **Qué NO está acá**: la línea del tiempo institucional (`hitos`) y las fichas de personas se
 separaron a `/historia` + `historia.db` el 2026-08-10 — ver `agent_docs/historia-institucional.md`
-y `dev-log/DECISIONS.md`. Los dos módulos son hermanos y **no se importan entre sí**: el motor
-CRUD está duplicado a propósito para que tocar (o borrar) uno no rompa el otro.
+y `dev-log/DECISIONS.md`. Los dos módulos son hermanos y **no se importan entre sí**: comparten
+el motor genérico `crud.py`, que no importa a ninguno de los dos — ver `agent_docs/crud-motor.md`.
 
 ## Arquitectura
 
-- **`gestion.py`** — todo el módulo: blueprint Flask (`bp`, prefix `/gestion`), schema,
-  seed y rutas. Server-rendered con Jinja. El JS propio es `static/gestion.js`, con dos
+- **`gestion.py`** — el área: blueprint Flask (`bp`, prefix `/gestion`), `ENTIDADES`, `SCHEMA`,
+  sus hooks (`migrar`, `seed`, `secciones_detalle`, `valores_iniciales`, `tarjetas_extra`,
+  `contexto_extra`, `extras_template`, `NAV_EXTRA`) y **el bloque entero de préstamos/carrito**,
+  que es lo único que no pasa por el motor. Las rutas CRUD las monta `crud.registrar_rutas(bp,
+  ...)` y el gate `crud.registrar_acceso(bp)` — ver `agent_docs/crud-motor.md`.
+  Server-rendered con Jinja. El JS propio es `static/gestion.js`, con dos
   mejoras progressive-enhancement: búsqueda en vivo del listado y agregar al carrito por
   AJAX (ver abajo); el resto es HTML puro con forms + redirects.
 - **`gestion.db`** — SQLite propia, separada de `escuela.db`. **No** se regenera desde
@@ -34,6 +43,8 @@ CRUD está duplicado a propósito para que tocar (o borrar) uno no rompa el otro
 - **`static/gestion.js`** — único JS del módulo: búsqueda en vivo del listado + el stepper
   del carrito (vanilla, sin build step). Cargado en `base.html` con `defer`; no hace nada
   fuera de las páginas donde encuentra sus hooks (guarda por existencia de elementos).
+- **`static/mobile-nav.js`** — menú lateral de celular, compartido con `/historia` y
+  `/agente` (ver "Celular" abajo). No es lógica de dominio: solo mueve nodos del shell.
 - `base.html` incluye el widget flotante del asistente (`agente/_agente_widget.html`) y
   linkea a las otras áreas en el header.
 - Integración: `app.py` hace `app.register_blueprint(gestion.bp)` + `gestion.init_db()`
@@ -41,13 +52,43 @@ CRUD está duplicado a propósito para que tocar (o borrar) uno no rompa el otro
   `/gestion` es deliberadamente "oculto", se accede escribiendo la URL (decisión
   2026-07-17, ver `dev-log/DECISIONS.md`). `base.html` sí tiene el link de vuelta al SPA.
 
+## Celular
+
+Todo el shell (header + nav + fichas) es **el mismo markup en celular y en escritorio**:
+lo único que cambia es CSS, más un script que reubica dos bloques. **Arriba de 900px no
+se aplica nada de esto** — el escritorio quedó igual que siempre. Es común a las tres
+áreas que comparten `gestion.css` (`/gestion`, `/historia`, `/agente`).
+
+- **Menú lateral ocultable (`static/mobile-nav.js`)** — abajo de 900px, el `.g-nav` de
+  pestañas y el `.g-header-actions` del header **se mueven** (no se clonan) a un panel
+  `.g-sidebar` que se abre con el botón ☰. Se mueven, no se clonan, por dos razones:
+  los listeners ya enganchados por `gestion.js` (carrito) y `gestion-agente.js` (botón
+  del asistente) siguen funcionando en el nodo movido, y no se duplican IDs como
+  `#agente-toggle-btn`. Cada bloque deja un comentario-marcador en su lugar original,
+  así al agrandar la ventana vuelve exactamente ahí (se escucha `matchMedia`, no
+  `resize`). El panel se cierra con ✕, Esc, tocando el fondo o cualquier link de adentro.
+  Sin JS no hay panel: nav y acciones quedan en el header envolviendo en varias filas,
+  como siempre.
+- **Listados como tarjetas (≤700px)** — una tabla de 5 columnas en 360px obliga a
+  scrollear de costado y deja RETIRAR / Ver / Editar fuera de pantalla. Abajo de 700px
+  cada `<tr>` de `.g-table` pasa a `display: block` y se ve como una tarjeta: el nombre
+  de título, el resto como pares etiqueta/valor, los botones al pie. **La etiqueta sale
+  del `data-label` de cada `<td>`**, que repite el encabezado de la columna — si agregás
+  una columna a un listado, ponele `data-label` o en celular sale sin etiqueta. Los `<td>`
+  llevan `{%- -%}` para quedar *realmente* vacíos cuando no hay dato y que `td:empty` los
+  esconda (si no, se vería la etiqueta sola). Entre 700 y 900px sigue siendo tabla con
+  scroll horizontal.
+- **Táctil** — objetivos de 44px en botones y campos, y **16px exactos** de `font-size`
+  en los inputs: con menos, iOS hace zoom al enfocar y descuadra el layout.
+- El chat tiene además su propia capa mobile, ver `agent_docs/agente-asistente.md`.
+
 ## Modelo de datos (gestion.db)
 
 | Tabla | Campos |
 |-------|--------|
-| `recursos` | id, nombre, tipo, descripcion, ubicacion, estado, drive_url, cantidad, valor, fecha_revision, **fotos** |
-| `conjuntos` | id, nombre, descripcion, uso_tipico, drive_url, **fotos** |
-| `actividades` | id, nombre, objetivo, descripcion, duracion, curso, drive_url, **fotos** |
+| `recursos` | id, nombre, tipo, descripcion, ubicacion, estado, cantidad, valor, fecha_revision, **fotos** |
+| `conjuntos` | id, nombre, descripcion, uso_tipico, **fotos** |
+| `actividades` | id, nombre, objetivo, descripcion, duracion, curso, **fotos** |
 | `prestamos` | id, persona, destino, notas, fecha_salida, fecha_devolucion |
 | `prestamo_items` | prestamo_id, recurso_id, cantidad, cantidad_devuelta (M2M con cantidad, `UNIQUE(prestamo_id, recurso_id)`) |
 
@@ -56,7 +97,14 @@ CRUD está duplicado a propósito para que tocar (o borrar) uno no rompa el otro
 - `tipo`: content-type (ej: `image/png`)
 - `fecha`: timestamp ISO de cuándo se subió
 - Upload: botón en ficha de detalle → POST `/<slug>/<id>/foto` → sube imagen, convierte a base64, guarda en DB
-- Renderizado: galería grid responsive (150px minmax) con preview nativo en el HTML
+- Renderizado: galería grid responsive (120px minmax) de miniaturas recortadas (`object-fit: cover`)
+- **Visor**: click en una miniatura abre un lightbox a pantalla completa (`.g-lightbox`, CSS en
+  `gestion.css`, JS inline en `detalle.html`) con la foto entera, contador `n / total`, flechas
+  ‹ › (y ← → del teclado), cierre con Esc o click en el fondo, y el botón **ELIMINAR**
+- Borrado: `POST /<slug>/<id>/foto/<indice>/eliminar` (con `confirm()`) → saca la foto del array
+  y redirige a la ficha. **La referencia es la posición en el array**: las fotos no tienen id
+  propio. Un índice fuera de rango no es error, se ignora (dos pestañas borrando a la vez)
+- Las miniaturas son `<button>` (no `<img>` suelta) para que el visor se abra también con teclado
 
 M2M (con `UNIQUE` por par): `conjunto_recursos`, `actividad_recursos`, `actividad_conjuntos`.
 **No hay ninguna relación que cruce a `historia.db`**: `proyecto_recursos` (lo único que ataba
@@ -67,10 +115,12 @@ Valor (recursos): "" / Básico / Secundario / Alto valor — es la *importancia*
 dentro del inventario, no su precio (se llamaba `utilidad`, renombrada 2026-08-08).
 `cantidad` y `fecha_revision` son TEXT. **`fecha_revision` se precarga con la fecha de hoy
 en todo alta de recurso**, por los dos caminos: el form web (`_valores_iniciales()` en el
-GET de `/recursos/nuevo`) y el chat (`_normalizar_borrador()` en `agente.py`, antes de
+GET de `/recursos/nuevo`) y el chat (`_normalizar_borrador()` en `agente/tools/fichas.py`, antes de
 calcular el token, para que la fecha aparezca en la ficha y el usuario la vea y la pueda
 cambiar). Dar de alta un recurso es un control de inventario; antes quedaba vacía y casi
-ningún recurso terminaba con fecha. Formato `gestion.FORMATO_FECHA_REVISION` = `%d/%m/%Y`
+ningún recurso terminaba con fecha. "Hoy" sale de `config.ahora()` (hora de Buenos Aires; el
+server de producción corre en UTC — ver "El reloj" en `agent_docs/crud-motor.md`), igual que la
+fecha/hora de los préstamos (`gestion._ahora()`). Formato `gestion.FORMATO_FECHA_REVISION` = `%d/%m/%Y`
 (ej `08/08/2026`) — **conviven** con las fechas cortas sin año del inventario importado del
 sheet ("24/4", "8/5"), que no se reformatean. Editar un recurso **no** toca la fecha:
 `_editar_entidad` parte de la fila actual y no pasa por `_normalizar_borrador`.
@@ -93,18 +143,19 @@ Cada entidad define: `tabla`, `singular`/`plural`, `descripcion` (card del home)
 `rel_` para no colisionar con columnas).
 
 **`campo_nombre`** (opcional, default `'nombre'`): cómo se llama en la tabla la columna que
-hace de nombre visible. Ninguna entidad de este módulo la declara distinta — el mecanismo se
-mantiene porque `historia.hitos` sí la necesita (`titulo`) y los dos módulos comparten el mismo
-patrón de CRUD genérico. Todas las lecturas van por **`_select(cfg)`**, que agrega el alias
-`AS nombre` al `SELECT`, así que templates, `buscar_entidad_sin_request`, `snapshot_entidad` y
-`agente.py` leen siempre `fila['nombre']`. Las escrituras y la validación de obligatorio usan
-`_campo_nombre(cfg)`.
+hace de nombre visible. Ninguna entidad de este módulo la declara distinta — el mecanismo existe
+porque `historia.hitos` sí la necesita (`titulo`). Todas las lecturas van por **`crud.select(cfg)`**,
+que agrega el alias `AS nombre`, así que templates, `crud.buscar_entidad`, `crud.snapshot_entidad`
+y el agente leen siempre `fila['nombre']`. Las escrituras usan `crud.campo_nombre(cfg)`.
+
+El contrato completo de la config y de los hooks está en `agent_docs/crud-motor.md`; acá sólo se
+documenta lo que es propio de gestión.
 
 Para agregar un campo: sumarlo al `SCHEMA`,
-a `campos` y a la lista de `_migrar()` — `init_db()` hace el `ALTER TABLE` aditivo
+a `campos` y a la lista de `migrar()` — `init_db()` hace el `ALTER TABLE` aditivo
 automáticamente en DBs existentes (así entraron cantidad/valor/fecha_revision).
 Para **renombrar** uno, además del `SCHEMA` y `campos` va un `ALTER TABLE ... RENAME COLUMN`
-guardado por `PRAGMA table_info` en `_migrar()`, **antes** del loop aditivo (si no, el aditivo
+guardado por `PRAGMA table_info` en `migrar()`, **antes** del loop aditivo (si no, el aditivo
 crea la columna nueva vacía al lado de la vieja y se pierde el dato). Ver `utilidad`→`valor`.
 
 `LIMPIEZA_M2M` mapea qué tablas de relación limpiar al eliminar cada tipo de entidad.
@@ -121,6 +172,8 @@ crea la columna nueva vacía al lado de la vieja y se pierde el dato). Ver `util
 | `/gestion/<slug>/<id>` | GET | Detalle: campos + relaciones en ambas direcciones |
 | `/gestion/<slug>/<id>/editar` | GET/POST | Edición (sincroniza M2M: delete + insert) |
 | `/gestion/<slug>/<id>/eliminar` | POST | Borra fila + sus filas M2M (confirm en el browser) |
+| `/gestion/<slug>/<id>/foto` | POST | Sube una imagen a la galería (multipart → base64). Devuelve JSON |
+| `/gestion/<slug>/<id>/foto/<indice>/eliminar` | POST | Borra la foto de esa posición y vuelve a la ficha |
 
 `slug` ∈ {recursos, conjuntos, actividades}; otro valor → 404. (`hitos` y `personas` viven en
 `/historia`, con las mismas rutas bajo su propio prefijo.)
@@ -128,10 +181,10 @@ crea la columna nueva vacía al lado de la vieja y se pierde el dato). Ver `util
 ## Búsqueda tolerante (`?q=` en `lista()`)
 
 No es el `LIKE` literal de SQL: `lista()` trae todas las filas y las filtra/ordena en
-Python con `_puntaje_busqueda()`. Perdona **acentos y mayúsculas** (normaliza con `_norm`)
+Python con `texto.puntaje_busqueda()`. Perdona **acentos y mayúsculas** (normaliza con `texto.norm`)
 y **typos** (similitud difusa vía `difflib.SequenceMatcher`, sin dependencias). Reglas:
 substring normalizado siempre puntúa por encima de los difusos; la similitud difusa solo
-entra para queries de 3+ caracteres, con umbral `UMBRAL_SIMILITUD` (**0.68**, medido contra
+entra para queries de 3+ caracteres, con umbral `texto.UMBRAL_SIMILITUD` (**0.68**, medido contra
 el inventario real — ver `dev-log/DECISIONS.md` 2026-08-08). Compara la query
 contra el nombre, cada palabra del nombre, y la descripción. Con ~decenas de filas por
 entidad el filtrado en Python es despreciable; si alguna tabla creciera a miles habría que
@@ -141,7 +194,7 @@ reconsiderar (índice, FTS). Aplica a las 4 entidades genéricas; los préstamos
 **Búsqueda en vivo (client-side, `static/gestion.js`)**: además del filtrado server-side,
 el listado filtra en el navegador mientras se escribe, sin recargar ni ir al servidor. La
 ruta emite por fila un atributo `data-buscar` con el texto ya normalizado por Python
-(`_norm(nombre + descripcion)`), y el JS filtra por substring normalizado (repite la misma
+(`texto.norm(nombre + descripcion)`), y el JS filtra por substring normalizado (repite la misma
 normalización de acentos/mayúsculas). Es progressive enhancement: sin JS, el form sigue
 haciendo la búsqueda difusa server-side. Con JS, el botón BUSCAR se oculta y Enter no recarga.
 La capa en vivo **no** tiene la tolerancia difusa a typos (solo substring) — a propósito: al
@@ -236,7 +289,7 @@ préstamos apunta al **listado de recursos** (ahí arranca el carrito), no a un 
 
 `gestion.db` es la única DB con datos propios: no se regenera desde Sheets y está en
 `.gitignore`, así que **si el archivo se pierde no hay commit ni fuente externa de la
-cual recuperarla**. Por eso `init_db()` arranca llamando a `respaldar_db()`.
+cual recuperarla**. Por eso `init_db()` arranca llamando a `respaldos.respaldar()`.
 
 - Copia a `backups/gestion-YYYYMMDD-HHMMSS-ffffff.db` con la **API `backup()` de
   sqlite3**, no `shutil.copy`: garantiza una copia consistente aunque otro proceso
@@ -245,7 +298,7 @@ cual recuperarla**. Por eso `init_db()` arranca llamando a `respaldar_db()`.
 - **No respalda una DB sin recursos.** Un respaldo vacío encima de los buenos sería
   justo lo que arruinaría la recuperación.
 - **No duplica**: si el contenido no cambió desde el último respaldo, lo descarta.
-- **Retención** (`_a_borrar`): los últimos `BACKUP_MAX` (20) **más el primero de cada
+- **Retención** (`respaldos._a_borrar`): los últimos `BACKUP_MAX` (20) **más el primero de cada
   día**. Sin la regla diaria, una tarde de reinicios depurando empuja fuera de la
   rotación todo lo viejo — que es exactamente lo que uno querría recuperar.
 

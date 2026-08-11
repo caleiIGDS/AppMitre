@@ -3,9 +3,9 @@ import csv
 import json
 import os
 import re
-import unicodedata
 import urllib.request
 import io
+import texto
 from config import TURNO_CURSOS, TURNO_DEFAULT
 
 def _cargar_nombre_mapeos():
@@ -119,10 +119,11 @@ def tiene_datos():
     except Exception:
         return False
 
-def eliminar_acentos(texto):
-    if not texto: return ""
-    return "".join(c for c in unicodedata.normalize('NFD', texto)
-                  if unicodedata.category(c) != 'Mn')
+# Alias local: la implementación vive en texto.py (capa 0, compartida con el resto de las
+# áreas). Se conserva el nombre porque es el que se lee bien en este pipeline, y porque
+# `limpiar_profesor`/`limpiar_aula` dependen de que NO baje a minúsculas — que es justo la
+# diferencia entre `texto.sin_acentos` y `texto.norm`.
+eliminar_acentos = texto.sin_acentos
 
 def limpiar_profesor(nombre):
     if not nombre: return ""
@@ -526,12 +527,11 @@ def aulas_libres(dia=None, hora=None):
     Si día/hora no se especifican, usa el actual (si es un día laborable).
     Retorna dict con 'dia', 'hora', 'libres_por_piso' (dict piso -> lista de aulas),
     'total_libres' y 'nota' si aplica."""
-    from datetime import datetime
-    from config import DIAS, FLOOR_MAPPING
+    from config import DIAS, FLOOR_MAPPING, ahora
 
     # Resolver día
     if dia is None:
-        hoy = datetime.now()
+        hoy = ahora()
         dia_semana = hoy.weekday()  # 0=lunes, 4=viernes, 5+=sábado/domingo
         if dia_semana >= 5:
             return {'dia': None, 'hora': None, 'libres_por_piso': {}, 'total_libres': 0,
@@ -544,7 +544,7 @@ def aulas_libres(dia=None, hora=None):
 
     # Resolver hora
     if hora is None:
-        hora = datetime.now().strftime('%H:%M')
+        hora = ahora().strftime('%H:%M')
 
     # Universo de aulas: todas las del FLOOR_MAPPING
     todas_aulas = {}

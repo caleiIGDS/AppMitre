@@ -1,6 +1,31 @@
 # config.py
 # Configuración centralizada de AppMitre
 
+from datetime import datetime, timedelta, timezone
+
+# Zona horaria de la escuela. El servidor de producción (Render) corre en UTC, así que
+# `datetime.now()` a secas daba la hora 3 horas adelantada: el agente contestaba "ahora
+# son las 21:40" a las 18:40, y lo mismo se guardaba en préstamos y fechas de revisión.
+# Toda la app pide la hora por `ahora()`, nunca por `datetime.now()`.
+ZONA_HORARIA = "America/Argentina/Buenos_Aires"
+UTC_OFFSET_HORAS = -3   # fallback si el sistema no tiene la base de zonas horarias
+
+
+def ahora():
+    """La hora de pared de la escuela, como datetime naive.
+
+    Naive a propósito: todo el código (formatos, comparaciones con horas de la DB) trabaja
+    sin tzinfo, y devolver un datetime consciente rompería las restas contra fechas
+    guardadas. Argentina no aplica horario de verano desde 2009, por eso el fallback de
+    offset fijo es equivalente cuando falta `tzdata` (Windows sin el paquete instalado).
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(ZONA_HORARIA)
+    except Exception:
+        tz = timezone(timedelta(hours=UTC_OFFSET_HORAS))
+    return datetime.now(tz).replace(tzinfo=None)
+
 # ID del documento de Google Sheets (común para todas las hojas)
 SHEET_ID = "1GJxwpxXfLosqKxgIa6zyZhwjDK-89ZDavLi6nouWTsw"
 

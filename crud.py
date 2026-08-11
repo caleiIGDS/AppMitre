@@ -1,0 +1,666 @@
+"""Motor CRUD genérico — capa 1.
+
+Conoce el *concepto* de entidad (una config declarativa, un slug, relaciones M2M) pero
+**ninguna entidad concreta**: no sabe qué es un recurso ni un hito. Por eso **no importa
+`gestion` ni `historia`** — las recibe como argumento (`area`). Esa es la regla que evita
+el import circular y la que mantiene legible el criterio de pertenencia:
+
+    capa 2 (gestion, historia)  ->  capa 1 (crud)  ->  capa 0 (texto, respaldos, config)
+
+Un "área" es simplemente un módulo que expone lo de abajo. Todo lo que nombre una tabla
+concreta entra por un **hook opcional**, nunca por un `if slug == '...'` acá adentro.
+
+    OBLIGATORIO
+      DB_PATH          ruta al archivo .db
+      PREFIJO_BACKUP   prefijo de sus respaldos ('gestion' -> backups/gestion-*.db)
+      TABLA_TESTIGO    tabla que se mira para saber si la DB "tiene datos"
+      ENTIDADES        {slug: cfg}  — ver abajo
+      SCHEMA           script SQL de creación (idempotente, CREATE TABLE IF NOT EXISTS)
+      LIMPIEZA_M2M     {slug: [(tabla, columna), ...]} a limpiar al eliminar
+
+    HOOKS OPCIONALES (se leen con getattr; si no están, no pasa nada)
+      migrar(cur)                     ALTERs aditivos para DBs viejas
+      seed(cur)                       datos de ejemplo en instalación nueva
+      secciones_detalle(slug, id, cur)  relaciones a mostrar en el detalle
+      derivados(slug, valores)        columnas calculadas al guardar (no van en 'campos')
+      valores_iniciales(slug)         defaults del form de alta
+      extras_template(vista, slug)    kwargs extra para render_template
+      tarjetas_extra(cur)             tarjetas del home que no salen de ENTIDADES
+      contexto_extra()                claves extra del context processor
+      NAV_EXTRA                       [(slug, label)] extra para la nav
+      ERROR_DUPLICADO                 {slug: mensaje} cuando un UNIQUE rechaza el guardado
+
+Cada cfg de ENTIDADES: tabla, singular, plural, descripcion, campos, columnas,
+relaciones y (opcional) campo_nombre.
+"""
+
+import base64
+import json
+import os
+import sqlite3
+
+from flask import (abort, jsonify, redirect, render_template, request, session,
+                   url_for)
+
+import respaldos
+import texto
+from config import ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, ahora
+
+
+# ---------------------------------------------------------------------------
+# Conexión y config declarativa
+# ---------------------------------------------------------------------------
+
+def conectar(area):
+    con = sqlite3.connect(area.DB_PATH)
+    con.row_factory = sqlite3.Row
+    return con
+
+
+def cfg(area, slug):
+    """Config de un slug, o 404 si no existe en esta área."""
+    if slug not in area.ENTIDADES:
+        abort(404)
+    return area.ENTIDADES[slug]
+
+
+def campo_nombre(cfg_ent):
+    """Columna que hace de nombre visible de la entidad.
+
+    Casi todas usan 'nombre'; `historia.hitos` la llama 'titulo'. El mecanismo existe para
+    que el resto del sistema no tenga que enterarse (ver `select`).
+    """
+    return cfg_ent.get('campo_nombre', 'nombre')
+
+
+def select(cfg_ent):
+    """SELECT que SIEMPRE expone una columna `nombre`, se llame como se llame en la tabla.
+
+    Todo lo que consume filas (templates genéricos, búsqueda, el agente) lee
+    `fila['nombre']`. Con el alias, una entidad puede tener su columna con otro nombre sin
+    que ninguno de esos consumidores se entere.
+    """
+    campo = campo_nombre(cfg_ent)
+    alias = '' if campo == 'nombre' else f", {campo} AS nombre"
+    return f"SELECT *{alias} FROM {cfg_ent['tabla']}"
+
+
+def _hook(area, nombre, default=None):
+    return getattr(area, nombre, default)
+
+
+# ---------------------------------------------------------------------------
+# Creación / migración de la DB
+# ---------------------------------------------------------------------------
+
+def init_db(area):
+    """Crea las tablas si no existen, migra columnas nuevas y siembra la primera vez.
+
+    Respalda antes de tocar nada (ver `respaldos.respaldar`).
+    """
+    respaldos.respaldar(area.DB_PATH, area.PREFIJO_BACKUP, area.TABLA_TESTIGO)
+
+    con = conectar(area)
+    cur = con.cursor()
+    cur.executescript(area.SCHEMA)
+
+    migrar = _hook(area, 'migrar')
+    if migrar:
+        migrar(cur)
+
+    sembrar = _hook(area, 'seed')
+    if cur.execute(f"SELECT COUNT(*) FROM {area.TABLA_TESTIGO}").fetchone()[0] == 0:
+        # Una DB vacía es ambigua: puede ser una instalación nueva o datos perdidos.
+        # Los respaldos desempatan — si existen, esto ya estuvo cargado alguna vez y
+        # seguir de largo taparía la pérdida en silencio (que es exactamente lo que pasó
+        # el 2026-08-08). Ante la duda, fallar ruidoso.
+        previos = respaldos.listar(area.PREFIJO_BACKUP)
+        if previos and os.environ.get('GESTION_SEED') != '1':
+            nombre_db = os.path.basename(area.DB_PATH)
+            ultimo = previos[-1]
+            con.close()
+            aviso = ("NO se cargaron los datos de ejemplo." if sembrar
+                     else "NO se cargó nada.")
+            raise RuntimeError(
+                f"{nombre_db} está vacía pero hay {len(previos)} respaldo(s) en "
+                f"{respaldos.BACKUP_DIR}.\n"
+                f"Probablemente se perdió el archivo — {aviso}\n\n"
+                f"Para restaurar el más reciente:\n"
+                f"    copy \"{ultimo}\" \"{area.DB_PATH}\"\n\n"
+                f"Si de verdad querés empezar de cero:\n"
+                f"    GESTION_SEED=1 python app.py"
+            )
+        if sembrar:
+            sembrar(cur)
+    con.commit()
+    con.close()
+
+
+# ---------------------------------------------------------------------------
+# Lectura y escritura sin Flask request (lo que usa el agente)
+# ---------------------------------------------------------------------------
+
+def buscar_entidad(area, slug, query, con=None):
+    """Búsqueda de entidades que no depende de Flask request.
+    Devuelve lista de dicts {id, nombre, descripcion, ...} ya filtrados y ordenados."""
+    if slug not in area.ENTIDADES:
+        return []
+    cfg_ent = area.ENTIDADES[slug]
+
+    debe_cerrar = con is None
+    if con is None:
+        con = conectar(area)
+    cur = con.cursor()
+
+    filas = cur.execute(f"{select(cfg_ent)} ORDER BY nombre COLLATE NOCASE").fetchall()
+    if debe_cerrar:
+        con.close()
+
+    if not query:
+        return [dict(f) for f in filas]
+
+    q_norm = texto.norm(query)
+    puntuadas = []
+    for fila in filas:
+        puntaje = texto.puntaje_busqueda(q_norm, fila['nombre'], fila['descripcion'])
+        if puntaje is not None:
+            puntuadas.append((puntaje, fila))
+    puntuadas.sort(key=lambda par: (-par[0], texto.norm(par[1]['nombre'])))
+    return [dict(fila) for _, fila in puntuadas]
+
+
+def guardar_entidad(area, slug, campos_dict, id=None, con=None):
+    """Alta o edición a partir de un dict (no lee request.form).
+    Devuelve el id creado o actualizado, o None si hubo error."""
+    if slug not in area.ENTIDADES:
+        return None
+    cfg_ent = area.ENTIDADES[slug]
+
+    debe_cerrar = con is None
+    if con is None:
+        con = conectar(area)
+    cur = con.cursor()
+
+    try:
+        nombres = [c['nombre'] for c in cfg_ent['campos']]
+        valores = {n: str(campos_dict.get(n, '')).strip() for n in nombres}
+
+        derivados = _hook(area, 'derivados')
+        if derivados:
+            valores.update(derivados(slug, valores))
+
+        cols = list(valores)
+        datos = [valores[c] for c in cols]
+        if id is None:
+            placeholders = ','.join('?' * len(cols))
+            cur.execute(
+                f"INSERT INTO {cfg_ent['tabla']} ({','.join(cols)}) VALUES ({placeholders})",
+                datos)
+            id = cur.lastrowid
+        else:
+            sets = ','.join(f"{c} = ?" for c in cols)
+            cur.execute(f"UPDATE {cfg_ent['tabla']} SET {sets} WHERE id = ?", datos + [id])
+
+        # Relaciones M2M: sólo se tocan las que vengan explícitas en campos_dict.
+        for rel in cfg_ent['relaciones']:
+            campo = rel['campo']
+            if campo in campos_dict:
+                cur.execute(f"DELETE FROM {rel['tabla']} WHERE {rel['col_propia']} = ?", (id,))
+                for rid_str in (campos_dict[campo] if isinstance(campos_dict[campo], list) else []):
+                    try:
+                        rid = int(rid_str)
+                        cur.execute(
+                            f"INSERT OR IGNORE INTO {rel['tabla']} "
+                            f"({rel['col_propia']}, {rel['col_ajena']}) VALUES (?,?)",
+                            (id, rid),
+                        )
+                    except (ValueError, TypeError):
+                        pass
+
+        con.commit()
+        if debe_cerrar:
+            con.close()
+        return id
+    except Exception:
+        if debe_cerrar:
+            con.close()
+        return None
+
+
+def snapshot_entidad(area, slug, id, con=None):
+    """Foto de una fila + sus relaciones M2M, para auditar antes de borrar.
+    Devuelve dict con 'fila', 'relaciones' (slug -> [ids]) y 'm2m' (filas crudas)."""
+    if slug not in area.ENTIDADES:
+        return None
+    cfg_ent = area.ENTIDADES[slug]
+
+    debe_cerrar = con is None
+    if con is None:
+        con = conectar(area)
+    cur = con.cursor()
+
+    fila = cur.execute(f"{select(cfg_ent)} WHERE id = ?", (id,)).fetchone()
+    if fila is None:
+        if debe_cerrar:
+            con.close()
+        return None
+
+    relaciones = {}
+    for rel in cfg_ent['relaciones']:
+        ids = [r[0] for r in cur.execute(
+            f"SELECT {rel['col_ajena']} FROM {rel['tabla']} WHERE {rel['col_propia']} = ?",
+            (id,)).fetchall()]
+        relaciones[rel['slug_ajeno']] = ids
+
+    # Filas M2M crudas que un borrado destruiría. No alcanza con 'relaciones': esa recorre
+    # cfg['relaciones'] (dirección "hacia afuera"), y para 'recursos' está vacía — pero
+    # LIMPIEZA_M2M sí borra sus 3 tablas inversas. Sin esto el snapshot decía relaciones={}
+    # y un borrado erróneo de un recurso no se podía restaurar completo.
+    m2m = {}
+    for tabla, columna in area.LIMPIEZA_M2M.get(slug, []):
+        filas_m2m = cur.execute(f"SELECT * FROM {tabla} WHERE {columna} = ?", (id,)).fetchall()
+        if filas_m2m:
+            m2m[tabla] = [dict(f) for f in filas_m2m]
+
+    if debe_cerrar:
+        con.close()
+    return {'fila': dict(fila), 'relaciones': relaciones, 'm2m': m2m}
+
+
+def agregar_relacion_m2m(area, tabla, col_propia, col_ajena, id_propio, id_ajeno, con=None):
+    """Agregar una fila a una tabla M2M."""
+    debe_cerrar = con is None
+    if con is None:
+        con = conectar(area)
+    try:
+        con.execute(f"INSERT OR IGNORE INTO {tabla} ({col_propia}, {col_ajena}) VALUES (?,?)",
+                    (id_propio, id_ajeno))
+        con.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        if debe_cerrar:
+            con.close()
+
+
+def quitar_relacion_m2m(area, tabla, col_propia, col_ajena, id_propio, id_ajeno, con=None):
+    """Quitar una fila de una tabla M2M."""
+    debe_cerrar = con is None
+    if con is None:
+        con = conectar(area)
+    try:
+        con.execute(f"DELETE FROM {tabla} WHERE {col_propia} = ? AND {col_ajena} = ?",
+                    (id_propio, id_ajeno))
+        con.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        if debe_cerrar:
+            con.close()
+
+
+def agregar_foto(area, slug, id, b64, tipo):
+    """Agrega una foto ya en base64 a la galería de una entidad.
+
+    Vive suelta y no dentro de `subir_foto` porque el agente también escribe la galería:
+    cuando el alta de un recurso salió de una foto del chat, esa foto termina acá por el
+    mismo camino que la que se sube desde el detalle (ver `agente.confirmar`).
+    """
+    cfg_ent = cfg(area, slug)
+    con = conectar(area)
+    cur = con.cursor()
+    fila = cur.execute(f"SELECT fotos FROM {cfg_ent['tabla']} WHERE id = ?", (id,)).fetchone()
+    if fila is None:
+        con.close()
+        return False
+    fotos = json.loads(fila['fotos'] or '[]')
+    fotos.append({'b64': b64, 'tipo': tipo, 'fecha': ahora().isoformat()})
+    cur.execute(f"UPDATE {cfg_ent['tabla']} SET fotos = ? WHERE id = ?", (json.dumps(fotos), id))
+    con.commit()
+    con.close()
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Helpers de formulario
+# ---------------------------------------------------------------------------
+
+def _opciones_relaciones(area, cfg_ent, cur):
+    """Opciones disponibles para cada relación M2M del formulario."""
+    opciones = {}
+    for rel in cfg_ent['relaciones']:
+        cfg_ajeno = area.ENTIDADES[rel['slug_ajeno']]
+        opciones[rel['campo']] = cur.execute(
+            f"SELECT id, {campo_nombre(cfg_ajeno)} AS nombre FROM {cfg_ajeno['tabla']} "
+            f"ORDER BY nombre COLLATE NOCASE").fetchall()
+    return opciones
+
+
+def _seleccion_relaciones(cfg_ent, id, cur):
+    """IDs actualmente vinculados, por campo de relación."""
+    seleccion = {}
+    for rel in cfg_ent['relaciones']:
+        filas = cur.execute(
+            f"SELECT {rel['col_ajena']} FROM {rel['tabla']} WHERE {rel['col_propia']} = ?",
+            (id,)).fetchall()
+        seleccion[rel['campo']] = {f[0] for f in filas}
+    return seleccion
+
+
+def _guardar_form(area, slug, cfg_ent, cur, id=None):
+    """Inserta o actualiza desde request.form y sincroniza las M2M. Devuelve el id."""
+    nombres = [c['nombre'] for c in cfg_ent['campos']]
+    valores = {n: request.form.get(n, '').strip() for n in nombres}
+
+    derivados = _hook(area, 'derivados')
+    if derivados:
+        valores.update(derivados(slug, valores))
+
+    cols = list(valores)
+    datos = [valores[c] for c in cols]
+    if id is None:
+        placeholders = ','.join('?' * len(cols))
+        cur.execute(f"INSERT INTO {cfg_ent['tabla']} ({','.join(cols)}) VALUES ({placeholders})",
+                    datos)
+        id = cur.lastrowid
+    else:
+        sets = ','.join(f"{c} = ?" for c in cols)
+        cur.execute(f"UPDATE {cfg_ent['tabla']} SET {sets} WHERE id = ?", datos + [id])
+
+    for rel in cfg_ent['relaciones']:
+        cur.execute(f"DELETE FROM {rel['tabla']} WHERE {rel['col_propia']} = ?", (id,))
+        for rid in request.form.getlist(rel['campo']):
+            try:
+                rid = int(rid)
+            except ValueError:
+                continue
+            cur.execute(
+                f"INSERT OR IGNORE INTO {rel['tabla']} "
+                f"({rel['col_propia']}, {rel['col_ajena']}) VALUES (?,?)",
+                (id, rid),
+            )
+    return id
+
+
+# ---------------------------------------------------------------------------
+# Gate de sesión
+# ---------------------------------------------------------------------------
+
+def _clave():
+    """Se lee en cada request y no al importar, para que cambiar la env var no exija
+    reiniciar y para que un test pueda pisarla."""
+    return os.environ.get('GESTION_CLAVE', 'mitre2026')
+
+
+def registrar_acceso(bp, endpoints_pagina=None, endpoint_default='home'):
+    """Monta el gate de contraseña de un blueprint: before_request + /login + /salir.
+
+    Traba mínima mientras esto está en desarrollo: una sola clave (`GESTION_CLAVE`) y una
+    sola marca de sesión (`gestion_ok`) para todas las áreas, porque es el mismo staff.
+    No es seguridad completa: sin usuarios, sin CSRF, sin límite de intentos, y el default
+    está en un repo público.
+
+    `endpoints_pagina`: si el blueprint mezcla páginas HTML con endpoints JSON (el caso de
+    `/agente`), acá van los que devuelven HTML. Sólo esos redirigen al login; el resto
+    contesta 401, que es lo que un `fetch` sabe leer — un redirect a HTML le llega como
+    una respuesta 200 sin sentido. Si es None, todo redirige (áreas 100% server-rendered).
+
+    `endpoint_default`: a dónde volver después de loguearse si no hay `next` válido.
+    """
+    prefijo = bp.url_prefix or f'/{bp.name}'
+
+    @bp.before_request
+    def _requiere_clave():
+        if request.endpoint == f'{bp.name}.login' or session.get('gestion_ok'):
+            return
+        if endpoints_pagina is None or request.endpoint in endpoints_pagina:
+            return redirect(url_for(f'{bp.name}.login', next=request.path))
+        abort(401)
+
+    @bp.route('/login', methods=['GET', 'POST'])
+    def login():
+        error = None
+        if request.method == 'POST':
+            if request.form.get('clave', '') == _clave():
+                session['gestion_ok'] = True
+                volver = request.form.get('next', '')
+                # Solo volver a rutas del propio blueprint (evita open redirect).
+                if not volver.startswith(prefijo):
+                    volver = url_for(f'{bp.name}.{endpoint_default}')
+                return redirect(volver)
+            error = 'Contraseña incorrecta.'
+        # `area_nombre`/`base_template` van explícitos y no por el context processor:
+        # `registrar_acceso` también la usa `/agente`, que no monta rutas CRUD y por lo
+        # tanto no tiene el context processor de `registrar_rutas`.
+        return render_template(f'{bp.name}/login.html', error=error,
+                               next=request.values.get('next', ''), activo=None,
+                               area_nombre=bp.name, base_template=f'{bp.name}/base.html')
+
+    @bp.route('/salir')
+    def salir():
+        session.pop('gestion_ok', None)
+        return redirect(url_for(f'{bp.name}.login'))
+
+
+# ---------------------------------------------------------------------------
+# Rutas genéricas
+# ---------------------------------------------------------------------------
+
+def contexto_base(bp, area):
+    """Lo que todo template del área necesita. `area_nombre` y `base_template` son lo que
+    permite que los templates de `templates/crud/` sirvan para cualquier área sin saber
+    de cuál son."""
+    nav = [(slug, e['plural']) for slug, e in area.ENTIDADES.items()]
+    nav += list(_hook(area, 'NAV_EXTRA', []))
+    ctx = {
+        'escuela_nombre': ESCUELA_NOMBRE,
+        'escuela_logo': ESCUELA_LOGO,
+        'escuela_version': ESCUELA_VERSION,
+        'nav_entidades': nav,
+        'area_nombre': bp.name,
+        'base_template': f'{bp.name}/base.html',
+    }
+    extra = _hook(area, 'contexto_extra')
+    if extra:
+        ctx.update(extra())
+    return ctx
+
+
+def registrar_rutas(bp, area):
+    """Monta home / lista / nuevo / detalle / editar / eliminar / fotos sobre `bp`.
+
+    Los endpoints y las carpetas de templates salen de `bp.name`, que ya coincide con el
+    nombre de la carpeta en `templates/` — así esto no necesita configuración extra.
+    """
+    nombre = bp.name
+
+    def _extras(vista, slug):
+        hook = _hook(area, 'extras_template')
+        return hook(vista, slug) if hook else {}
+
+    @bp.context_processor
+    def _contexto():
+        return contexto_base(bp, area)
+
+    @bp.route('/')
+    def home():
+        con = conectar(area)
+        cur = con.cursor()
+        tarjetas = []
+        for slug, e in area.ENTIDADES.items():
+            total = cur.execute(f"SELECT COUNT(*) FROM {e['tabla']}").fetchone()[0]
+            tarjetas.append({'slug': slug, 'plural': e['plural'], 'singular': e['singular'],
+                             'descripcion': e['descripcion'], 'total': total})
+        extra = _hook(area, 'tarjetas_extra')
+        if extra:
+            tarjetas.extend(extra(cur))
+        con.close()
+        return render_template(f'{nombre}/home.html', tarjetas=tarjetas, activo='home')
+
+    @bp.route('/<slug>')
+    def lista(slug):
+        cfg_ent = cfg(area, slug)
+        q = request.args.get('q', '').strip()
+        con = conectar(area)
+        cur = con.cursor()
+        filas = cur.execute(f"{select(cfg_ent)} ORDER BY nombre COLLATE NOCASE").fetchall()
+        con.close()
+        if q:
+            # Búsqueda tolerante (ver texto.puntaje_busqueda): acentos/mayúsculas no
+            # importan y se perdonan typos. Se filtra y ordena en Python — con esta
+            # cantidad de filas el costo es despreciable frente a que "perdone".
+            q_norm = texto.norm(q)
+            puntuadas = []
+            for fila in filas:
+                puntaje = texto.puntaje_busqueda(q_norm, fila['nombre'], fila['descripcion'])
+                if puntaje is not None:
+                    puntuadas.append((puntaje, fila))
+            puntuadas.sort(key=lambda par: (-par[0], texto.norm(par[1]['nombre'])))
+            filas = [fila for _, fila in puntuadas]
+        # Texto ya normalizado por fila, para el filtrado en vivo del navegador
+        # (data-buscar). Mismo alcance que la búsqueda del server: nombre + descripcion.
+        buscar = {fila['id']: texto.norm(f"{fila['nombre']} {fila['descripcion'] or ''}")
+                  for fila in filas}
+        return render_template(f'{nombre}/lista.html', cfg=cfg_ent, slug=slug, filas=filas,
+                               q=q, activo=slug, buscar=buscar, **_extras('lista', slug))
+
+    @bp.route('/<slug>/nuevo', methods=['GET', 'POST'])
+    def nuevo(slug):
+        cfg_ent = cfg(area, slug)
+        con = conectar(area)
+        cur = con.cursor()
+        error = None
+        if request.method == 'POST':
+            if not request.form.get(campo_nombre(cfg_ent), '').strip():
+                error = 'El nombre es obligatorio.'
+            else:
+                try:
+                    id = _guardar_form(area, slug, cfg_ent, cur)
+                except sqlite3.IntegrityError:
+                    error = _hook(area, 'ERROR_DUPLICADO', {}).get(
+                        slug, 'Ya existe un registro igual.')
+                else:
+                    con.commit()
+                    con.close()
+                    return redirect(url_for(f'{nombre}.detalle', slug=slug, id=id))
+        opciones = _opciones_relaciones(area, cfg_ent, cur)
+        con.close()
+        seleccion = {rel['campo']: {int(v) for v in request.form.getlist(rel['campo'])}
+                     for rel in cfg_ent['relaciones']}
+        # En el GET el form arranca con los defaults; en un POST fallido se respeta lo tipeado.
+        iniciales = _hook(area, 'valores_iniciales')
+        valores = request.form if request.method == 'POST' else (
+            iniciales(slug) if iniciales else {})
+        return render_template(f'{nombre}/form.html', cfg=cfg_ent, slug=slug, fila=None,
+                               valores=valores, opciones=opciones, seleccion=seleccion,
+                               error=error, activo=slug, **_extras('nuevo', slug))
+
+    @bp.route('/<slug>/<int:id>')
+    def detalle(slug, id):
+        cfg_ent = cfg(area, slug)
+        con = conectar(area)
+        cur = con.cursor()
+        fila = cur.execute(f"{select(cfg_ent)} WHERE id = ?", (id,)).fetchone()
+        if fila is None:
+            con.close()
+            abort(404)
+        secciones_hook = _hook(area, 'secciones_detalle')
+        secciones = secciones_hook(slug, id, cur) if secciones_hook else []
+        con.close()
+        fila_dict = dict(fila)
+        fila_dict['fotos'] = json.loads(fila_dict.get('fotos', '[]'))
+        return render_template(f'{nombre}/detalle.html', cfg=cfg_ent, slug=slug,
+                               fila=fila_dict, secciones=secciones, activo=slug,
+                               **_extras('detalle', slug))
+
+    @bp.route('/<slug>/<int:id>/editar', methods=['GET', 'POST'])
+    def editar(slug, id):
+        cfg_ent = cfg(area, slug)
+        con = conectar(area)
+        cur = con.cursor()
+        fila = cur.execute(f"{select(cfg_ent)} WHERE id = ?", (id,)).fetchone()
+        if fila is None:
+            con.close()
+            abort(404)
+        error = None
+        if request.method == 'POST':
+            if not request.form.get(campo_nombre(cfg_ent), '').strip():
+                error = 'El nombre es obligatorio.'
+            else:
+                try:
+                    _guardar_form(area, slug, cfg_ent, cur, id)
+                except sqlite3.IntegrityError:
+                    error = _hook(area, 'ERROR_DUPLICADO', {}).get(
+                        slug, 'Ya existe un registro igual.')
+                else:
+                    con.commit()
+                    con.close()
+                    return redirect(url_for(f'{nombre}.detalle', slug=slug, id=id))
+        opciones = _opciones_relaciones(area, cfg_ent, cur)
+        seleccion = _seleccion_relaciones(cfg_ent, id, cur)
+        con.close()
+        valores = request.form if request.method == 'POST' else fila
+        return render_template(f'{nombre}/form.html', cfg=cfg_ent, slug=slug, fila=fila,
+                               valores=valores, opciones=opciones, seleccion=seleccion,
+                               error=error, activo=slug, **_extras('editar', slug))
+
+    @bp.route('/<slug>/<int:id>/eliminar', methods=['POST'])
+    def eliminar(slug, id):
+        cfg_ent = cfg(area, slug)
+        con = conectar(area)
+        cur = con.cursor()
+        cur.execute(f"DELETE FROM {cfg_ent['tabla']} WHERE id = ?", (id,))
+        for tabla, columna in area.LIMPIEZA_M2M[slug]:
+            cur.execute(f"DELETE FROM {tabla} WHERE {columna} = ?", (id,))
+        con.commit()
+        con.close()
+        return redirect(url_for(f'{nombre}.lista', slug=slug))
+
+    @bp.route('/<slug>/<int:id>/foto', methods=['POST'])
+    def subir_foto(slug, id):
+        """Sube una foto, la convierte a base64 y la guarda en el JSON de fotos."""
+        cfg(area, slug)  # 404 temprano si el slug no existe
+
+        if 'file' not in request.files:
+            return jsonify({'ok': False, 'error': 'No hay archivo'}), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'ok': False, 'error': 'Archivo vacío'}), 400
+
+        if not file.content_type.startswith('image/'):
+            return jsonify({'ok': False, 'error': 'Solo se aceptan imágenes'}), 400
+
+        try:
+            b64 = base64.b64encode(file.read()).decode('utf-8')
+            if not agregar_foto(area, slug, id, b64, file.content_type):
+                return jsonify({'ok': False, 'error': 'No existe el registro'}), 404
+            return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'ok': False, 'error': str(e)}), 500
+
+    @bp.route('/<slug>/<int:id>/foto/<int:indice>/eliminar', methods=['POST'])
+    def eliminar_foto(slug, id, indice):
+        """Borra una foto de la galería por su posición en el array JSON.
+
+        Las fotos no tienen id propio (son objetos dentro de un array), así que la
+        posición es la única referencia posible. Un índice fuera de rango no es error:
+        se ignora y se vuelve a la ficha (pasa si dos pestañas borran a la vez).
+        """
+        cfg_ent = cfg(area, slug)
+        con = conectar(area)
+        cur = con.cursor()
+        fila = cur.execute(f"SELECT fotos FROM {cfg_ent['tabla']} WHERE id = ?", (id,)).fetchone()
+        if fila is None:
+            con.close()
+            abort(404)
+        fotos = json.loads(fila['fotos'] or '[]')
+        if 0 <= indice < len(fotos):
+            fotos.pop(indice)
+            cur.execute(f"UPDATE {cfg_ent['tabla']} SET fotos = ? WHERE id = ?",
+                        (json.dumps(fotos), id))
+            con.commit()
+        con.close()
+        return redirect(url_for(f'{nombre}.detalle', slug=slug, id=id))

@@ -1,0 +1,195 @@
+# El motor CRUD y el criterio de capas (`crud.py`, `texto.py`, `respaldos.py`)
+
+Cómo está organizado el código compartido entre áreas, y **dónde va cada cosa nueva**.
+
+## Las tres capas
+
+La app tiene cuatro áreas (horarios, `/gestion`, `/historia`, `/agente`) y **tres bases de datos
+independientes**, que siguen siéndolo: no se fusionaron ni hay FK que crucen de una a otra. Lo que
+se comparte es el **código**, no los datos, y está ordenado en capas donde las dependencias van
+siempre hacia arriba:
+
+```
+capa 2   gestion.py   historia.py   database.py+app.py   agente/       ← nombran tablas reales
+              │            │                │                │
+capa 1        └──────── crud.py + templates/crud/ ──────────┘          ← sabe "entidad", no cuáles
+                                  │
+capa 0        config.py    texto.py    respaldos.py                    ← no nombran nada del dominio
+```
+
+**La pregunta para ubicar cualquier función es una sola: ¿qué nombra?**
+
+| Si… | va en | ejemplo |
+|---|---|---|
+| No nombra tablas, ni entidades, ni rutas, ni Flask | **capa 0** | `texto.norm`, `respaldos.respaldar` |
+| Nombra el *concepto* de entidad (slug, `ENTIDADES`, relación M2M) pero ninguna concreta | **capa 1** | `crud.select`, `crud.registrar_rutas` |
+| Nombra una tabla, un slug o una ruta reales | **capa 2** | `gestion.secciones_detalle`, `historia.clave_persona` |
+
+`crud.py` **nunca importa `gestion` ni `historia`**: las recibe como argumento (`area`). Eso es lo
+que evita el import circular y lo que mantiene el criterio legible — si algún día `crud.py` necesita
+importar un área, la función que lo obligó está en la capa equivocada.
+
+### El reloj: `config.ahora()`
+
+Nadie llama a `datetime.now()`. La hora sale siempre de `config.ahora()`, que devuelve la hora de
+pared de la escuela (`ZONA_HORARIA = "America/Argentina/Buenos_Aires"`) como **datetime naive**.
+
+- **Por qué**: en producción (Render) el server corre en UTC, así que `datetime.now()` daba todo
+  3 horas adelantado — el agente contestaba con la hora equivocada y lo mismo se guardaba en
+  préstamos, fechas de revisión y nombres de respaldo.
+- **Por qué naive**: todo el código formatea y compara contra fechas de la DB, que no tienen
+  tzinfo. Devolver un datetime consciente rompería esas restas.
+- **Fallback**: si falta la base de zonas horarias (`zoneinfo` sin `tzdata`, típico en Windows),
+  cae a un offset fijo `-3`. Argentina no aplica horario de verano desde 2009, así que da igual.
+
+Consumidores: `agente/llm.py` (hora del system prompt), `agente/rutas.py` (sello de hora por
+mensaje), `agente/db.py`, `gestion._ahora` y `valores_iniciales`, `historia.derivados`,
+`crud.py` (fecha de foto), `respaldos.py` (nombre del archivo), `app.py` (pie de los PDF) y
+`database.aulas_libres`.
+
+Los archivos de capa 0 se llaman por lo que contienen (`texto.py`, `respaldos.py`) y **no `util.py`**
+a propósito: un archivo llamado "util" no tiene forma de decirte que algo no pertenece ahí, y termina
+siendo el cajón donde vuelve a acumularse todo. Si hace falta compartir algo que no es texto ni
+respaldos, va en un archivo nuevo con nombre propio.
+
+## El contrato de "área"
+
+Un área es un módulo Python que expone esto. `crud` lo lee con `getattr`, así que lo opcional que no
+esté simplemente no se usa.
+
+### Obligatorio
+
+| | qué es |
+|---|---|
+| `DB_PATH` | ruta a su `.db` |
+| `PREFIJO_BACKUP` | prefijo de sus respaldos (`'gestion'` → `backups/gestion-*.db`) |
+| `TABLA_TESTIGO` | tabla que se mira para saber si la DB "tiene datos" |
+| `ENTIDADES` | `{slug: cfg}` — la config declarativa |
+| `SCHEMA` | script SQL idempotente (`CREATE TABLE IF NOT EXISTS`) |
+| `LIMPIEZA_M2M` | `{slug: [(tabla, columna)]}` a limpiar al eliminar una fila |
+
+### Hooks opcionales
+
+**Son la frontera exacta entre capa 1 y capa 2**: todo lo que nombra una tabla concreta entra por
+acá, nunca por un `if slug == '...'` dentro de `crud.py`.
+
+| hook | cuándo se llama | quién lo usa hoy |
+|---|---|---|
+| `migrar(cur)` | en cada `init_db`, después del SCHEMA | los dos |
+| `seed(cur)` | sólo si la DB arranca vacía | `gestion` (historia arranca vacía a propósito) |
+| `secciones_detalle(slug, id, cur)` | al armar la ficha de detalle | los dos |
+| `derivados(slug, valores)` | antes de cada INSERT/UPDATE; devuelve columnas calculadas | `historia` (`nombre_norm`, `fecha_actualizada`) |
+| `valores_iniciales(slug)` | defaults del form de alta | `gestion` (`fecha_revision` = hoy) |
+| `extras_template(vista, slug)` | kwargs extra para `render_template` | `gestion` (el carrito en recursos) |
+| `tarjetas_extra(cur)` | tarjetas del home que no salen de `ENTIDADES` | `gestion` (Préstamos) |
+| `contexto_extra()` | claves extra del context processor | `gestion` (`carrito_count`) |
+| `NAV_EXTRA` | `[(slug, label)]` extra para la nav | `gestion` (Préstamos) |
+| `ERROR_DUPLICADO` | `{slug: mensaje}` cuando un UNIQUE rechaza el guardado | `historia` (personas) |
+
+#### Lo que NO entra por `migrar(cur)`
+
+`migrar` recibe un cursor de **una sola** DB, la del área. Sirve para los `ALTER` aditivos y los
+renombres puertas adentro, y con eso alcanza para casi todo: corre en cada `init_db`, o sea en cada
+arranque, así que una instalación vieja se pone al día sola con un `git pull` + reload.
+
+Una migración que **cruza las dos DBs** no cabe ahí, porque ningún área importa a la otra. Esas van
+a `actualizar.py`, un script de consola que sí puede mirar las dos (mudanza de `hitos`/`personas` de
+`gestion.db` a `historia.db`, y `proyectos` → hitos). Mismo criterio para la limpieza de tablas y
+columnas que el código ya no declara: `migrar` no puede saber qué sobra en la DB de al lado.
+
+### Config de cada entidad (`ENTIDADES[slug]`)
+
+`tabla`, `singular`, `plural`, `descripcion` (card del home), `campos` (form), `columnas` (listado),
+`relaciones` (M2M editables desde el form, con prefijo `rel_`) y, opcional, **`campo_nombre`**.
+
+`campo_nombre` (default `'nombre'`) existe porque `historia.hitos` llama `titulo` a su columna de
+nombre. **Todas las lecturas van por `crud.select(cfg)`**, que agrega `titulo AS nombre`, así que
+templates, búsqueda y el agente leen siempre `fila['nombre']` sin enterarse. Las escrituras y la
+validación de obligatorio usan `crud.campo_nombre(cfg)`.
+
+## Cómo se monta un área
+
+Al final del módulo, dos líneas:
+
+```python
+crud.registrar_acceso(bp)
+crud.registrar_rutas(bp, sys.modules[__name__])
+```
+
+`registrar_rutas` monta `home`, `lista`, `nuevo`, `detalle`, `editar`, `eliminar`, `subir_foto` y
+`eliminar_foto`, más el context processor. **Los endpoints y las carpetas de templates salen de
+`bp.name`** (`url_for(f'{bp.name}.detalle')`, `render_template(f'{bp.name}/lista.html')`), que ya
+coincide con el nombre de la carpeta en `templates/` — no hay nada que configurar.
+
+`registrar_acceso` monta el gate: `before_request` + `/login` + `/salir`. Dos parámetros:
+
+- `endpoints_pagina`: si el blueprint mezcla páginas HTML con endpoints JSON (el caso de `/agente`),
+  acá van los que devuelven HTML. Sólo esos redirigen al login; el resto contesta **401**, que es lo
+  que un `fetch` sabe leer — un redirect a HTML le llega como un 200 sin sentido. Si es `None`, todo
+  redirige (áreas 100% server-rendered).
+- `endpoint_default`: a dónde volver tras loguearse sin `next` válido (`home`, o `chat_page` en el
+  agente).
+
+Una sola `GESTION_CLAVE` y una sola marca de sesión (`gestion_ok`) abren las tres áreas, porque es el
+mismo staff. **No es seguridad completa**: sin usuarios, sin CSRF, sin límite de intentos, y el
+default está en un repo público.
+
+## Templates
+
+`templates/crud/` tiene `lista.html`, `form.html`, `detalle.html` y `login.html` genéricos. Se
+adaptan a cualquier área con dos variables que inyecta `crud.contexto_base()`:
+
+- `base_template` → `{% extends base_template %}`, así cada área conserva su layout y su nav
+- `area_nombre` → `url_for(area_nombre ~ '.detalle', ...)`
+
+**Cada área conserva un stub con el mismo nombre**, para que `render_template(f'{bp.name}/lista.html')`
+siga funcionando y para que cualquier excepción sea explícita:
+
+```jinja
+{# templates/historia/lista.html — usa el genérico tal cual #}
+{% extends 'crud/lista.html' %}
+```
+
+Cuando un área necesita algo propio, llena un bloque en vez de forkear el template:
+
+| bloque | dónde | quién lo usa |
+|---|---|---|
+| `acciones_fila` | celda de acciones de cada fila del listado | `gestion` (botón RETIRAR) |
+| `acciones` | toolbar del detalle | `gestion` (botón RETIRAR) |
+| `seccion` | cada bloque de relaciones del detalle | `gestion` (tabla "quién lo tiene ahora") |
+
+`acciones_fila` y `seccion` están declarados **`scoped`** en el genérico: están dentro de un `for` y
+quien los sobreescriba necesita ver `fila` / `s`. Sin `scoped` esas variables no llegan al override.
+El bloque `seccion` de `gestion` llama a `{{ super() }}` para el caso normal y sólo intercepta el
+suyo.
+
+`base.html` y `home.html` **no** son genéricos: son la identidad visual y el texto de cada área.
+
+## Cómo agregar…
+
+**…un campo a una entidad**: sumarlo al `SCHEMA` del área, a su `campos`, y al loop aditivo de
+`migrar()` — `init_db()` hace el `ALTER TABLE` solo en las DBs existentes.
+
+**…una entidad a un área**: una entrada en `ENTIDADES`, su tabla en `SCHEMA`, su fila en
+`LIMPIEZA_M2M`, y si tiene relaciones que mostrar, una rama en `secciones_detalle`. Las rutas salen
+solas. Si la entidad debe ser visible para el asistente, no hay nada más que hacer:
+`agente.SLUGS_ENTIDAD` se deriva de las `ENTIDADES` de los dos módulos.
+
+**…un área nueva**: un archivo con el contrato de arriba, `templates/<area>/` con `base.html`,
+`home.html`, `login.html` y los cuatro stubs, las dos líneas de registro, y
+`app.register_blueprint(...)` + `init_db()` en `app.py`. Si además tiene que entrar al asistente,
+sumarla a `agente._modulo()`.
+
+**…algo compartido**: pasarlo por el filtro de la primera sección. Si nombra una tabla, no es
+compartido — es del área, y quien lo necesite lo importa de ahí (como el paquete `agente/` importa
+`database.limpiar_profesor` del área de horarios).
+
+## Qué NO está en el motor
+
+`gestion.py` conserva entero su bloque de **préstamos/carrito** (~380 líneas): tiene ítems con
+cantidad y un ciclo prestado→devuelto que no entra en la config declarativa. No está duplicado en
+ningún lado, así que no hay nada que extraer — es dominio puro de gestión, y vive con su área.
+
+Ver también: `agent_docs/gestion-conocimiento.md`, `agent_docs/historia-institucional.md`,
+`agent_docs/agente-asistente.md`, y `dev-log/DECISIONS.md` 2026-08-10 (por qué capas y no
+duplicación).

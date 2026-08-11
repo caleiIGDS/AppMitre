@@ -2,16 +2,28 @@
 
 ## Qué es esta app
 
-**AppMitre** son **cuatro áreas independientes** sobre el mismo Flask, para la **Escuela Técnica Emilio Mitre**. Cada una vive en su propio archivo, su propio prefijo de URL y (las que tienen datos propios) su propia DB, **sin importarse entre sí**: tocar o borrar una no rompe las otras.
+**AppMitre** son **cuatro áreas** sobre el mismo Flask, para la **Escuela Técnica Emilio Mitre**. Cada una tiene su archivo, su prefijo de URL y (las que tienen datos propios) **su propia DB, sin FK que crucen de una a otra**.
 
 | Área | URL | Archivo | DB | Qué es |
 |---|---|---|---|---|
 | **Horarios** | `/` | `app.py` + `database.py` | `escuela.db` | Consulta de horarios por curso (1°–7°), profesor, aula y preceptor; dashboard "En Vivo" para kiosco; export a PDF. Se regenera desde Google Sheets. |
 | **Gestión de recursos** | `/gestion` | `gestion.py` | `gestion.db` | Inventario técnico: recursos, conjuntos, actividades y préstamos. |
 | **Historia institucional** | `/historia` | `historia.py` | `historia.db` | Línea del tiempo: hitos y las personas que hicieron la escuela. |
-| **Asistente** | `/agente` | `agente.py` | (usa las de arriba) | Chat con tool-calling. Único transversal: **lee las tres** y escribe en recursos e historia. |
+| **Asistente** | `/agente` | `agente/` (paquete) | (usa las de arriba) | Chat con tool-calling. Único transversal: **lee las tres** y escribe en recursos e historia. |
 
-El motor CRUD de `gestion.py` e `historia.py` está **duplicado a propósito** (ver `dev-log/DECISIONS.md` 2026-08-10). Lo único compartido entre áreas es lo que no es lógica de dominio: `static/gestion.css` (paleta), `static/gestion-agente.js` y el widget del chat.
+### Dónde va cada cosa: tres capas
+
+Las áreas **no duplican código**: comparten un motor. Las dependencias van siempre hacia arriba y **la capa 1 nunca importa un área** — las recibe como argumento.
+
+```
+capa 2   gestion.py   historia.py   database.py+app.py   agente/       ← nombran tablas reales
+capa 1              crud.py + templates/crud/                          ← sabe "entidad", no cuáles
+capa 0        config.py    texto.py    respaldos.py                    ← no nombran nada del dominio
+```
+
+**La pregunta para ubicar cualquier función es una sola: ¿qué nombra?** Si nombra una tabla, un slug o una ruta, es del área y quien la necesite la importa de ahí. Si no nombra nada del dominio, sube. Lo específico de un área entra al motor por **hooks declarados** (`migrar`, `seed`, `derivados`, `secciones_detalle`, …), nunca por un `if slug == '...'` dentro de `crud.py`. Detalle completo en `agent_docs/crud-motor.md`.
+
+También se comparte lo que no es lógica de dominio: `static/gestion.css` (paleta), `static/gestion-agente.js`, `static/mobile-nav.js` (menú lateral de celular) y el widget del chat.
 
 **Usuarios principales:** alumnos, docentes, preceptores y administración.  
 **Stack:** Flask + SQLite + Vanilla JS (sin frameworks). Sin tests, sin linter, sin build step.
@@ -25,6 +37,9 @@ pip install -r requirements.txt   # instalar dependencias
 python app.py                      # dev en http://localhost:5000
 gunicorn app:app                   # producción
 # POST /api/actualizar             # regenerar DB desde Google Sheets
+
+python actualizar.py --dry-run     # deploy: qué le falta a las DB del server (no escribe)
+python actualizar.py               # aplicarlo, antes del Reload del web app
 ```
 
 ---
@@ -43,16 +58,22 @@ Google Sheets (CSV export por año: 1ro–7mo + preceptores + personal)
 
 | Archivo | Rol |
 |---------|-----|
-| `config.py` | SHEET_ID, GIDs por año, FLOOR_MAPPING, branding |
+| `config.py` | SHEET_ID, GIDs por año, FLOOR_MAPPING, branding y `ahora()` — el reloj de la escuela (capa 0). Nadie llama a `datetime.now()`: el server de producción corre en UTC |
+| `texto.py` | Normalización de texto y búsqueda difusa (capa 0). Único dueño de `UMBRAL_SIMILITUD` |
+| `respaldos.py` | Respaldos rotativos de SQLite, parametrizados por área (capa 0) |
+| `crud.py` | Motor CRUD genérico + rutas + gate de sesión (capa 1). No importa ningún área |
+| `actualizar.py` | Script de consola para el deploy: pone al día una `gestion.db`/`historia.db` vieja. Hace lo que `migrar()` no puede porque cruza las dos DBs (mudanza de hitos/personas, `proyectos` → hitos) y limpia tablas y columnas que el código ya no declara. Idempotente, con `--dry-run` |
 | `database.py` | Creación de tablas, descarga CSV, normalización |
 | `app.py` | Rutas Flask |
 | `templates/index.html` | Shell SPA — pasa `window.APP_DATA` al JS |
 | `static/js/script.js` | Toda la lógica frontend (~1500 líneas) |
 | `static/style.css` | Tema blueprint/industrial con CSS variables |
 | `nombre_mapeos.json` | Correcciones manuales de nombres de docentes |
-| `gestion.py` | Gestión de recursos (`/gestion`): blueprint + `gestion.db` + templates en `templates/gestion/` |
-| `historia.py` | Historia institucional (`/historia`): blueprint + `historia.db` + templates en `templates/historia/` |
-| `agente.py` | Asistente conversacional (`/agente`): blueprint + templates en `templates/agente/` |
+| `gestion.py` | Gestión de recursos (`/gestion`): declara sus entidades y hooks + préstamos/carrito propio |
+| `historia.py` | Historia institucional (`/historia`): declara sus entidades y hooks (`derivados`, `clave_persona`) |
+| `agente/` | Asistente conversacional (`/agente`): paquete con blueprint, tools, prompt y loop + templates en `templates/agente/`. Expone `bp` e `init_db`; el mapa de los módulos está en `agente/__init__.py` |
+| `templates/crud/` | `lista/form/detalle/login.html` genéricos; cada área deja un stub que los extiende |
+| `static/mobile-nav.js` | Menú lateral ocultable de celular para `/gestion`, `/historia` y `/agente` (≤900px). No toca escritorio |
 
 ---
 
@@ -205,10 +226,11 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 
 ## Deployment
 
-- **Hosting:** Render.com (free tier) + Cloudflare DNS
-- `escuela.db` es efímero en Render; se regenera automáticamente al iniciar o via `/api/actualizar`
-- `gunicorn app:app` para producción
-- Ver `PLAN_HOSTING_GRATIS.txt` y `PLAN_ESCUELAS.md` para más detalles
+- **Hosting:** PythonAnywhere (WSGI) + Cloudflare DNS. Antes fue Render.com — ver `dev-log/DECISIONS.md` 2026-06-25
+- **Los `.db` persisten entre deploys** y están en `.gitignore`: `git pull` nunca los pisa. `escuela.db` es la excepción que no importa (se regenera desde Sheets al iniciar o via `/api/actualizar`); `gestion.db` e `historia.db` son la fuente de verdad y sólo tienen los respaldos de `respaldos.py`
+- **Deploy:** `git pull` → `pip install -r requirements.txt` → `python actualizar.py --dry-run` → `python actualizar.py` → Reload del web app. Las variables de entorno (`SECRET_KEY`, `GESTION_CLAVE`, las API keys del agente) van en el `.env` del servidor, que tampoco viaja por git
+- `gunicorn app:app` para producción en hostings que no sean PythonAnywhere
+- Ver `PLAN_ESCUELAS.md` y `AGENTE_CONFIG.md` para más detalles
 
 ---
 
@@ -229,9 +251,10 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 - Renderizado del calendario, clustering, superposición → leer `agent_docs/calendar-engine.md`
 - Sistema de búsqueda y parsing de queries → leer `agent_docs/search-api.md`
 - Estilos, variables CSS, patrones visuales → leer `agent_docs/frontend-ui.md`
+- Motor CRUD compartido, criterio de capas, contrato de área, hooks, templates genéricos (`crud.py`, `texto.py`, `respaldos.py`, `templates/crud/`) → leer `agent_docs/crud-motor.md`
 - Gestión de recursos (`/gestion`, `gestion.py`, `gestion.db`) → leer `agent_docs/gestion-conocimiento.md`
 - Historia institucional (`/historia`, `historia.py`, `historia.db`: hitos y personas) → leer `agent_docs/historia-institucional.md`
-- Asistente conversacional (`/agente`, `agente.py`, tools, fichas de confirmación, fotos) → leer `agent_docs/agente-asistente.md`
+- Asistente conversacional (`/agente`, paquete `agente/`, tools, fichas de confirmación, fotos) → leer `agent_docs/agente-asistente.md`
 - Historias narradas por Emilio (`historias/*.json`, lore — NO confundir con `/historia`): cómo agregar, campos, tonos y estilos → leer `HISTORIAS_PROCEDIMIENTO.md`
 
 ## Dev Log
@@ -253,7 +276,9 @@ Actualizar la doc **es parte de la tarea, no un paso opcional**: siempre que un 
 - ¿Cambié estilos o variables CSS del SPA? → actualizar `agent_docs/frontend-ui.md`
 - ¿Cambié algo de Gestión de recursos (`/gestion`, `gestion.py`, rutas/búsqueda/schema de `gestion.db`, templates de `gestion/`, `gestion.css`, o JS propio del módulo)? → actualizar `agent_docs/gestion-conocimiento.md`
 - ¿Cambié algo de Historia institucional (`/historia`, `historia.py`, schema de `historia.db`, templates de `historia/`)? → actualizar `agent_docs/historia-institucional.md`
-- ¿Cambié algo del Asistente (`agente.py`, tools, prompts, `templates/agente/`, `gestion-agente.js`)? → actualizar `agent_docs/agente-asistente.md`
+- ¿Cambié algo del Asistente (paquete `agente/`, tools, prompts, `templates/agente/`, `gestion-agente.js`)? → actualizar `agent_docs/agente-asistente.md`
+- ¿Cambié el motor compartido (`crud.py`, `texto.py`, `respaldos.py`, `templates/crud/`), el contrato de área o sus hooks? → actualizar `agent_docs/crud-motor.md`
+- ¿Agregué código compartido entre áreas? → pasarlo antes por el filtro de capas de `agent_docs/crud-motor.md`: si nombra una tabla o un slug, no es compartido
 - ¿Cambió un contrato entre módulos? → agregar entrada en `dev-log/CHANGELOG.md`
 - ¿Tomaste una decisión no obvia? → agregar entrada en `dev-log/DECISIONS.md`
 - ¿Creaste, moviste o eliminaste un documento (`.md` de referencia)? → actualizar la referencia en `CLAUDE.md` (Context Rules o la sección que corresponda)

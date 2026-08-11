@@ -1,7 +1,7 @@
 # gestion.py
-# Gestión de recursos — módulo independiente del sistema de horarios Y de historia.py
-# (línea del tiempo institucional: hitos/personas, antes vivían acá — ver
-# dev-log/DECISIONS.md sobre la separación física de los dos módulos).
+# Gestión de recursos — área de capa 2: declara sus entidades y sus reglas de negocio,
+# y el CRUD se lo da el motor genérico (crud.py). Lo que NO es genérico y vive acá entero:
+# préstamos/carrito, al final del archivo.
 #
 # Usa su propia DB (gestion.db): a diferencia de escuela.db, NO se regenera desde
 # Google Sheets y /api/actualizar no la toca. Es la única DB con datos propios de la app
@@ -10,65 +10,32 @@
 # Entidades: recursos, conjuntos (agrupaciones de recursos), actividades.
 # Relaciones M2M: conjunto_recursos, actividad_recursos, actividad_conjuntos.
 
-import base64
-import difflib
-import glob
-import hashlib
 import json
 import os
-import sqlite3
-import unicodedata
-from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, abort, session, jsonify
+import sys
 
-from config import ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION
+from config import ahora
+from flask import (Blueprint, abort, jsonify, redirect, render_template, request,
+                   session, url_for)
+
+import crud
+import texto
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gestion.db')
 
-# Respaldos rotativos de gestion.db. Existen porque esta DB no se regenera desde
-# ninguna fuente externa y está en .gitignore: si el archivo se pierde, no hay
-# commit ni Sheet del que recuperarla (ver DECISIONS 2026-08-08).
-BACKUP_DIR = os.path.join(os.path.dirname(DB_PATH), 'backups')
-BACKUP_MAX = 20
+# Respaldos rotativos: la maquinaria vive en respaldos.py (capa 0). Acá sólo se declara
+# con qué prefijo se guardan y qué tabla mirar para saber si la DB tiene datos de verdad
+# (una DB vacía no se respalda: taparía los respaldos buenos).
+PREFIJO_BACKUP = 'gestion'
+TABLA_TESTIGO = 'recursos'
 
 bp = Blueprint('gestion', __name__, url_prefix='/gestion')
 
-# --- Acceso con contraseña compartida (provisorio) ---------------------------
-# Traba mínima mientras el módulo está en desarrollo: una sola clave para todo
-# /gestion, guardada en la sesión. En el hosting se cambia con la env var
-# GESTION_CLAVE; el default de abajo es público (el repo lo es), así que solo
-# frena curiosos. Sin usuarios, sin CSRF, sin límite de intentos.
-CLAVE = os.environ.get('GESTION_CLAVE', 'mitre2026')
 
-
-@bp.before_request
-def _requiere_clave():
-    if request.endpoint == 'gestion.login' or session.get('gestion_ok'):
-        return
-    return redirect(url_for('gestion.login', next=request.path))
-
-
-@bp.route('/login', methods=['GET', 'POST'])
-def login():
-    error = None
-    if request.method == 'POST':
-        if request.form.get('clave', '') == CLAVE:
-            session['gestion_ok'] = True
-            destino = request.form.get('next', '')
-            # Solo volver a rutas del propio módulo (evita open redirect).
-            if not destino.startswith('/gestion'):
-                destino = url_for('gestion.home')
-            return redirect(destino)
-        error = 'Contraseña incorrecta.'
-    return render_template('gestion/login.html', error=error,
-                           next=request.values.get('next', ''), activo=None)
-
-
-@bp.route('/salir')
-def salir():
-    session.pop('gestion_ok', None)
-    return redirect(url_for('gestion.login'))
-
+def conectar():
+    """Conexión a gestion.db — `crud.conectar` con esta área ya puesta. El bloque de
+    préstamos (que no pasa por el motor genérico) la usa en casi todas sus rutas."""
+    return crud.conectar(sys.modules[__name__])
 
 ESTADOS_RECURSO = ["Disponible", "Retirado", "En uso", "En reparación", "De baja", "Sin revisar"]
 # "" primero: permite dejar el valor sin definir (recursos previos al inventario).
@@ -92,7 +59,6 @@ ENTIDADES = {
             {'nombre': 'estado', 'label': 'Estado', 'tipo': 'select', 'opciones': ESTADOS_RECURSO},
             {'nombre': 'valor', 'label': 'Valor', 'tipo': 'select', 'opciones': VALORES_RECURSO, 'ayuda': 'Importancia del recurso dentro del inventario'},
             {'nombre': 'fecha_revision', 'label': 'Última revisión', 'tipo': 'text', 'ayuda': 'Fecha del último control de inventario (día/mes/año). En un alta arranca en hoy'},
-            {'nombre': 'drive_url', 'label': 'Carpeta de Drive (link)', 'tipo': 'url', 'ayuda': 'Fotos, planos y documentos viven en Drive; acá solo va el link'},
         ],
         'columnas': [('nombre', 'NOMBRE'), ('cantidad', 'CANT.'), ('ubicacion', 'UBICACIÓN'), ('estado', 'ESTADO'), ('valor', 'VALOR')],
         'relaciones': [],
@@ -106,7 +72,6 @@ ENTIDADES = {
             {'nombre': 'nombre', 'label': 'Nombre', 'tipo': 'text', 'requerido': True},
             {'nombre': 'descripcion', 'label': 'Descripción', 'tipo': 'textarea'},
             {'nombre': 'uso_tipico', 'label': 'Uso típico', 'tipo': 'textarea', 'ayuda': 'Para qué se usa habitualmente este conjunto'},
-            {'nombre': 'drive_url', 'label': 'Carpeta de Drive (link)', 'tipo': 'url'},
         ],
         'columnas': [('nombre', 'NOMBRE'), ('uso_tipico', 'USO TÍPICO')],
         'relaciones': [
@@ -125,7 +90,6 @@ ENTIDADES = {
             {'nombre': 'descripcion', 'label': 'Descripción / pasos', 'tipo': 'textarea'},
             {'nombre': 'duracion', 'label': 'Duración', 'tipo': 'text', 'ayuda': 'Ej: 2 módulos, 80 minutos'},
             {'nombre': 'curso', 'label': 'Curso / año', 'tipo': 'text', 'ayuda': 'Ej: 6° año'},
-            {'nombre': 'drive_url', 'label': 'Carpeta de Drive (link)', 'tipo': 'url', 'ayuda': 'Guías, planillas y material de la actividad'},
         ],
         'columnas': [('nombre', 'NOMBRE'), ('curso', 'CURSO'), ('duracion', 'DURACIÓN')],
         'relaciones': [
@@ -152,7 +116,6 @@ CREATE TABLE IF NOT EXISTS recursos (
     descripcion TEXT DEFAULT '',
     ubicacion TEXT DEFAULT '',
     estado TEXT DEFAULT 'Disponible',
-    drive_url TEXT DEFAULT '',
     cantidad TEXT DEFAULT '',
     valor TEXT DEFAULT '',
     fecha_revision TEXT DEFAULT '',
@@ -163,7 +126,6 @@ CREATE TABLE IF NOT EXISTS conjuntos (
     nombre TEXT NOT NULL,
     descripcion TEXT DEFAULT '',
     uso_tipico TEXT DEFAULT '',
-    drive_url TEXT DEFAULT '',
     fotos TEXT DEFAULT '[]'
 );
 CREATE TABLE IF NOT EXISTS actividades (
@@ -173,7 +135,6 @@ CREATE TABLE IF NOT EXISTS actividades (
     descripcion TEXT DEFAULT '',
     duracion TEXT DEFAULT '',
     curso TEXT DEFAULT '',
-    drive_url TEXT DEFAULT '',
     fotos TEXT DEFAULT '[]'
 );
 CREATE TABLE IF NOT EXISTS conjunto_recursos (
@@ -209,180 +170,11 @@ CREATE TABLE IF NOT EXISTS prestamo_items (
 """
 
 
-def _norm(texto):
-    """Minúsculas, sin acentos, espacios colapsados — para comparar nombres."""
-    texto = unicodedata.normalize('NFD', texto)
-    texto = ''.join(c for c in texto if unicodedata.category(c) != 'Mn')
-    return ' '.join(texto.lower().split())
+# --- Reglas propias del área ------------------------------------------------
+# El CRUD (rutas, búsqueda, fotos, respaldos) lo pone crud.py. Acá queda sólo lo que
+# nombra tablas concretas de gestion.db, que es lo que el motor no puede saber.
 
-
-# Búsqueda "que perdona": en vez del LIKE literal, normaliza acentos/mayúsculas y
-# tolera typos por similitud (difflib, sin dependencias). El substring normalizado
-# siempre gana; la similitud difusa solo entra para queries de 3+ caracteres (con
-# menos daría demasiado ruido). Subir = más estricto.
-#
-# 0.68 salió de medir contra el inventario real (91 recursos), no a ojo: con 0.6
-# buscar "taladro" (que no existe) devolvía 4 recursos, "guantes" 7 y "multimetro"
-# traía 8 con "Pintura marrón (tarro)" adentro. Para nombres cortos, 0.6 deja pasar
-# casi cualquier cosa que comparta vocales. A 0.68 esos casos caen a 0/1/1 y el
-# recall no se toca: todas las queries con typo probadas ("multimetr0", "alikate",
-# "agujeradora", "anemometroo", "caladra") siguen encontrando su recurso en el
-# puesto #1. Arriba de 0.68 se gana poco y se empieza a arriesgar recall.
-UMBRAL_SIMILITUD = 0.68
-
-
-def _puntaje_busqueda(q_norm, *textos):
-    """Qué tan bien `q_norm` (ya normalizado) matchea los textos dados.
-    Devuelve un puntaje mayor = mejor, o None si no llega al umbral. Los que
-    contienen la query como substring puntúan por encima de los difusos."""
-    difuso = len(q_norm) >= 3  # perdonar typos solo tiene sentido con 3+ caracteres
-    substring = False
-    mejor = 0.0
-    for texto in textos:
-        if not texto:
-            continue
-        t_norm = _norm(texto)
-        if q_norm in t_norm:
-            substring = True
-        if difuso:
-            mejor = max(mejor, difflib.SequenceMatcher(None, q_norm, t_norm).ratio())
-            for palabra in t_norm.split():
-                mejor = max(mejor, difflib.SequenceMatcher(None, q_norm, palabra).ratio())
-    if substring:
-        return 1.0 + mejor  # substring exacto siempre primero; desempata por similitud
-    if difuso and mejor >= UMBRAL_SIMILITUD:
-        return mejor
-    return None
-
-
-def conectar():
-    con = sqlite3.connect(DB_PATH)
-    con.row_factory = sqlite3.Row
-    return con
-
-
-def _tiene_datos(ruta):
-    """True si la DB de `ruta` existe y tiene al menos un recurso cargado.
-    Tolera archivos a medio crear (sin tablas todavía): eso cuenta como 'sin datos'."""
-    if not os.path.exists(ruta) or os.path.getsize(ruta) == 0:
-        return False
-    try:
-        con = sqlite3.connect(f'file:{ruta}?mode=ro', uri=True)
-        try:
-            return con.execute("SELECT COUNT(*) FROM recursos").fetchone()[0] > 0
-        finally:
-            con.close()
-    except sqlite3.Error:
-        return False
-
-
-def _hash_archivo(ruta):
-    h = hashlib.sha256()
-    with open(ruta, 'rb') as f:
-        for bloque in iter(lambda: f.read(1 << 20), b''):
-            h.update(bloque)
-    return h.hexdigest()
-
-
-def respaldos():
-    """Respaldos existentes, del más viejo al más nuevo. El nombre lleva la fecha,
-    así que el orden alfabético ya es el cronológico."""
-    return sorted(glob.glob(os.path.join(BACKUP_DIR, 'gestion-*.db')))
-
-
-def respaldar_db(max_copias=BACKUP_MAX):
-    """Copia gestion.db a backups/ y conserva las últimas `max_copias`.
-
-    Se llama desde init_db(), o sea en cada arranque de la app: el respaldo queda
-    hecho ANTES de cualquier migración de schema. Usa la API de backup de sqlite3
-    en vez de copiar el archivo porque garantiza una copia consistente aunque otro
-    proceso esté escribiendo.
-
-    No respalda una DB sin recursos: si el archivo se perdió, un respaldo vacío
-    encima de los buenos sería justamente lo que arruinaría la recuperación.
-    """
-    if not _tiene_datos(DB_PATH):
-        return None
-
-    os.makedirs(BACKUP_DIR, exist_ok=True)
-    # Los microsegundos van en el nombre para que dos respaldos del mismo segundo no
-    # se pisen (pasa si la app reinicia en loop). Al ser de ancho fijo, el orden
-    # alfabético de respaldos() sigue siendo el cronológico.
-    destino = os.path.join(BACKUP_DIR, f"gestion-{datetime.now():%Y%m%d-%H%M%S-%f}.db")
-
-    origen = sqlite3.connect(DB_PATH)
-    copia = sqlite3.connect(destino)
-    try:
-        origen.backup(copia)
-    finally:
-        copia.close()
-        origen.close()
-
-    # Si no cambió nada desde el último respaldo, no acumular duplicados.
-    previos = [r for r in respaldos() if r != destino]
-    if previos and _hash_archivo(previos[-1]) == _hash_archivo(destino):
-        os.remove(destino)
-        return previos[-1]
-
-    for viejo in _a_borrar(respaldos(), max_copias):
-        os.remove(viejo)
-    return destino
-
-
-def _dia(ruta):
-    """'gestion-20260808-231729-300184.db' -> '20260808'."""
-    return os.path.basename(ruta).split('-')[1]
-
-
-def _a_borrar(existentes, max_copias):
-    """Qué respaldos sobran.
-
-    Conserva los últimos `max_copias` MÁS el primero de cada día anterior. Sin esa
-    segunda regla, una tarde de reinicios depurando (cada arranque escribe en la DB,
-    así que cada arranque genera un respaldo nuevo) alcanzaba para empujar fuera de
-    la rotación todo lo viejo, que es justo lo que uno querría recuperar.
-    """
-    recientes = set(existentes[-max_copias:])
-    primero_del_dia = {}
-    for r in existentes:
-        primero_del_dia.setdefault(_dia(r), r)
-    conservar = recientes | set(primero_del_dia.values())
-    return [r for r in existentes if r not in conservar]
-
-
-def init_db():
-    """Crea las tablas si no existen, migra columnas nuevas y carga datos de ejemplo la primera vez.
-
-    Respalda antes de tocar nada (ver respaldar_db).
-    """
-    respaldar_db()
-
-    con = conectar()
-    cur = con.cursor()
-    cur.executescript(SCHEMA)
-    _migrar(cur)
-    if cur.execute("SELECT COUNT(*) FROM recursos").fetchone()[0] == 0:
-        # Una DB vacía es ambigua: puede ser una instalación nueva o datos perdidos.
-        # Los respaldos desempatan — si existen, esto ya estuvo cargado alguna vez y
-        # sembrar los datos de ejemplo taparía la pérdida en silencio (que es
-        # exactamente lo que pasó el 2026-08-08). Ante la duda, fallar ruidoso.
-        if respaldos() and os.environ.get('GESTION_SEED') != '1':
-            ultimo = respaldos()[-1]
-            con.close()
-            raise RuntimeError(
-                f"gestion.db está vacía pero hay {len(respaldos())} respaldo(s) en {BACKUP_DIR}.\n"
-                f"Probablemente se perdió el archivo — NO se cargaron los datos de ejemplo.\n\n"
-                f"Para restaurar el más reciente:\n"
-                f"    copy \"{ultimo}\" \"{DB_PATH}\"\n\n"
-                f"Si de verdad querés empezar de cero con los datos de ejemplo:\n"
-                f"    GESTION_SEED=1 python app.py"
-            )
-        _seed(cur)
-    con.commit()
-    con.close()
-
-
-def _migrar(cur):
+def migrar(cur):
     """Adapta una gestion.db creada con un schema anterior (ALTER aditivo + renombres)."""
     existentes = {c[1] for c in cur.execute("PRAGMA table_info(recursos)").fetchall()}
     # 'utilidad' pasó a llamarse 'valor'. RENAME COLUMN conserva los datos ya cargados;
@@ -404,36 +196,44 @@ def _migrar(cur):
         if 'fotos' not in cols:
             cur.execute(f"ALTER TABLE {tabla} ADD COLUMN fotos TEXT DEFAULT '[]'")
 
+    # `drive_url` se eliminó: la escuela dejó de usar Drive y la fuente de verdad de gestión
+    # pasó a ser esta DB. Es la primera migración DESTRUCTIVA del módulo, así que se corrió
+    # habiendo verificado que la columna estaba vacía en las 89 filas de las tres tablas; el
+    # respaldo previo de `respaldos.respaldar()` (que corre antes que esto, en init_db) es la red por
+    # si alguna instalación tenía links cargados.
+    for tabla in ('recursos', 'conjuntos', 'actividades'):
+        cols = {c[1] for c in cur.execute(f"PRAGMA table_info({tabla})").fetchall()}
+        if 'drive_url' in cols:
+            cur.execute(f"ALTER TABLE {tabla} DROP COLUMN drive_url")
 
-def _seed(cur):
+
+def seed(cur):
     """Datos de ejemplo: el banco de ensayo solar del documento de diseño."""
     recursos = [
-        ("Panel solar 100W", "Equipo", "Panel fotovoltaico monocristalino de 100W usado para prácticas de energías renovables.", "Taller de Electricidad", "Disponible", ""),
-        ("Estructura regulable", "Estructura", "Estructura metálica con ángulo de inclinación regulable, construida en la escuela.", "Taller de Electricidad", "Disponible", ""),
-        ("Inclinómetro digital", "Instrumento", "Medidor digital de ángulo de inclinación.", "Pañol", "Disponible", ""),
-        ("Multímetro", "Instrumento", "Multímetro digital para medición de tensión, corriente y resistencia.", "Pañol", "Disponible", ""),
-        ("Pinza amperométrica", "Instrumento", "Pinza para medición de corriente sin abrir el circuito.", "Pañol", "Disponible", ""),
+        ("Panel solar 100W", "Equipo", "Panel fotovoltaico monocristalino de 100W usado para prácticas de energías renovables.", "Taller de Electricidad", "Disponible"),
+        ("Estructura regulable", "Estructura", "Estructura metálica con ángulo de inclinación regulable, construida en la escuela.", "Taller de Electricidad", "Disponible"),
+        ("Inclinómetro digital", "Instrumento", "Medidor digital de ángulo de inclinación.", "Pañol", "Disponible"),
+        ("Multímetro", "Instrumento", "Multímetro digital para medición de tensión, corriente y resistencia.", "Pañol", "Disponible"),
+        ("Pinza amperométrica", "Instrumento", "Pinza para medición de corriente sin abrir el circuito.", "Pañol", "Disponible"),
     ]
-    cur.executemany("INSERT INTO recursos (nombre, tipo, descripcion, ubicacion, estado, drive_url) VALUES (?,?,?,?,?,?)", recursos)
+    cur.executemany("INSERT INTO recursos (nombre, tipo, descripcion, ubicacion, estado) VALUES (?,?,?,?,?)", recursos)
     ids = {r['nombre']: r['id'] for r in cur.execute("SELECT id, nombre FROM recursos").fetchall()}
 
-    cur.execute("INSERT INTO conjuntos (nombre, descripcion, uso_tipico, drive_url) VALUES (?,?,?,?)", (
+    cur.execute("INSERT INTO conjuntos (nombre, descripcion, uso_tipico) VALUES (?,?,?)", (
         "Banco de ensayo solar",
         "Banco para ensayar paneles solares variando el ángulo de inclinación. Compuesto por la estructura regulable, el panel y el inclinómetro.",
         "Prácticas de energías renovables: medición de rendimiento de paneles según inclinación.",
-        "",
     ))
     conjunto_id = cur.lastrowid
     for nombre in ("Panel solar 100W", "Estructura regulable", "Inclinómetro digital"):
         cur.execute("INSERT INTO conjunto_recursos (conjunto_id, recurso_id) VALUES (?,?)", (conjunto_id, ids[nombre]))
 
-    cur.execute("INSERT INTO actividades (nombre, objetivo, descripcion, duracion, curso, drive_url) VALUES (?,?,?,?,?,?)", (
+    cur.execute("INSERT INTO actividades (nombre, objetivo, descripcion, duracion, curso) VALUES (?,?,?,?,?)", (
         "Medición de panel solar según inclinación",
         "Medir el rendimiento de un panel solar variando el ángulo de inclinación.",
         "Se monta el panel en el banco de ensayo, se varía la inclinación en pasos de 15° y se registran tensión y corriente en cada posición. Con los datos se grafica rendimiento vs. ángulo.",
         "2 módulos",
         "6° año",
-        "",
     ))
     actividad_id = cur.lastrowid
     for nombre in ("Multímetro", "Pinza amperométrica"):
@@ -441,232 +241,30 @@ def _seed(cur):
     cur.execute("INSERT INTO actividad_conjuntos (actividad_id, conjunto_id) VALUES (?,?)", (actividad_id, conjunto_id))
 
 
-def _cfg(slug):
-    if slug not in ENTIDADES:
-        abort(404)
-    return ENTIDADES[slug]
-
-
-def _campo_nombre(cfg):
-    """Columna que hace de nombre visible de la entidad. Ninguna de este módulo la
-    redefine hoy (todas usan 'nombre') — el mecanismo existe porque `historia.hitos`
-    sí la necesita (`titulo`) y las dos DBs comparten el mismo patrón de CRUD genérico."""
-    return cfg.get('campo_nombre', 'nombre')
-
-
-def _select(cfg):
-    """SELECT que SIEMPRE expone una columna `nombre`, se llame como se llame en la tabla.
-
-    Todo el módulo (templates genéricos, búsqueda, `agente.py`) lee `fila['nombre']`.
-    Con el alias, una entidad puede tener su columna con otro nombre sin que ninguno de
-    esos consumidores se entere (ver `_campo_nombre`).
-    """
-    campo = _campo_nombre(cfg)
-    alias = '' if campo == 'nombre' else f", {campo} AS nombre"
-    return f"SELECT *{alias} FROM {cfg['tabla']}"
-
-
-def buscar_entidad_sin_request(slug, query, con=None):
-    """Búsqueda de entidades reusable por el agente (no depende de Flask request).
-    Retorna lista de dicts {id, nombre, descripcion, ...} ya filtrados y ordenados."""
-    cfg = _cfg(slug) if slug in ENTIDADES else None
-    if not cfg:
-        return []
-
-    debe_cerrar = con is None
-    if con is None:
-        con = conectar()
-    cur = con.cursor()
-
-    filas = cur.execute(f"{_select(cfg)} ORDER BY nombre COLLATE NOCASE").fetchall()
-    con.close() if debe_cerrar else None
-
-    if not query:
-        return [dict(f) for f in filas]
-
-    q_norm = _norm(query)
-    puntuadas = []
-    for fila in filas:
-        puntaje = _puntaje_busqueda(q_norm, fila['nombre'], fila['descripcion'])
-        if puntaje is not None:
-            puntuadas.append((puntaje, fila))
-    puntuadas.sort(key=lambda par: (-par[0], _norm(par[1]['nombre'])))
-    return [dict(fila) for _, fila in puntuadas]
-
-
-def guardar_entidad_sin_request(slug, campos_dict, id=None, con=None):
-    """Versión de _guardar que recibe un dict de campos en vez de leer request.form.
-    Retorna el id creado o actualizado, o None si error."""
-    cfg = _cfg(slug) if slug in ENTIDADES else None
-    if not cfg:
-        return None
-
-    debe_cerrar = con is None
-    if con is None:
-        con = conectar()
-    cur = con.cursor()
-
-    try:
-        nombres = [c['nombre'] for c in cfg['campos']]
-        valores = [str(campos_dict.get(n, '')).strip() for n in nombres]
-
-        if id is None:
-            placeholders = ','.join('?' * len(nombres))
-            cur.execute(f"INSERT INTO {cfg['tabla']} ({','.join(nombres)}) VALUES ({placeholders})", valores)
-            id = cur.lastrowid
-        else:
-            sets = ','.join(f"{n} = ?" for n in nombres)
-            cur.execute(f"UPDATE {cfg['tabla']} SET {sets} WHERE id = ?", valores + [id])
-
-        # Relaciones M2M: si vienen en campos_dict con clave 'rel_*', procesarlas
-        for rel in cfg['relaciones']:
-            campo = rel['campo']
-            if campo in campos_dict:
-                cur.execute(f"DELETE FROM {rel['tabla']} WHERE {rel['col_propia']} = ?", (id,))
-                for rid_str in (campos_dict[campo] if isinstance(campos_dict[campo], list) else []):
-                    try:
-                        rid = int(rid_str)
-                        cur.execute(
-                            f"INSERT OR IGNORE INTO {rel['tabla']} ({rel['col_propia']}, {rel['col_ajena']}) VALUES (?,?)",
-                            (id, rid),
-                        )
-                    except (ValueError, TypeError):
-                        pass
-
-        con.commit()
-        con.close() if debe_cerrar else None
-        return id
-    except Exception as e:
-        con.close() if debe_cerrar else None
-        return None
-
-
-def snapshot_entidad(slug, id, con=None):
-    """Retorna un snapshot de una fila + sus relaciones M2M, para auditar antes de borrar.
-    Retorna dict con 'fila' (dict) y 'relaciones' (dict de slug -> [ids])."""
-    cfg = _cfg(slug) if slug in ENTIDADES else None
-    if not cfg:
-        return None
-
-    debe_cerrar = con is None
-    if con is None:
-        con = conectar()
-    cur = con.cursor()
-
-    fila = cur.execute(f"{_select(cfg)} WHERE id = ?", (id,)).fetchone()
-
-    if fila is None:
-        con.close() if debe_cerrar else None
-        return None
-
-    relaciones = {}
-    for rel in cfg['relaciones']:
-        ids = [r[0] for r in cur.execute(f"SELECT {rel['col_ajena']} FROM {rel['tabla']} WHERE {rel['col_propia']} = ?", (id,)).fetchall()]
-        relaciones[rel['slug_ajeno']] = ids
-
-    # Filas M2M crudas que un borrado destruiría. No alcanza con 'relaciones': esa recorre
-    # cfg['relaciones'] (dirección "hacia afuera"), y para 'recursos' está vacía — pero
-    # LIMPIEZA_M2M sí borra sus 3 tablas inversas. Sin esto el snapshot decía relaciones={}
-    # y un borrado erróneo de un recurso no se podía restaurar completo.
-    m2m = {}
-    for tabla, columna in LIMPIEZA_M2M.get(slug, []):
-        filas_m2m = cur.execute(f"SELECT * FROM {tabla} WHERE {columna} = ?", (id,)).fetchall()
-        if filas_m2m:
-            m2m[tabla] = [dict(f) for f in filas_m2m]
-
-    con.close() if debe_cerrar else None
-    return {'fila': dict(fila), 'relaciones': relaciones, 'm2m': m2m}
-
-
-def agregar_relacion_m2m(tabla, col_propia, col_ajena, id_propio, id_ajeno, con=None):
-    """Agregar una fila a una tabla M2M."""
-    debe_cerrar = con is None
-    if con is None:
-        con = conectar()
-    cur = con.cursor()
-
-    try:
-        cur.execute(
-            f"INSERT OR IGNORE INTO {tabla} ({col_propia}, {col_ajena}) VALUES (?,?)",
-            (id_propio, id_ajeno),
-        )
-        con.commit()
-        con.close() if debe_cerrar else None
-        return True
-    except Exception:
-        con.close() if debe_cerrar else None
-        return False
-
-
-def quitar_relacion_m2m(tabla, col_propia, col_ajena, id_propio, id_ajeno, con=None):
-    """Quitar una fila de una tabla M2M."""
-    debe_cerrar = con is None
-    if con is None:
-        con = conectar()
-    cur = con.cursor()
-
-    try:
-        cur.execute(f"DELETE FROM {tabla} WHERE {col_propia} = ? AND {col_ajena} = ?", (id_propio, id_ajeno))
-        con.commit()
-        con.close() if debe_cerrar else None
-        return True
-    except Exception:
-        con.close() if debe_cerrar else None
-        return False
-
-
-def _opciones_relaciones(cfg, cur):
-    """Opciones disponibles para cada relación M2M del formulario."""
-    opciones = {}
-    for rel in cfg['relaciones']:
-        cfg_ajeno = ENTIDADES[rel['slug_ajeno']]
-        opciones[rel['campo']] = cur.execute(
-            f"SELECT id, {_campo_nombre(cfg_ajeno)} AS nombre FROM {cfg_ajeno['tabla']} "
-            f"ORDER BY nombre COLLATE NOCASE").fetchall()
-    return opciones
-
-
-def _seleccion_relaciones(cfg, id, cur):
-    """IDs actualmente vinculados, por campo de relación."""
-    seleccion = {}
-    for rel in cfg['relaciones']:
-        filas = cur.execute(f"SELECT {rel['col_ajena']} FROM {rel['tabla']} WHERE {rel['col_propia']} = ?", (id,)).fetchall()
-        seleccion[rel['campo']] = {f[0] for f in filas}
-    return seleccion
-
-
 # Qué decir cuando un UNIQUE de la DB rechaza el guardado (si no, sale un 500 pelado).
-# Vacío hoy: ninguna entidad de este módulo tiene un UNIQUE de negocio (a diferencia de
-# historia.personas, que sí lo necesita — ver historia._ERROR_DUPLICADO).
-_ERROR_DUPLICADO = {}
+# Vacío: ninguna entidad de este módulo tiene un UNIQUE de negocio (a diferencia de
+# historia.personas, que sí lo necesita — ver historia.ERROR_DUPLICADO).
+ERROR_DUPLICADO = {}
 
 
-def _guardar(slug, cfg, cur, id=None):
-    """Inserta o actualiza la fila y sincroniza sus relaciones M2M. Devuelve el id."""
-    nombres = [c['nombre'] for c in cfg['campos']]
-    valores = [request.form.get(n, '').strip() for n in nombres]
-    if id is None:
-        placeholders = ','.join('?' * len(nombres))
-        cur.execute(f"INSERT INTO {cfg['tabla']} ({','.join(nombres)}) VALUES ({placeholders})", valores)
-        id = cur.lastrowid
-    else:
-        sets = ','.join(f"{n} = ?" for n in nombres)
-        cur.execute(f"UPDATE {cfg['tabla']} SET {sets} WHERE id = ?", valores + [id])
-    for rel in cfg['relaciones']:
-        cur.execute(f"DELETE FROM {rel['tabla']} WHERE {rel['col_propia']} = ?", (id,))
-        for rid in request.form.getlist(rel['campo']):
-            try:
-                rid = int(rid)
-            except ValueError:
-                continue
-            cur.execute(
-                f"INSERT OR IGNORE INTO {rel['tabla']} ({rel['col_propia']}, {rel['col_ajena']}) VALUES (?,?)",
-                (id, rid),
-            )
-    return id
+# Formato de `recursos.fecha_revision`. La columna es TEXT y el inventario importado del
+# sheet trae fechas cortas sin año ("24/4"): conviven, pero lo que se carga de acá en más
+# lleva el año. El agente importa esta constante para no tener dos formatos distintos.
+FORMATO_FECHA_REVISION = '%d/%m/%Y'
 
 
-def _secciones_detalle(slug, id, cur):
+def valores_iniciales(slug):
+    """Con qué valores arranca el formulario de alta, antes de que el usuario escriba.
+
+    Dar de alta un recurso ES un control de inventario, así que la fecha de revisión
+    arranca en hoy. Antes quedaba vacía y casi ningún recurso terminaba con fecha.
+    """
+    if slug == 'recursos':
+        return {'fecha_revision': ahora().strftime(FORMATO_FECHA_REVISION)}
+    return {}
+
+
+def secciones_detalle(slug, id, cur):
     """Relaciones a mostrar en la vista de detalle, en ambas direcciones."""
     secciones = []
 
@@ -711,215 +309,39 @@ def _secciones_detalle(slug, id, cur):
     return secciones
 
 
-@bp.context_processor
-def _contexto_base():
-    return {
-        'escuela_nombre': ESCUELA_NOMBRE,
-        'escuela_logo': ESCUELA_LOGO,
-        'escuela_version': ESCUELA_VERSION,
-        'nav_entidades': [(slug, e['plural']) for slug, e in ENTIDADES.items()] + [('prestamos', 'Préstamos')],
-        'carrito_count': len(_carrito()),  # ítems distintos en el carrito, para el badge del nav
-    }
+# --- Enganches del motor -----------------------------------------------------
+# Préstamos no es una entidad de ENTIDADES (tiene ítems con cantidad y un ciclo
+# prestado→devuelto), así que entra al nav y al home por estos hooks.
+
+NAV_EXTRA = [('prestamos', 'Préstamos')]
 
 
-@bp.route('/')
-def home():
-    con = conectar()
-    cur = con.cursor()
-    tarjetas = []
-    for slug, e in ENTIDADES.items():
-        total = cur.execute(f"SELECT COUNT(*) FROM {e['tabla']}").fetchone()[0]
-        tarjetas.append({'slug': slug, 'plural': e['plural'], 'singular': e['singular'],
-                         'descripcion': e['descripcion'], 'total': total})
+def tarjetas_extra(cur):
     activos = cur.execute("SELECT COUNT(*) FROM prestamos WHERE fecha_devolucion = ''").fetchone()[0]
-    tarjetas.append({'slug': 'prestamos', 'plural': 'Préstamos', 'singular': 'Préstamo',
-                     'descripcion': 'Retiros internos de recursos: quién se llevó qué, cuánto y cuándo lo devolvió. Todo queda en el historial. El contador muestra lo que sigue afuera.',
-                     'total': activos})
-    con.close()
-    return render_template('gestion/home.html', tarjetas=tarjetas, activo='home')
+    return [{'slug': 'prestamos', 'plural': 'Préstamos', 'singular': 'Préstamo',
+             'descripcion': 'Retiros internos de recursos: quién se llevó qué, cuánto y cuándo lo devolvió. Todo queda en el historial. El contador muestra lo que sigue afuera.',
+             'total': activos}]
 
 
-@bp.route('/<slug>')
-def lista(slug):
-    cfg = _cfg(slug)
-    q = request.args.get('q', '').strip()
-    con = conectar()
-    cur = con.cursor()
-    filas = cur.execute(f"{_select(cfg)} ORDER BY nombre COLLATE NOCASE").fetchall()
-    con.close()
-    if q:
-        # Búsqueda tolerante (ver _puntaje_busqueda): acentos/mayúsculas no importan
-        # y se perdonan typos. Se filtra y ordena en Python — con esta cantidad de
-        # filas el costo es despreciable frente a la comodidad de que "perdone".
-        q_norm = _norm(q)
-        puntuadas = []
-        for fila in filas:
-            puntaje = _puntaje_busqueda(q_norm, fila['nombre'], fila['descripcion'])
-            if puntaje is not None:
-                puntuadas.append((puntaje, fila))
-        puntuadas.sort(key=lambda par: (-par[0], _norm(par[1]['nombre'])))
-        filas = [fila for _, fila in puntuadas]
-    # Texto de búsqueda ya normalizado por fila, para el filtrado en vivo del navegador
-    # (data-buscar). Mismo alcance que la búsqueda del server: nombre + descripcion.
-    buscar = {fila['id']: _norm(f"{fila['nombre']} {fila['descripcion'] or ''}") for fila in filas}
-    # En recursos, cada fila muestra el botón RETIRO / stepper del carrito; pasamos las
-    # cantidades ya en el carrito para renderizar el estado inicial correcto.
-    carrito = _carrito() if slug == 'recursos' else {}
-    return render_template('gestion/lista.html', cfg=cfg, slug=slug, filas=filas, q=q,
-                           activo=slug, buscar=buscar, carrito=carrito)
+def contexto_extra():
+    return {'carrito_count': len(_carrito())}  # ítems distintos, para el badge del nav
 
 
-# Formato de `recursos.fecha_revision`. La columna es TEXT y el inventario importado del
-# sheet trae fechas cortas sin año ("24/4"): conviven, pero lo que se carga de acá en más
-# lleva el año. `agente.py` importa esta constante para no tener dos formatos distintos.
-FORMATO_FECHA_REVISION = '%d/%m/%Y'
-
-
-def _valores_iniciales(slug):
-    """Con qué valores arranca el formulario de alta, antes de que el usuario escriba.
-
-    Dar de alta un recurso ES un control de inventario, así que la fecha de revisión
-    arranca en hoy. Antes quedaba vacía y casi ningún recurso terminaba con fecha.
-    """
-    if slug == 'recursos':
-        return {'fecha_revision': datetime.now().strftime(FORMATO_FECHA_REVISION)}
+def extras_template(vista, slug):
+    """En recursos, el listado y la ficha muestran el botón RETIRO / stepper del carrito;
+    hay que pasarles las cantidades ya en el carrito para pintar el estado inicial."""
+    if slug == 'recursos' and vista in ('lista', 'detalle'):
+        return {'carrito': _carrito()}
     return {}
 
 
-@bp.route('/<slug>/nuevo', methods=['GET', 'POST'])
-def nuevo(slug):
-    cfg = _cfg(slug)
-    con = conectar()
-    cur = con.cursor()
-    error = None
-    if request.method == 'POST':
-        if not request.form.get(_campo_nombre(cfg), '').strip():
-            error = 'El nombre es obligatorio.'
-        else:
-            try:
-                id = _guardar(slug, cfg, cur)
-            except sqlite3.IntegrityError:
-                error = _ERROR_DUPLICADO.get(slug, 'Ya existe un registro igual.')
-            else:
-                con.commit()
-                con.close()
-                return redirect(url_for('gestion.detalle', slug=slug, id=id))
-    opciones = _opciones_relaciones(cfg, cur)
-    con.close()
-    seleccion = {rel['campo']: {int(v) for v in request.form.getlist(rel['campo'])} for rel in cfg['relaciones']}
-    # En el GET el form arranca con los defaults; en un POST fallido se respeta lo tipeado.
-    valores = request.form if request.method == 'POST' else _valores_iniciales(slug)
-    return render_template('gestion/form.html', cfg=cfg, slug=slug, fila=None, valores=valores,
-                           opciones=opciones, seleccion=seleccion, error=error, activo=slug)
+def init_db():
+    """Lo hace el motor; queda como nombre estable para app.py e init_gestion.py."""
+    crud.init_db(sys.modules[__name__])
 
 
-@bp.route('/<slug>/<int:id>')
-def detalle(slug, id):
-    cfg = _cfg(slug)
-    con = conectar()
-    cur = con.cursor()
-    fila = cur.execute(f"{_select(cfg)} WHERE id = ?", (id,)).fetchone()
-    if fila is None:
-        con.close()
-        abort(404)
-    secciones = _secciones_detalle(slug, id, cur)
-    con.close()
-    carrito = _carrito() if slug == 'recursos' else {}
-    # Parsear fotos de JSON a lista para el template
-    fila_dict = dict(fila)
-    fila_dict['fotos'] = json.loads(fila_dict.get('fotos', '[]'))
-    return render_template('gestion/detalle.html', cfg=cfg, slug=slug, fila=fila_dict,
-                           secciones=secciones, activo=slug, carrito=carrito)
-
-
-@bp.route('/<slug>/<int:id>/editar', methods=['GET', 'POST'])
-def editar(slug, id):
-    cfg = _cfg(slug)
-    con = conectar()
-    cur = con.cursor()
-    fila = cur.execute(f"{_select(cfg)} WHERE id = ?", (id,)).fetchone()
-    if fila is None:
-        con.close()
-        abort(404)
-    error = None
-    if request.method == 'POST':
-        if not request.form.get(_campo_nombre(cfg), '').strip():
-            error = 'El nombre es obligatorio.'
-        else:
-            try:
-                _guardar(slug, cfg, cur, id)
-            except sqlite3.IntegrityError:
-                error = _ERROR_DUPLICADO.get(slug, 'Ya existe un registro igual.')
-            else:
-                con.commit()
-                con.close()
-                return redirect(url_for('gestion.detalle', slug=slug, id=id))
-    opciones = _opciones_relaciones(cfg, cur)
-    seleccion = _seleccion_relaciones(cfg, id, cur)
-    con.close()
-    valores = request.form if request.method == 'POST' else fila
-    return render_template('gestion/form.html', cfg=cfg, slug=slug, fila=fila, valores=valores,
-                           opciones=opciones, seleccion=seleccion, error=error, activo=slug)
-
-
-@bp.route('/<slug>/<int:id>/eliminar', methods=['POST'])
-def eliminar(slug, id):
-    cfg = _cfg(slug)
-    con = conectar()
-    cur = con.cursor()
-    cur.execute(f"DELETE FROM {cfg['tabla']} WHERE id = ?", (id,))
-    for tabla, columna in LIMPIEZA_M2M[slug]:
-        cur.execute(f"DELETE FROM {tabla} WHERE {columna} = ?", (id,))
-    con.commit()
-    con.close()
-    return redirect(url_for('gestion.lista', slug=slug))
-
-
-def agregar_foto(slug, id, b64, tipo):
-    """Agrega una foto ya en base64 a la galería de una entidad.
-
-    Vive suelta y no dentro de `subir_foto` porque el agente también escribe la galería:
-    cuando el alta de un recurso salió de una foto del chat, esa foto termina acá por el
-    mismo camino que la que se sube desde el detalle (ver `agente.confirmar`).
-    """
-    cfg = _cfg(slug)
-    con = conectar()
-    cur = con.cursor()
-    fila = cur.execute(f"SELECT fotos FROM {cfg['tabla']} WHERE id = ?", (id,)).fetchone()
-    if fila is None:
-        con.close()
-        return False
-    fotos = json.loads(fila['fotos'] or '[]')
-    fotos.append({'b64': b64, 'tipo': tipo, 'fecha': datetime.now().isoformat()})
-    cur.execute(f"UPDATE {cfg['tabla']} SET fotos = ? WHERE id = ?", (json.dumps(fotos), id))
-    con.commit()
-    con.close()
-    return True
-
-
-@bp.route('/<slug>/<int:id>/foto', methods=['POST'])
-def subir_foto(slug, id):
-    """Sube una foto, la convierte a base64 y la guarda en el JSON de fotos."""
-    _cfg(slug)  # 404 temprano si el slug no existe
-
-    if 'file' not in request.files:
-        return jsonify({'ok': False, 'error': 'No hay archivo'}), 400
-
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'ok': False, 'error': 'Archivo vacío'}), 400
-
-    # Solo imágenes
-    if not file.content_type.startswith('image/'):
-        return jsonify({'ok': False, 'error': 'Solo se aceptan imágenes'}), 400
-
-    try:
-        b64 = base64.b64encode(file.read()).decode('utf-8')
-        if not agregar_foto(slug, id, b64, file.content_type):
-            return jsonify({'ok': False, 'error': 'No existe el registro'}), 404
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
+crud.registrar_acceso(bp)
+crud.registrar_rutas(bp, sys.modules[__name__])
 
 
 # --- Préstamos / retiros internos --------------------------------------------
@@ -937,7 +359,7 @@ def subir_foto(slug, id):
 
 
 def _ahora():
-    return datetime.now().strftime('%Y-%m-%d %H:%M')
+    return ahora().strftime('%Y-%m-%d %H:%M')
 
 
 def _int(texto):
@@ -1030,7 +452,7 @@ def _carrito_filas(cur, items):
         filas.append({'id': rid, 'cantidad': cant,
                       'nombre': r['nombre'] if r else '(recurso eliminado)',
                       'ubicacion': r['ubicacion'] if r else ''})
-    filas.sort(key=lambda f: _norm(f['nombre']))
+    filas.sort(key=lambda f: texto.norm(f['nombre']))
     return filas
 
 

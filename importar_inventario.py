@@ -13,10 +13,10 @@
 import csv
 import io
 import sys
-import unicodedata
 import urllib.request
 
 import gestion
+import texto
 
 SHEET_ID = "12dNx9m9UCzP6nrWkd93BN5k38-hKcLp3YzF3koy7CEE"
 GID = "0"
@@ -37,13 +37,6 @@ MAPEO_ESTADOS = {
 }
 
 
-def _norm(texto):
-    """Minúsculas, sin acentos, espacios colapsados — para matchear nombres."""
-    texto = unicodedata.normalize('NFD', texto)
-    texto = ''.join(c for c in texto if unicodedata.category(c) != 'Mn')
-    return ' '.join(texto.lower().split())
-
-
 def obtener_filas(ruta_csv=None):
     if ruta_csv:
         with open(ruta_csv, encoding='utf-8') as f:
@@ -56,7 +49,7 @@ def obtener_filas(ruta_csv=None):
 
 def importar(ruta_csv=None):
     filas = obtener_filas(ruta_csv)
-    if not filas or _norm(filas[0][0]) != 'material':
+    if not filas or texto.norm(filas[0][0]) != 'material':
         raise SystemExit(f"Encabezado inesperado: {filas[:1]} — ¿cambió el formato del sheet?")
 
     gestion.init_db()  # asegura tablas y columnas nuevas antes de insertar
@@ -66,7 +59,7 @@ def importar(ruta_csv=None):
     # Filas preexistentes, matcheables una sola vez cada una (por nombre normalizado).
     existentes = {}
     for fila in cur.execute("SELECT id, nombre, descripcion FROM recursos ORDER BY id").fetchall():
-        existentes.setdefault(_norm(fila['nombre']), []).append(dict(fila))
+        existentes.setdefault(texto.norm(fila['nombre']), []).append(dict(fila))
 
     insertados = actualizados = 0
     for fila in filas[1:]:
@@ -79,7 +72,7 @@ def importar(ruta_csv=None):
             print(f"  aviso: estado desconocido {estado!r} en {material!r} -> 'Sin revisar'")
             estado_app = 'Sin revisar'
 
-        candidatos = existentes.get(_norm(material), [])
+        candidatos = existentes.get(texto.norm(material), [])
         if candidatos:
             previo = candidatos.pop(0)
             descripcion = previo['descripcion'] or ''
@@ -91,9 +84,9 @@ def importar(ruta_csv=None):
             actualizados += 1
         else:
             cur.execute(
-                "INSERT INTO recursos (nombre, tipo, descripcion, ubicacion, estado, drive_url, cantidad, valor, fecha_revision) "
-                "VALUES (?,?,?,?,?,?,?,?,?)",
-                (material, '', obs, ubicacion, estado_app, '', cantidad, valor, fecha))
+                "INSERT INTO recursos (nombre, tipo, descripcion, ubicacion, estado, cantidad, valor, fecha_revision) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (material, '', obs, ubicacion, estado_app, cantidad, valor, fecha))
             insertados += 1
 
     con.commit()

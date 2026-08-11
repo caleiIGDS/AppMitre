@@ -20,11 +20,13 @@
         </thead>
         <tbody>
             {% for p in activos %}
+            {# data-label: en celular cada fila se muestra como tarjeta y necesita la
+               etiqueta de la columna al lado del valor (ver gestion.css). #}
             <tr>
-                <td><a class="g-item-link" href="{{ url_for('gestion.prestamo_detalle', id=p['id']) }}">{{ p['persona'] }}</a></td>
-                <td>{{ resumen.get(p['id'], '—') }}</td>
-                <td>{{ p['destino'] }}</td>
-                <td>{{ p['fecha_salida'] }}</td>
+                <td data-label="PERSONA"><a class="g-item-link" href="{{ url_for('gestion.prestamo_detalle', id=p['id']) }}">{{ p['persona'] }}</a></td>
+                <td data-label="SE LLEVÓ">{{ resumen.get(p['id'], '—') }}</td>
+                <td data-label="DESTINO">{{ p['destino'] }}</td>
+                <td data-label="SALIDA">{{ p['fecha_salida'] }}</td>
                 <td class="g-td-actions">
                     <a class="g-link" href="{{ url_for('gestion.prestamo_detalle', id=p['id']) }}">Ver</a>
                     <form method="post" class="g-inline-form" action="{{ url_for('gestion.prestamo_devolver', id=p['id']) }}">
@@ -50,10 +52,10 @@
         <tbody>
             {% for p in devueltos %}
             <tr>
-                <td><a class="g-item-link" href="{{ url_for('gestion.prestamo_detalle', id=p['id']) }}">{{ p['persona'] }}</a></td>
-                <td>{{ resumen.get(p['id'], '—') }}</td>
-                <td>{{ p['fecha_salida'] }}</td>
-                <td>{{ p['fecha_devolucion'] }}</td>
+                <td data-label="PERSONA"><a class="g-item-link" href="{{ url_for('gestion.prestamo_detalle', id=p['id']) }}">{{ p['persona'] }}</a></td>
+                <td data-label="SE LLEVÓ">{{ resumen.get(p['id'], '—') }}</td>
+                <td data-label="SALIDA">{{ p['fecha_salida'] }}</td>
+                <td data-label="DEVOLUCIÓN">{{ p['fecha_devolucion'] }}</td>
                 <td class="g-td-actions">
                     <a class="g-link" href="{{ url_for('gestion.prestamo_detalle', id=p['id']) }}">Ver</a>
                 </td>

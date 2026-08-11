@@ -1,0 +1,66 @@
+{# Listado genérico de una entidad. Sirve para cualquier área: `area_nombre` y
+   `base_template` los inyecta crud.contexto_base() a partir del nombre del blueprint.
+   Un área que necesite algo propio en la fila sobreescribe `acciones_fila`. #}
+{% extends base_template %}
+{% block titulo %}{{ cfg.plural }}{% endblock %}
+{% block contenido %}
+<div class="g-toolbar">
+    <h2>{{ cfg.plural | upper }} <span class="g-count">{{ filas | length }}</span></h2>
+    <form method="get" class="g-search" action="{{ url_for(area_nombre ~ '.lista', slug=slug) }}">
+        <input type="text" name="q" value="{{ q }}" placeholder="BUSCAR POR NOMBRE O DESCRIPCIÓN...">
+        <button type="submit">BUSCAR</button>
+        {% if q %}<a class="g-link" href="{{ url_for(area_nombre ~ '.lista', slug=slug) }}">limpiar</a>{% endif %}
+    </form>
+    <a class="g-btn" href="{{ url_for(area_nombre ~ '.nuevo', slug=slug) }}">+ CREAR {{ cfg.singular | upper }}</a>
+</div>
+
+{% if filas %}
+<div class="g-table-wrap">
+    <table class="g-table">
+        <thead>
+            <tr>
+                {% for campo, label in cfg.columnas %}<th>{{ label }}</th>{% endfor %}
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for fila in filas %}
+            <tr data-buscar="{{ buscar[fila['id']] }}">
+                {% for campo, label in cfg.columnas %}
+                {# data-label repite el encabezado de la columna: en celular la fila se
+                   muestra como tarjeta y cada valor necesita su etiqueta al lado (ver
+                   gestion.css). Los {%- -%} dejan la celda REALMENTE vacía cuando no hay
+                   dato, así td:empty la esconde en vez de mostrar la etiqueta sola. #}
+                <td data-label="{{ label }}">
+                    {%- if loop.first -%}
+                    <a class="g-item-link" href="{{ url_for(area_nombre ~ '.detalle', slug=slug, id=fila['id']) }}">{{ fila[campo] }}</a>
+                    {%- elif campo == 'estado' -%}
+                    <span class="g-badge">{{ fila[campo] }}</span>
+                    {%- else -%}
+                    {{ fila[campo] }}
+                    {%- endif -%}
+                </td>
+                {% endfor %}
+                <td class="g-td-actions">
+                    {# `scoped` es imprescindible: el bloque está dentro del for y quien lo
+                       sobreescriba necesita ver `fila`. #}
+                    {% block acciones_fila scoped %}{% endblock %}
+                    <a class="g-link" href="{{ url_for(area_nombre ~ '.detalle', slug=slug, id=fila['id']) }}">Ver</a>
+                    <a class="g-link" href="{{ url_for(area_nombre ~ '.editar', slug=slug, id=fila['id']) }}">Editar</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="g-empty">
+    {% if q %}
+    <p>No se encontraron {{ cfg.plural | lower }} para "{{ q }}".</p>
+    {% else %}
+    <p>Todavía no hay {{ cfg.plural | lower }} cargados.</p>
+    <a class="g-btn" href="{{ url_for(area_nombre ~ '.nuevo', slug=slug) }}">+ CREAR EL PRIMERO</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

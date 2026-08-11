@@ -11,10 +11,9 @@ import database
 import gestion
 import historia
 import agente
-from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS, TURNO_CURSOS, TURNO_DEFAULT
+from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS, TURNO_CURSOS, TURNO_DEFAULT, ahora
 from fpdf import FPDF
 import io
-from datetime import datetime
 from database import obtener_filas
 
 app = Flask(__name__)
@@ -189,7 +188,7 @@ def dibujar_pagina_horario(pdf, tipo, valor):
     pdf.set_font('RobotoMono', '', 8)
     pdf.set_text_color(120, 120, 120)
     pdf.set_xy(15, 5)
-    pdf.cell(0, 5, datetime.now().strftime("%d/%m/%Y"), 0, 0, 'L')
+    pdf.cell(0, 5, ahora().strftime("%d/%m/%Y"), 0, 0, 'L')
 
     # Nuevo Título simple y centrado
     pdf.set_font('RobotoMono', 'B', 16)
@@ -599,7 +598,7 @@ def export_pdf_planilla_preceptores():
     pdf.set_font('RobotoMono', '', 8)
     pdf.set_text_color(120, 120, 120)
     pdf.set_xy(margin, 3)
-    pdf.cell(0, 5, datetime.now().strftime("%d/%m/%Y"), 0, 0, 'L')
+    pdf.cell(0, 5, ahora().strftime("%d/%m/%Y"), 0, 0, 'L')
 
     pdf.set_font('RobotoMono', 'B', 15)
     pdf.set_text_color(0, 0, 0)
@@ -658,11 +657,25 @@ def export_pdf_planilla_preceptores():
     return send_file(output, mimetype='application/pdf', as_attachment=False, download_name='planilla_preceptores.pdf')
 
 if __name__ == '__main__':
-    database.init_tablas()
-    if not database.tiene_datos():
-        print("Base vacía, cargando datos desde Google Sheets...")
-        database.crear_tablas()
-        database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
-        database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
-        database.cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)
-    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+    # El arranque corre SOLO en el proceso padre. Con el reloader activo, Werkzeug levanta un
+    # hijo (marcado con WERKZEUG_RUN_MAIN) que es el que sirve, y lo relanza entero cada vez
+    # que se guarda un .py — o sea que este bloque se ejecutaría de nuevo en cada guardado.
+    # `init_tablas` es idempotente y aguanta, pero revisar la base y eventualmente bajarla de
+    # Google Sheets en cada Ctrl+S no tiene sentido. Sin reloader la variable no existe y el
+    # bloque corre igual, así que la guarda no cambia nada en producción.
+    if not os.environ.get('WERKZEUG_RUN_MAIN'):
+        database.init_tablas()
+        if not database.tiene_datos():
+            print("Base vacía, cargando datos desde Google Sheets...")
+            database.crear_tablas()
+            database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
+            database.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
+            database.cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)
+
+    # use_reloader activo: al guardar un .py el server se recarga solo. Estuvo apagado un
+    # tiempo y el costo fue real — se editaba el agente, el proceso viejo seguía sirviendo
+    # el código anterior y parecía que el cambio no funcionaba. En Windows el problema se
+    # disimula todavía más: Werkzeug abre el socket con SO_REUSEADDR, así que un segundo
+    # `python app.py` arranca SIN error aunque el 5000 ya esté tomado, no recibe tráfico, y
+    # quedan dos servers de los que contesta el más viejo.
+    app.run(host='0.0.0.0', port=5000, debug=True)
