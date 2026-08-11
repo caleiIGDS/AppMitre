@@ -10,7 +10,40 @@ import texto
 from config import DIAS
 from database import obtener_filas
 
-from ..padrones import _buscar_profesor_scored, _personas_parecidas
+from ..padrones import (_buscar_profesor_scored, _etiqueta_curso, _personas_parecidas,
+                        _preceptores_parecidos, _preceptores_por_curso, _puntaje_nombre,
+                        _lista_preceptores, _roles_no_docentes)
+
+# Explicación de titular/contraturno que acompaña a todas las respuestas de preceptores:
+# sin esto el modelo lee dos nombres y no sabe cuál dar cuando le preguntan "el preceptor"
+# de un curso a secas.
+#
+# Decía "`contraturno` es el del otro turno", en singular. Los turnos son TRES y hay 12 cursos
+# de 64 con dos contraturnos a la vez, así que "el otro" no existe: leyendo eso, preguntado por
+# la mañana de un curso cuyo contraturno era de tarde, el modelo daba al de tarde — porque bajo
+# la regla binaria era la única respuesta posible.
+NOTA_TURNOS = ('Los turnos de la escuela son TRES: MAÑANA, TARDE y VESPERTINO. `turno_del_curso` '
+               'es el turno en que ese curso cursa: ese dato es este campo y no se deduce de '
+               'ningún otro. `titular` es el preceptor de ese turno; `contraturno` es TODO el '
+               'resto, y es una LISTA que puede tener más de una persona, en turnos distintos. '
+               'Si te preguntan "el preceptor" sin aclarar, es el titular — mencioná el de '
+               'contraturno como dato adicional. '
+               'SI TE PREGUNTAN POR UN TURNO CONCRETO ("¿y a la mañana?", "¿el de la tarde?"), '
+               'buscá ese turno en el campo `turno` de cada entrada y contestá con esa: NUNCA '
+               'asumas que "contraturno" significa el turno que te preguntaron. Si el turno que '
+               'te preguntan está en `turnos_sin_nadie`, la respuesta es que la planilla no tiene '
+               'a nadie cargado en ese turno para ese curso — decilo así, no ofrezcas al de otro '
+               'turno en su lugar (podés mencionarlo aparte, aclarando de qué turno es). '
+               '`turnos_sin_nadie` es para CONTESTAR, no para recitar: si no te preguntaron por '
+               'ese turno, no lo enumeres. Las dos excepciones en que sí conviene decirlo solo son '
+               'que el turno vacío sea `turno_del_curso` (o sea, `titular` vacío) o que el curso '
+               'no tenga a nadie en ningún turno. '
+               'Si `titular` viene VACÍO, la planilla no tiene a nadie cargado en el turno del '
+               'curso: contá el de contraturno aclarando eso, no lo presentes como si fuera el '
+               'titular ni digas que el curso no tiene preceptor. `dias` aparece solo cuando esa '
+               'persona no cubre la semana entera. `sin_asignar` significa que la planilla dice '
+               'FALTA ahí, no que haya alguien llamado así (distinto de `turnos_sin_nadie`, que '
+               'es no haber ninguna fila).')
 
 
 def _buscar_profesor(query):
@@ -26,24 +59,197 @@ def _buscar_profesor(query):
     El aviso va en el resultado de la tool y no en el system prompt porque el fallo pasa
     JUSTO acá: el modelo ya eligió mal la herramienta, y lo único que lo puede corregir a
     tiempo es lo que esta herramienta le conteste.
+
+    Cada candidato lleva su `rol` cuando tiene cargo no docente, y los PRECEPTORES que
+    coinciden se devuelven aparte: no están en el padrón difuso (nombres sin normalizar),
+    así que sin este cruce alguien como "NOELIA" no existía para el agente.
     """
-    docentes = [{'nombre': p} for _, p in _buscar_profesor_scored(query)]
+    docentes = []
+    for _, nombre, rol in _buscar_profesor_scored(query):
+        candidato = {'nombre': nombre}
+        if rol:
+            candidato['rol'] = rol
+        docentes.append(candidato)
+
     con_ficha = _personas_parecidas(query)
-    if not con_ficha:
+    preceptores = _preceptores_parecidos(query)
+    if not con_ficha and not preceptores:
         return docentes
 
-    return {
-        'docentes': docentes,
-        'personas_con_ficha': [{'id': pid, 'nombre': n} for pid, n in con_ficha],
-        'aviso': (
+    salida = {'docentes': docentes}
+    if con_ficha:
+        salida['personas_con_ficha'] = [{'id': pid, 'nombre': n} for pid, n in con_ficha]
+        salida['aviso'] = (
             'OJO: "' + query + '" también se parece a personas que tienen FICHA propia en la '
             'memoria de la escuela (' + ', '.join(n for _, n in con_ficha) + '). Son dos '
             'padrones distintos: `docentes` sale de los horarios, `personas_con_ficha` de las '
             'semblanzas. Si estás hablando de un hito o la historia de alguien, '
             'casi seguro te referís a una de `personas_con_ficha` — usá esa y NO ofrezcas solo '
             'la lista de docentes. Si no estás seguro, mostrale las dos y preguntá.'
-        ),
+        )
+    if preceptores:
+        salida['preceptores'] = preceptores
+        salida['aviso_preceptores'] = (
+            '"' + query + '" también coincide con PRECEPTORES de la planilla: '
+            + ', '.join(preceptores) + '. Ellos no dan clases, así que horario_profesor no '
+            'sabe nada de esta gente: para saber qué cursos tienen, llamá a '
+            'preceptores(preceptor="...").'
+        )
+    return salida
+
+
+def _buscar_por_rol_fmt(rol=None):
+    """Personal no docente buscado por CARGO (EMATP, jefaturas), no por nombre.
+
+    Sin `rol` devuelve el padrón entero. Con `rol` que no matchea, devuelve igual el padrón
+    entero en `padron_completo`: los cargos están escritos con las siglas de la escuela
+    ("EMATP EERR" por energías renovables) y la búsqueda compara letras, no significados —
+    el que reconoce la sigla es el modelo, mirando la lista. Es el mismo camino de dos
+    niveles que `buscar_entidad` → `listar_todos`, sin diccionario de abreviaturas que
+    mantener cada vez que la escuela crea un cargo.
+    """
+    todos = _roles_no_docentes()
+    if not todos:
+        return {'total': 0, 'resultados': [],
+                'nota': 'No hay personal no docente cargado en los horarios.'}
+
+    if not rol:
+        return {'total': len(todos), 'resultados': todos,
+                'instruccion': ('Este es el padrón COMPLETO de cargos no docentes de la escuela. '
+                                'El horario de cualquiera de ellos se pide con horario_profesor.')}
+
+    encontrados = _roles_no_docentes(rol)
+    if encontrados:
+        return {'rol_buscado': rol, 'total': len(encontrados), 'resultados': encontrados,
+                'instruccion': ('El cargo está escrito tal como lo cargó la escuela. Para el '
+                                'horario de presencia de alguno de ellos, llamá a horario_profesor.')}
+
+    return {
+        'rol_buscado': rol, 'total': 0, 'resultados': [], 'padron_completo': todos,
+        'nota': (f'Ningún cargo coincide LITERALMENTE con "{rol}", pero la planilla usa las '
+                 'siglas de la escuela, así que puede estar igual con otro nombre. Ahí tenés el '
+                 'padrón completo de cargos no docentes en `padron_completo`: fijate vos si '
+                 'alguno es el que te piden. Si ninguno lo es, decilo — no ofrezcas el más '
+                 'parecido como si fuera el correcto.')
     }
+
+
+def _fichas_ordenadas(fichas):
+    """Las fichas de preceptores ordenadas por año y división, para que se lean como la planilla."""
+    def clave(item):
+        (curso, division), _ficha = item
+        return (int(curso) if str(curso).isdigit() else 99, str(division))
+    return [ficha for _, ficha in sorted(fichas.items(), key=clave)]
+
+
+def _preceptores_fmt(curso=None, division=None, preceptor=None):
+    """Preceptor ↔ curso, ya digerido: qué preceptor tiene cada curso, y al revés.
+
+    La tabla cruda son 595 filas (una por curso × turno × día) con los nombres sin
+    normalizar; acá sale una ficha por curso, con el titular y el contraturno separados.
+    Tres modos, según lo que venga: un curso, un preceptor, o nada (la planilla entera).
+    """
+    fichas = _preceptores_por_curso()
+    if not fichas:
+        return {'total': 0, 'cursos': [],
+                'nota': 'No hay planilla de preceptores cargada.'}
+
+    if preceptor:
+        return _cursos_de_preceptor_fmt(preceptor, fichas)
+
+    if curso:
+        num = database._extraer_num_curso(curso)
+        # La división pasa por lo mismo que el curso: las de 4°–7° son números y en castellano
+        # se escriben "6ta"/"3ra" — tal cual las tipea el usuario. Sin esto "6ta" quedaba "6TA",
+        # no matcheaba nada y la tool devolvía error con los 64 cursos. `_extraer_num_curso`
+        # devuelve el string tal cual si no empieza con dígito, así que "A"/"B" no se tocan.
+        div = database._extraer_num_curso(division).strip().upper() if division else ''
+        elegidas = {k: v for k, v in fichas.items()
+                    if k[0] == num and (not div or k[1] == div)}
+        if not elegidas:
+            pedido = _etiqueta_curso(num, div)
+            return {'error': f'No hay preceptores cargados para {pedido}.',
+                    'cursos_disponibles': [f['curso'] for f in _fichas_ordenadas(fichas)],
+                    'nota': 'Fijate en `cursos_disponibles` si el curso está escrito de otra '
+                            'forma. Si no está en esa lista, no hay planilla para ese curso.'}
+        return {'total': len(elegidas), 'cursos': _fichas_ordenadas(elegidas),
+                'instruccion': NOTA_TURNOS}
+
+    return {'total': len(fichas), 'cursos': _fichas_ordenadas(fichas),
+            'instruccion': ('Esta es la planilla COMPLETA de preceptores, un curso por fila. '
+                            + NOTA_TURNOS)}
+
+
+def _alias_preceptores(padron):
+    """Agrupa las grafías del mismo nombre: [['ROMERO VANESA', 'VANESA ROMERO'], ['NOELIA'], …].
+
+    La planilla carga el nombre a mano y a veces con el orden dado vuelta, así que la misma
+    preceptora entra dos veces. Sin agrupar pasaban dos cosas: la búsqueda por nombre
+    quedaba empatada entre sus dos grafías y pedía desambiguar entre dos opciones idénticas,
+    y la que se eligiera mostraba solo la mitad de sus cursos. Se agrupa por conjunto de
+    palabras —no por parecido— para no fusionar a dos personas distintas: "DANIELA TRAJO" y
+    "DANIELA TREJO" (que son un typo) quedan separadas a propósito.
+    """
+    grupos = {}
+    for nombre in padron:
+        grupos.setdefault(frozenset(texto.norm(nombre).split()), []).append(nombre)
+    return list(grupos.values())
+
+
+def _cursos_de_preceptor_fmt(nombre, fichas):
+    """Los cursos que tiene un preceptor, separados en titulares y de contraturno.
+
+    Resuelve el nombre igual que `_horario_profesor_fmt`: difuso, auto-resolviendo solo si
+    hay un ganador claro y devolviendo `sugerencias` si están empatados. Hace más falta que
+    allá, porque esta planilla tiene el nombre a veces dado vuelta ("VANESA ROMERO" y
+    "ROMERO VANESA") y con erratas.
+    """
+    grupos = _alias_preceptores(_lista_preceptores())
+    q_norm = texto.norm(nombre)
+
+    def puntaje(variantes):
+        return max(max(_puntaje_nombre(q_norm, texto.norm(v)),
+                       texto.puntaje_busqueda(q_norm, v) or 0.0) for v in variantes)
+
+    puntuados = sorted(((puntaje(g), g) for g in grupos), reverse=True, key=lambda x: x[0])
+    puntuados = [(s, g) for s, g in puntuados if s >= 0.6][:5]
+
+    if not puntuados:
+        return {'preceptor': nombre, 'cursos': [],
+                'nota': f'No hay ningún preceptor llamado "{nombre}" ni parecido en la planilla.'}
+
+    ganador_claro = len(puntuados) == 1 or puntuados[0][0] - puntuados[1][0] >= 0.15
+    if not ganador_claro:
+        return {'preceptor': nombre, 'sin_match_exacto': True,
+                'sugerencias': [g[0] for _, g in puntuados],
+                'nota': f'Hay varios preceptores parecidos a "{nombre}". Preguntale al usuario '
+                        'cuál es en vez de elegir vos. NO inventes los cursos.'}
+
+    variantes = puntuados[0][1]
+    como_titular, como_contraturno = [], []
+    for ficha in _fichas_ordenadas(fichas):
+        for donde, destino in (('titular', como_titular), ('contraturno', como_contraturno)):
+            for entrada in ficha[donde]:
+                if entrada.get('preceptor') in variantes:
+                    item = {'curso': ficha['curso'], 'turno': entrada['turno']}
+                    if entrada.get('dias'):
+                        item['dias'] = entrada['dias']
+                    destino.append(item)
+
+    elegido = max(variantes, key=lambda v: (
+        sum(1 for f in fichas.values() for d in ('titular', 'contraturno')
+            for e in f[d] if e.get('preceptor') == v), v))
+    salida = {'preceptor': elegido,
+              'como_titular': como_titular, 'como_contraturno': como_contraturno,
+              'total_cursos': len(como_titular) + len(como_contraturno),
+              'instruccion': NOTA_TURNOS}
+    if len(variantes) > 1:
+        salida['nota_variantes'] = ('La planilla tiene a esta persona escrita de más de una forma ('
+                                    + ', '.join(sorted(variantes)) + '); los cursos de todas esas '
+                                    'grafías están sumados acá.')
+    elif texto.norm(elegido) != q_norm:
+        salida['nota_fuzzy'] = f'No hay coincidencia exacta con "{nombre}"; se usó "{elegido}".'
+    return salida
 
 def _horario_no_docente(nombre):
     """Horario de personal no docente (EMATP, jefaturas, porteros…), o None si no está.
@@ -80,7 +286,7 @@ def _horario_profesor_fmt(nombre):
 
     if not filas and not no_docente:
         scored = _buscar_profesor_scored(nombre)
-        candidatos = [n for _, n in scored]
+        candidatos = [n for _, n, _rol in scored]
         # Auto-resolvemos solo si hay un ganador claro (único candidato, o el primero
         # le saca ventaja al segundo). Si están empatados —"gonzalez" matchea a varios
         # por igual— devolvemos la lista para que el modelo pregunte, no adivine.
@@ -91,14 +297,34 @@ def _horario_profesor_fmt(nombre):
             no_docente = _horario_no_docente(nombre_usado)
             nota_fuzzy = f'No hay coincidencia exacta con "{nombre}"; se usó "{nombre_usado}".'
         elif candidatos:
-            return {
+            resultado = {
                 'profesor': nombre, 'clases': {}, 'sin_match_exacto': True,
                 'sugerencias': candidatos,
                 'nota': f'No existe nadie llamado exactamente "{nombre}". Candidatos '
                         f'parecidos: {", ".join(candidatos)}. Preguntale al usuario cuál es '
                         f'(o reintentá con el nombre exacto). NO inventes el horario.'
             }
+            # El nombre puede ser el de un preceptor y estos candidatos, docentes que se
+            # llaman parecido: ofrecer solo los docentes manda al usuario a elegir entre
+            # gente que no es la que buscaba.
+            preceptores = _preceptores_parecidos(nombre)
+            if preceptores:
+                resultado['preceptores'] = preceptores
+                resultado['aviso_preceptores'] = (
+                    f'"{nombre}" también coincide con preceptores de la planilla: '
+                    + ', '.join(preceptores) + '. Los preceptores no tienen horario de clases; '
+                    'sus cursos se consultan con preceptores(preceptor="...").')
+            return resultado
         else:
+            # Último cruce antes de decir que no existe: los preceptores no están en este
+            # padrón y tampoco tienen clases, así que su horario no se responde acá.
+            preceptores = _preceptores_parecidos(nombre)
+            if preceptores:
+                return {'profesor': nombre, 'clases': {}, 'preceptores': preceptores,
+                        'nota': f'"{nombre}" no da clases ni figura como personal no docente, '
+                                f'pero SÍ es preceptor/a de la planilla ({", ".join(preceptores)}). '
+                                'Los preceptores no tienen horario de clases: para saber qué '
+                                'cursos tiene, llamá a preceptores(preceptor="...").'}
             return {'profesor': nombre, 'clases': {},
                     'nota': f'No existe ningún docente ni personal no docente llamado "{nombre}" ni parecido.'}
 

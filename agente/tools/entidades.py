@@ -11,7 +11,7 @@ import crud
 import texto
 
 from ..dominio import SLUGS_ENTIDAD, _modulo
-from ..padrones import _docentes_parecidos
+from ..padrones import _gente_horarios_parecida
 
 # Tope de resultados que se le mandan a Claude. La búsqueda difusa no acota: con una
 # query sin match literal devuelve cualquier cosa que se parezca de escritura, y con
@@ -103,19 +103,24 @@ def _buscar_entidad_fmt(slug, query):
     # horarios. Sin esto, buscar "vazquez" en `personas` no devolvía nada y el modelo
     # concluía "no la tengo cargada", con VAZQUEZ NATALIA dando clases en la escuela.
     if slug == 'personas' and query:
-        docentes = _docentes_parecidos(query)
-        if docentes:
-            salida['en_horarios'] = docentes
+        # El padrón de horarios no es solo docentes: incluye a los EMATP y las jefaturas,
+        # y su cargo viaja con el nombre para que el aviso diga "CALEI (EMATP EERR)" en vez
+        # de presentarlo como un docente más.
+        gente = _gente_horarios_parecida(query)
+        if gente:
+            salida['en_horarios'] = [
+                {'nombre': n, 'rol': rol} if rol else {'nombre': n} for n, rol in gente]
+            listado = ', '.join(f'{n} ({rol})' if rol else n for n, rol in gente)
             if resultados:
                 salida['aviso_horarios'] = (
-                    'Además, en los HORARIOS hay docentes que coinciden con "' + query + '": '
-                    + ', '.join(docentes) + '. Son otro padrón: pueden ser la misma persona '
+                    'Además, en los HORARIOS hay gente que coincide con "' + query + '": '
+                    + listado + '. Son otro padrón: pueden ser la misma persona '
                     'o no. Si de cuál se trata cambia lo que vas a hacer, preguntale al usuario.'
                 )
             else:
                 salida['aviso_horarios'] = (
                     'NO hay ficha de persona que coincida, pero en los HORARIOS sí hay: '
-                    + ', '.join(docentes) + '. O sea que existe en la escuela, solo que sin '
+                    + listado + '. O sea que existe en la escuela, solo que sin '
                     'ficha propia. NO le digas al usuario que no la tenés. Si te está hablando '
                     'de horarios, resolvelo con esos nombres; si está armando un hito o una '
                     'semblanza, avisale que todavía no tiene ficha y ofrecé '
@@ -198,7 +203,12 @@ def _detalle_entidad_fmt(slug, id):
         # No todas las secciones son (id, nombre): la de "En préstamo" trae
         # (persona, pendiente) y sin este chequeo reventaba con KeyError 'id'
         # justo cuando el recurso estaba prestado — el caso más útil.
-        clave = sec.get('slug') or sec.get('titulo') or 'otros'
+        # La clave es el slug sólo si es una entidad real (así el modelo puede pasarla a
+        # buscar_entidad/detalle_entidad). 'prestamos' no lo es: con la clave cruda, el
+        # "Historial de préstamos" llegaba como "prestamos" y se leía como lo que está
+        # afuera ahora. Para esas secciones manda el título, que dice qué son.
+        clave = sec.get('slug') if sec.get('slug') in modulo.ENTIDADES else None
+        clave = clave or sec.get('titulo') or 'otros'
         items = []
         for item in sec['items']:
             d = dict(item)

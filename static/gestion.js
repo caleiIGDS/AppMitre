@@ -76,12 +76,16 @@
         var b = document.querySelector('[data-cart-count]');
         return b ? (parseInt(b.textContent, 10) || 0) : 0;
     }
+    // El link 📋 PRÉSTAMO del header sólo se ve con el carrito cargado: aparece con el
+    // primer RETIRAR y desaparece cuando vuelve a 0. Se oculta, no se saca del DOM,
+    // porque de ahí sale SET_URL.
     function setBadge(count) {
         var badges = document.querySelectorAll('[data-cart-count]');
         for (var i = 0; i < badges.length; i++) {
             badges[i].textContent = count;
             badges[i].hidden = !count;
         }
+        if (cartLink) cartLink.hidden = !count;
     }
     function stockDe(widget) {
         var s = parseInt(widget.getAttribute('data-stock'), 10);

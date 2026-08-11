@@ -7,8 +7,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block titulo %}Sistema de Gestión{% endblock %} — {{ escuela_nombre }}</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=14">
-    <script src="{{ url_for('static', filename='gestion.js') }}?v=3" defer></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=15">
+    <script src="{{ url_for('static', filename='gestion.js') }}?v=4" defer></script>
     <script src="{{ url_for('static', filename='gestion-agente.js') }}?v=5" defer></script>
     {# En celular mueve el nav y las acciones del header a un panel lateral. #}
     <script src="{{ url_for('static', filename='mobile-nav.js') }}?v=1" defer></script>
@@ -29,8 +29,12 @@
                     {% if session.get('gestion_ok') %}
                     <a class="g-btn-outline" href="{{ url_for('historia.home') }}">HISTORIA INSTITUCIONAL ›</a>
                     <button id="agente-toggle-btn" class="g-btn-outline" title="Abrir asistente" style="cursor: pointer;">🤖 ASISTENTE</button>
+                    {# El link al carrito sólo existe mientras haya algo adentro: aparece
+                       cuando se aprieta RETIRAR en el catálogo (gestion.js lo muestra) y
+                       se va cuando el carrito vuelve a 0. #}
                     <a class="g-btn-outline g-cart-link" href="{{ url_for('gestion.carrito_finalizar') }}"
-                       data-set-url="{{ url_for('gestion.carrito_set') }}">📋 PRÉSTAMO <span class="g-cart-count" data-cart-count {% if not carrito_count %}hidden{% endif %}>{{ carrito_count }}</span></a>
+                       data-set-url="{{ url_for('gestion.carrito_set') }}"
+                       {% if not carrito_count %}hidden{% endif %}>📋 PRÉSTAMO <span class="g-cart-count" data-cart-count {% if not carrito_count %}hidden{% endif %}>{{ carrito_count }}</span></a>
                     <a class="g-btn-outline" href="{{ url_for('gestion.salir') }}">SALIR</a>
                     {% endif %}
                 </div>

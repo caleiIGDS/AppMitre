@@ -190,6 +190,18 @@ def migrar(cur):
     cols_items = {c[1] for c in cur.execute("PRAGMA table_info(prestamo_items)").fetchall()}
     if 'cantidad_devuelta' not in cols_items:
         cur.execute("ALTER TABLE prestamo_items ADD COLUMN cantidad_devuelta TEXT DEFAULT '0'")
+    # El ALTER de arriba dejó en '0' los ítems de préstamos que YA estaban cerrados: quedaban
+    # como "devuelto pero con todo pendiente", y bastaba tocarlos para que _recalcular_estado
+    # los reabriera. Un préstamo cerrado no puede tener pendientes, así que se emparejan.
+    # Idempotente: corre siempre, no sólo el día del ALTER.
+    cur.execute(
+        "UPDATE prestamo_items SET cantidad_devuelta = cantidad WHERE prestamo_id IN "
+        "(SELECT id FROM prestamos WHERE fecha_devolucion <> '') AND cantidad_devuelta <> cantidad")
+    # `recursos.estado` es un derivado de los préstamos y quedó desfasado por los caminos que
+    # antes no lo sincronizaban (ver `sincronizar_estado`). Se emparejan las filas viejas; las
+    # nuevas ya salen bien. Es un pase por ~100 recursos, corre en cada arranque y es idempotente.
+    for r in cur.execute("SELECT id FROM recursos").fetchall():
+        sincronizar_estado(cur, r['id'])
     # Agregar columna fotos a las demás tablas si no existe
     for tabla in ('conjuntos', 'actividades'):
         cols = {c[1] for c in cur.execute(f"PRAGMA table_info({tabla})").fetchall()}
@@ -285,15 +297,23 @@ def secciones_detalle(slug, id, cur):
         prestamo_activo = []
         for row in en_prestamo:
             pendiente = max(0, _int(row['cantidad']) - _int(row['cantidad_devuelta']))
-            prestamo_activo.append({'persona': row['persona'], 'pendiente': pendiente})
+            # pendiente 0 = de ESTE recurso ya volvió todo, aunque el préstamo siga abierto
+            # por otros ítems. Sin este filtro, devolver 1 de 4 cosas dejaba al devuelto
+            # listado bajo "En préstamo" (con un 0 al lado que no se lee).
+            if pendiente:
+                prestamo_activo.append({'persona': row['persona'], 'pendiente': pendiente})
         if prestamo_activo:
             secciones.append({'titulo': 'En préstamo', 'slug': None, 'items': prestamo_activo, 'tipo': 'prestamo_activo'})
         # slug 'prestamos' no está en ENTIDADES, pero url_for('gestion.detalle', slug='prestamos', id=N)
         # genera /gestion/prestamos/N, que el routing despacha a prestamo_detalle (la ruta
         # estática tiene prioridad sobre /<slug>/<id>) — el template genérico no cambia.
+        # El estado va escrito en las DOS ramas: el agente lee esta misma sección por JSON
+        # (detalle_entidad) y sin la marca de "devuelto" leía el historial como si fuera
+        # lo que está afuera ahora — ver dev-log/DECISIONS.md 2026-08-11.
         agregar('Historial de préstamos', 'prestamos',
                 "SELECT p.id, p.persona || ' — ' || p.fecha_salida || "
-                "(CASE WHEN p.fecha_devolucion = '' THEN ' · EN PRÉSTAMO' ELSE '' END) AS nombre "
+                "(CASE WHEN p.fecha_devolucion = '' THEN ' · EN PRÉSTAMO' "
+                "ELSE ' · DEVUELTO ' || p.fecha_devolucion END) AS nombre "
                 "FROM prestamos p JOIN prestamo_items i ON i.prestamo_id = p.id "
                 "WHERE i.recurso_id = ? ORDER BY p.fecha_salida DESC, p.id DESC")
     elif slug == 'conjuntos':
@@ -370,11 +390,29 @@ def _int(texto):
         return 0
 
 
+def sincronizar_estado(cur, rid):
+    """Pone `recursos.estado` en 'Retirado' o 'Disponible' según lo que haya afuera AHORA.
+
+    `estado` es un derivado de los préstamos guardado en una columna, y cada camino de
+    escritura tenía su propia versión de cómo mantenerlo: el resultado era un recurso
+    entero adentro del pañol figurando 'Retirado' (o al revés) según por dónde hubiera
+    pasado. Ahora hay una sola función y la llaman todos los caminos.
+
+    Respeta lo que se cargó a mano: sólo devuelve a 'Disponible' lo que este mismo
+    mecanismo marcó 'Retirado' (no pisa 'En reparación' ni 'Sin revisar'), y nunca toca
+    lo que está 'De baja'.
+    """
+    if pendiente_afuera(cur, rid):
+        cur.execute("UPDATE recursos SET estado = 'Retirado' WHERE id = ? AND estado != 'De baja'", (rid,))
+    else:
+        cur.execute("UPDATE recursos SET estado = 'Disponible' WHERE id = ? AND estado = 'Retirado'", (rid,))
+
+
 def _recalcular_estado(cur, id):
     """Cierra el préstamo (setea fecha_devolucion) cuando no queda nada pendiente, y lo
     reabre (la limpia) si vuelve a haber algo afuera. fecha_devolucion sigue siendo la
     fuente de verdad de 'devuelto' para la lista y el contador del home.
-    También actualiza el estado de recursos: 'Retirado' mientras haya afuera, 'Disponible' cuando vuelve todo."""
+    También sincroniza el estado de cada recurso tocado."""
     filas = cur.execute(
         "SELECT cantidad, cantidad_devuelta, recurso_id FROM prestamo_items WHERE prestamo_id = ?", (id,)).fetchall()
     pendiente = sum(max(0, _int(f['cantidad']) - _int(f['cantidad_devuelta'])) for f in filas)
@@ -384,20 +422,16 @@ def _recalcular_estado(cur, id):
     cerrado = bool(actual['fecha_devolucion'])
     if filas and pendiente == 0 and not cerrado:
         cur.execute("UPDATE prestamos SET fecha_devolucion = ? WHERE id = ?", (_ahora(), id))
-        # Marcar recursos como Disponible si no hay más préstamos activos
-        for f in filas:
-            rid = f['recurso_id']
-            tiene_prestamos = cur.execute(
-                "SELECT 1 FROM prestamo_items i JOIN prestamos p ON p.id = i.prestamo_id "
-                "WHERE i.recurso_id = ? AND p.fecha_devolucion = '' LIMIT 1", (rid,)).fetchone()
-            if not tiene_prestamos:
-                cur.execute("UPDATE recursos SET estado = 'Disponible' WHERE id = ? AND estado = 'Retirado'", (rid,))
     elif pendiente > 0 and cerrado:
         cur.execute("UPDATE prestamos SET fecha_devolucion = '' WHERE id = ?", (id,))
-        # Marcar recursos como Retirado nuevamente
-        for f in filas:
-            rid = f['recurso_id']
-            cur.execute("UPDATE recursos SET estado = 'Retirado' WHERE id = ? AND estado != 'De baja'", (rid,))
+
+    # Fuera de los `if`: el estado del recurso no depende de que el PRÉSTAMO haya cambiado
+    # de estado. Devolver 1 de 4 cosas no cierra el préstamo, pero esa una ya volvió al
+    # pañol; y quien cierra el préstamo por su cuenta (la ruta 'devolver' setea
+    # `fecha_devolucion` antes de llamar acá) dejaba `cerrado=True` y no entraba a ninguna
+    # rama, así que los recursos quedaban 'Retirado' para siempre.
+    for f in filas:
+        sincronizar_estado(cur, f['recurso_id'])
 
 
 def _resumen_items(cur, ids, solo_pendiente=False):
@@ -491,6 +525,20 @@ def _stock(cur, rid):
     0 = sin stock definido → sin tope (cantidad vacía o no numérica)."""
     row = cur.execute("SELECT cantidad FROM recursos WHERE id = ?", (rid,)).fetchone() if rid else None
     return None if row is None else _int(row['cantidad'])
+
+
+def pendiente_afuera(cur, rid):
+    """Unidades de ese recurso que están afuera ahora, sumando TODOS los préstamos abiertos.
+
+    `_stock` es "cuántas hay en total", no "cuántas quedan": los topes que sólo miran el
+    stock dejan prestar la misma unidad dos veces. Esto es lo que hay que restarle al stock
+    para saber qué queda en el pañol.
+    """
+    filas = cur.execute(
+        "SELECT i.cantidad, i.cantidad_devuelta FROM prestamo_items i "
+        "JOIN prestamos p ON p.id = i.prestamo_id "
+        "WHERE i.recurso_id = ? AND p.fecha_devolucion = ''", (rid,)).fetchall()
+    return sum(max(0, _int(f['cantidad']) - _int(f['cantidad_devuelta'])) for f in filas)
 
 
 @bp.route('/carrito/agregar', methods=['POST'])
@@ -602,7 +650,7 @@ def carrito_finalizar():
             for rid, cant in items.items():
                 cur.execute("INSERT INTO prestamo_items (prestamo_id, recurso_id, cantidad, cantidad_devuelta) VALUES (?,?,?, '0')",
                             (pid, rid, str(cant)))
-                cur.execute("UPDATE recursos SET estado = 'Retirado' WHERE id = ?", (rid,))
+                sincronizar_estado(cur, rid)
             con.commit()
             con.close()
             session.pop('carrito', None)
@@ -667,8 +715,11 @@ def prestamo_devolver_item(id):
     if item is not None:
         pendiente = max(0, _int(item['cantidad']) - _int(item['cantidad_devuelta']))
         pedido = request.form.get('cantidad', '').strip()
+        # Campo vacío = "todo lo que falta". Con un número, se topea a lo pendiente.
+        # El `max(1, …)` que había acá convertía cualquier basura ("abc", "-5") en una
+        # devolución de 1 unidad que nadie pidió: ante un valor inválido no se toca nada.
         cuanto = _int(pedido) if pedido else pendiente
-        cuanto = max(1, min(cuanto, pendiente)) if pendiente else 0
+        cuanto = min(cuanto, pendiente) if cuanto > 0 else 0
         if cuanto:
             nueva = _int(item['cantidad_devuelta']) + cuanto
             cur.execute("UPDATE prestamo_items SET cantidad_devuelta = ? WHERE prestamo_id = ? AND recurso_id = ?",
@@ -716,14 +767,8 @@ def prestamo_eliminar(id):
     filas = cur.execute("SELECT recurso_id FROM prestamo_items WHERE prestamo_id = ?", (id,)).fetchall()
     cur.execute("DELETE FROM prestamos WHERE id = ?", (id,))
     cur.execute("DELETE FROM prestamo_items WHERE prestamo_id = ?", (id,))
-    # Actualizar estado de recursos: si no hay más préstamos activos, marcar como Disponible
     for f in filas:
-        rid = f['recurso_id']
-        tiene_prestamos = cur.execute(
-            "SELECT 1 FROM prestamo_items i JOIN prestamos p ON p.id = i.prestamo_id "
-            "WHERE i.recurso_id = ? AND p.fecha_devolucion = '' LIMIT 1", (rid,)).fetchone()
-        if not tiene_prestamos:
-            cur.execute("UPDATE recursos SET estado = 'Disponible' WHERE id = ? AND estado = 'Retirado'", (rid,))
+        sincronizar_estado(cur, f['recurso_id'])
     con.commit()
     con.close()
     return redirect(url_for('gestion.prestamos_lista'))

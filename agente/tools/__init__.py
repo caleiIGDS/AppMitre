@@ -19,8 +19,9 @@ from .esquemas import TOOLS_SCHEMA
 from .fichas import _crear_entidad
 from .fotos import _adjuntar_foto_entidad, _leer_foto_fmt
 from .hitos import _buscar_hitos_fmt
-from .horarios import (_aulas_libres_fmt, _buscar_profesor, _horario_aula_fmt,
-                       _horario_curso_fmt, _horario_profesor_fmt)
+from .horarios import (_aulas_libres_fmt, _buscar_por_rol_fmt, _buscar_profesor,
+                       _horario_aula_fmt, _horario_curso_fmt, _horario_profesor_fmt,
+                       _preceptores_fmt)
 from .prestamos import (_crear_prestamo, _detalle_prestamo_fmt, _eliminar_prestamo,
                         _finalizar_prestamo, _listar_prestamos_fmt, _reabrir_prestamo)
 
@@ -40,7 +41,8 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None):
         contexto_turno = {}
 
     lectura = tool_name in [
-        'buscar_profesor', 'horario_profesor', 'horario_curso', 'horario_aula',
+        'buscar_profesor', 'buscar_por_rol', 'preceptores', 'horario_profesor',
+        'horario_curso', 'horario_aula',
         'aulas_libres', 'buscar_entidad', 'listar_todos', 'detalle_entidad',
         'listar_prestamos', 'detalle_prestamo', 'consultar_historia', 'buscar_hitos',
         'leer_foto'   # no toca la base; lo que gasta es la API de visión, no el inventario
@@ -49,6 +51,11 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None):
     try:
         if tool_name == 'buscar_profesor':
             resultado = _buscar_profesor(tool_input.get('query', ''))
+        elif tool_name == 'buscar_por_rol':
+            resultado = _buscar_por_rol_fmt(tool_input.get('rol'))
+        elif tool_name == 'preceptores':
+            resultado = _preceptores_fmt(tool_input.get('curso'), tool_input.get('division'),
+                                         tool_input.get('preceptor'))
         elif tool_name == 'horario_profesor':
             resultado = _horario_profesor_fmt(tool_input.get('nombre', ''))
         elif tool_name == 'horario_curso':

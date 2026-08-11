@@ -710,6 +710,10 @@ body {
 /* Badge con la cantidad de ítems en el carrito, sobre el botón 🛒 del nav. */
 .g-cart-link { position: relative; }
 
+/* El link vive oculto hasta que el carrito tiene algo: hace falta la regla porque
+   .g-btn-outline fuerza display:inline-block y pisaría el [hidden] del navegador. */
+.g-cart-link[hidden] { display: none; }
+
 .g-cart-count {
     display: inline-block;
     background: var(--g-accent);

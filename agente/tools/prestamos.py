@@ -127,11 +127,20 @@ def _crear_prestamo(persona, destino, notas, items_list):
     # Resolver nombres de recursos a ids
     con = conectar()
     cur = con.cursor()
-    items_resueltos = []
+    items_resueltos = {}   # rid -> cantidad. Dict y no lista: ver la consolidación de abajo
+    avisos = []
 
     for item in items_list:
         recurso = item.get('recurso', '')
-        cantidad = gestion._int(item.get('cantidad', 1)) or 1
+        pedido = item.get('cantidad', 1)
+        cantidad = gestion._int(pedido)
+        if cantidad < 0:
+            # Una cantidad negativa entraba tal cual y dejaba un ítem con pendiente 0 en un
+            # préstamo abierto: figuraba prestado sin nada que devolver.
+            con.close()
+            return {'ok': False, 'error': f'Cantidad inválida para "{recurso}": {pedido}. '
+                                          f'No se creó el préstamo.'}
+        cantidad = cantidad or 1
 
         # Si es un número, asumir es id
         if recurso.isdigit():
@@ -158,10 +167,30 @@ def _crear_prestamo(persona, destino, notas, items_list):
         if stock is None:
             con.close()
             return {'ok': False, 'error': f'Recurso no existe: id={rid}'}
-        if stock > 0:
-            cantidad = min(cantidad, stock)
 
-        items_resueltos.append((rid, cantidad))
+        # El mismo recurso puede venir repetido (el usuario lo nombró dos veces, o dos nombres
+        # distintos cayeron en el mismo id). `prestamo_items` tiene UNIQUE(prestamo_id,
+        # recurso_id): antes reventaba con el error crudo de SQLite. Se suman, que es lo que
+        # el usuario quiso decir.
+        if rid in items_resueltos:
+            cantidad += items_resueltos[rid]
+            avisos.append(f'el recurso {rid} venía repetido en la lista: se sumaron las cantidades')
+
+        if stock > 0 and cantidad > stock:
+            avisos.append(f'del recurso {rid} pediste {cantidad} pero hay {stock} en total: '
+                          f'se prestaron {stock}')
+            cantidad = stock
+
+        # Aviso, no bloqueo: el stock del inventario puede estar desactualizado y el pañol
+        # sabe mejor que la DB. Pero prestar la misma unidad dos veces tiene que decirse,
+        # porque es la diferencia entre "quedan 5" y "quedan 5 en el papel".
+        afuera = gestion.pendiente_afuera(cur, rid)
+        if stock > 0 and afuera + cantidad > stock:
+            avisos.append(f'OJO: del recurso {rid} ya hay {afuera} afuera en otros préstamos '
+                          f'abiertos y el inventario dice {stock} en total — con este préstamo '
+                          f'quedan {stock - afuera - cantidad} en el pañol. Avisale al usuario')
+
+        items_resueltos[rid] = cantidad
 
     # Crear préstamo
     try:
@@ -171,26 +200,74 @@ def _crear_prestamo(persona, destino, notas, items_list):
         )
         pid = cur.lastrowid
 
-        for rid, cant in items_resueltos:
+        for rid, cant in items_resueltos.items():
             cur.execute(
                 "INSERT INTO prestamo_items (prestamo_id, recurso_id, cantidad, cantidad_devuelta) VALUES (?,?,?, '0')",
                 (pid, rid, str(cant))
             )
+            # Paridad con el alta por web (`carrito_finalizar`): sin esto la ficha del recurso
+            # decía "Disponible" y "En préstamo: Fulano" al mismo tiempo.
+            gestion.sincronizar_estado(cur, rid)
 
         con.commit()
         con.close()
 
-        return {'ok': True, 'prestamo_id': pid, 'mensaje': f'Préstamo creado id={pid}'}
+        mensaje = f'Préstamo creado id={pid}'
+        if avisos:
+            # Todo lo que salió distinto de lo pedido se avisa: si el modelo cantó "presté 10"
+            # y salieron 4, el usuario tiene que enterarse ahora y no cuando falte material.
+            mensaje += '. OJO: ' + '; '.join(avisos)
+        return {'ok': True, 'prestamo_id': pid, 'mensaje': mensaje, 'ajustes': avisos}
 
     except Exception as e:
         con.rollback()
         con.close()
         return {'ok': False, 'error': f'Error al crear préstamo: {str(e)}'}
 
+def _existe_prestamo(cur, prestamo_id):
+    """El id existe? Los UPDATE de abajo no fallan cuando el WHERE no matchea nada, así que
+    sin este chequeo un id inventado devolvía 'ok: devuelto' y el modelo lo cantaba como
+    hecho. Un id que no existe es un error, no una devolución silenciosa."""
+    return cur.execute("SELECT 1 FROM prestamos WHERE id = ?", (prestamo_id,)).fetchone() is not None
+
+
+def _cierre(prestamo_id, mensaje_base):
+    """Resultado de una devolución/reapertura contado como quedó, no como se pidió.
+    Se llama SIEMPRE después del commit: relee el préstamo ya escrito.
+
+    `_recalcular_estado` puede dejar el préstamo abierto (quedaba algo) o cerrarlo, y el
+    mensaje tiene que decir cuál de las dos pasó: 'Devuelto préstamo id=N' a secas, después
+    de devolver 1 de 4, se lee como que volvió todo.
+    """
+    detalle = _detalle_prestamo_fmt(prestamo_id)
+    pendiente = detalle.get('pendiente_total', 0)
+    estado = detalle.get('estado', '')
+    if pendiente:
+        faltan = ', '.join(f"{it['pendiente']}× {it['nombre']}" for it in detalle['items'] if it['pendiente'])
+        mensaje = f'{mensaje_base}. SIGUE ABIERTO: falta que devuelvan {faltan}'
+    else:
+        mensaje = f'{mensaje_base}. No queda nada pendiente, el préstamo se cerró'
+    return {'estado': estado, 'pendiente_total': pendiente, 'mensaje': mensaje}
+
+
 def _finalizar_prestamo(prestamo_id, items_list=None):
     """Devolver préstamo (todo o parcial)."""
     con = conectar()
     cur = con.cursor()
+
+    if not _existe_prestamo(cur, prestamo_id):
+        con.close()
+        return {'ok': False, 'error': f'No existe el préstamo id={prestamo_id}. No se registró '
+                                      f'ninguna devolución. Buscá el id con listar_prestamos.'}
+
+    if items_list is not None and not items_list:
+        # None = "devolvé todo" (la tool se llamó sin `items`). [] = el modelo mandó una lista
+        # y quedó vacía: eso NO es un pedido de devolver todo, y tratarlo como tal cerraba el
+        # préstamo entero por un error de armado.
+        con.close()
+        return {'ok': False, 'error': f'Mandaste `items` vacío en el préstamo {prestamo_id}: no se '
+                                      f'devolvió nada. Si querían devolver TODO, llamá sin `items`; '
+                                      f'si es parcial, mandá los recurso_id de detalle_prestamo.'}
 
     if not items_list:
         # Devolver todo
@@ -202,6 +279,9 @@ def _finalizar_prestamo(prestamo_id, items_list=None):
     else:
         # Devoluciones parciales
         no_encontrados = []
+        sin_cantidad = []
+        ya_estaban = []
+        ajustados = []
         aplicados = []
         for item in items_list:
             rid = gestion._int(item.get('recurso_id'))
@@ -216,40 +296,74 @@ def _finalizar_prestamo(prestamo_id, items_list=None):
                 no_encontrados.append(rid)
                 continue
 
-            if cantidad > 0:
-                pendiente = max(0, gestion._int(fila['cantidad']) - gestion._int(fila['cantidad_devuelta']))
-                nuevo = gestion._int(fila['cantidad_devuelta']) + min(cantidad, pendiente)
-                cur.execute(
-                    "UPDATE prestamo_items SET cantidad_devuelta = ? WHERE prestamo_id = ? AND recurso_id = ?",
-                    (str(nuevo), prestamo_id, rid)
-                )
-                aplicados.append(rid)
+            if cantidad <= 0:
+                # 0, negativo o no numérico. Antes caía en el `else` mudo: la tool contestaba
+                # "devuelto" con `aplicados: []` y nadie se enteraba de que no pasó nada.
+                sin_cantidad.append(rid)
+                continue
+
+            pendiente = max(0, gestion._int(fila['cantidad']) - gestion._int(fila['cantidad_devuelta']))
+            if not pendiente:
+                # De este ítem ya había vuelto todo. Marcarlo "aplicado" hacía que devolver dos
+                # veces lo mismo contestara ok las dos, y la segunda no cambiaba nada.
+                ya_estaban.append(rid)
+                continue
+            if cantidad > pendiente:
+                ajustados.append(f'de {rid} pediste {cantidad} pero sólo faltaban {pendiente}')
+            nuevo = gestion._int(fila['cantidad_devuelta']) + min(cantidad, pendiente)
+            cur.execute(
+                "UPDATE prestamo_items SET cantidad_devuelta = ? WHERE prestamo_id = ? AND recurso_id = ?",
+                (str(nuevo), prestamo_id, rid)
+            )
+            aplicados.append(rid)
 
         gestion._recalcular_estado(cur, prestamo_id)
         con.commit()
         con.close()
 
+        cierre = _cierre(prestamo_id, f'Devolución parcial en el préstamo {prestamo_id}')
+        problemas = []
         if no_encontrados:
+            problemas.append(f'recurso_id {no_encontrados} no pertenece(n) a este préstamo')
+        if sin_cantidad:
+            problemas.append(f'recurso_id {sin_cantidad} vino(eron) sin cantidad válida (0 o negativa)')
+        if ya_estaban:
+            problemas.append(f'recurso_id {ya_estaban} ya estaba(n) devuelto(s) entero(s)')
+
+        if problemas:
             return {
                 'ok': False,
-                'error': f'recurso_id {no_encontrados} no pertenece(n) al préstamo {prestamo_id}. '
-                         f'No se les aplicó ninguna devolución (revisá con detalle_prestamo). '
-                         f'Ítems sí aplicados: {aplicados}.',
+                'error': '; '.join(problemas) + f'. A esos NO se les aplicó nada (revisá con '
+                         f'detalle_prestamo). Sí se aplicó a: {aplicados}. {cierre["mensaje"]}',
                 'prestamo_id': prestamo_id,
-                'aplicados': aplicados
+                'aplicados': aplicados,
+                **cierre
             }
 
-        return {'ok': True, 'prestamo_id': prestamo_id, 'mensaje': f'Devuelto préstamo id={prestamo_id}', 'aplicados': aplicados}
+        return {'ok': True, 'prestamo_id': prestamo_id, 'aplicados': aplicados,
+                'ajustes': ajustados, **cierre}
 
+    gestion._recalcular_estado(cur, prestamo_id)
     con.commit()
     con.close()
 
-    return {'ok': True, 'prestamo_id': prestamo_id, 'mensaje': f'Devuelto préstamo id={prestamo_id}'}
+    return {'ok': True, 'prestamo_id': prestamo_id,
+            **_cierre(prestamo_id, f'Devuelto entero el préstamo {prestamo_id}')}
 
 def _reabrir_prestamo(prestamo_id, items_list=None):
     """Deshacer una devolución."""
     con = conectar()
     cur = con.cursor()
+
+    if not _existe_prestamo(cur, prestamo_id):
+        con.close()
+        return {'ok': False, 'error': f'No existe el préstamo id={prestamo_id}. No se reabrió nada. '
+                                      f'Buscá el id con listar_prestamos.'}
+
+    if items_list is not None and not items_list:
+        con.close()
+        return {'ok': False, 'error': f'Mandaste `items` vacío en el préstamo {prestamo_id}: no se '
+                                      f'reabrió nada. Si querías reabrirlo ENTERO, llamá sin `items`.'}
 
     if not items_list:
         # Reabrir todo
@@ -275,19 +389,24 @@ def _reabrir_prestamo(prestamo_id, items_list=None):
         con.commit()
         con.close()
 
+        cierre = _cierre(prestamo_id, f'Reapertura parcial del préstamo {prestamo_id}')
         if no_encontrados:
             return {
                 'ok': False,
-                'error': f'recurso_id {no_encontrados} no pertenece(n) al préstamo {prestamo_id}. No se reabrió nada para esos ítems.',
-                'prestamo_id': prestamo_id
+                'error': f'recurso_id {no_encontrados} no pertenece(n) al préstamo {prestamo_id}. '
+                         f'No se reabrió nada para esos ítems. {cierre["mensaje"]}',
+                'prestamo_id': prestamo_id,
+                **cierre
             }
 
-        return {'ok': True, 'prestamo_id': prestamo_id, 'mensaje': f'Reabierto préstamo id={prestamo_id}'}
+        return {'ok': True, 'prestamo_id': prestamo_id, **cierre}
 
+    gestion._recalcular_estado(cur, prestamo_id)
     con.commit()
     con.close()
 
-    return {'ok': True, 'prestamo_id': prestamo_id, 'mensaje': f'Reabierto préstamo id={prestamo_id}'}
+    return {'ok': True, 'prestamo_id': prestamo_id,
+            **_cierre(prestamo_id, f'Reabierto entero el préstamo {prestamo_id}')}
 
 def _eliminar_prestamo(prestamo_id, persona_confirmacion=None):
     """Eliminar un préstamo (solo para cargas erróneas).
@@ -325,6 +444,11 @@ def _eliminar_prestamo(prestamo_id, persona_confirmacion=None):
     try:
         cur.execute("DELETE FROM prestamos WHERE id = ?", (prestamo_id,))
         cur.execute("DELETE FROM prestamo_items WHERE prestamo_id = ?", (prestamo_id,))
+
+        # Borrar un préstamo abierto devuelve sus recursos al pañol de hecho; sin esto
+        # quedaban 'Retirado' sin ningún préstamo que lo justificara.
+        for it in items_antes:
+            gestion.sincronizar_estado(cur, it['recurso_id'])
 
         con.commit()
         con.close()

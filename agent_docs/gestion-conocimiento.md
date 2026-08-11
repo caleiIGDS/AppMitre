@@ -206,6 +206,10 @@ incluyen / actividades que lo usan / **quién lo tiene ahora** / **historial de 
 conjunto → recursos incluidos / actividades que lo usan; actividad → conjuntos + recursos
 utilizados.
 
+En "historial de préstamos" cada fila **dice su estado en las dos ramas** (`· EN PRÉSTAMO`
+o `· DEVUELTO <fecha>`), nunca por ausencia de marca: esta misma sección la lee el agente
+como JSON por `detalle_entidad`, donde una fila sin marca se leía como préstamo abierto.
+
 ## Préstamos / retiros internos
 
 Registro de quién se lleva qué recursos, cuánto y cuándo lo devuelve. Rutas propias
@@ -227,9 +231,15 @@ No hay form de alta con filas de ítems. El préstamo se arma como un **carrito 
 tipo e-commerce**: en cada recurso hay un botón **RETIRAR** que lo suma al carrito. Al
 agregarlo, el botón se transforma en un **stepper verde `−  N  +`** (en la misma fila / ficha)
 que ajusta la cantidad **hasta el stock disponible** (`recursos.cantidad`; sin stock definido =
-sin tope). Arriba de todo, en el nav, hay un **PRÉSTAMO 📋** con el contador que lleva directo al
+sin tope). Arriba de todo, en el nav, aparece un **PRÉSTAMO 📋** con el contador que lleva directo al
 checkout (`/carrito/finalizar`). Recién al finalizar se pide quién retira y **ahí** se crea el
 préstamo.
+
+El link **PRÉSTAMO 📋 sólo se ve con el carrito cargado**: el header lo renderiza con `hidden` si
+`carrito_count` es 0, `setBadge()` de `gestion.js` lo muestra con el primer RETIRAR y lo vuelve a
+esconder cuando el carrito baja a 0. Se oculta (no se saca del DOM) porque de su `data-set-url` sale
+la URL que usa el stepper. Hace falta `.g-cart-link[hidden] { display: none; }` en `gestion.css`
+porque `.g-btn-outline` fuerza `display: inline-block` y pisaría el `[hidden]` del navegador.
 
 **UI optimista, sin delay**: `gestion.js` cambia la interfaz al instante en el click (muestra el
 stepper, ajusta el badge) y sincroniza con el server en segundo plano por `fetch` — no se espera
@@ -262,8 +272,21 @@ eliminado)" y se pueden quitar.
 
 **No se descuenta stock**: `recursos.cantidad` no cambia al prestar/devolver — es
 "cuánto hay en total", no "cuánto está libre ahora mismo". Lo prestado se calcula por
-consulta (`cantidad − cantidad_devuelta` sobre `prestamo_items`), no se mantiene como
-contador aparte.
+consulta con **`pendiente_afuera(cur, rid)`** (suma `cantidad − cantidad_devuelta` de todos los
+préstamos abiertos de ese recurso), no se mantiene como contador aparte. El tope del alta mira
+`_stock` (el total), así que **se puede prestar más de lo que hay**: el inventario puede estar
+desactualizado y el pañol sabe mejor que la DB, así que eso se **avisa y no se bloquea** —
+`crear_prestamo` devuelve `ajustes` cuando lo guardado salió distinto de lo pedido. Ver
+`dev-log/DECISIONS.md` 2026-08-11.
+
+**`recursos.estado` es un derivado**: 'Retirado' mientras haya algo afuera, 'Disponible' cuando
+volvió todo. Lo mantiene **`sincronizar_estado(cur, rid)`, la única función que lo escribe**, y la
+llaman todos los caminos: alta (web y agente), devolución total y por ítem, reapertura y borrado
+del préstamo. Antes cada camino tenía su versión y el estado quedaba mintiendo — el caso peor era
+el botón "devolvió" de la web, que cerraba el préstamo antes de recalcular y dejaba los recursos
+'Retirado' para siempre. Respeta lo cargado a mano: sólo devuelve a 'Disponible' lo que él mismo
+puso en 'Retirado' (no pisa 'En reparación' ni 'Sin revisar') y nunca toca 'De baja'. `migrar()`
+lo corre sobre todos los recursos al arrancar, para emparejar las filas que quedaron desfasadas.
 
 **Devolución por ítem (parcial en cantidad)**: cada `prestamo_items` guarda cuánto se
 devolvió en `cantidad_devuelta` (0 = sigue afuera entero). Un ítem está devuelto cuando
@@ -272,8 +295,21 @@ del préstamo **sigue siendo la fuente de verdad de "cerrado"**: `_recalcular_es
 setea sola cuando no queda nada pendiente en ningún ítem, y la limpia si vuelve a haber algo
 afuera (por un `reabrir_item`). Así la lista (activos/historial) y el contador del home no
 cambian de lógica. Un préstamo con algo devuelto pero no todo figura como "EN PRÉSTAMO ·
-parcial". La migración `cantidad_devuelta` es aditiva (`ALTER TABLE` en `_migrar`, arranca en
-`'0'` para préstamos previos).
+parcial". La migración `cantidad_devuelta` es aditiva (`ALTER TABLE` en `migrar()`, arranca en
+`'0'`), y **arranca en `'0'` también para los préstamos que ya estaban cerrados**: eso los dejaba
+como "devuelto pero con todo pendiente", y al primer `_recalcular_estado()` se reabrían solos.
+Por eso `migrar()` corre después un `UPDATE` idempotente que empareja
+`cantidad_devuelta = cantidad` en todo ítem de un préstamo con `fecha_devolucion <> ''`.
+**Invariante: un préstamo cerrado no tiene pendientes.**
+
+**Un préstamo abierto no significa que todo siga afuera.** Devolver 1 de 4 cosas deja el préstamo
+abierto y esa una ya volvió al pañol: lo que manda siempre es el pendiente **por ítem**. De ahí
+salen dos reglas que hay que sostener en cualquier vista nueva:
+- La sección "quién lo tiene ahora" filtra `pendiente > 0`, no "préstamo abierto" (si no, el
+  devuelto sigue figurando prestado con un `0` al lado que nadie lee).
+- `devolver_item` con el campo `cantidad` vacío devuelve todo lo pendiente de ese ítem; con un
+  número, se topea a lo pendiente; **con basura ("abc", "-5") no se toca nada**. El `max(1, …)`
+  que había convertía cualquier entrada inválida en una devolución de 1 unidad que nadie pidió.
 
 **Routing de `/gestion/prestamos*` vs `/gestion/<slug>*`**: son rutas estáticas
 (`/gestion/prestamos`, `/gestion/prestamos/<id>`, etc.) que compiten con las dinámicas

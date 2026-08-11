@@ -4,6 +4,130 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-11] — La ficha de `preceptores` suma `turno_del_curso` y `turnos_sin_nadie`
+
+**Tipo**: campos nuevos en la respuesta de una tool + constante compartida nueva
+**Archivos**: `agente/padrones.py`, `agente/tools/horarios.py`, `agente/tools/esquemas.py`,
+`agente/prompt.py`, `database.py`, `agent_docs/agente-asistente.md`
+
+Preguntado por el preceptor de 7° 6 a la mañana, el agente contestó con el de la tarde e inventó
+que el curso cursaba a la tarde (ver `dev-log/DECISIONS.md` de la misma fecha). Cuatro cambios:
+
+**1. `database.TURNOS` (constante nueva)** — `("MAÑANA", "TARDE", "VESPERTINO")`, en orden. Los
+`bloques` de `cargar_horarios_preceptores()` se arman a partir de ella (`offset = i * 9`) en vez de
+tener la lista escrita a mano. Es también la lista contra la que `padrones.py` calcula qué turnos de
+un curso están vacíos: si hubiera dos listas y se desincronizaran, un turno entero desaparecería sin
+que nada falle.
+
+**2. Cada ficha de `_preceptores_por_curso()` trae `turno_del_curso`** — el turno en que ese curso
+cursa (de `config.TURNO_CURSOS`, mismo criterio de siempre). Antes era sólo *inferible* leyendo el
+`turno` de lo que hubiera caído en `titular`, y en los 7 cursos con `titular` vacío ni eso.
+
+**3. Cada ficha trae `turnos_sin_nadie`** cuando corresponde — los turnos sin ninguna fila para ese
+curso. Se omite si no hay ninguno. **No** es lo mismo que `sin_asignar` (que es la planilla diciendo
+`FALTA`): esto es la ausencia de fila, que antes no era representable.
+
+**4. `division` se normaliza con `database._extraer_num_curso`** en `_preceptores_fmt`, igual que
+`curso`. `"6ta"` → `"6"`; antes quedaba `"6TA"` y devolvía `error` con los 64 cursos. `"A"`/`"B"` no
+se tocan.
+
+`titular` y `contraturno` **no cambian de forma**: siguen siendo listas de `{turno, preceptor}` con
+el mismo criterio. Lo que se corrigió alrededor es el texto que las describe (`NOTA_TURNOS`, esquema
+de la tool, system prompt), que decía "`contraturno` es el del otro turno" — singular y falso para
+12 de los 64 cursos. Consumidor único de todo esto: el modelo, vía JSON de tool. El SPA no toca
+`padrones.py`.
+
+---
+
+## [2026-08-11] — Las tools de préstamo devuelven el estado resultante; `sincronizar_estado` es el único dueño de `recursos.estado`
+
+**Tipo**: cambio de forma en la respuesta de tres tools + función nueva en `gestion` + reparación de datos
+**Archivos**: `agente/tools/prestamos.py`, `gestion.py`, `agente/tools/esquemas.py`,
+`agente/prompt.py`, `agent_docs/agente-asistente.md`, `agent_docs/gestion-conocimiento.md`
+
+Salió de romper a mano el circuito de préstamos con casos parciales (ver `dev-log/DECISIONS.md`).
+
+**Funciones nuevas en `gestion.py`** (capa 2, las usan las rutas y las tools):
+- `pendiente_afuera(cur, rid)` — unidades de un recurso afuera ahora, sumando todos los
+  préstamos abiertos. Es lo que hay que restarle a `_stock` para saber qué queda.
+- `sincronizar_estado(cur, rid)` — **único lugar que escribe `recursos.estado`**. La llaman el
+  alta (web y agente), `_recalcular_estado`, el borrado de préstamos y `migrar()`.
+  `_recalcular_estado` ya no toca `recursos` por su cuenta.
+
+**Respuesta de `finalizar_prestamo` / `reabrir_prestamo`** — se agregan `estado` y
+`pendiente_total` (releídos después del commit) y el `mensaje` pasa a decir si el préstamo quedó
+abierto y con qué. Antes era siempre `Devuelto préstamo id=N`, incluso tras devolver 1 de 4.
+Además: un `prestamo_id` inexistente ahora devuelve `ok: false` (antes `ok: true` sin escribir
+nada), `items: []` devuelve `ok: false` (antes se interpretaba como "devolver todo"), y las
+cantidades ≤ 0 e ítems ya devueltos se reportan en vez de contarse como aplicados.
+
+**Respuesta de `crear_prestamo`** — se agrega `ajustes` (lista) y el `mensaje` los resume: tope
+por stock, recursos repetidos consolidados (antes: `UNIQUE constraint failed` crudo) y aviso de
+sobre-préstamo. Una cantidad negativa pasa a ser error (antes creaba un ítem con cantidad `-3`).
+
+**Reparación de datos en `migrar()`** — corre `sincronizar_estado` sobre todos los recursos al
+arrancar, para las filas que quedaron desfasadas. Idempotente.
+
+**Web**: `devolver_item` con una cantidad inválida ya no devuelve 1 unidad por el `max(1, …)`;
+no escribe nada. La sección "En préstamo" de la ficha de un recurso filtra `pendiente > 0`.
+
+---
+
+## [2026-08-11] — `detalle_entidad` cambia las claves de `relaciones` para las secciones que no son entidades
+
+**Tipo**: cambio de forma en la respuesta de una tool + backfill de datos en `migrar()`
+**Archivos**: `agente/tools/entidades.py`, `gestion.py`, `agent_docs/agente-asistente.md`,
+`agent_docs/gestion-conocimiento.md`
+
+Emilio reportaba como préstamo abierto uno cerrado hacía semanas y después negaba que existiera
+(ver `dev-log/DECISIONS.md` de la misma fecha). Tres cambios:
+
+**1. Claves de `relaciones` (`_detalle_entidad_fmt`)** — antes la clave era siempre el `slug` de la
+sección. Ahora es el slug **sólo si está en `modulo.ENTIDADES`**; si no, es el título. Lo único que
+cambia en la práctica: en `recursos`, la clave `prestamos` pasa a ser `Historial de préstamos`
+(`En préstamo` ya venía por título, porque su slug es `None`). `conjuntos`, `actividades` e `hitos`
+quedan igual. Consumidor único: el modelo, vía JSON de tool.
+
+**2. Texto del historial de préstamos (`gestion.secciones_detalle`)** — las filas cerradas pasan de
+no tener marca a decir `· DEVUELTO <fecha>`. Afecta también a la ficha web del recurso.
+
+**3. Backfill en `gestion.migrar()`** — `UPDATE prestamo_items SET cantidad_devuelta = cantidad`
+para todo préstamo con `fecha_devolucion <> ''`. Repara las filas que el `ALTER TABLE` de
+`cantidad_devuelta` dejó en `'0'` pese a estar el préstamo cerrado (quedaban "devuelto con todo
+pendiente" y `_recalcular_estado()` los reabría). Idempotente, corre en cada arranque.
+
+---
+
+## [2026-08-11] — El agente busca personas por CARGO y llega a los preceptores
+
+**Tipo**: dos tools nuevas + cambio de forma en tres funciones de `agente/padrones.py`
+**Archivos**: `agente/padrones.py`, `agente/tools/horarios.py`, `agente/tools/entidades.py`,
+`agente/tools/esquemas.py`, `agente/tools/__init__.py`, `agente/prompt.py`,
+`agent_docs/agente-asistente.md`
+
+Los cargos estaban en `escuela.db` y el agente no llegaba a ellos: buscar "ematp" devolvía `[]`, y
+los preceptores (`horarios_preceptores`) eran directamente invisibles pese a que el system prompt
+prometía "quién es el preceptor de un curso".
+
+**Tools nuevas** (lectura, no se auditan):
+- `buscar_por_rol(rol?)` — personal no docente por cargo. Sin match devuelve `padron_completo`
+  con todos los cargos, para que el modelo reconozca la sigla ("EMATP EERR" = energías renovables).
+- `preceptores(curso?, division?, preceptor?)` — preceptor ↔ curso ya digerido: de 595 filas crudas
+  a 64 fichas, con `titular` y `contraturno` separados según `config.TURNO_CURSOS`.
+
+**Cambios de forma** (call sites internos del paquete `agente/`, nada fuera):
+- `_buscar_profesor_scored()` devuelve `(puntaje, nombre, rol)` en vez de `(puntaje, nombre)`.
+- `_docentes_parecidos()` → **`_gente_horarios_parecida()`**, devuelve `[(nombre, rol)]`.
+- `buscar_profesor` marca cada candidato con `rol` y puede agregar `preceptores` +
+  `aviso_preceptores`; `horario_profesor` agrega los mismos dos campos cuando el nombre es de un
+  preceptor.
+- `buscar_entidad('personas', …)`: `en_horarios` pasa de `['CALEI']` a
+  `[{'nombre': 'CALEI', 'rol': 'EMATP EERR'}]` (`rol` omitido si es docente puro).
+
+Costo: los esquemas de tools pasan de ~7.250 a ~7.900 tokens por round-trip (+643).
+
+---
+
 ## [2026-08-10] — `actualizar.py`: poner al día las DBs de una instalación vieja
 
 **Tipo**: herramienta de despliegue (no cambia ningún contrato — los aplica)

@@ -16,6 +16,14 @@ def _cargar_nombre_mapeos():
     return {}
 
 _NOMBRE_MAPEOS = _cargar_nombre_mapeos()
+
+# Los turnos de la escuela, en orden. Es la lista de la que salen los bloques de la planilla
+# de preceptores (`cargar_horarios_preceptores`) y contra la que el agente calcula qué turnos
+# de un curso NO tienen a nadie cargado. Una sola lista: si acá dice tres y allá dos, un turno
+# entero desaparece sin que nada falle.
+TURNOS = ("MAÑANA", "TARDE", "VESPERTINO")
+
+
 def conectar():
     return sqlite3.connect('escuela.db')
 
@@ -258,11 +266,7 @@ def cargar_horarios_preceptores(sheet_id, gid):
 
         # Estructura por bloque: Preceptor | Curso | Division | LUN | MAR | MIE | JUE | VIE
         # + 1 columna vacía separadora → offset entre bloques = 9
-        bloques = [
-            {"turno": "MAÑANA",     "offset": 0},
-            {"turno": "TARDE",      "offset": 9},
-            {"turno": "VESPERTINO", "offset": 18},
-        ]
+        bloques = [{"turno": turno, "offset": i * 9} for i, turno in enumerate(TURNOS)]
 
         for row in reader:
             for bloque in bloques:

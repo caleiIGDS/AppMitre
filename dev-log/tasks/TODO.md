@@ -44,6 +44,24 @@
   3. Opcional a futuro: botón "sugerir otros nombres" por recurso (eso sí requeriría la key en el hosting).
   **Ya hecho (2026-07-21)**: búsqueda tolerante sin IA — `_puntaje_busqueda()` normaliza acentos/mayúsculas y perdona typos por similitud (`difflib`). Resuelve acentos y typos; falta solo la parte de sinónimos que no se parecen ("tester"), que es lo que aporta `otros_nombres`.
 
+- [ ] #22 — `listar_prestamos(persona)` filtra con `LIKE` crudo: no perdona acentos ni typos — `agente/tools/prestamos.py`  
+  `persona LIKE '%x%'` es sensible a acentos, así que buscar "Damian Planes" no encuentra el préstamo de "Damián Planes" y el agente contesta "no hay préstamos a esa persona" — indistinguible de que no exista. La búsqueda de recursos ya resolvió esto en el mismo archivo (`_resolver_recurso`: exacto → substring normalizado → difuso con `texto.norm` y `_puntaje_nombre`); falta aplicar el mismo criterio a la persona. Ojo con el caso "no hay match": tiene que decir explícitamente que buscó y no encontró, no devolver `[]` a secas. Salió al investigar el reporte del 2026-08-11 (ver `dev-log/DECISIONS.md`), aunque no fue la causa de ese bug. Lo mismo aplica al `?q=` de `/gestion/prestamos`, que busca con `LIKE` en persona/destino/notas.
+
+- [ ] #23 — `config.TURNO_CURSOS` desfasado contra la planilla de preceptores — `config.py` (+ confirmar con la escuela)  
+  Hay **7 cursos** donde el turno que dice `config.TURNO_CURSOS` no tiene **ninguna fila** en `horarios_preceptores`. Consecuencia: el agente devuelve `titular` vacío (hay una rama en `NOTA_TURNOS` que lo explica, pero es un parche sobre datos mal) y el SPA no marca ningún "PRECEPTOR PRINCIPAL" en la vista de curso.
+
+  | curso | config dice | la planilla tiene |
+  |---|---|---|
+  | 3° B | MAÑANA | TARDE |
+  | 4° 6 | TARDE | MAÑANA + VESPERTINO |
+  | 4° 7 | TARDE | MAÑANA + VESPERTINO |
+  | 5° 2 | TARDE | MAÑANA |
+  | 6° 3 | TARDE | VESPERTINO |
+  | 6° 7 | VESPERTINO | MAÑANA + TARDE |
+  | 7° 5 | VESPERTINO | TARDE |
+
+  Además `("3", "")` y `("4", "G")` no están en el mapa y caen silenciosamente a `TURNO_DEFAULT` ("MAÑANA"). **Antes de tocar nada hay que preguntar en la escuela cuál de los dos está bien**: puede ser config viejo, o puede ser que falte cargar gente en el Sheet. No es un bug de código. Salió al arreglar el bug de turnos del agente el 2026-08-11 (ver `dev-log/DECISIONS.md`).
+
 ---
 
 ## Bloqueado
@@ -53,6 +71,6 @@
 
 ---
 
-_Último número usado: #21. Próxima tarea nueva: #22_
+_Último número usado: #23. Próxima tarea nueva: #24_
 
 _#4 (parser de preceptores por nombre de columna) descartada el 2026-07-13 — ver `dev-log/DECISIONS.md`: estructura del sheet fija por contrato._

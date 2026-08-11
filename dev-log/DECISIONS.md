@@ -4,6 +4,74 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-08-11] — Un turno no se deduce: si el modelo lo va a decir, tiene que estar escrito
+
+**Contexto**: un usuario preguntó por la preceptora de 7° 6 y el agente contestó bien — titular Magali Bruno (vespertino), contraturno Juan Pablo. Repreguntó "¿a la mañana?" y contestó "Juan Pablo. Es el contraturno de 7° 6, que cursa a la tarde". Dos errores en una línea: 7° 6 cursa **vespertino** (lo había dicho él mismo un mensaje antes) y Juan Pablo es el de **tarde**. La respuesta correcta era que a la mañana **no hay nadie cargado**.
+
+**No fue una distracción del modelo: no tenía cómo contestar bien.** Los resultados de las tools no se persisten en el historial (`agente/rutas.py`: sólo se guarda el texto final del asistente). En el turno 2 el contexto era el system prompt, la pregunta original, la respuesta anterior —donde nunca se escribió que Juan Pablo fuera de tarde— y "¿a la mañana?". La palabra TARDE no existía en ninguna parte. Y como creía saber la respuesta, no volvió a llamar la tool.
+
+**Lo que sí estaba en contexto era una regla falsa.** El system prompt decía "cada curso tiene un preceptor TITULAR (el de su turno) y **uno de CONTRATURNO**". Los turnos son tres, y hay **12 cursos de 64 con dos contraturnos a la vez**. Bajo la regla binaria, con "titular = vespertino" y "contraturno = Juan Pablo" en el historial, "Juan Pablo" era la única deducción consistente al preguntar por la mañana; después racionalizó hacia atrás ("que cursa a la tarde") para que cerrara. El mismo singular estaba en `NOTA_TURNOS` y en el esquema de la tool. **Una simplificación en el prompt no es inocua: el modelo la usa como premisa y deduce con ella.**
+
+**Por qué el turno del curso va como campo y no inferido**: `turno_del_curso` se podía sacar leyendo el `turno` de lo que cayera en `titular` — salvo en los 7 cursos donde `titular` viene vacío, donde no se puede. Un dato que el modelo va a afirmar en voz alta no puede depender de una inferencia que a veces no tiene insumos. Cuesta un campo.
+
+**Por qué `turnos_sin_nadie` existe**: la ficha se armaba recorriendo las filas que hay, así que un turno sin filas no aparecía. "A la mañana no hay nadie" era **incontestable** con ese payload: no había diferencia entre "no hay nadie" y "no te lo estoy diciendo". Es el mismo principio del bug de los préstamos de esta misma fecha — un dato negativo tiene que ocupar lugar—, y acá se ve más claro porque el SPA nunca tuvo el problema: `renderizarPreceptor` pinta las tres ranuras `T.M / T.T / T.V` y la vacía se ve vacía. La versión del agente había perdido justamente eso al colapsar tres turnos en dos baldes.
+
+**Por qué la regla de re-llamar va en el prompt y no en la `instruccion` de la tool**: la `instruccion` viaja en el `tool_result`, que se descarta al terminar el turno. En la repregunta —el momento exacto en que falla— ya no está. El prompt es lo único que sobrevive, así que la regla "cualquier pregunta por un turno concreto obliga a volver a llamar `preceptores`" tiene que vivir ahí. Regla general para este agente: **lo que haga falta en el turno N+1 va en el prompt o queda escrito en la respuesta; en el resultado de una tool no queda nada.**
+
+**Lo que se descartó**: hacer que el agente nombre siempre el turno al mencionar un preceptor ("Juan Pablo (tarde)"). Habría dejado el dato en el historial y arreglado este caso, pero atarle el formato de salida a una limitación del almacenamiento es frágil —y ensucia todas las respuestas para cubrir una repregunta que puede no llegar—. Forzar la re-llamada va al problema.
+
+**Lo que no se cambió**: los 7 cursos donde `config.TURNO_CURSOS` nombra un turno que la planilla no tiene ninguna fila (3° B, 4° 6, 4° 7, 5° 2, 6° 3, 6° 7, 7° 5), que son los que devuelven `titular` vacío. No es un bug de código: hay que preguntar en la escuela si está viejo el config o falta cargar gente en el Sheet. Queda como tarea #23, con la lista.
+
+---
+
+## [2026-08-11] — `recursos.estado` es un derivado, y los derivados tienen un solo dueño
+
+**Contexto**: al castigar el circuito de préstamos con casos parciales (prestar 4, devolver 1, reabrir, borrar) apareció que `recursos.estado` mentía en casi todos los caminos. Un recurso entero adentro del pañol figurando 'Retirado', y unidades afuera figurando 'Disponible'.
+
+**Por qué pasaba**: 'Retirado'/'Disponible' es una función de los préstamos abiertos, pero se guarda en una columna, y cada camino de escritura tenía su propia versión de cómo mantenerla — cinco lugares, cinco criterios. El peor era el botón "devolvió" de la web: setea `fecha_devolucion` y recién después llama a `_recalcular_estado()`, que sólo marcaba 'Disponible' dentro de la rama "el préstamo pasa de abierto a cerrado". Como ya estaba cerrado, no entraba a ninguna rama y los recursos quedaban 'Retirado' para siempre. El alta del agente directamente no lo marcaba (la de la web sí), y borrar un préstamo abierto dejaba todo 'Retirado' sin ningún préstamo que lo justificara.
+
+**La decisión**: una sola función, `sincronizar_estado(cur, rid)`, que no recibe "qué pasó" sino que **mira el estado actual** (`pendiente_afuera`) y escribe la conclusión. La llaman los cinco caminos. Un derivado con un solo dueño no se puede desincronizar por un camino nuevo que se olvide de actualizarlo; con cinco dueños, es cuestión de tiempo. La sincronización de recursos salió además de adentro de los `if` de `_recalcular_estado`: el estado del recurso **no depende de que el préstamo haya cambiado de estado** — devolver 1 de 4 cosas no cierra el préstamo, pero esa una ya volvió.
+
+**Qué respeta**: sólo devuelve a 'Disponible' lo que él mismo puso en 'Retirado', así no pisa un 'En reparación' cargado a mano, y nunca toca 'De baja'.
+
+**Sobre-préstamo: se avisa, no se bloquea**. El tope del alta compara contra el stock total, no contra lo disponible, así que se puede prestar dos veces la única caladora. No se bloqueó: el inventario de la escuela puede estar desactualizado y el pañol sabe mejor que la DB — negarse a registrar un préstamo que ya ocurrió en la vida real haría que la gente deje de cargarlos, que es peor. Lo que sí se agregó es que `crear_prestamo` devuelva `ajustes` con lo que salió distinto de lo pedido, para que el asistente lo diga en vez de confirmar en silencio.
+
+---
+
+## [2026-08-11] — Lo que el agente lee por JSON no puede depender de una marca por ausencia
+
+**Contexto**: Emilio informó que un multímetro estaba prestado a Lucas Garcia "desde el 21 de julio" y, cuando le pidieron anotar la devolución, contestó que no existía ese préstamo. Las dos respuestas salieron de la misma base. El préstamo estaba cerrado hacía semanas; lo que falló fue cómo se lo contamos.
+
+**Las dos causas, que son la misma**: la sección "Historial de préstamos" de `gestion.secciones_detalle()` marcaba con `· EN PRÉSTAMO` los abiertos y **no marcaba nada** en los cerrados, y `_detalle_entidad_fmt` la publicaba bajo la clave `prestamos`. En la página web eso se lee bien: el título dice "Historial" y las filas marcadas saltan a la vista. En el JSON que ve el modelo quedaba `"prestamos": [{"nombre": "Lucas Garcia — 2026-07-21 03:55"}]` — el título se pierde, la ausencia de marca no significa nada, y lo que queda es una lista de préstamos con el nombre de una persona y una fecha.
+
+**Por qué el estado va escrito en las dos ramas del `CASE`**: un dato negativo tiene que ocupar lugar. "Sin marca = devuelto" es una convención que sólo existe en la cabeza de quien escribió el SQL y que se pierde en cuanto el dato cambia de medio. Cuesta seis palabras y sirve igual en la web (el historial ahora dice cuándo volvió cada cosa).
+
+**Por qué la clave sale del título cuando el slug no es una entidad**: `prestamos` figura como `slug` de esa sección por una razón de routing — que el template genérico arme el link a `/gestion/prestamos/<id>` —, no porque sea una entidad de `ENTIDADES`. Ese detalle interno estaba decidiendo qué palabra leía el modelo. Ahora la clave es el slug sólo cuando es un slug de verdad (y el modelo puede pasarlo a otra tool); si no, manda el título, que dice qué es la sección.
+
+**El daño colateral que apareció al mirar**: el `ALTER TABLE` que agregó `cantidad_devuelta` la dejó en `'0'` para todos los ítems, incluidos los de préstamos ya cerrados. Esas filas quedaron como "devuelto pero con todo pendiente" — una contradicción latente: al primer `_recalcular_estado()` el préstamo se reabría solo y el recurso volvía a figurar afuera. Se agregó a `migrar()` un `UPDATE` idempotente que empareja `cantidad_devuelta = cantidad` donde `fecha_devolucion <> ''`. **Una migración aditiva no termina en el `ALTER`**: si la columna nueva participa de un invariante, hay que backfillear las filas viejas o el invariante nace roto.
+
+**Lo que no se cambió**: `listar_prestamos(persona)` sigue filtrando con `LIKE '%persona%'`, que es sensible a acentos ("García" ≠ "Garcia"). No fue la causa acá — el préstamo estaba cerrado y no tenía que aparecer —, pero es un pozo real; queda como tarea, no como parche apurado.
+
+---
+
+## [2026-08-11] — Los cargos y los preceptores entran por tools propias, no al padrón difuso
+
+**Contexto**: el agente no podía contestar "¿qué EMATP hay?" ni "¿quién es el preceptor de 3° B?". Los datos estaban en `escuela.db` desde siempre: `personal_no_docente` tiene una columna `rol`, y `horarios_preceptores` tiene 595 filas con la planilla entera.
+
+**Por qué la búsqueda por cargo es una tool aparte y no un parámetro de `buscar_profesor`**: son dos preguntas distintas. `buscar_profesor` resuelve *un nombre que el usuario dijo mal*; `buscar_por_rol` resuelve *una función dentro de la escuela*, donde el usuario no tiene ningún nombre. Meter las dos en la misma tool obliga a puntuar nombre y cargo en la misma escala, y entonces "ematp" empieza a traer docentes que se escriben parecido. Lo que sí se hizo es que el `rol` viaje pegado al nombre en todas las respuestas: el padrón ya lo tenía y tirarlo era el bug original.
+
+**Por qué no hay diccionario de siglas**: el cargo dice `EMATP EERR` y el usuario dice "energías renovables"; ningún algoritmo que compare letras une esas dos cosas. La alternativa era un mapa `EERR → energías renovables` en el código, que hay que mantener cada vez que la escuela crea un cargo y que igual se queda corto ante la sigla siguiente. En vez de eso, cuando la búsqueda por rol falla la tool devuelve el padrón **completo** de cargos y deja que el modelo reconozca la sigla — que es exactamente lo que un LLM hace bien y una comparación de strings no. Es la misma decisión que `buscar_entidad` → `listar_todos` (2026-08-08), y acá sale aún más barata: son cuatro cargos, ~60 tokens.
+
+**Por qué los preceptores no entran al padrón difuso**: sus nombres están cargados a mano y sin normalizar ("ANGELINA", "KARINA (M RIOS)", "PTRICIA MAGALLANES", "FALTA"). Sumarlos a `_padron_horarios()` habría degradado todas las sugerencias de `buscar_profesor`, que es la tool más usada, para arreglar una pregunta que se hace mucho menos. Entran por una tool propia, y para que igual se los **encuentre** por nombre, `buscar_profesor` y `horario_profesor` cruzan contra ellos y devuelven un aviso lateral que apunta a esa tool — el mismo patrón que ya existía para las personas con ficha.
+
+**Por qué la tool de preceptores devuelve la planilla digerida y no las filas**: la tabla cruda es una fila por curso × turno × día. Mandársela al modelo es pedirle que agrupe 595 filas y que decida solo qué significan dos nombres en el mismo curso. En vez de eso se manda una ficha por curso con `titular` y `contraturno` ya separados (usando `config.TURNO_CURSOS`, el mismo criterio que el SPA), los días solo cuando no son los cinco, y `sin_asignar` donde la planilla dice "FALTA". La regla general: el agente decide con datos interpretados, no con SQL crudo.
+
+**Por qué las grafías se agrupan por conjunto de palabras y no por parecido**: "ROMERO VANESA" y "VANESA ROMERO" son la misma persona cargada dos veces, y separadas hacían que la búsqueda pidiera desambiguar entre dos opciones idénticas y mostrara la mitad de sus cursos. Agrupar por *token set* las une sin riesgo. Agrupar por similitud habría unido también "DANIELA TRAJO" con "DANIELA TREJO" — que probablemente también sean la misma persona, pero fusionar por parecido puede unir a dos distintas, y ese error es mucho más caro que dejar un duplicado a la vista.
+
+**Costo aceptado**: +643 tokens de esquemas en **cada** round-trip de tool (de ~7.250 a ~7.900). Se paga porque cierra dos agujeros que hoy se responden mal — y uno de ellos, el de preceptores, el system prompt ya lo prometía sin tener con qué cumplirlo.
+
+---
+
 ## [2026-08-10] — Las migraciones que cruzan las dos DBs van a un script, no al hook `migrar()`
 
 **Contexto**: el hosting (PythonAnywhere) conserva los `.db` entre deploys y los `.db` están en `.gitignore`. Eso es lo que salva los datos en cada `git pull`, pero también significa que el archivo puede venir de un schema de hace tres refactors. Al preparar el deploy del split en cuatro áreas apareció que dos migraciones ya hechas en desarrollo no tenían forma de llegar al servidor.

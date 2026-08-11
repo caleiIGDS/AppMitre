@@ -23,7 +23,8 @@
       "PowerShell(cd \"c:\\\\Users\\\\calei\\\\projects\\\\AppMitre\"; $env:PYTHONPATH = \"c:\\\\Users\\\\calei\\\\projects\\\\AppMitre\"; python -c \"import ast; [ast.parse\\(open\\(f,encoding='utf-8'\\).read\\(\\),f\\) for f in ['agente.py','gestion.py','app.py']]; print\\('sintaxis OK'\\)\"; python -c \"import agente; print\\('tools:', len\\(agente.TOOLS_SCHEMA\\)\\); print\\('leer_foto' in [t['name'] for t in agente.TOOLS_SCHEMA], 'adjuntar_foto' in [t['name'] for t in agente.TOOLS_SCHEMA]\\); print\\('adjuntar en escritura:', 'adjuntar_foto' in agente.TOOLS_ESCRITURA\\)\")",
       "PowerShell(cd \"c:\\\\Users\\\\calei\\\\projects\\\\AppMitre\"; $env:PYTHONPATH = \"c:\\\\Users\\\\calei\\\\projects\\\\AppMitre\"; python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\b16f2f1d-052b-401d-b466-90d247f34556\\\\scratchpad\\\\test_dos_caminos.py\")",
       "Bash(python -c \"import ast,sys; ast.parse\\(open\\('agente.py',encoding='utf-8'\\).read\\(\\)\\); print\\('sintaxis OK'\\)\")",
-      "Bash(echo \"refs restantes: $?\")"
+      "Bash(echo \"refs restantes: $?\")",
+      "Bash(python -X utf8 -c ' *)"
     ]
   }
 }

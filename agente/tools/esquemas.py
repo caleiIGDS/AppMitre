@@ -31,13 +31,69 @@ TOOLS_SCHEMA = [
                         'institucional). Si el tema es un hito o la semblanza de '
                         "alguien, la persona se busca con buscar_entidad('personas', ...). Cuando el "
                         'nombre coincide con las dos cosas, esta tool te devuelve además '
-                        '`personas_con_ficha` y un `aviso`: hacele caso.'),
+                        '`personas_con_ficha` y un `aviso`: hacele caso. Los que tienen cargo no '
+                        'docente vienen con su `rol` al lado del nombre. Los PRECEPTORES no están '
+                        'en este padrón: si el nombre coincide con alguno, te lo devuelve aparte '
+                        'en `preceptores` y ahí seguís con la tool `preceptores`. '
+                        'Buscar por CARGO ("¿qué EMATP hay?") no es esta tool: es buscar_por_rol.'),
         'input_schema': {
             'type': 'object',
             'properties': {
                 'query': {'type': 'string', 'description': 'Parte del nombre a buscar, como lo dijo el usuario'}
             },
             'required': ['query']
+        }
+    },
+    {
+        'name': 'buscar_por_rol',
+        'description': ('Busca personal NO DOCENTE por su CARGO, no por su nombre: EMATP, '
+                        'jefaturas de departamento, porteros. Es la tool de "¿qué EMATP hay?", '
+                        '"¿quién es el EMATP de energías renovables?", "¿quién es la jefa de '
+                        'exactas?". SIN parámetro devuelve el padrón completo de cargos, que es '
+                        'corto. OJO CON LAS SIGLAS: los cargos están escritos como los cargó la '
+                        'escuela ("EMATP EERR" es el EMATP de energías renovables), y esta '
+                        'búsqueda compara letras, no significados. Si no encuentra el cargo por '
+                        'el nombre que te dieron, te devuelve igual `padron_completo` con TODOS '
+                        'los cargos: leelo y reconocé vos la sigla. Si ahí tampoco está, decí '
+                        'que no está cargado — no ofrezcas el más parecido. Esta tool NO da '
+                        'horarios (eso es horario_profesor) ni sabe de preceptores por curso '
+                        '(eso es la tool preceptores).'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'rol': {'type': 'string', 'description': 'Cargo a buscar, como lo dijo el usuario ("ematp", "jefa de exactas"). Vacío = todos los cargos'}
+            },
+            'required': []
+        }
+    },
+    {
+        'name': 'preceptores',
+        'description': ('Qué preceptor tiene cada curso, y qué cursos tiene cada preceptor. '
+                        'Es la ÚNICA fuente de esto: los preceptores no dan clases, así que '
+                        'horario_profesor no sabe nada de ellos. Los turnos son TRES (MAÑANA, '
+                        'TARDE, VESPERTINO): cada curso viene con `turno_del_curso`, con '
+                        '`titular` (el preceptor de ese turno) y con `contraturno`, que es una '
+                        'LISTA con todos los demás y puede traer más de uno, en turnos distintos. '
+                        'Si te preguntan "el preceptor" a secas, es el titular; si te preguntan '
+                        'por un turno, mirá el campo `turno` de cada entrada en vez de suponer. '
+                        'Tres formas de llamarla: (a) con `curso` y `division` para un curso '
+                        '("¿quién es el preceptor de 3° B?"); (b) con `curso` solo, para todas '
+                        'las divisiones de ese año; (c) con `preceptor` para dar vuelta la '
+                        'pregunta ("¿qué cursos tiene Vanesa Romero?"), que resuelve el nombre '
+                        'difuso y puede pedirte que desambigües con `sugerencias`. Sin ningún '
+                        'parámetro devuelve la planilla ENTERA (64 cursos): usala así solo si la '
+                        'pregunta es realmente sobre todos. `sin_asignar: true` significa que la '
+                        'planilla no tiene preceptor cargado ahí — decilo así, no inventes un '
+                        'nombre; `turnos_sin_nadie` lista los turnos que ese curso no tiene '
+                        'cubiertos. Los cursos van como "3° B": el año y la división por separado.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'curso': {'type': 'string', 'description': 'Solo el número de año, "1" a "7". Sin el símbolo de grado'},
+                'division': {'type': 'string', 'description': 'Solo la división: "A", "B", o un número como "1", "9". Opcional: sin esto trae todas las divisiones del año'},
+                'preceptor': {'type': 'string', 'description': 'Nombre del preceptor, para preguntar al revés qué cursos tiene. Tolera aproximados y nombre invertido'}
+            },
+            'required': []
         }
     },
     {
@@ -126,9 +182,10 @@ TOOLS_SCHEMA = [
                         'Multímetro si te pidieron un "tester". En ese caso llamá a '
                         'listar_todos con el mismo slug y decidí mirando la lista completa. '
                         'CON slug="personas" mira TAMBIÉN el padrón de los horarios: si hay '
-                        'docentes que coinciden te los devuelve en `en_horarios` con un '
-                        '`aviso_horarios`. Que no haya ficha NO significa que la persona no '
-                        'exista en la escuela — puede estar dando clases y no tener ficha todavía.'),
+                        'gente que coincide te la devuelve en `en_horarios` (con su `rol` si es '
+                        'personal no docente) y un `aviso_horarios`. Que no haya ficha NO '
+                        'significa que la persona no exista en la escuela — puede estar dando '
+                        'clases o tener un cargo y no tener ficha todavía.'),
         'input_schema': {
             'type': 'object',
             'properties': {
@@ -421,7 +478,9 @@ TOOLS_SCHEMA = [
                         'vuelvas a llamar acá. Si un nombre de recurso es ambiguo devuelve ok:false con '
                         'una lista `opciones`: en ese caso mostrale las opciones al usuario y preguntá '
                         'cuál es, no elijas vos ni reintentes adivinando. La cantidad se topea al stock '
-                        'disponible.'),
+                        'del inventario. Si lo que se guardó salió distinto de lo pedido (se topeó al '
+                        'stock, se sumaron repetidos, o ya había unidades afuera en otros préstamos), '
+                        'la respuesta trae `ajustes`: decíselos al usuario, no des por hecho lo pedido.'),
         'input_schema': {
             'type': 'object',
             'properties': {
@@ -452,7 +511,9 @@ TOOLS_SCHEMA = [
                         '`recurso_id` tienen que ser los de ESTE préstamo: llamá detalle_prestamo antes '
                         'para conocerlos, no uses ids de buscar_entidad. Si alguno no pertenece al '
                         'préstamo devuelve ok:false y no aplica NADA: en ese caso avisá del error, no '
-                        'lo des por devuelto.'),
+                        'lo des por devuelto. La respuesta trae `estado` y `pendiente_total` de cómo '
+                        'quedó el préstamo DESPUÉS de la devolución: contale eso al usuario, no lo que '
+                        'pediste. Nunca mandes `items` vacío: si devolvieron todo, omitilo.'),
         'input_schema': {
             'type': 'object',
             'properties': {

@@ -192,9 +192,16 @@ El asistente se usa mayormente desde el teléfono, en el pasillo. Lo que eso imp
 
 **Lectura** (no se auditan, siempre disponibles):
 - `buscar_profesor(query)` — resolución difusa de nombre, **sobre el padrón de los
-  horarios**: docentes de `clases` **y personal no docente** (ver abajo). Si el nombre también
+  horarios**: docentes de `clases` **y personal no docente** (ver abajo). Cada candidato lleva
+  su `rol` si tiene cargo no docente. Si el nombre también
   coincide con una persona con ficha, devuelve
-  `{docentes, personas_con_ficha, aviso}` en vez de la lista pelada (ver "Dos padrones")
+  `{docentes, personas_con_ficha, aviso}` en vez de la lista pelada (ver "Dos padrones"); si
+  coincide con un preceptor, agrega `preceptores` + `aviso_preceptores`
+- `buscar_por_rol(rol?)` — personal no docente **por cargo**, no por nombre ("¿qué EMATP hay?").
+  Sin `rol` devuelve el padrón entero; con un `rol` que no matchea lo devuelve igual en
+  `padron_completo`, ver "Buscar por cargo"
+- `preceptores(curso?, division?, preceptor?)` — preceptor ↔ curso, ya digerido: titular y
+  contraturno separados, ver "Los preceptores entran por su propia tool"
 - `horario_profesor(nombre)` / `horario_curso(curso, division)` / `horario_aula(aula)`
   — horarios agrupados por día. `horario_profesor` cubre también al personal no docente
 - `aulas_libres()` — aulas desocupadas ahora, agrupadas por piso
@@ -203,7 +210,7 @@ El asistente se usa mayormente desde el teléfono, en el pasillo. Lo que eso imp
   (calidad del match explícita, ver abajo)
 - `listar_todos(slug)` — lista completa de nombres + id; **fallback** de `buscar_entidad`
   cuando no hay ningún match `exacto`, ver abajo
-- `detalle_entidad(slug, id)` — detalle completo + relaciones
+- `detalle_entidad(slug, id)` — detalle completo + relaciones (ver "Claves de `relaciones`")
 - `listar_prestamos(persona?)` / `detalle_prestamo(id)` — estados de préstamos
 - `consultar_historia(tema)` — lore de la escuela y guiños internos, ver abajo
 - `leer_foto()` — lee la foto adjuntada en ESTE turno y devuelve lo que dice, en texto. No
@@ -218,8 +225,9 @@ El asistente se usa mayormente desde el teléfono, en el pasillo. Lo que eso imp
   parámetro
 - `vincular_entidad` / `desvincular_entidad` — gestionar M2M
 - `crear_prestamo(persona, destino?, notas?, items)` — crear préstamo (cantidad topeada
-  a stock, recurso por nombre o id con resolución ambigua)
-- `finalizar_prestamo(id, items?)` — devolución total o parcial (calcula estado automáticamente)
+  a stock, recurso por nombre o id con resolución ambigua). Devuelve `ajustes` si lo guardado
+  salió distinto de lo pedido, ver "Las tools de préstamo cuentan cómo quedó" abajo
+- `finalizar_prestamo(id, items?)` — devolución total (sin `items`) o parcial (con `items`)
 - `reabrir_prestamo(id, items?)` — deshace una devolución
 - `eliminar_entidad` / `eliminar_prestamo` — **requieren confirmación en turno separado** (el
   system prompt instruye a Claude a no ejecutar en el mismo turno en que se solicita, sino
@@ -341,6 +349,14 @@ tablas, igual que ya hacía el autocompletado del SPA. De ahí comen `_buscar_pr
 (y por lo tanto `buscar_profesor` y la resolución difusa de `horario_profesor`) y
 `_personas_conocidas()`.
 
+**El rol viaja con el nombre.** `_buscar_profesor_scored` devuelve `(puntaje, nombre, rol)` y
+no `(puntaje, nombre)`: el padrón ya tenía el cargo y tirarlo era el bug — CALEI aparecía como
+un candidato más entre los docentes, sin nada que dijera que es la EMATP de renovables. Por eso
+`buscar_profesor` marca a cada candidato con su `rol`, y `buscar_entidad('personas', …)` lo pone
+en `en_horarios` y lo nombra en el aviso ("CALEI (EMATP EERR)"). Por lo mismo
+`_docentes_parecidos` pasó a llamarse **`_gente_horarios_parecida`** y devuelve `[(nombre, rol)]`:
+el nombre viejo empujaba a los avisos a decirle "docente" a un EMATP.
+
 **`horario_profesor` devuelve los dos horarios, no uno u otro**, porque los cargos conviven:
 
 | Caso | Qué devuelve |
@@ -355,9 +371,84 @@ las clases. Y en el caso "solo no docente" el early return viejo (`"no tiene cla
 cargadas"`) llevaba al modelo a darlo por inexistente, que es exactamente el bug: ahora esa
 rama responde el horario de presencia.
 
-Los **preceptores** (`horarios_preceptores`) siguen fuera: sus nombres están cargados sin
-normalizar ("ANGELINA", "KARINA (M RIOS)", "FALTA") y meterlos al padrón difuso ensuciaría
-las sugerencias de `buscar_profesor`. Su horario se consulta por el SPA, no por el agente.
+### Buscar por cargo (`buscar_por_rol`)
+
+Los nombres se encontraban; los **cargos** no existían: buscar "ematp" devolvía `[]`, porque el
+padrón difuso compara nombres de persona. `buscar_por_rol(rol?)` filtra `personal_no_docente` por
+la columna `rol` con `_coincide_fuerte` —el mismo filtro estricto de los cruces de padrón, que
+resuelve tanto "ematp" (substring) como "ematp de biologia" (palabra por palabra)—.
+
+**Las siglas de la escuela no se traducen en el código.** El cargo está escrito como lo cargó la
+escuela: `EMATP EERR` es el EMATP de energías renovables, y "energías renovables" no matchea con
+"EERR" por letras. Cuando no hay match, la tool devuelve igual **`padron_completo`** con los cuatro
+cargos y le pide al modelo reconocer la sigla ahí. Es el mismo camino de dos niveles que
+`buscar_entidad` → `listar_todos` (ver `dev-log/DECISIONS.md` 2026-08-08): un diccionario de
+abreviaturas habría que mantenerlo cada vez que la escuela crea un cargo, y el padrón entero cuesta
+~60 tokens.
+
+### Los preceptores entran por su propia tool (`preceptores`)
+
+Sus nombres siguen **fuera del padrón difuso** —están cargados sin normalizar ("ANGELINA",
+"KARINA (M RIOS)", "FALTA") y ensuciarían las sugerencias de `buscar_profesor`—, pero ya no son
+invisibles: `preceptores(curso?, division?, preceptor?)` los devuelve **digeridos**, que es la única
+forma en que esa tabla sirve. De 595 filas crudas (curso × turno × día) salen 64 fichas, una por
+curso:
+
+- **Titular vs contraturno.** El turno en que el curso cursa sale de `config.TURNO_CURSOS`
+  (fallback `TURNO_DEFAULT`), el mismo criterio que ya usa `database.obtener_horario_preceptor()`;
+  todo lo que no es ese turno es contraturno. Sin esa distinción, un curso devuelve dos nombres y
+  no hay forma de saber cuál contestar cuando preguntan "el preceptor" a secas.
+- **`contraturno` es una LISTA y "el otro turno" no existe.** Los turnos son tres, así que
+  **12 de los 64 cursos tienen dos contraturnos a la vez**, en dos turnos distintos (4° 5, 4° 6,
+  4° 7, 5° 4, 5° 5, 5° 6, 6° 5, 6° 7, 6° 8, 7° 1, 7° 2, 7° 3). Los textos que ve el modelo decían
+  "el del otro turno", en singular, y eso se cobró un bug real — ver `dev-log/DECISIONS.md`
+  2026-08-11 ("Un turno no se deduce…").
+- **`turno_del_curso` viene escrito en cada ficha.** Antes el turno en que cursa el curso era sólo
+  *inferible* leyendo el `turno` de lo que hubiera caído en `titular` — y en los 7 cursos con
+  `titular` vacío ni siquiera eso. Es el campo, no una deducción.
+- **`turnos_sin_nadie`** — los turnos que no tienen **ninguna fila** para ese curso (se omite si no
+  hay ninguno). La ficha se arma sólo con las filas que existen, así que un turno vacío no aparecía
+  por ningún lado y "¿y a la mañana?" era literalmente incontestable con este payload. Distinto de
+  `sin_asignar`: eso es la planilla diciendo `FALTA`, esto es no haber fila. La lista de turnos
+  válidos es `database.TURNOS`, la misma de la que salen los bloques del Sheet.
+- **`dias` solo cuando no cubre la semana entera** (hay cursos donde dos preceptores se reparten
+  los días); si cubre los cinco, el detalle es ruido.
+- **`titular` vacío es un caso real** (7 de 64 cursos): la planilla tiene gente en el contraturno y
+  a nadie en el turno del curso. La `instruccion` se lo dice explícitamente al modelo, porque las
+  dos salidas fáciles son erróneas: decir que el curso no tiene preceptor, o pasar el de
+  contraturno por titular. Son datos desfasados, no un caso de diseño: la lista de los 7 y qué
+  hacer con ellos está en `dev-log/tasks/TODO.md` #23.
+- **`sin_asignar: true` en vez del nombre** cuando la planilla dice `FALTA` — si no, el agente le
+  contesta a alguien que su preceptora se llama FALTA.
+- **Las grafías del mismo nombre se agrupan** (`_alias_preceptores`): la planilla tiene "ROMERO
+  VANESA" **y** "VANESA ROMERO". Sin agrupar, preguntar por ella empataba entre dos opciones
+  idénticas y la que se eligiera mostraba la mitad de sus cursos. Se agrupa por **conjunto de
+  palabras**, no por parecido: "DANIELA TRAJO" y "DANIELA TREJO" son un typo y quedan separadas a
+  propósito, porque fusionar a dos personas distintas es el error caro.
+
+Tres modos: un curso (`curso` + `division`, o `curso` solo para todo el año), un preceptor (difuso,
+con `sugerencias` si empata — igual protocolo que `_horario_profesor_fmt`), o **nada**, que devuelve
+la planilla entera (~4.000 tokens; la descripción del esquema pide usarlo solo si la pregunta es
+realmente sobre todos). Los campos de turno le sumaron ~29% a ese modo — 55 de los 64 cursos tienen
+algún turno vacío, así que `turnos_sin_nadie` aparece en casi todos. Se paga igual: una ficha que
+cambia de forma según cómo se llamó la tool es peor que una ficha grande, y el modo caro ya está
+desaconsejado en el esquema. En el modo normal (un curso) la ficha entera son ~1,6 KB.
+
+**La división pasa por `database._extraer_num_curso`, igual que el curso.** Las divisiones de 4°–7°
+son números y en castellano se escriben "6ta"/"3ra" — tal cual las tipea el usuario. Sin eso "6ta"
+quedaba `"6TA"`, no matcheaba y la tool devolvía `error` con los 64 cursos. La función devuelve el
+string tal cual si no empieza con dígito, así que `"A"`/`"B"` no se tocan.
+
+**Las repreguntas de turno obligan a volver a llamar la tool.** Está en el system prompt, no en la
+`instruccion`, y por una razón concreta: los resultados de las tools **no quedan en el historial**
+(`rutas.py`, ver "La conversación"), así que en el turno siguiente la `instruccion` ya no está en
+contexto — el prompt sí. "¿Y a la mañana?" después de una respuesta de preceptores parece
+contestable de memoria y no lo es: el turno de cada persona no quedó escrito en ningún lado.
+
+Y para que la gente se **encuentre** sin entrar al padrón difuso, `buscar_profesor` y
+`horario_profesor` cruzan contra los preceptores y devuelven `preceptores` + un aviso que apunta a
+esta tool. Los preceptores siguen sin tener horario de clases: eso no se responde con
+`horario_profesor`.
 
 ### Dos padrones de personas, y el cruce en las dos direcciones
 
@@ -386,7 +477,8 @@ ese nombre, o proponer crearle la ficha).
 Va en el resultado de las tools y no (solo) en el system prompt porque para cuando el modelo
 llamó **ya eligió**: lo único que lo corrige a tiempo es lo que la herramienta le conteste.
 
-**`_coincide_fuerte(q_norm, nombre)`** es el filtro de los dos cruces, y es más estricto que
+**`_coincide_fuerte(q_norm, nombre)`** es el filtro de todos los cruces laterales —los dos de
+persona, el de preceptores y el de cargos de `buscar_por_rol`—, y es más estricto que
 las búsquedas normales: substring, o similitud **palabra por palabra** ≥ `UMBRAL_SIMILITUD`
 (0.68). No usa el 0.6 de `_buscar_profesor_scored`, que ofrece candidatos a propósito: con
 0.6 el cruce de "nati" traía PETRATE MATIAS (0.60 contra "matias") y el de "calei" traía
@@ -927,6 +1019,46 @@ del tiempo, personas). La sección de PERSONAS le marca dos cosas que el código
 que la semblanza institucional **no** se mezcla con las anécdotas literales de
 `consultar_historia`, y que antes de crear una persona hay que buscarla, porque una segunda
 ficha del mismo docente le parte la historia en dos.
+
+### Las tools de préstamo cuentan cómo quedó, no lo que se pidió
+
+Un préstamo puede terminar distinto de lo que se pidió (se devolvió parte, se topeó al stock, el
+id no existía), y el modelo sólo tiene el JSON de la tool para saberlo. Contrato, desde 2026-08-11
+(salió de romper a mano el circuito completo, ver `dev-log/DECISIONS.md`):
+
+- **`finalizar_prestamo` y `reabrir_prestamo` devuelven `estado` y `pendiente_total` releídos
+  después del commit**, más un `mensaje` que dice si el préstamo quedó abierto y qué falta. El
+  mensaje viejo era `Devuelto préstamo id=N` para todos los casos: después de devolver 1 de 4, el
+  modelo lo leía como que había vuelto todo.
+- **Un id que no existe es un error.** Los `UPDATE … WHERE id = ?` no fallan cuando no matchean
+  nada, así que `finalizar_prestamo(99999)` contestaba `ok: true` y el asistente daba por
+  registrada una devolución que nunca ocurrió. Ahora se chequea la existencia primero
+  (`_existe_prestamo`).
+- **`items: []` es un error, no "devolvé todo".** `None` (la tool llamada sin `items`) significa
+  todo; una lista vacía es un armado fallido, y tratarla como `None` cerraba el préstamo entero.
+- **Lo que no se pudo aplicar se enumera**: ítems que no pertenecen al préstamo, cantidades ≤ 0 y
+  ítems que ya estaban devueltos enteros vuelven en el `error`, separados de los que sí se
+  aplicaron (`aplicados`).
+- **`crear_prestamo` devuelve `ajustes`** cuando topeó al stock, sumó un recurso repetido (el
+  `UNIQUE(prestamo_id, recurso_id)` antes reventaba con el error crudo de SQLite) o detectó que
+  ya hay unidades afuera en otros préstamos. Una cantidad negativa se rechaza de plano.
+
+### Claves de `relaciones` en `detalle_entidad`
+
+`_detalle_entidad_fmt` arma `resultado['relaciones']` desde
+`modulo.secciones_detalle()`, y **la clave que elige cambia lo que el modelo entiende**:
+
+- Si el `slug` de la sección es una entidad real (está en `modulo.ENTIDADES`), la clave **es
+  el slug** (`conjuntos`, `actividades`, `hitos`): así el modelo puede pasarla tal cual a
+  `buscar_entidad` / `detalle_entidad`.
+- Si no lo es, manda el **título** (`"En préstamo"`, `"Historial de préstamos"`).
+
+El motivo es un bug real (2026-08-11): `prestamos` **no** es una entidad de `ENTIDADES`, pero
+la sección "Historial de préstamos" la declara como `slug` para que el template genérico arme
+el link a `/gestion/prestamos/<id>`. Con la clave cruda, el historial completo le llegaba al
+modelo como `"prestamos": [...]` — o sea, indistinguible de "lo que está afuera ahora" — y
+Emilio informaba como préstamo abierto uno cerrado hacía semanas. Regla general: **una clave
+que el modelo lee como prosa no puede depender de un detalle de routing.**
 
 ### Integración con los módulos de dominio
 
