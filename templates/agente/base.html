@@ -25,9 +25,16 @@
                 </div>
                 <div class="g-header-actions">
                     <a class="g-btn-outline" href="/">‹ SISTEMA DE HORARIOS</a>
-                    {% if session.get('gestion_ok') %}
+                    {% if puede('gestion.leer') %}
                     <a class="g-btn-outline" href="{{ url_for('gestion.home') }}">‹ GESTIÓN DE RECURSOS</a>
+                    {% endif %}
+                    {% if puede('historia.leer') %}
                     <a class="g-btn-outline" href="{{ url_for('historia.home') }}">‹ HISTORIA INSTITUCIONAL</a>
+                    {% endif %}
+                    {% if puede('accesos.admin') %}
+                    <a class="g-btn-outline" href="{{ url_for('accesos.panel') }}">🔑 ACCESOS</a>
+                    {% endif %}
+                    {% if acceso_actual() %}
                     <a class="g-btn-outline" href="{{ url_for('agente.salir') }}">SALIR</a>
                     {% endif %}
                 </div>
@@ -37,7 +44,9 @@
         <div class="g-container g-shell">
             <nav class="g-nav">
                 <a href="{{ url_for('agente.chat_page') }}" class="g-nav-tag {{ 'active' if activo == 'agente' }}">ASISTENTE</a>
+                {% if puede('agente.auditar') %}
                 <a href="{{ url_for('agente.agente_log') }}" class="g-nav-tag">AUDITORÍA</a>
+                {% endif %}
             </nav>
 
             <main class="g-main">

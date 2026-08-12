@@ -11,7 +11,7 @@ from config import DIAS, ahora
 from .padrones import _personas_conocidas
 from .prompt import construir_system_prompt
 from .proveedores import _get_config
-from .tools import TOOLS_SCHEMA, ejecutar_tool
+from .tools import TOOLS_ESCRITURA, ejecutar_tool, tools_permitidas
 
 
 # ============================================================================
@@ -62,12 +62,14 @@ def _crear_cliente_llm():
 PROVIDERS_OPENAI = ('openai', 'groq', 'ollama', 'deepseek')
 
 
-def _tools_openai():
-    """TOOLS_SCHEMA (formato Anthropic) → formato de function calling de OpenAI.
+def _tools_openai(tools):
+    """Esquemas (formato Anthropic) → formato de function calling de OpenAI.
 
     Anthropic usa {name, description, input_schema}; OpenAI/DeepSeek/Groq esperan
     {type:'function', function:{name, description, parameters}}. El JSON Schema en sí
     es idéntico, solo cambia el envoltorio.
+
+    Recibe la lista ya filtrada por permisos: acá no se decide nada, sólo se traduce.
     """
     return [
         {
@@ -78,7 +80,7 @@ def _tools_openai():
                 'parameters': t['input_schema'],
             }
         }
-        for t in TOOLS_SCHEMA
+        for t in tools
     ]
 
 
@@ -130,7 +132,7 @@ def _mensajes_openai(mensajes, vision=False):
 
 
 def _loop_openai(client, model, system_prompt, mensajes_usuario, trazas, max_iterations=10,
-                 contexto_turno=None):
+                 contexto_turno=None, permisos=frozenset(), tools_disponibles=()):
     """Loop de tool-calling para APIs compatibles con OpenAI (DeepSeek, Groq, Ollama, GPT).
 
     Es un loop aparte y no un `if` dentro del de Anthropic porque cambia todo lo que
@@ -140,7 +142,7 @@ def _loop_openai(client, model, system_prompt, mensajes_usuario, trazas, max_ite
     """
     msgs = ([{'role': 'system', 'content': system_prompt}]
             + _mensajes_openai(mensajes_usuario, vision=_get_config()['vision']))
-    tools = _tools_openai()
+    tools = _tools_openai(tools_disponibles)
 
     for _ in range(max_iterations):
         try:
@@ -183,7 +185,8 @@ def _loop_openai(client, model, system_prompt, mensajes_usuario, trazas, max_ite
             if not isinstance(tool_input, dict):
                 tool_input = {}
 
-            resultado = ejecutar_tool(tc.function.name, tool_input, contexto_turno)
+            resultado = ejecutar_tool(tc.function.name, tool_input, contexto_turno,
+                                      permisos=permisos)
             trazas.append({
                 'tool': tc.function.name,
                 'ok': resultado.get('ok', True) if isinstance(resultado, dict) else True
@@ -197,7 +200,8 @@ def _loop_openai(client, model, system_prompt, mensajes_usuario, trazas, max_ite
     return 'Máximo de iteraciones alcanzado'
 
 
-def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None):
+def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None,
+                    permisos=frozenset()):
     """
     Llama al LLM configurado con la lista de tools, ejecuta lo que pida, repite hasta
     que el modelo da una respuesta final de texto. Retorna la respuesta final.
@@ -207,6 +211,11 @@ def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None):
     (nombre + ok). Las lecturas no van a `agente_log` (sería ruido), así que sin esto
     no había forma de saber si el modelo consultó de verdad o inventó la respuesta —
     que es exactamente como se detectó que fabricaba horarios enteros.
+
+    `permisos`: los del acceso que está chateando. Recortan las tools ANTES de mandarlas,
+    así que el modelo ni se entera de que existen las que no le corresponden. Es distinto
+    a prohibírselas: una tool que no está en la lista no se anuncia ni se alucina. El
+    default vacío es fail-closed.
     """
     if trazas is None:
         trazas = []
@@ -220,7 +229,14 @@ def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None):
     # el prompt se arma de nuevo en cada mensaje justamente para que no se quede vieja.
     hoy = ahora()
     dia_semana = DIAS[hoy.weekday()] if hoy.weekday() < len(DIAS) else hoy.strftime('%A')
-    system_prompt = construir_system_prompt(_personas_conocidas(), hoy, dia_semana)
+
+    tools = tools_permitidas(permisos)
+    # El prompt se deriva de las tools que EFECTIVAMENTE se mandan, no del set de permisos:
+    # así es imposible que el prompt hable de dar de alta mientras las tools de alta no
+    # viajaron. Una sola fuente para las dos mitades del mismo mensaje.
+    escribe = bool(TOOLS_ESCRITURA & {t['name'] for t in tools})
+    system_prompt = construir_system_prompt(_personas_conocidas(), hoy, dia_semana,
+                                            escribe=escribe)
 
     max_iterations = 10
 
@@ -231,7 +247,8 @@ def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None):
 
     if _get_config()['provider'] in PROVIDERS_OPENAI:
         return _loop_openai(client, _get_config()['model'], system_prompt,
-                            mensajes_usuario, trazas, max_iterations, contexto_turno)
+                            mensajes_usuario, trazas, max_iterations, contexto_turno,
+                            permisos=permisos, tools_disponibles=tools)
 
     # Copiar la lista para no mutar el historial original (que se persiste en sesión
     # como texto plano) con objetos complejos de la API (ToolUseBlock, etc.)
@@ -248,7 +265,7 @@ def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None):
                 model=_get_config()['model'],
                 max_tokens=1024,
                 system=system_prompt,
-                tools=TOOLS_SCHEMA,
+                tools=tools,
                 messages=messages
             )
         except Exception as e:
@@ -296,7 +313,8 @@ def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None):
                         tool_input = block.input
                         tool_use_id = block.id
 
-                        resultado = ejecutar_tool(tool_name, tool_input, contexto_turno)
+                        resultado = ejecutar_tool(tool_name, tool_input, contexto_turno,
+                                                  permisos=permisos)
                         trazas.append({
                             'tool': tool_name,
                             'ok': resultado.get('ok', True) if isinstance(resultado, dict) else True
@@ -317,7 +335,8 @@ def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None):
                         except:
                             tool_input = tool_call.function.arguments
 
-                        resultado = ejecutar_tool(tool_name, tool_input, contexto_turno)
+                        resultado = ejecutar_tool(tool_name, tool_input, contexto_turno,
+                                                  permisos=permisos)
                         trazas.append({
                             'tool': tool_name,
                             'ok': resultado.get('ok', True) if isinstance(resultado, dict) else True

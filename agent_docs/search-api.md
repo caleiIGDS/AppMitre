@@ -231,17 +231,22 @@ Para `profesor` (modo especial):
 
 ---
 
-## `/api/actualizar` — nota importante
+## `/api/actualizar` — POST y con permiso
 
-La ruta está decorada sin `methods` explícitos:
 ```python
-@app.route('/api/actualizar')
+@app.route('/api/actualizar', methods=['POST'])
+@accesos.requiere('horarios.actualizar', como_json=True)
 def api_actualizar():
 ```
 
-Flask por default acepta solo GET para rutas sin `methods`. El botón en el frontend usa `fetch('/api/actualizar')` sin `method: 'POST'`. Por lo tanto esta ruta es **GET**, no POST como dice el `CLAUDE.md`.
+Es lo único del SPA de horarios que no es público. Borra y reconstruye `escuela.db` entera desde
+Google Sheets, y antes era **GET sin permiso**: cualquier crawler, prefetch o alumno que leyera el
+HTML podía dispararla, y si Sheets no responde la escuela se queda sin horarios en plena jornada.
 
-Semánticamente debería ser POST (es una operación con efecto secundario), pero cambiar a POST requeriría actualizar tanto el backend como el fetch en el JS.
+Ahora: POST, permiso `horarios.actualizar` (verbo `admin`, así que sólo el administrador lo tiene
+por el comodín), y el botón envuelto en `{% if puede('horarios.actualizar') %}` en `index.html`. El
+`fetch` de `script.js` manda `{ method: 'POST' }`. El 403 vuelve en JSON, que es lo que el `.then`
+del botón sabe leer.
 
 ---
 

@@ -7,7 +7,11 @@ con OpenAI, donde el JSON Schema es idéntico y sólo cambia el envoltorio.
 Las descripciones son largas a propósito: no describen qué hace la función, le dicen al
 modelo cómo comportarse ("nunca respondas un horario de memoria", "que devuelva una sola
 clase es un resultado válido, no lo rellenes"). Acortarlas degrada al agente.
+
+Al final del archivo está `PERMISO_POR_TOOL`, que dice qué permiso pide cada una, y
+`tools_permitidas()`, la única puerta por la que estos esquemas salen hacia el modelo.
 """
+import accesos
 import historia
 
 from ..dominio import SLUGS_ENTIDAD
@@ -599,3 +603,73 @@ TOOLS_SCHEMA = [
         }
     }
 ]
+
+
+# ============================================================================
+# Qué permiso pide cada tool — la fuente de verdad
+# ============================================================================
+
+# Antes esta clasificación estaba en TRES lugares que había que mantener a mano: los
+# comentarios `# LECTURA` / `# ESCRITURA` de arriba, una lista `lectura` en
+# `tools/__init__.py` y un `TOOLS_ESCRITURA` en `filtros.py`. Ahora los otros dos se
+# derivan de acá.
+#
+# Va como dict aparte y no como una clave dentro de cada esquema a propósito: así
+# TOOLS_SCHEMA sigue siendo exactamente lo que las APIs esperan y no hay que acordarse de
+# limpiarlo antes de mandarlo (Anthropic rechaza con 400 cualquier clave de más, y el
+# proveedor por defecto es DeepSeek, así que ese bug sería invisible en desarrollo).
+# De paso, las 25 se leen de un vistazo.
+PERMISO_POR_TOOL = {
+    # --- LECTURA: no tocan ninguna base ---
+    'buscar_profesor': 'agente.leer',
+    'buscar_por_rol': 'agente.leer',
+    'preceptores': 'agente.leer',
+    'horario_profesor': 'agente.leer',
+    'horario_curso': 'agente.leer',
+    'horario_aula': 'agente.leer',
+    'aulas_libres': 'agente.leer',
+    'buscar_entidad': 'agente.leer',
+    'listar_todos': 'agente.leer',
+    'detalle_entidad': 'agente.leer',
+    'listar_prestamos': 'agente.leer',
+    'detalle_prestamo': 'agente.leer',
+    'consultar_historia': 'agente.leer',
+    'buscar_hitos': 'agente.leer',
+    # No toca la base: lo que gasta es la API de visión, no el inventario.
+    'leer_foto': 'agente.leer',
+
+    # --- ESCRITURA: modifican gestion.db o historia.db ---
+    'crear_entidad': 'agente.escribir',
+    'editar_entidad': 'agente.escribir',
+    'adjuntar_foto': 'agente.escribir',
+    'vincular_entidad': 'agente.escribir',
+    'desvincular_entidad': 'agente.escribir',
+    'crear_prestamo': 'agente.escribir',
+    'finalizar_prestamo': 'agente.escribir',
+    'reabrir_prestamo': 'agente.escribir',
+    'eliminar_entidad': 'agente.escribir',
+    'eliminar_prestamo': 'agente.escribir',
+}
+
+# Una tool sin permiso declarado sería una tool que nadie puede ejecutar (fail-closed) y
+# que encima desaparecería del listado sin avisar. Que reviente al importar, no en
+# producción a mitad de una conversación.
+_sin_permiso = {t['name'] for t in TOOLS_SCHEMA} - set(PERMISO_POR_TOOL)
+if _sin_permiso:
+    raise RuntimeError(
+        f"Estas tools no declaran permiso en PERMISO_POR_TOOL: {sorted(_sin_permiso)}. "
+        f"Agregalas en agente/tools/esquemas.py.")
+
+TOOLS_ESCRITURA = frozenset(n for n, p in PERMISO_POR_TOOL.items() if p == 'agente.escribir')
+TOOLS_LECTURA = frozenset(PERMISO_POR_TOOL) - TOOLS_ESCRITURA
+
+
+def tools_permitidas(permisos):
+    """Los esquemas que este acceso puede ver.
+
+    Es la única puerta por la que los esquemas salen hacia el modelo. Filtrar acá y no
+    rechazar en el ejecutor es la diferencia entre "no tenés esa herramienta" y "tenés esa
+    herramienta pero no te dejo": en el primer caso el modelo ni sabe que existe, no la
+    anuncia y no inventa que la usó.
+    """
+    return [t for t in TOOLS_SCHEMA if accesos.tiene(permisos, PERMISO_POR_TOOL[t['name']])]

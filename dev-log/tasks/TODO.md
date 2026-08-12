@@ -34,8 +34,12 @@
   - `index.html`: `⚡` del banner MODO COMPARACIÓN (~155), `✕ SALIR` (~158), `‹` de los `.btn-slide-trigger` (5 usos).
   - El logo ya es imagen local (`escuela_logo`) — usar ese patrón (`url_for('static', ...)`). Definir tamaño/color vía CSS y contemplar el tema oscuro (los SVG actuales usan `currentColor`).
 
-- [ ] #20 — Seguridad completa de `/gestion` (hoy: contraseña compartida provisoria) — `gestion.py` / `app.py` / hosting  
-  Setear `GESTION_CLAVE` y `SECRET_KEY` como env vars en el hosting (los defaults del repo son públicos: clave conocida y cookie forjable), agregar CSRF a los forms, límite de intentos de login, y evaluar usuarios individuales con auditoría. Ver DECISIONS 2026-07-19.
+- [ ] #24 — Endurecer los accesos si algún día hace falta — `accesos.py` / hosting  
+  Lo que quedó explícitamente fuera del sistema de accesos del 2026-08-11 por estar sobredimensionado para una escuela (ver `agent_docs/accesos.md`, última sección). Sólo abordar si aparece un motivo real:
+  - **CSRF** en los forms que escriben (hoy no hay; la cookie es `SameSite=Lax`, que cubre el caso común).
+  - **Límite de intentos** en el login de admin — es la única puerta que sigue siendo una contraseña.
+  - **Google Sign-In** como segunda puerta: las columnas `email` / `google_sub` de `dispositivos` ya están reservadas y el gate lee "identidad" en abstracto, así que se suma sin migrar nada ni tocar los permisos.
+  - **Corte fino por área en el agente**: hoy `agente.escribir` habilita escribir en gestión **y** en historia, porque las tools genéricas por slug cruzan las dos. Si hiciera falta separarlas, el lugar es `ejecutar_tool` mirando `_modulo(slug)`, no el esquema.
 
 - [ ] #21 — Búsqueda de recursos por sinónimos: columna `otros_nombres` + generación con IA — `gestion.py` / `static/gestion.css` / script nuevo  
   Muchas herramientas se conocen por varios nombres (Multímetro = tester = polímetro). Falta:
@@ -71,6 +75,6 @@
 
 ---
 
-_Último número usado: #23. Próxima tarea nueva: #24_
+_Último número usado: #24. Próxima tarea nueva: #25_
 
 _#4 (parser de preceptores por nombre de columna) descartada el 2026-07-13 — ver `dev-log/DECISIONS.md`: estructura del sheet fija por contrato._

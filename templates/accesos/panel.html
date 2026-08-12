@@ -1,0 +1,153 @@
+{% extends 'accesos/base.html' %}
+{% block titulo %}Accesos{% endblock %}
+{% block contenido %}
+
+<div class="g-toolbar">
+    <h2>QUIÉN TIENE ACCESO</h2>
+</div>
+
+{% if error %}<div class="g-error">{{ error }}</div>{% endif %}
+
+{% if link_nuevo %}
+<div class="g-card" style="border-color: var(--secondary);">
+    <h3>LINK LISTO — MANDÁSELO A LA PERSONA</h3>
+    <p class="g-help">Sirve <strong>una sola vez</strong> y vence en 7 días. Al abrirlo va
+        a escribir su nombre y queda habilitado ese dispositivo.</p>
+    <div class="g-field">
+        <input id="link-nuevo" type="text" readonly value="{{ link_nuevo }}"
+               onclick="this.select()" style="width:100%;">
+    </div>
+    <button class="g-btn" type="button" onclick="
+        var c = document.getElementById('link-nuevo');
+        c.select(); document.execCommand('copy'); this.textContent = 'COPIADO ✓';
+    ">COPIAR LINK</button>
+</div>
+{% endif %}
+
+<table class="g-table">
+    <thead>
+        <tr>
+            <th>QUIÉN DIJO SER</th>
+            <th>ETIQUETA</th>
+            <th>ACCESO</th>
+            <th>DISPOSITIVO</th>
+            <th>ALTA</th>
+            <th>ÚLTIMO USO</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for d in dispositivos %}
+        <tr {% if d.revocado %}style="opacity:.5;"{% endif %}>
+            <td>{{ d.nombre }}</td>
+            <td>{{ d.etiqueta or '—' }}</td>
+            <td>{{ d.perfil_etiqueta }}{% if d.revocado %} · REVOCADO{% endif %}</td>
+            <td>{{ d.dispositivo }}</td>
+            <td>{{ d.alta[:10] }}</td>
+            <td>{{ d.ultimo_uso[:16] if d.ultimo_uso else 'nunca' }}</td>
+            <td style="white-space:nowrap;">
+                {% if d.revocado %}
+                <form method="post" action="{{ url_for('accesos.reactivar_dispositivo', disp_id=d.id) }}" style="display:inline;">
+                    <button class="g-btn-outline" type="submit">REACTIVAR</button>
+                </form>
+                {% else %}
+                <form method="post" action="{{ url_for('accesos.otro_dispositivo', disp_id=d.id) }}" style="display:inline;">
+                    <button class="g-btn-outline" type="submit" title="Link nuevo con los mismos permisos, para su otro dispositivo">+ OTRO</button>
+                </form>
+                <form method="post" action="{{ url_for('accesos.revocar_dispositivo', disp_id=d.id) }}" style="display:inline;"
+                      onsubmit="return confirm('Revocar el acceso de {{ d.nombre }}? Deja de entrar en el acto.');">
+                    <button class="g-btn-outline" type="submit">REVOCAR</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="g-help">Todavía no hay ningún dispositivo habilitado.
+            El único acceso es el de administración, con contraseña.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if invitaciones %}
+<div class="g-toolbar"><h2>LINKS MANDADOS, TODAVÍA SIN USAR</h2></div>
+<table class="g-table">
+    <thead><tr><th>PARA QUIÉN</th><th>ACCESO</th><th>CREADO</th><th>VENCE</th><th></th></tr></thead>
+    <tbody>
+        {% for i in invitaciones %}
+        <tr>
+            <td>{{ i.etiqueta }}</td>
+            <td>{{ i.perfil_etiqueta }}</td>
+            <td>{{ i.creada[:10] }}</td>
+            <td>{{ i.expira[:10] }}</td>
+            <td>
+                <form method="post" action="{{ url_for('accesos.borrar_inv', inv_id=i.id) }}" style="display:inline;">
+                    <button class="g-btn-outline" type="submit">ANULAR</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<div class="g-toolbar"><h2>HABILITAR A ALGUIEN NUEVO</h2></div>
+
+<form method="post" action="{{ url_for('accesos.invitar') }}" class="g-form" id="form-invitar">
+    <div class="g-field">
+        <label for="campo-etiqueta">PARA QUIÉN ES</label>
+        <input id="campo-etiqueta" type="text" name="etiqueta" required
+               placeholder="alumna 5°B, pañol, preceptores TT…">
+        <span class="g-help">Es tu nota, no la ve la persona. Ella escribe su nombre al
+            abrir el link, y acá vas a ver los dos: si no coinciden, el link se reenvió.</span>
+    </div>
+
+    <div class="g-field">
+        <label>NIVEL DE ACCESO</label>
+        {% for clave, etiqueta in perfiles %}
+        <label style="display:block; font-weight:normal;">
+            <input type="radio" name="perfil" value="{{ clave }}" data-perfil="{{ clave }}"
+                   {% if clave == 'interno-lectura' %}checked{% endif %}>
+            {{ etiqueta }}
+        </label>
+        {% endfor %}
+        <span class="g-help">Son atajos: marcan los permisos de abajo. Si tocás alguno a
+            mano, el acceso queda "a medida".</span>
+    </div>
+
+    {% for grupo, permisos in grupos.items() %}
+    <div class="g-field">
+        <label>{{ grupo | upper }}</label>
+        {% for clave, etiqueta, verbo in permisos %}
+        <label style="display:block; font-weight:normal;">
+            <input type="checkbox" name="permisos" value="{{ clave }}"> {{ etiqueta }}
+        </label>
+        {% endfor %}
+    </div>
+    {% endfor %}
+
+    <div class="g-form-actions">
+        <button type="submit" class="g-btn">GENERAR LINK</button>
+    </div>
+</form>
+
+{# Los presets del server, para que tildar un perfil marque sus permisos. Si después se
+   toca un checkbox a mano, el server detecta que no coincide y guarda 'custom'. #}
+<script>
+(function () {
+    var PRESET = {{ preset | tojson }};
+    var form = document.getElementById('form-invitar');
+    if (!form) return;
+    function aplicar(perfil) {
+        var claves = PRESET[perfil] || [];
+        var todas = claves.indexOf('*') !== -1;
+        form.querySelectorAll('input[name="permisos"]').forEach(function (chk) {
+            chk.checked = todas || claves.indexOf(chk.value) !== -1;
+        });
+    }
+    form.querySelectorAll('input[name="perfil"]').forEach(function (radio) {
+        radio.addEventListener('change', function () { aplicar(this.value); });
+    });
+    aplicar('interno-lectura');
+})();
+</script>
+{% endblock %}

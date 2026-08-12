@@ -12,10 +12,14 @@ siempre hacia arriba:
 ```
 capa 2   gestion.py   historia.py   database.py+app.py   agente/       ← nombran tablas reales
               │            │                │                │
-capa 1        └──────── crud.py + templates/crud/ ──────────┘          ← sabe "entidad", no cuáles
-                                  │
+capa 1   crud.py + templates/crud/  ·  accesos.py + templates/accesos/
+              │                                    │                   ← saben "entidad" y "permiso",
+              └────────────────┬───────────────────┘                     no cuáles
 capa 0        config.py    texto.py    respaldos.py                    ← no nombran nada del dominio
 ```
+
+`accesos.py` es el hermano de `crud.py`: mismo criterio, otro concepto. `crud.py` lo importa (para
+decorar sus rutas de escritura), nunca al revés. Ver `agent_docs/accesos.md`.
 
 **La pregunta para ubicar cualquier función es una sola: ¿qué nombra?**
 
@@ -67,6 +71,10 @@ esté simplemente no se usa.
 | `ENTIDADES` | `{slug: cfg}` — la config declarativa |
 | `SCHEMA` | script SQL idempotente (`CREATE TABLE IF NOT EXISTS`) |
 | `LIMPIEZA_M2M` | `{slug: [(tabla, columna)]}` a limpiar al eliminar una fila |
+| `PERMISOS` | `[(clave, etiqueta, verbo)]` que declara al catálogo de `accesos` |
+| `GRUPO_PERMISOS` | título bajo el que se agrupan en el panel `/accesos` |
+| `PERMISO_LECTURA` | el permiso base: hace falta para ver cualquier cosa del área |
+| `PERMISO_ESCRITURA` | el que piden `nuevo`/`editar`/`eliminar`/fotos y los botones que los muestran |
 
 ### Hooks opcionales
 
@@ -112,17 +120,22 @@ validación de obligatorio usan `crud.campo_nombre(cfg)`.
 Al final del módulo, dos líneas:
 
 ```python
-crud.registrar_acceso(bp)
+accesos.registrar_acceso(bp, PERMISO_LECTURA)
 crud.registrar_rutas(bp, sys.modules[__name__])
 ```
 
 `registrar_rutas` monta `home`, `lista`, `nuevo`, `detalle`, `editar`, `eliminar`, `subir_foto` y
 `eliminar_foto`, más el context processor. **Los endpoints y las carpetas de templates salen de
 `bp.name`** (`url_for(f'{bp.name}.detalle')`, `render_template(f'{bp.name}/lista.html')`), que ya
-coincide con el nombre de la carpeta en `templates/` — no hay nada que configurar.
+coincide con el nombre de la carpeta en `templates/` — no hay nada que configurar. Las cinco rutas
+que escriben las decora con `accesos.requiere(area.PERMISO_ESCRITURA)`: el motor no nombra ningún
+permiso, lee la clave que declaró el área (mismo criterio que `campo_nombre`).
 
-`registrar_acceso` monta el gate: `before_request` + `/login` + `/salir`. Dos parámetros:
+`registrar_acceso` vive en **`accesos.py`**, no acá: el gate dejó de ser "una clave y un booleano" y
+es un motor aparte, con catálogo de permisos, perfiles, dispositivos y panel. Ver
+`agent_docs/accesos.md`. Lo que hay que saber para montar un área:
 
+- El primer argumento es el **permiso base**: el que hace falta para ver cualquier cosa del área.
 - `endpoints_pagina`: si el blueprint mezcla páginas HTML con endpoints JSON (el caso de `/agente`),
   acá van los que devuelven HTML. Sólo esos redirigen al login; el resto contesta **401**, que es lo
   que un `fetch` sabe leer — un redirect a HTML le llega como un 200 sin sentido. Si es `None`, todo
@@ -130,9 +143,9 @@ coincide con el nombre de la carpeta en `templates/` — no hay nada que configu
 - `endpoint_default`: a dónde volver tras loguearse sin `next` válido (`home`, o `chat_page` en el
   agente).
 
-Una sola `GESTION_CLAVE` y una sola marca de sesión (`gestion_ok`) abren las tres áreas, porque es el
-mismo staff. **No es seguridad completa**: sin usuarios, sin CSRF, sin límite de intentos, y el
-default está en un repo público.
+Sin acceso → login o 401. Con acceso pero sin el permiso → **403** (`templates/crud/403.html`),
+nunca el login: mandar al login a quien ya entró es un bucle, y si acierta la clave se convertiría
+en admin.
 
 ## Templates
 
@@ -177,8 +190,10 @@ solas. Si la entidad debe ser visible para el asistente, no hay nada más que ha
 
 **…un área nueva**: un archivo con el contrato de arriba, `templates/<area>/` con `base.html`,
 `home.html`, `login.html` y los cuatro stubs, las dos líneas de registro, y
-`app.register_blueprint(...)` + `init_db()` en `app.py`. Si además tiene que entrar al asistente,
-sumarla a `agente._modulo()`.
+`app.register_blueprint(...)` + `init_db()` en `app.py`. Sumarla también a la lista de
+`accesos.registrar_app(app, [...])`, que está ahí al lado: con eso sus `PERMISOS` entran solos al
+catálogo y a los perfiles, **sin tocar el gate ni migrar los accesos ya dados**. Si además tiene que
+entrar al asistente, sumarla a `agente._modulo()`.
 
 **…algo compartido**: pasarlo por el filtro de la primera sección. Si nombra una tabla, no es
 compartido — es del área, y quien lo necesite lo importa de ahí (como el paquete `agente/` importa

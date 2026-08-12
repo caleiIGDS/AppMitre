@@ -36,6 +36,7 @@ sys.path.insert(0, RAIZ)
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(errors='replace')
 
+import accesos
 import gestion
 import historia
 import agente
@@ -147,7 +148,7 @@ def copia_de_seguridad(dry):
     print("=" * 70)
 
     sello = ahora().strftime('%Y%m%d-%H%M%S')
-    for ruta in (gestion.DB_PATH, historia.DB_PATH):
+    for ruta in (gestion.DB_PATH, historia.DB_PATH, accesos.DB_PATH):
         if not os.path.exists(ruta):
             continue
         destino = f"{ruta}.pre-actualizacion-{sello}"
@@ -402,14 +403,20 @@ def migraciones_de_schema(dry):
     print("=" * 70)
 
     if dry:
-        print("  [dry-run] correría gestion.init_db(), historia.init_db() y agente.init_db()")
+        print("  [dry-run] correría gestion.init_db(), historia.init_db(), agente.init_db()")
+        print("            y accesos.init_db()")
         print("            (ALTER aditivos, rename utilidad→valor, DROP de drive_url,")
         print("             y las tablas agente_* dentro de gestion.db)")
+        if not os.path.exists(accesos.DB_PATH):
+            print("            accesos.db no existe todavía: se va a crear VACÍA. Hasta que")
+            print("            invites al primer dispositivo, el único acceso es el de")
+            print("            administración con GESTION_CLAVE.")
         return True
 
     for nombre, init in (('gestion', gestion.init_db),
                          ('historia', historia.init_db),
-                         ('agente', agente.init_db)):
+                         ('agente', agente.init_db),
+                         ('accesos', accesos.init_db)):
         try:
             init()
             print(f"  ✓ {nombre}")
@@ -429,6 +436,7 @@ def migraciones_de_schema(dry):
 DUENOS = (
     (lambda: gestion.DB_PATH, lambda: (gestion.SCHEMA, agente_db.SCHEMA)),
     (lambda: historia.DB_PATH, lambda: (historia.SCHEMA,)),
+    (lambda: accesos.DB_PATH, lambda: (accesos.SCHEMA,)),
 )
 
 

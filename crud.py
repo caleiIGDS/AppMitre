@@ -17,6 +17,10 @@ concreta entra por un **hook opcional**, nunca por un `if slug == '...'` acá ad
       ENTIDADES        {slug: cfg}  — ver abajo
       SCHEMA           script SQL de creación (idempotente, CREATE TABLE IF NOT EXISTS)
       LIMPIEZA_M2M     {slug: [(tabla, columna), ...]} a limpiar al eliminar
+      PERMISOS         [(clave, etiqueta, verbo)] que declara al catálogo de `accesos`
+      GRUPO_PERMISOS   título bajo el que se agrupan en el panel de accesos
+      PERMISO_LECTURA  el que hace falta para ver cualquier cosa del área
+      PERMISO_ESCRITURA  el que piden nuevo/editar/eliminar/fotos
 
     HOOKS OPCIONALES (se leen con getattr; si no están, no pasa nada)
       migrar(cur)                     ALTERs aditivos para DBs viejas
@@ -39,9 +43,9 @@ import json
 import os
 import sqlite3
 
-from flask import (abort, jsonify, redirect, render_template, request, session,
-                   url_for)
+from flask import abort, jsonify, redirect, render_template, request, url_for
 
+import accesos
 import respaldos
 import texto
 from config import ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, ahora
@@ -384,64 +388,9 @@ def _guardar_form(area, slug, cfg_ent, cur, id=None):
     return id
 
 
-# ---------------------------------------------------------------------------
-# Gate de sesión
-# ---------------------------------------------------------------------------
-
-def _clave():
-    """Se lee en cada request y no al importar, para que cambiar la env var no exija
-    reiniciar y para que un test pueda pisarla."""
-    return os.environ.get('GESTION_CLAVE', 'mitre2026')
-
-
-def registrar_acceso(bp, endpoints_pagina=None, endpoint_default='home'):
-    """Monta el gate de contraseña de un blueprint: before_request + /login + /salir.
-
-    Traba mínima mientras esto está en desarrollo: una sola clave (`GESTION_CLAVE`) y una
-    sola marca de sesión (`gestion_ok`) para todas las áreas, porque es el mismo staff.
-    No es seguridad completa: sin usuarios, sin CSRF, sin límite de intentos, y el default
-    está en un repo público.
-
-    `endpoints_pagina`: si el blueprint mezcla páginas HTML con endpoints JSON (el caso de
-    `/agente`), acá van los que devuelven HTML. Sólo esos redirigen al login; el resto
-    contesta 401, que es lo que un `fetch` sabe leer — un redirect a HTML le llega como
-    una respuesta 200 sin sentido. Si es None, todo redirige (áreas 100% server-rendered).
-
-    `endpoint_default`: a dónde volver después de loguearse si no hay `next` válido.
-    """
-    prefijo = bp.url_prefix or f'/{bp.name}'
-
-    @bp.before_request
-    def _requiere_clave():
-        if request.endpoint == f'{bp.name}.login' or session.get('gestion_ok'):
-            return
-        if endpoints_pagina is None or request.endpoint in endpoints_pagina:
-            return redirect(url_for(f'{bp.name}.login', next=request.path))
-        abort(401)
-
-    @bp.route('/login', methods=['GET', 'POST'])
-    def login():
-        error = None
-        if request.method == 'POST':
-            if request.form.get('clave', '') == _clave():
-                session['gestion_ok'] = True
-                volver = request.form.get('next', '')
-                # Solo volver a rutas del propio blueprint (evita open redirect).
-                if not volver.startswith(prefijo):
-                    volver = url_for(f'{bp.name}.{endpoint_default}')
-                return redirect(volver)
-            error = 'Contraseña incorrecta.'
-        # `area_nombre`/`base_template` van explícitos y no por el context processor:
-        # `registrar_acceso` también la usa `/agente`, que no monta rutas CRUD y por lo
-        # tanto no tiene el context processor de `registrar_rutas`.
-        return render_template(f'{bp.name}/login.html', error=error,
-                               next=request.values.get('next', ''), activo=None,
-                               area_nombre=bp.name, base_template=f'{bp.name}/base.html')
-
-    @bp.route('/salir')
-    def salir():
-        session.pop('gestion_ok', None)
-        return redirect(url_for(f'{bp.name}.login'))
+# El gate de sesión vive en `accesos.py` (capa 1, hermano de este archivo): dejó de ser
+# "una clave y un booleano" para ser catálogo de permisos, perfiles, dispositivos y panel,
+# que es un motor aparte. Las áreas llaman a `accesos.registrar_acceso(bp, permiso)`.
 
 
 # ---------------------------------------------------------------------------
@@ -461,6 +410,9 @@ def contexto_base(bp, area):
         'nav_entidades': nav,
         'area_nombre': bp.name,
         'base_template': f'{bp.name}/base.html',
+        # Para que `lista.html`/`detalle.html` escondan los botones de escritura sin que
+        # este archivo nombre ningún permiso: la clave la pone el área.
+        'permiso_escritura': _hook(area, 'PERMISO_ESCRITURA'),
     }
     extra = _hook(area, 'contexto_extra')
     if extra:
@@ -475,6 +427,9 @@ def registrar_rutas(bp, area):
     nombre de la carpeta en `templates/` — así esto no necesita configuración extra.
     """
     nombre = bp.name
+    # Qué permiso pide una ruta que escribe. Lo nombra el área; este archivo sólo lo
+    # pasa, igual que hace con `campo_nombre`.
+    escritura = _hook(area, 'PERMISO_ESCRITURA')
 
     def _extras(vista, slug):
         hook = _hook(area, 'extras_template')
@@ -527,6 +482,7 @@ def registrar_rutas(bp, area):
                                q=q, activo=slug, buscar=buscar, **_extras('lista', slug))
 
     @bp.route('/<slug>/nuevo', methods=['GET', 'POST'])
+    @accesos.requiere(escritura)
     def nuevo(slug):
         cfg_ent = cfg(area, slug)
         con = conectar(area)
@@ -576,6 +532,7 @@ def registrar_rutas(bp, area):
                                **_extras('detalle', slug))
 
     @bp.route('/<slug>/<int:id>/editar', methods=['GET', 'POST'])
+    @accesos.requiere(escritura)
     def editar(slug, id):
         cfg_ent = cfg(area, slug)
         con = conectar(area)
@@ -607,6 +564,7 @@ def registrar_rutas(bp, area):
                                error=error, activo=slug, **_extras('editar', slug))
 
     @bp.route('/<slug>/<int:id>/eliminar', methods=['POST'])
+    @accesos.requiere(escritura)
     def eliminar(slug, id):
         cfg_ent = cfg(area, slug)
         con = conectar(area)
@@ -619,6 +577,7 @@ def registrar_rutas(bp, area):
         return redirect(url_for(f'{nombre}.lista', slug=slug))
 
     @bp.route('/<slug>/<int:id>/foto', methods=['POST'])
+    @accesos.requiere(escritura)
     def subir_foto(slug, id):
         """Sube una foto, la convierte a base64 y la guarda en el JSON de fotos."""
         cfg(area, slug)  # 404 temprano si el slug no existe
@@ -642,6 +601,7 @@ def registrar_rutas(bp, area):
             return jsonify({'ok': False, 'error': str(e)}), 500
 
     @bp.route('/<slug>/<int:id>/foto/<int:indice>/eliminar', methods=['POST'])
+    @accesos.requiere(escritura)
     def eliminar_foto(slug, id, indice):
         """Borra una foto de la galería por su posición en el array JSON.
 

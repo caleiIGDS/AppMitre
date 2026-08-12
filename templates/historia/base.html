@@ -23,9 +23,16 @@
                 </div>
                 <div class="g-header-actions">
                     <a class="g-btn-outline" href="/">‹ SISTEMA DE HORARIOS</a>
-                    {% if session.get('gestion_ok') %}
+                    {% if puede('gestion.leer') %}
                     <a class="g-btn-outline" href="{{ url_for('gestion.home') }}">‹ GESTIÓN DE RECURSOS</a>
+                    {% endif %}
+                    {% if puede('agente.leer') %}
                     <button id="agente-toggle-btn" class="g-btn-outline" title="Abrir asistente" style="cursor: pointer;">🤖 ASISTENTE</button>
+                    {% endif %}
+                    {% if puede('accesos.admin') %}
+                    <a class="g-btn-outline" href="{{ url_for('accesos.panel') }}">🔑 ACCESOS</a>
+                    {% endif %}
+                    {% if acceso_actual() %}
                     <a class="g-btn-outline" href="{{ url_for('historia.salir') }}">SALIR</a>
                     {% endif %}
                 </div>
@@ -50,6 +57,8 @@
         </footer>
     </div>
 
-    {% include 'agente/_agente_widget.html' %}
+    {# Se omite entero sin permiso, no sólo el botón: si el markup existiera, su JS
+       pediría /agente/historial en cada carga y se comería un 403 por página. #}
+    {% if puede('agente.leer') %}{% include 'agente/_agente_widget.html' %}{% endif %}
 </body>
 </html>

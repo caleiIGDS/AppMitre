@@ -26,15 +26,24 @@
                 </div>
                 <div class="g-header-actions">
                     <a class="g-btn-outline" href="/">‹ SISTEMA DE HORARIOS</a>
-                    {% if session.get('gestion_ok') %}
+                    {% if puede('historia.leer') %}
                     <a class="g-btn-outline" href="{{ url_for('historia.home') }}">HISTORIA INSTITUCIONAL ›</a>
+                    {% endif %}
+                    {% if puede('agente.leer') %}
                     <button id="agente-toggle-btn" class="g-btn-outline" title="Abrir asistente" style="cursor: pointer;">🤖 ASISTENTE</button>
+                    {% endif %}
+                    {% if puede('gestion.editar') %}
                     {# El link al carrito sólo existe mientras haya algo adentro: aparece
                        cuando se aprieta RETIRAR en el catálogo (gestion.js lo muestra) y
                        se va cuando el carrito vuelve a 0. #}
                     <a class="g-btn-outline g-cart-link" href="{{ url_for('gestion.carrito_finalizar') }}"
                        data-set-url="{{ url_for('gestion.carrito_set') }}"
                        {% if not carrito_count %}hidden{% endif %}>📋 PRÉSTAMO <span class="g-cart-count" data-cart-count {% if not carrito_count %}hidden{% endif %}>{{ carrito_count }}</span></a>
+                    {% endif %}
+                    {% if puede('accesos.admin') %}
+                    <a class="g-btn-outline" href="{{ url_for('accesos.panel') }}">🔑 ACCESOS</a>
+                    {% endif %}
+                    {% if acceso_actual() %}
                     <a class="g-btn-outline" href="{{ url_for('gestion.salir') }}">SALIR</a>
                     {% endif %}
                 </div>
@@ -51,7 +60,7 @@
                 <a href="{{ url_for('gestion.lista', slug=slug) }}" class="g-nav-tag {{ 'active' if activo == slug }}">{{ plural | upper }}</a>
                 {% endif %}
                 {% endfor %}
-                {% if session.get('gestion_ok') %}
+                {% if puede('agente.leer') %}
                 <a href="{{ url_for('agente.chat_page') }}" class="g-nav-tag g-nav-tag-agente">🤖 ASISTENTE</a>
                 {% endif %}
             </nav>
@@ -67,7 +76,9 @@
     </div>
 
     {# El widget y la pestaña completa (/agente) comparten IDs y nunca se renderizan
-       juntos: la pestaña vive en templates/agente/ con su propio base.html. #}
-    {% include 'agente/_agente_widget.html' %}
+       juntos: la pestaña vive en templates/agente/ con su propio base.html.
+       Se omite entero sin permiso, no sólo el botón: si el markup existiera, su JS
+       pediría /agente/historial en cada carga y se comería un 403 por página. #}
+    {% if puede('agente.leer') %}{% include 'agente/_agente_widget.html' %}{% endif %}
 </body>
 </html>

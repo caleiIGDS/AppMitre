@@ -44,11 +44,9 @@ def _extraer_entidad_mencionada(respuesta_anterior, tipo='profesor'):
         return match.group(1).strip()
     return None
 
-TOOLS_ESCRITURA = {
-    'crear_entidad', 'editar_entidad', 'vincular_entidad', 'desvincular_entidad',
-    'crear_prestamo', 'finalizar_prestamo', 'reabrir_prestamo',
-    'eliminar_entidad', 'eliminar_prestamo', 'adjuntar_foto',
-}
+# Se deriva de PERMISO_POR_TOOL, que es la única fuente de verdad: antes esta lista era
+# una copia a mano y había que acordarse de tocarla al sumar una tool de escritura.
+from .tools.esquemas import TOOLS_ESCRITURA  # noqa: E402,F401
 
 
 def _escritura_no_ejecutada(respuesta, trazas):

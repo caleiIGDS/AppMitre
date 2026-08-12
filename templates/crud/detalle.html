@@ -13,11 +13,14 @@
     </div>
     <div class="g-toolbar-actions">
         {% block acciones %}{% endblock %}
+        {# `permiso_escritura` lo inyecta crud.contexto_base con la clave del área. #}
+        {% if puede(permiso_escritura) %}
         <a class="g-btn-outline-dark" href="{{ url_for(area_nombre ~ '.editar', slug=slug, id=fila['id']) }}">EDITAR</a>
         <form method="post" action="{{ url_for(area_nombre ~ '.eliminar', slug=slug, id=fila['id']) }}"
               onsubmit="return confirm('¿Eliminar este elemento? Esta acción no se puede deshacer.');">
             <button type="submit" class="g-btn-danger">ELIMINAR</button>
         </form>
+        {% endif %}
     </div>
 </div>
 
@@ -37,6 +40,7 @@
         </div>
         {% endif %}
 
+        {% if puede(permiso_escritura) %}
         <div class="g-foto-toolbar">
             <form id="form-foto" enctype="multipart/form-data">
                 <input type="file" name="file" accept="image/*" id="input-foto" style="display:none">
@@ -45,6 +49,7 @@
                 </button>
             </form>
         </div>
+        {% endif %}
     </div>
 
     <dl class="g-props">
@@ -91,10 +96,12 @@
     <div class="g-lightbox-barra">
         <span class="g-lightbox-contador" id="g-lb-contador"></span>
         <span class="g-lightbox-acciones">
+            {% if puede(permiso_escritura) %}
             <form method="post" id="g-lb-form-eliminar"
                   onsubmit="return confirm('¿Eliminar esta foto? Esta acción no se puede deshacer.');">
                 <button type="submit" class="g-lightbox-btn g-lightbox-btn-danger" title="Eliminar foto">🗑 ELIMINAR</button>
             </form>
+            {% endif %}
             <button type="button" class="g-lightbox-btn" id="g-lb-cerrar" title="Cerrar (Esc)">✕</button>
         </span>
     </div>
@@ -153,7 +160,9 @@ document.getElementById('input-foto')?.addEventListener('change', (e) => {
         const mini = miniaturas[actual];
         img.src = mini.querySelector('img').src;
         contador.textContent = (actual + 1) + ' / ' + miniaturas.length;
-        formEliminar.action = mini.dataset.eliminarUrl;
+        // Sin permiso de escritura el form de borrado no se renderiza: el visor sigue
+        // andando igual, sólo que sin el botón de la papelera.
+        if (formEliminar) formEliminar.action = mini.dataset.eliminarUrl;
         navs.forEach(b => b.hidden = miniaturas.length < 2);
     }
 

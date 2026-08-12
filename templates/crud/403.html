@@ -1,0 +1,22 @@
+{# Para alguien YA identificado al que le falta un permiso. No lo mandamos al login:
+   ya entró, y tipear la clave ahí lo convertiría en admin — le concedería de más. #}
+{% extends base_template %}
+{% block titulo %}Sin permiso{% endblock %}
+{% block contenido %}
+<div class="g-toolbar">
+    <h2>ESTA PARTE NO ESTÁ HABILITADA PARA VOS</h2>
+</div>
+
+<div class="g-error">
+    Tu acceso{% if acceso and acceso.nombre %} ({{ acceso.nombre }}){% endif %} no incluye
+    esta sección. No es un error: está bien que estés adentro, pero esto queda para otro
+    nivel de acceso.
+</div>
+
+<p class="g-help">Si lo necesitás, pedile a administración que te habilite
+    <code>{{ permiso }}</code>.</p>
+
+<div class="g-form-actions">
+    <a class="g-btn" href="/">‹ VOLVER AL SISTEMA DE HORARIOS</a>
+</div>
+{% endblock %}

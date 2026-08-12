@@ -1,19 +1,19 @@
 """Los endpoints Flask de /agente.
 
-El gate de acceso es el mismo motor que /gestion e /historia (misma GESTION_CLAVE, misma
-marca `gestion_ok`), pero acá el blueprint mezcla páginas HTML con endpoints JSON: sólo
-las páginas redirigen al login y el resto contesta 401, que es lo que el fetch del chat
-sabe leer.
+El gate de acceso es el mismo motor que /gestion e /historia (`accesos.registrar_acceso`),
+pero acá el blueprint mezcla páginas HTML con endpoints JSON: sólo las páginas redirigen
+al login y el resto contesta 401, que es lo que el fetch del chat sabe leer.
 """
 import re
 
 from flask import jsonify, render_template, request
 
+import accesos
 import crud
 import texto
 from config import DIAS, ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION, ahora
 
-from . import bp
+from . import PERMISO_ESCRITURA, PERMISO_LECTURA, bp
 from .db import (FICHAS_MAX, HISTORIAL_AL_MODELO, _conv_borrar, _conv_cargar,
                  _conv_guardar, _foto_pendiente_guardar, _foto_pendiente_tomar,
                  _sin_imagenes, conectar)
@@ -33,12 +33,14 @@ from .tools.fichas import _nombre_de
 # Los endpoints JSON sí siguen dando 401, que es lo que el fetch del chat sabe leer.
 _ENDPOINTS_PAGINA = ('agente.chat_page', 'agente.agente_log')
 
-# Gate de sesión: el mismo motor que /gestion y /historia (misma GESTION_CLAVE, misma
-# marca de sesión `gestion_ok`), pero acá el blueprint mezcla páginas HTML con endpoints
-# JSON, así que sólo las páginas redirigen al login y el resto contesta 401 — que es lo
-# que el fetch del chat sabe leer.
-crud.registrar_acceso(bp, endpoints_pagina=_ENDPOINTS_PAGINA,
-                      endpoint_default='chat_page')
+# Gate de acceso: el mismo motor que /gestion y /historia, pero acá el blueprint mezcla
+# páginas HTML con endpoints JSON, así que sólo las páginas redirigen al login y el resto
+# contesta 401 — que es lo que el fetch del chat sabe leer.
+#
+# `agente.leer` es el piso: alcanza para chatear y consultar. Las rutas que escriben
+# (`/confirmar`) o auditan (`/log`) piden más, marcadas con `accesos.requiere`.
+accesos.registrar_acceso(bp, PERMISO_LECTURA, endpoints_pagina=_ENDPOINTS_PAGINA,
+                         endpoint_default='chat_page')
 
 
 @bp.context_processor
@@ -178,7 +180,8 @@ def chat():
         # que no puede pasarla como parámetro.
         contexto_turno['foto_turno'] = (imagen_base64, media_type)
         contexto_turno['texto_usuario'] = mensaje_usuario
-    respuesta = chat_with_tools(mensajes, trazas=trazas, contexto_turno=contexto_turno)
+    respuesta = chat_with_tools(mensajes, trazas=trazas, contexto_turno=contexto_turno,
+                                permisos=accesos.permisos())
     # Se filtra ANTES de guardar, así el historial repintado tampoco muestra ids — y, en el
     # caso de las acotaciones, el modelo no las tiene como ejemplo a imitar en el turno que viene.
     respuesta = _ocultar_ids(respuesta)
@@ -340,6 +343,7 @@ def _enlazar_protagonistas(hito_id, protagonistas):
 
 
 @bp.route('/confirmar', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
 def confirmar():
     """Confirma un alta desde el botón del chat, sin pasar por el modelo.
 
@@ -347,6 +351,10 @@ def confirmar():
     sesión, nunca del request. Así lo que se guarda es literalmente lo que se mostró en
     pantalla, y da igual lo que arme el front. Tampoco hay una llamada al LLM de por
     medio: el alta es determinística y sale gratis.
+
+    El permiso va explícito porque esta ruta ESCRIBE sin pasar por el LLM: recortar las
+    tools que ve el modelo no la protege en absoluto. Sin este decorador, un acceso de
+    lectura que forjara el POST con un token de ficha escribiría en el inventario.
     """
     token = (request.get_json() or {}).get('token', '')
     conv = _conv_cargar()
@@ -363,7 +371,8 @@ def confirmar():
     entrada = dict(pendiente['campos'])
     entrada['slug'] = pendiente['slug']
     contexto_turno = {'fichas_previas': fichas}
-    resultado = ejecutar_tool('crear_entidad', entrada, contexto_turno)
+    resultado = ejecutar_tool('crear_entidad', entrada, contexto_turno,
+                              permisos=accesos.permisos())
     # `ejecutar_tool` consumió el token de `fichas` si llegó a escribir.
 
     if resultado.get('ok'):
@@ -401,6 +410,7 @@ def reset():
     return jsonify({'ok': True})
 
 @bp.route('/log', methods=['GET'])
+@accesos.requiere('agente.auditar')
 def agente_log():
     """Página de auditoría: últimas N entradas del agente_log."""
     con = conectar()

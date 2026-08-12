@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>{% block titulo %}Accesos{% endblock %} — {{ escuela_nombre }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=15">
+    {# En celular mueve el nav y las acciones del header a un panel lateral. #}
+    <script src="{{ url_for('static', filename='mobile-nav.js') }}?v=1" defer></script>
+</head>
+<body>
+    <div class="g-bg">
+        <header class="g-header">
+            <div class="g-container g-header-flex">
+                <div class="g-brand">
+                    <img src="{{ url_for('static', filename=escuela_logo) }}" alt="Escudo" class="g-logo">
+                    <div class="g-titles">
+                        <h1>{{ escuela_nombre }} <span class="g-serial">{{ escuela_version }}</span></h1>
+                        <p>Accesos</p>
+                    </div>
+                </div>
+                <div class="g-header-actions">
+                    <a class="g-btn-outline" href="/">‹ SISTEMA DE HORARIOS</a>
+                    {% if puede('gestion.leer') %}
+                    <a class="g-btn-outline" href="{{ url_for('gestion.home') }}">‹ GESTIÓN DE RECURSOS</a>
+                    {% endif %}
+                    {% if acceso_actual() %}
+                    <a class="g-btn-outline" href="{{ url_for('accesos.salir') }}">SALIR</a>
+                    {% endif %}
+                </div>
+            </div>
+        </header>
+
+        <div class="g-container g-shell">
+            <main class="g-main">
+                {% block contenido %}{% endblock %}
+            </main>
+        </div>
+
+        <footer class="g-footer">
+            <p>Programa hecho por Calei | <a href="https://github.com/caleiIGDS/AppMitre" target="_blank">Repositorio en GitHub</a></p>
+        </footer>
+    </div>
+</body>
+</html>

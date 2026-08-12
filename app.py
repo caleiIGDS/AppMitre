@@ -1,27 +1,56 @@
 from flask import Flask, render_template, jsonify, send_file
 import os
 import sqlite3
+from datetime import timedelta
 
 # Carga .env en desarrollo local (DEEPSEEK_API_KEY, etc.). En Render las env vars se
 # setean en el dashboard y este archivo ni existe, así que no falla si falta.
 from dotenv import load_dotenv
 load_dotenv()
 
+import accesos
 import database
 import gestion
 import historia
 import agente
-from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS, TURNO_CURSOS, TURNO_DEFAULT, ahora
+import sys
+
+# El SPA de horarios es público: lo único que declara es quién puede regenerar la DB
+# desde Google Sheets, que borra y reconstruye escuela.db.
+PERMISOS = [
+    ('horarios.actualizar', 'Regenerar los horarios desde Google Sheets', 'admin'),
+]
+GRUPO_PERMISOS = 'Horarios'
+from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS, TURNO_CURSOS, TURNO_DEFAULT, ahora, PRODUCCION, SESION_DIAS
 from fpdf import FPDF
 import io
 from database import obtener_filas
 
 app = Flask(__name__)
 
-# Firma la cookie de sesión (la usa el login de /gestion, /historia y /agente). El
-# default solo evita romper el arranque local: en el hosting setear SECRET_KEY como
-# env var, porque con el default público cualquiera puede forjar la sesión.
-app.secret_key = os.environ.get('SECRET_KEY', 'appmitre-dev-cambiar-en-hosting')
+# Firma la cookie de sesión: es lo que sostiene todo el sistema de accesos. En producción
+# se exige de verdad, porque con una clave conocida cualquiera se forja una sesión de admin.
+_secret = os.environ.get('SECRET_KEY')
+if not _secret:
+    if PRODUCCION:
+        raise RuntimeError(
+            "Falta SECRET_KEY en el entorno. Sin ella la cookie de sesión es forjable "
+            "y el gate de accesos no vale nada: no se arranca en producción.")
+    # Estable a propósito y no aleatoria: si cambiara en cada arranque, el reloader de
+    # Flask te desloguearía en cada Ctrl+S.
+    _secret = 'appmitre-dev-inseguro'
+    print("AVISO: SECRET_KEY no está seteada — usando la clave de desarrollo.")
+app.secret_key = _secret
+
+# Sin esto la cookie muere al cerrar el navegador y hay que re-tipear la clave cada vez.
+# Con SESSION_REFRESH_EACH_REQUEST (default True) la expiración se corre en cada visita,
+# así que quien usa la app no se desloguea nunca. Ver config.SESION_DIAS.
+app.permanent_session_lifetime = timedelta(days=SESION_DIAS)
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = PRODUCCION
+if PRODUCCION:
+    # Para que los links de invitación (url_for con _external) salgan en https.
+    app.config['PREFERRED_URL_SCHEME'] = 'https'
 
 # Gestión de recursos (/gestion) — módulo independiente con DB propia (gestion.db).
 # init_db() en import para que también corra bajo gunicorn/WSGI (no solo en __main__).
@@ -35,6 +64,13 @@ historia.init_db()
 # Asistente conversacional (/agente) — blueprint independiente con su propio gate.
 app.register_blueprint(agente.bp)
 agente.init_db()
+
+# Accesos y permisos (accesos.db) — junta el catálogo que declaró cada área, engancha los
+# globals de Jinja y monta el canje de invitaciones + el panel /accesos. Esta lista es lo
+# único que hay que tocar al sumar un área nueva, y está al lado del register_blueprint
+# que ya hay que tocar igual.
+accesos.init_db()
+accesos.registrar_app(app, [gestion, historia, agente, sys.modules[__name__]])
 
 # obtener_filas se importa desde database (ver database.py)
 
@@ -522,8 +558,15 @@ def api_preceptor(valor):
         print(f"Error preceptor: {e}")
         return jsonify(None)
 
-@app.route('/api/actualizar')
+@app.route('/api/actualizar', methods=['POST'])
+@accesos.requiere('horarios.actualizar', como_json=True)
 def api_actualizar():
+    """Borra y reconstruye escuela.db desde Google Sheets.
+
+    Era GET y sin permiso: cualquier crawler, prefetch o alumno que leyera el HTML podía
+    dispararla, y si Sheets no responde la escuela se queda sin horarios en plena jornada.
+    POST + permiso de admin + botón oculto alcanza para el nivel de riesgo de una escuela.
+    """
     try:
         database.crear_tablas()
         database.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)

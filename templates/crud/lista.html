@@ -11,7 +11,11 @@
         <button type="submit">BUSCAR</button>
         {% if q %}<a class="g-link" href="{{ url_for(area_nombre ~ '.lista', slug=slug) }}">limpiar</a>{% endif %}
     </form>
+    {# `permiso_escritura` lo inyecta crud.contexto_base con la clave que declaró el área:
+       este template no nombra ningún permiso concreto, igual que no nombra ninguna tabla. #}
+    {% if puede(permiso_escritura) %}
     <a class="g-btn" href="{{ url_for(area_nombre ~ '.nuevo', slug=slug) }}">+ CREAR {{ cfg.singular | upper }}</a>
+    {% endif %}
 </div>
 
 {% if filas %}
@@ -46,7 +50,9 @@
                        sobreescriba necesita ver `fila`. #}
                     {% block acciones_fila scoped %}{% endblock %}
                     <a class="g-link" href="{{ url_for(area_nombre ~ '.detalle', slug=slug, id=fila['id']) }}">Ver</a>
+                    {% if puede(permiso_escritura) %}
                     <a class="g-link" href="{{ url_for(area_nombre ~ '.editar', slug=slug, id=fila['id']) }}">Editar</a>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -59,7 +65,9 @@
     <p>No se encontraron {{ cfg.plural | lower }} para "{{ q }}".</p>
     {% else %}
     <p>Todavía no hay {{ cfg.plural | lower }} cargados.</p>
+    {% if puede(permiso_escritura) %}
     <a class="g-btn" href="{{ url_for(area_nombre ~ '.nuevo', slug=slug) }}">+ CREAR EL PRIMERO</a>
+    {% endif %}
     {% endif %}
 </div>
 {% endif %}

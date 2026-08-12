@@ -356,18 +356,27 @@ sembrar**, porque sembrar taparía la pérdida en silencio (que es lo que pasó 
 Para empezar de cero a propósito: `GESTION_SEED=1`. En un deploy limpio (Render,
 PythonAnywhere) no hay respaldos, así que el primer arranque siembra normalmente.
 
-## Auth provisoria (contraseña compartida)
+## Permisos
 
-Todo `/gestion` está detrás de una contraseña compartida: `bp.before_request` exige
-`session['gestion_ok']` y redirige a `/gestion/login` (excepto el propio login).
-La clave sale de la env var `GESTION_CLAVE`; **el default hardcodeado en `gestion.py`
-es público** (el repo lo es) — en el hosting hay que setear `GESTION_CLAVE` y
-`SECRET_KEY` (firma de la cookie de sesión, se setea en `app.py`) como env vars.
+El área declara dos, y el verbo es lo que los hace entrar solos en los perfiles:
 
-`/historia` y `/agente` usan **la misma env var y la misma clave de sesión**, así que una
-sola contraseña abre las tres áreas — pero cada módulo tiene su propia copia del gate y su
-propio `/login`, sin importar el del otro. Esa duplicación de ~15 líneas es lo que los deja
-borrables por separado.
+| clave | verbo | qué habilita |
+|---|---|---|
+| `gestion.leer` | leer | ver inventario, actividades y préstamos. Es el permiso base del blueprint |
+| `gestion.editar` | escribir | `nuevo`/`editar`/`eliminar`/fotos, **todo el carrito** y las mutaciones de préstamos |
+
+`PERMISO_ESCRITURA` lo aplica solo `crud.registrar_rutas` a sus cinco rutas. **El bloque de
+préstamos/carrito no pasa por el motor**, así que sus rutas llevan `@accesos.requiere(...)` a mano,
+una por una: `carrito`, `carrito_agregar`, `carrito_set`, `carrito_quitar`, `carrito_vaciar`,
+`carrito_actualizar`, `carrito_finalizar`, `prestamo_devolver`, `prestamo_devolver_item`,
+`prestamo_reabrir`, `prestamo_reabrir_item`, `prestamo_eliminar`. Las dos que consultan
+(`prestamos_lista`, `prestamo_detalle`) se quedan con el permiso base. Las dos AJAX
+(`carrito_agregar`, `carrito_set`) piden el 403 en JSON, que es lo que el `fetch` de `gestion.js`
+sabe leer.
+
+Con `gestion.leer` a secas la UI queda en modo consulta: sin CREAR, sin Editar, sin ELIMINAR, sin
+subida de fotos y sin el link del carrito. El motor entero de accesos está en
+`agent_docs/accesos.md`.
 
 Es una traba de desarrollo, no seguridad completa: sin usuarios ni auditoría, sin
 CSRF, sin límite de intentos. Decisión 2026-07-19 (ver `dev-log/DECISIONS.md`).

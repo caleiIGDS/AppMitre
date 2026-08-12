@@ -227,6 +227,14 @@ document.addEventListener('DOMContentLoaded', function() {
     })
       .then(response => {
         if (!response.ok) {
+          // 401 = se venció la sesión; 403 = el acceso existe pero no alcanza. Sin este
+          // caso el usuario vería un "Error HTTP: 403" pelado y no sabría qué hacer.
+          if (response.status === 401) {
+            throw new Error('Se cerró la sesión. Recargá la página para volver a entrar.');
+          }
+          if (response.status === 403) {
+            throw new Error('Este acceso no puede hacer eso.');
+          }
           throw new Error('Error HTTP: ' + response.status);
         }
         return response.json();

@@ -1,4 +1,6 @@
-{# Pantalla de clave. Igual en las tres áreas: crud.registrar_acceso la renderiza. #}
+{# Pantalla de clave de ADMIN. Igual en las tres áreas: accesos.registrar_acceso la
+   renderiza. Los internos no pasan por acá: entran por link de invitación (/acceso/<token>)
+   y no tienen ninguna clave que tipear ni que filtrar. #}
 {% extends base_template %}
 {% block titulo %}Acceso{% endblock %}
 {% block contenido %}
@@ -11,9 +13,10 @@
 <form method="post" class="g-form" action="{{ url_for(area_nombre ~ '.login') }}">
     <input type="hidden" name="next" value="{{ next }}">
     <div class="g-field">
-        <label for="campo-clave">CONTRASEÑA</label>
+        <label for="campo-clave">CONTRASEÑA DE ADMINISTRACIÓN</label>
         <input id="campo-clave" type="password" name="clave" required autofocus>
-        <span class="g-help">Módulo en desarrollo — acceso solo con contraseña.</span>
+        <span class="g-help">Si te habilitaron el acceso por link, no necesitás
+            contraseña: entrá con el link que te mandaron.</span>
     </div>
     <div class="g-form-actions">
         <button type="submit" class="g-btn">ENTRAR</button>

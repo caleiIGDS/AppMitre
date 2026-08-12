@@ -11,13 +11,16 @@
 | **Historia institucional** | `/historia` | `historia.py` | `historia.db` | Línea del tiempo: hitos y las personas que hicieron la escuela. |
 | **Asistente** | `/agente` | `agente/` (paquete) | (usa las de arriba) | Chat con tool-calling. Único transversal: **lee las tres** y escribe en recursos e historia. |
 
+**Quién entra a qué — tres niveles** (detalle en `agent_docs/accesos.md`): **Público** es el SPA de horarios, abierto. **Interno** son dispositivos habilitados por un link de invitación de un solo uso, cada uno con su conjunto de permisos (`gestion.leer`, `agente.escribir`, …). **Admin** entra con `GESTION_CLAVE` y tiene el comodín `'*'`. Un área declara sus `PERMISOS` y entra sola al catálogo y a los perfiles: agregar un área nueva **no toca el gate ni migra los accesos ya dados**.
+
 ### Dónde va cada cosa: tres capas
 
 Las áreas **no duplican código**: comparten un motor. Las dependencias van siempre hacia arriba y **la capa 1 nunca importa un área** — las recibe como argumento.
 
 ```
 capa 2   gestion.py   historia.py   database.py+app.py   agente/       ← nombran tablas reales
-capa 1              crud.py + templates/crud/                          ← sabe "entidad", no cuáles
+capa 1      crud.py + templates/crud/   ·   accesos.py                 ← saben "entidad" y "permiso",
+                                                                         no cuáles
 capa 0        config.py    texto.py    respaldos.py                    ← no nombran nada del dominio
 ```
 
@@ -61,7 +64,8 @@ Google Sheets (CSV export por año: 1ro–7mo + preceptores + personal)
 | `config.py` | SHEET_ID, GIDs por año, FLOOR_MAPPING, branding y `ahora()` — el reloj de la escuela (capa 0). Nadie llama a `datetime.now()`: el server de producción corre en UTC |
 | `texto.py` | Normalización de texto y búsqueda difusa (capa 0). Único dueño de `UMBRAL_SIMILITUD` |
 | `respaldos.py` | Respaldos rotativos de SQLite, parametrizados por área (capa 0) |
-| `crud.py` | Motor CRUD genérico + rutas + gate de sesión (capa 1). No importa ningún área |
+| `crud.py` | Motor CRUD genérico + rutas (capa 1). No importa ningún área |
+| `accesos.py` | Motor de accesos y permisos (capa 1), hermano de `crud.py`: gate, catálogo de permisos, perfiles, links de invitación y panel `/accesos`. DB propia `accesos.db`. No nombra ningún permiso de área |
 | `actualizar.py` | Script de consola para el deploy: pone al día una `gestion.db`/`historia.db` vieja. Hace lo que `migrar()` no puede porque cruza las dos DBs (mudanza de hitos/personas, `proyectos` → hitos) y limpia tablas y columnas que el código ya no declara. Idempotente, con `--dry-run` |
 | `database.py` | Creación de tablas, descarga CSV, normalización |
 | `app.py` | Rutas Flask |
@@ -227,8 +231,10 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 ## Deployment
 
 - **Hosting:** PythonAnywhere (WSGI) + Cloudflare DNS. Antes fue Render.com — ver `dev-log/DECISIONS.md` 2026-06-25
-- **Los `.db` persisten entre deploys** y están en `.gitignore`: `git pull` nunca los pisa. `escuela.db` es la excepción que no importa (se regenera desde Sheets al iniciar o via `/api/actualizar`); `gestion.db` e `historia.db` son la fuente de verdad y sólo tienen los respaldos de `respaldos.py`
+- **Los `.db` persisten entre deploys** y están en `.gitignore`: `git pull` nunca los pisa. `escuela.db` es la excepción que no importa (se regenera desde Sheets al iniciar o via `/api/actualizar`); `gestion.db`, `historia.db` y `accesos.db` son la fuente de verdad y sólo tienen los respaldos de `respaldos.py`
 - **Deploy:** `git pull` → `pip install -r requirements.txt` → `python actualizar.py --dry-run` → `python actualizar.py` → Reload del web app. Las variables de entorno (`SECRET_KEY`, `GESTION_CLAVE`, las API keys del agente) van en el `.env` del servidor, que tampoco viaja por git
+- **`SECRET_KEY` y `GESTION_CLAVE` son obligatorias en producción**: sin ellas la app no arranca (`config.PRODUCCION` las exige cuando detecta `PYTHONANYWHERE_DOMAIN`). En local caen a un default de desarrollo con un aviso por consola. Ojo: **cambiar `GESTION_CLAVE` cierra todas las sesiones de admin** (es el botón de pánico) y **rotar `SECRET_KEY` desloguea también a todos los dispositivos**, que hay que volver a invitar
+- **La primera vez, `accesos.db` nace vacía**: no hay ningún dispositivo habilitado y el único acceso es el de administración con `GESTION_CLAVE`. Desde `/accesos` se invita al resto. La crea sola `accesos.init_db()`, tanto al arrancar como desde `actualizar.py`
 - `gunicorn app:app` para producción en hostings que no sean PythonAnywhere
 - Ver `PLAN_ESCUELAS.md` y `AGENTE_CONFIG.md` para más detalles
 
@@ -252,6 +258,7 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 - Sistema de búsqueda y parsing de queries → leer `agent_docs/search-api.md`
 - Estilos, variables CSS, patrones visuales → leer `agent_docs/frontend-ui.md`
 - Motor CRUD compartido, criterio de capas, contrato de área, hooks, templates genéricos (`crud.py`, `texto.py`, `respaldos.py`, `templates/crud/`) → leer `agent_docs/crud-motor.md`
+- Quién puede entrar a qué: los tres niveles (público/interno/admin), permisos por área, links de invitación y dispositivos (`accesos.py`, `accesos.db`, `/accesos`) → leer `agent_docs/accesos.md`
 - Gestión de recursos (`/gestion`, `gestion.py`, `gestion.db`) → leer `agent_docs/gestion-conocimiento.md`
 - Historia institucional (`/historia`, `historia.py`, `historia.db`: hitos y personas) → leer `agent_docs/historia-institucional.md`
 - Asistente conversacional (`/agente`, paquete `agente/`, tools, fichas de confirmación, fotos) → leer `agent_docs/agente-asistente.md`
@@ -278,6 +285,7 @@ Actualizar la doc **es parte de la tarea, no un paso opcional**: siempre que un 
 - ¿Cambié algo de Historia institucional (`/historia`, `historia.py`, schema de `historia.db`, templates de `historia/`)? → actualizar `agent_docs/historia-institucional.md`
 - ¿Cambié algo del Asistente (paquete `agente/`, tools, prompts, `templates/agente/`, `gestion-agente.js`)? → actualizar `agent_docs/agente-asistente.md`
 - ¿Cambié el motor compartido (`crud.py`, `texto.py`, `respaldos.py`, `templates/crud/`), el contrato de área o sus hooks? → actualizar `agent_docs/crud-motor.md`
+- ¿Cambié quién puede entrar a qué (`accesos.py`, permisos de un área, el panel `/accesos`, el canje de invitaciones)? → actualizar `agent_docs/accesos.md`
 - ¿Agregué código compartido entre áreas? → pasarlo antes por el filtro de capas de `agent_docs/crud-motor.md`: si nombra una tabla o un slug, no es compartido
 - ¿Cambió un contrato entre módulos? → agregar entrada en `dev-log/CHANGELOG.md`
 - ¿Tomaste una decisión no obvia? → agregar entrada en `dev-log/DECISIONS.md`

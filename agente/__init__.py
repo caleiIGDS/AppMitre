@@ -49,6 +49,21 @@ from flask import Blueprint
 
 bp = Blueprint('agente', __name__, url_prefix='/agente')
 
+# Permisos que declara el área al catálogo de `accesos`.
+#
+# El asistente tiene permisos PROPIOS y no reusa `gestion.editar` / `historia.editar`
+# porque sus tools genéricas por slug (crear_entidad, eliminar_entidad, buscar_entidad…)
+# cruzan las dos áreas: no hay forma de mapear una tool a un área desde el esquema. El
+# corte que importa acá es otro — leer contra escribir — y es el que se declara.
+PERMISOS = [
+    ('agente.leer', 'Usar el asistente para consultar', 'leer'),
+    ('agente.escribir', 'Que el asistente pueda modificar datos', 'escribir'),
+    ('agente.auditar', 'Ver el registro de auditoría del asistente', 'admin'),
+]
+GRUPO_PERMISOS = 'Asistente'
+PERMISO_LECTURA = 'agente.leer'
+PERMISO_ESCRITURA = 'agente.escribir'
+
 
 # Al final: `rutas` hace `from . import bp`, así que `bp` tiene que existir antes.
 # Importarlo es lo que registra los endpoints y el gate de acceso sobre el blueprint.

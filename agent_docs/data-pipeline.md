@@ -18,9 +18,9 @@ Google Sheets (CSV export)
 
 El pipeline se dispara en dos situaciones:
 1. **Arranque directo** (`python app.py`): el bloque `__main__` llama `init_tablas()` + `tiene_datos()` + carga si está vacío.
-2. **Petición manual**: `GET /api/actualizar` llama `crear_tablas()` (borra todo) + carga completa.
+2. **Petición manual**: `POST /api/actualizar` (requiere el permiso `horarios.actualizar`) llama `crear_tablas()` (borra todo) + carga completa.
 
-**Importante — producción (PythonAnywhere/WSGI):** el bloque `__main__` no se ejecuta cuando el servidor WSGI importa el módulo. En PythonAnywhere el `escuela.db` persiste entre reinicios, pero en un deploy nuevo la DB está vacía y todas las rutas fallan. En ese caso hay que disparar `/api/actualizar` desde la consola o el navegador. Solución estructural pendiente: ver `dev-log/tasks/TODO.md` #1.
+**Importante — producción (PythonAnywhere/WSGI):** el bloque `__main__` no se ejecuta cuando el servidor WSGI importa el módulo. En PythonAnywhere el `escuela.db` persiste entre reinicios, pero en un deploy nuevo la DB está vacía y todas las rutas fallan. En ese caso hay que disparar `/api/actualizar` desde el botón, logueado como administrador. Solución estructural pendiente: ver `dev-log/tasks/TODO.md` #1.
 
 ---
 
@@ -171,7 +171,7 @@ Solo se inserta una fila en DB por cada día donde `inicio` y `fin` estén prese
    }
    ```
 4. `GIDS_CURSOS` se genera automáticamente excluyendo `horarios_preceptores` y `personal_no_docente`, así que el nuevo año se incluirá en la próxima carga.
-5. Disparar `GET /api/actualizar`.
+5. Disparar `POST /api/actualizar` (botón ACTUALIZAR HORARIOS, visible sólo para el admin).
 
 No hay nada más que cambiar en el código para un año adicional.
 

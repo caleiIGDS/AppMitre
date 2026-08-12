@@ -160,12 +160,18 @@ Para agregar un campo: sumarlo al `SCHEMA`, a `campos` y al loop aditivo de `_mi
 
 `slug` ∈ {hitos, personas}; otro valor → 404.
 
-## Auth
+## Permisos
 
-Misma env var (`GESTION_CLAVE`) y misma clave de sesión (`session['gestion_ok']`) que
-`/gestion` y `/agente`: una contraseña abre las tres áreas. El gate lo monta
-`crud.registrar_acceso(bp)`, una línea al final del módulo. Vale la misma advertencia: es una traba de desarrollo, no seguridad completa (sin usuarios,
-sin CSRF, sin límite de intentos), y el default está en un repo público.
+Dos, declarados en `historia.py` y montados con `accesos.registrar_acceso(bp, PERMISO_LECTURA)`,
+una línea al final del módulo:
+
+| clave | verbo | qué habilita |
+|---|---|---|
+| `historia.leer` | leer | ver hitos y personas. Permiso base del blueprint |
+| `historia.editar` | escribir | `nuevo`/`editar`/`eliminar`/fotos, que decora `crud.registrar_rutas` |
+
+A diferencia de `/gestion`, acá **no hay rutas fuera del motor**: el área es CRUD puro, así que con
+declarar `PERMISO_ESCRITURA` queda todo cubierto. Motor completo en `agent_docs/accesos.md`.
 
 ## Búsqueda tolerante (`?q=`)
 

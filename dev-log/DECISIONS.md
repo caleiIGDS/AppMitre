@@ -4,6 +4,60 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-08-11] — El acceso interno se da por dispositivo, no por contraseña
+
+**Contexto**: hacía falta darle el asistente en modo consulta a gente que no es staff — el alumno encargado de un curso, por ejemplo. Con una contraseña compartida eso es imposible en la práctica: se propaga por WhatsApp en una tarde, y rotarla obliga a avisarle de nuevo a todos.
+
+**Un link de invitación de un solo uso no es filtrable.** El admin genera la URL, la persona la abre en su celular, el server quema el token y le deja la cookie. Si lo reenvía, el segundo en abrirlo recibe "link inválido". No hay ningún secreto que se pueda pasar de mano en mano y siga sirviendo, que es exactamente lo que se buscaba.
+
+**El GET no quema el token, el POST sí.** Parece ceremonia y no lo es: WhatsApp, Telegram y el prefetch del navegador hacen un GET al link para armar la vista previa. Con el canje en el GET, el link se consumiría **en el camino** y la persona recibiría un error sin haber tocado nada. La pantalla intermedia además pide el nombre, que es lo que hace útil la lista del panel.
+
+**Se guardan dos identidades y no una**: el nombre lo escribe la persona al canjear, la etiqueta la escribió el admin al invitar. El nombre es autodeclarado y nadie lo verifica — la defensa no es verificarlo, es **mostrar los dos juntos**: que no coincidan es la señal de que el link se reenvió. Para el nivel de riesgo de una escuela alcanza, y verificarlo de verdad exigiría identidad real (Google Sign-In), que se descartó por el costo de setup. Las columnas `email`/`google_sub` quedaron reservadas en la tabla por si algún día se suma.
+
+**Un link = un dispositivo, y el botón `+ OTRO DISPOSITIVO` para el resto.** La alternativa era un link con cupo para N canjes, pero eso reintroduce lo que se quería evitar: reenviado, los cupos se los lleva cualquiera y uno se entera después. El botón genera una invitación nueva con los mismos permisos, y quedan dos filas revocables por separado — si pierde el celular, la notebook sigue andando.
+
+**Sin vencimiento automático, a pedido.** El acceso dura hasta que se revoque. Se evaluó vencer a fin de año lectivo (los alumnos rotan) y se descartó por simplicidad: la columna "último uso" del panel alcanza para repasar la lista una vez al año. Lo que sí vence a los 7 días es el LINK sin usar.
+
+**`GESTION_CLAVE` no se elimina, y es deliberado.** Las `.db` no viajan por git, así que en cada instalación `accesos.db` nace vacía y no hay ningún dispositivo. Sin la clave nadie podría invitar al primero. Es el break-glass, y por eso la sesión de admin lleva la huella de la clave: cambiarla mata todas esas sesiones en el request siguiente.
+
+---
+
+## [2026-08-11] — Los permisos se declaran por área, con un verbo, y los perfiles se derivan
+
+**Contexto**: se viene otro inventario para otra sección de la escuela. La pregunta al diseñar los permisos era qué hay que tocar el día que se sume.
+
+**Con roles cerrados en el gate (`'interno'`, `'interno_gestion'`) la respuesta es "el gate"** — y encima cada persona con una combinación rara obliga a inventar un rol más. Por eso el acceso guarda un **conjunto de permisos** y los perfiles son sólo presets del formulario.
+
+**El truco es que los presets se definen por VERBO, no enumerando claves.** Cada área declara `('laboratorio.leer', '...', 'leer')`, y `'interno-lectura' = ('leer',)` la agarra sola. El día que se sume la sección nueva hay que tocar **una línea** —la lista de `accesos.registrar_app`, que está pegada al `register_blueprint` que ya hay que tocar igual— y los dispositivos ya dados de alta no se migran: simplemente no tienen el permiso nuevo hasta que el admin lo tilde. El gate no se entera.
+
+**`accesos.py` es un archivo nuevo y no un apéndice de `crud.py`** porque nombra otro concepto: `crud.py` es el motor de *entidades*, esto es el motor de *permisos*. Los dos son capa 1 y ninguno nombra un área. `crud.py` importa `accesos` (para decorar sus rutas de escritura), nunca al revés.
+
+**`accesos.db` es una DB aparte y no una tabla en `gestion.db`** por tres razones, y la segunda es la que decide: `DUENOS` en `actualizar.py` **dropea toda tabla que el código no declare para esa DB**. Meter `accesos` en `gestion.db` sin tocar `DUENOS` habría hecho que el próximo `python actualizar.py` borrara todos los dispositivos, en silencio. Esa trampa ya mordió una vez (ver el comentario de `actualizar.py`). Las otras dos: capa 1 no debería conocer la ruta de la DB de un área, y los respaldos son por prefijo.
+
+**`accesos.init_db()` no reusa `crud.init_db`**: aquél hace `raise` si la tabla testigo está vacía y hay respaldos, que es la guarda anti-pérdida del 2026-08-08. Para `accesos.db` una tabla vacía es un estado legítimo — es como nace.
+
+**Los permisos no viajan en la cookie.** Se resuelven server-side con un `SELECT` por request. Si viajaran, revocar un dispositivo no haría nada hasta que la cookie expirara, y revocar en el acto es la única garantía real que da todo este sistema. De paso, el presupuesto de ~4KB ya está compartido con `agente_sid`.
+
+**403 y no un redirect al login** para quien ya entró pero no tiene el permiso. Mandarlo al login es un bucle, y peor: si acierta la clave se convierte en admin. Le concederías todo justo por no tener nada.
+
+---
+
+## [2026-08-11] — Al agente no se le prohíben las tools: no se le mandan
+
+**Contexto**: para el acceso de consulta el pedido fue textual — "que ni las tenga disponibles, no que las tenga prohibidas".
+
+**No es una distinción cosmética, y este agente ya lo había demostrado.** Con una tool prohibida el modelo la intenta, se come el error y a veces igual contesta "✅ Recurso eliminado" — el mismo síntoma que motivó `_escritura_no_ejecutada` en `filtros.py`. Una tool que **no está en la lista** el modelo no la anuncia, no la promete y no alucina haberla usado. Por eso el filtro está en `tools_permitidas()`, antes de la llamada a la API, y no en un `if` dentro del ejecutor.
+
+**El chequeo en `ejecutar_tool` existe igual, como segunda línea**, porque hay un camino que no pasa por el modelo: `/agente/confirmar` ejecuta `crear_entidad` directo desde el botón del chat. Filtrar esquemas no lo protege en absoluto. El default `permisos=None` es fail-closed a propósito: un call site nuevo que se olvide de pasarlo falla cerrado y ruidoso, no abierto y en silencio.
+
+**El permiso de cada tool va en un dict aparte y no como clave dentro de su esquema.** La opción "natural" era `{'name': ..., 'permiso': ...}`, pero `TOOLS_SCHEMA` se manda tal cual a la API y **Anthropic rechaza con 400 cualquier clave de más**. Como el proveedor por defecto es DeepSeek —que traduce copiando tres claves explícitas— ese bug habría sido **invisible en desarrollo** y habría aparecido recién al cambiar de proveedor. Con el dict aparte, `TOOLS_SCHEMA` sigue siendo exactamente lo que las APIs esperan y no hay nada que limpiar. Se pierde la localidad (el permiso no está al lado de la tool) y se gana que las 25 se lean juntas en 25 líneas, más una verificación al importar que revienta si alguna quedó sin declarar.
+
+**El system prompt también se recorta, y `escribe` se deriva de las tools que se mandaron, no de los permisos.** Si saliera de los permisos, un bug en el filtrado dejaría al prompt explicando el circuito de alta mientras las tools de alta no viajaron — el modelo describiría un procedimiento que no puede ejecutar, que es la receta de la alucinación que se está tratando de matar. Derivándolo de la lista real, las dos mitades del mensaje no pueden contradecirse.
+
+**`prompt.py` se partió en bloques con un script, no a mano.** Son ~300 líneas afinadas donde una palabra cambiada degrada al agente sin que se note. La prueba de que salió bien es que `escribe=True` produce el prompt anterior **byte a byte**, incluido el orden de las secciones.
+
+---
+
 ## [2026-08-11] — Un turno no se deduce: si el modelo lo va a decir, tiene que estar escrito
 
 **Contexto**: un usuario preguntó por la preceptora de 7° 6 y el agente contestó bien — titular Magali Bruno (vespertino), contraturno Juan Pablo. Repreguntó "¿a la mañana?" y contestó "Juan Pablo. Es el contraturno de 7° 6, que cursa a la tarde". Dos errores en una línea: 7° 6 cursa **vespertino** (lo había dicho él mismo un mensaje antes) y Juan Pablo es el de **tarde**. La respuesta correcta era que a la mañana **no hay nadie cargado**.

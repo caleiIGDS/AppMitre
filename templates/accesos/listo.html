@@ -1,0 +1,24 @@
+{% extends 'accesos/base.html' %}
+{% block titulo %}Listo{% endblock %}
+{% block contenido %}
+
+<div class="g-toolbar">
+    <h2>LISTO, {{ disp.nombre | upper }}</h2>
+</div>
+
+<div class="g-card">
+    <p>Este dispositivo quedó habilitado con acceso de
+        <strong>{{ perfil_etiqueta }}</strong>. No hace falta que guardes el link ni que
+        recuerdes ninguna contraseña: mientras uses este navegador, entrás directo.</p>
+</div>
+
+<div class="g-form-actions">
+    {% if puede('agente.leer') %}
+    <a class="g-btn" href="{{ url_for('agente.chat_page') }}">🤖 IR AL ASISTENTE</a>
+    {% endif %}
+    {% if puede('gestion.leer') %}
+    <a class="g-btn-outline" href="{{ url_for('gestion.home') }}">GESTIÓN DE RECURSOS</a>
+    {% endif %}
+    <a class="g-btn-outline" href="/">SISTEMA DE HORARIOS</a>
+</div>
+{% endblock %}

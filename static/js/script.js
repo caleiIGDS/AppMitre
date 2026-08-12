@@ -443,7 +443,8 @@ function actualizarDatos() {
     btn.innerText = "ACTUALIZANDO...";
     btn.classList.add('loading');
 
-    fetch('/api/actualizar')
+    // POST y no GET: reconstruye escuela.db entera, no puede dispararla un prefetch.
+    fetch('/api/actualizar', { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (data.status === "success") {

@@ -19,10 +19,21 @@ import sys
 from config import ahora
 from flask import Blueprint
 
+import accesos
 import crud
 import texto
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'historia.db')
+
+# Permisos que declara el área al catálogo de `accesos`. Ver gestion.py para el criterio
+# del verbo.
+PERMISOS = [
+    ('historia.leer', 'Ver hitos y personas', 'leer'),
+    ('historia.editar', 'Cargar, editar y eliminar hitos y personas', 'escribir'),
+]
+GRUPO_PERMISOS = 'Historia institucional'
+PERMISO_LECTURA = 'historia.leer'
+PERMISO_ESCRITURA = 'historia.editar'
 
 # Respaldos rotativos: la maquinaria vive en respaldos.py (capa 0). Acá sólo se declara
 # con qué prefijo se guardan y qué tabla mirar para saber si la DB tiene datos de verdad
@@ -198,5 +209,5 @@ def init_db():
     crud.init_db(sys.modules[__name__])
 
 
-crud.registrar_acceso(bp)
+accesos.registrar_acceso(bp, PERMISO_LECTURA)
 crud.registrar_rutas(bp, sys.modules[__name__])

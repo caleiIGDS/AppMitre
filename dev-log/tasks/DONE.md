@@ -4,6 +4,9 @@ _Solo leer si se pide explícitamente._
 
 ---
 
+## [2026-08-11] — #20 Accesos por niveles: público / interno / admin (cierra #20)
+Motor nuevo `accesos.py` (capa 1, hermano de `crud.py`) + `accesos.db` + panel `/accesos`. Reemplaza la contraseña compartida única por tres niveles: **público** (el SPA de horarios), **interno** (dispositivos habilitados por link de invitación de un solo uso, con permisos sueltos) y **admin** (`GESTION_CLAVE`, comodín `*`). Cada área declara sus `PERMISOS` con un verbo y entra sola al catálogo y a los perfiles: sumar un área nueva no toca el gate ni migra los accesos ya dados. El asistente **no recibe** las tools de escritura si el acceso no las tiene (filtrado en `tools_permitidas`, antes de la llamada a la API) y su system prompt se recorta en consecuencia; con permiso de escritura el prompt es byte a byte el de antes. Se sacaron los defaults públicos de `SECRET_KEY`/`GESTION_CLAVE` (obligatorias en producción), la sesión pasó a ser permanente y deslizante (se acabó re-tipear la clave en cada visita), y `/api/actualizar` dejó de ser GET público y destructivo. Verificado en runtime (49 casos: los tres niveles, canje, reuso del link, revocación instantánea, multi-dispositivo, filtrado de tools). Ver CHANGELOG y DECISIONS 2026-08-11, y `agent_docs/accesos.md`. Lo que quedó fuera a propósito → TODO #24.
+
 ## [2026-07-21] — Préstamos: devolución parcial por ítem + retiro desde la ficha del recurso
 Columna `prestamo_items.cantidad_devuelta` (migración aditiva). Rutas `devolver_item`/`reabrir_item`: devolver/deshacer de a partes (ej: 1 de 3); `_recalcular_estado()` cierra o reabre el préstamo según el pendiente total, con `fecha_devolucion` como fuente de verdad de "cerrado". `devolver`/`reabrir` pasan a ser "todo". `prestamo_nuevo?recurso=<id>` precarga la fila 1 desde la ficha del recurso. Ver CHANGELOG y DECISIONS 2026-07-21.
 

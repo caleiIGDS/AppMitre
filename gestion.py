@@ -18,10 +18,22 @@ from config import ahora
 from flask import (Blueprint, abort, jsonify, redirect, render_template, request,
                    session, url_for)
 
+import accesos
 import crud
 import texto
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gestion.db')
+
+# Permisos que declara el área al catálogo de `accesos`. El VERBO es lo que hace que un
+# perfil los agarre solo: 'leer' entra en interno-lectura, 'escribir' en interno-gestion.
+PERMISOS = [
+    ('gestion.leer', 'Ver el inventario, actividades y préstamos', 'leer'),
+    ('gestion.editar',
+     'Cargar, editar y eliminar recursos; registrar y cerrar préstamos', 'escribir'),
+]
+GRUPO_PERMISOS = 'Gestión de recursos'
+PERMISO_LECTURA = 'gestion.leer'
+PERMISO_ESCRITURA = 'gestion.editar'
 
 # Respaldos rotativos: la maquinaria vive en respaldos.py (capa 0). Acá sólo se declara
 # con qué prefijo se guardan y qué tabla mirar para saber si la DB tiene datos de verdad
@@ -360,7 +372,7 @@ def init_db():
     crud.init_db(sys.modules[__name__])
 
 
-crud.registrar_acceso(bp)
+accesos.registrar_acceso(bp, PERMISO_LECTURA)
 crud.registrar_rutas(bp, sys.modules[__name__])
 
 
@@ -541,7 +553,11 @@ def pendiente_afuera(cur, rid):
     return sum(max(0, _int(f['cantidad']) - _int(f['cantidad_devuelta'])) for f in filas)
 
 
+# Todo el bloque de carrito y préstamos escribe, y NO pasa por `crud.registrar_rutas`:
+# el decorador que el motor pone en nuevo/editar/eliminar no los cubre, hay que marcarlos
+# uno por uno. Los que contesta el fetch de gestion.js piden el 403 en JSON.
 @bp.route('/carrito/agregar', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
 def carrito_agregar():
     """Suma un recurso al carrito (topeado al stock). Con JS (fetch) devuelve JSON
     {ok, count, cantidad} para actualizar el badge y el stepper sin recargar; sin JS,
@@ -565,6 +581,7 @@ def carrito_agregar():
 
 
 @bp.route('/carrito/set', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
 def carrito_set():
     """Fija la cantidad exacta de un recurso en el carrito — la usan el + y el − del
     stepper (AJAX). `cantidad` <= 0 lo saca; se topea al stock (`recursos.cantidad`) si
@@ -590,6 +607,7 @@ def carrito_set():
 
 
 @bp.route('/carrito/quitar', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
 def carrito_quitar():
     items = _carrito()
     items.pop(_int(request.form.get('recurso_id', '')), None)
@@ -598,12 +616,14 @@ def carrito_quitar():
 
 
 @bp.route('/carrito/vaciar', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
 def carrito_vaciar():
     session.pop('carrito', None)
     return redirect(url_for('gestion.carrito'))
 
 
 @bp.route('/carrito/actualizar', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
 def carrito_actualizar():
     """Guarda las cantidades editadas en la página del carrito. Con accion=finalizar
     sigue al checkout (pedir quién retira); si no, vuelve al carrito."""
@@ -619,6 +639,7 @@ def carrito_actualizar():
 
 
 @bp.route('/carrito')
+@accesos.requiere(PERMISO_ESCRITURA)
 def carrito():
     """Carrito de retiro: revisar ítems, editar cantidades, quitar. De acá se finaliza."""
     con = conectar()
@@ -629,6 +650,7 @@ def carrito():
 
 
 @bp.route('/carrito/finalizar', methods=['GET', 'POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
 def carrito_finalizar():
     """Checkout: recién acá se pide quién retira / destino / notas y se crea el
     préstamo con lo que haya en el carrito. Al confirmar, vacía el carrito."""
@@ -685,6 +707,7 @@ def prestamo_detalle(id):
 
 
 @bp.route('/prestamos/<int:id>/devolver', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
 def prestamo_devolver(id):
     """Devolver TODO de una: marca cada ítem entero y cierra el préstamo. Atajo del
     botón 'devolvió' de la lista y de 'devolver todo' del detalle. Las devoluciones
@@ -703,6 +726,7 @@ def prestamo_devolver(id):
 
 
 @bp.route('/prestamos/<int:id>/devolver_item', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
 def prestamo_devolver_item(id):
     """Devuelve parte (o el resto) de un ítem del préstamo. `cantidad` vacía = todo lo
     pendiente de ese ítem. Al cubrirse todo lo pendiente del préstamo, se cierra solo."""
@@ -731,6 +755,7 @@ def prestamo_devolver_item(id):
 
 
 @bp.route('/prestamos/<int:id>/reabrir', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
 def prestamo_reabrir(id):
     """Deshace una devolución marcada por error (todo el préstamo vuelve a figurar afuera)."""
     con = conectar()
@@ -744,6 +769,7 @@ def prestamo_reabrir(id):
 
 
 @bp.route('/prestamos/<int:id>/reabrir_item', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
 def prestamo_reabrir_item(id):
     """Deshace la devolución de un ítem puntual: vuelve a figurar afuera entero. Si con
     eso el préstamo vuelve a tener algo pendiente, se reabre (se limpia fecha_devolucion)."""
@@ -759,6 +785,7 @@ def prestamo_reabrir_item(id):
 
 
 @bp.route('/prestamos/<int:id>/eliminar', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
 def prestamo_eliminar(id):
     """Solo para registros mal cargados — la devolución normal usa /devolver."""
     con = conectar()

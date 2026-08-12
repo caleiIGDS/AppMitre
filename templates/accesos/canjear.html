@@ -1,0 +1,35 @@
+{# La pantalla que ve quien recibió el link. No muestra la etiqueta que escribió el
+   admin: esa es una nota interna, no algo para el destinatario. #}
+{% extends 'accesos/base.html' %}
+{% block titulo %}Habilitar dispositivo{% endblock %}
+{% block contenido %}
+
+<div class="g-toolbar">
+    <h2>HABILITAR ESTE DISPOSITIVO</h2>
+</div>
+
+{% if error %}<div class="g-error">{{ error }}</div>{% endif %}
+
+<div class="g-card">
+    <p>Este link te da acceso de
+        <strong>{{ {'interno-lectura': 'Consulta',
+                    'interno-gestion': 'Gestión',
+                    'admin': 'Administración'}.get(inv.perfil, 'A medida') }}</strong>
+        al sistema de la escuela.</p>
+</div>
+
+<form method="post" action="{{ url_for('acceso_canjear', token=token) }}" class="g-form">
+    <div class="g-field">
+        <label for="campo-nombre">TU NOMBRE Y APELLIDO</label>
+        <input id="campo-nombre" type="text" name="nombre" required autofocus
+               maxlength="80" autocomplete="name">
+        <span class="g-help">Sirve para que administración sepa quién tiene acceso.</span>
+    </div>
+    <div class="g-form-actions">
+        <button type="submit" class="g-btn">HABILITAR ESTE DISPOSITIVO</button>
+    </div>
+</form>
+
+<p class="g-help">Se habilita <strong>este</strong> dispositivo, no una cuenta: si después
+    querés entrar desde otro, pedí un link nuevo. El link sirve una sola vez.</p>
+{% endblock %}

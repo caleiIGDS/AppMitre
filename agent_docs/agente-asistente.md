@@ -16,10 +16,11 @@ hablar con la app en lenguaje natural en vez de hacer click en formularios: cons
 horarios, crear recursos, fotografiar etiquetas y cargarlas, gestionar préstamos, cargar
 hitos y personas. Todo con auditoría de escrituras en `agente_log`.
 
-**Acceso**: dos vistas del mismo chat, ambas detrás del login (`session['gestion_ok']`, la
-misma sesión y la misma `GESTION_CLAVE` que `/gestion` e `/historia`, montado con
-`crud.registrar_acceso` en cada
-módulo):
+**Acceso**: dos vistas del mismo chat, ambas detrás del gate de `accesos.py`
+(`accesos.registrar_acceso(bp, 'agente.leer', ...)`). El asistente declara **tres permisos
+propios** —`agente.leer`, `agente.escribir`, `agente.auditar`— y **con cuáles tenga cambia lo que el
+agente es**: con solo `agente.leer` las diez tools de escritura ni se le mandan al modelo. Ver
+"Permisos" más abajo y `agent_docs/accesos.md`.
 - Botón "🤖 ASISTENTE" en el header de `/gestion` y `/historia` → widget flotante, para
   consultar sin salir de la página en la que se está.
 - `/agente/`, el chat a pantalla completa. Es la vista pensada para el celular, que es donde
@@ -121,9 +122,14 @@ llegaría como un 200 sin sentido. Los que devuelven HTML —los de `_ENDPOINTS_
 a `/agente/login?next=...`, porque entrar por link directo a `/agente` desde el celular es el
 caso normal y un 401 pelado ahí es un callejón sin salida.
 
-Misma `GESTION_CLAVE`, misma `session['gestion_ok']` y mismo `next` scopeado al prefijo propio
-(contra open redirect) que `/gestion` e `/historia`: iniciar sesión en cualquiera de las tres
-áreas habilita las otras, porque es el mismo staff.
+Mismo motor de accesos y mismo `next` scopeado al prefijo propio (contra open redirect) que
+`/gestion` e `/historia`. Con acceso pero **sin** el permiso de la ruta la respuesta es **403**, no
+el login. Dos rutas piden más que el permiso base:
+
+| ruta | permiso | por qué |
+|---|---|---|
+| `/agente/confirmar` | `agente.escribir` | **escribe sin pasar por el LLM**: filtrar las tools no la protege en absoluto |
+| `/agente/log` | `agente.auditar` | la auditoría es de administración |
 
 **Context processor propio**: `agente.bp` construye su `_contexto_base()` localmente
 (`escuela_nombre`/`escuela_logo`/`escuela_version` salen de `config.py`). Antes delegaba en
@@ -190,7 +196,12 @@ El asistente se usa mayormente desde el teléfono, en el pasillo. Lo que eso imp
 
 ### Tools
 
-**Lectura** (no se auditan, siempre disponibles):
+Qué permiso pide cada una está en **`PERMISO_POR_TOOL`** (`agente/tools/esquemas.py`), que es la
+**única fuente de verdad**: `TOOLS_ESCRITURA`, la decisión de auditar y el filtrado por acceso se
+derivan de ahí. Antes esa clasificación estaba copiada a mano en tres lugares. Una tool nueva sin
+entrada en el dict hace fallar el import, a propósito.
+
+**Lectura** — `agente.leer` (no se auditan):
 - `buscar_profesor(query)` — resolución difusa de nombre, **sobre el padrón de los
   horarios**: docentes de `clases` **y personal no docente** (ver abajo). Cada candidato lleva
   su `rol` si tiene cargo no docente. Si el nombre también
@@ -217,7 +228,7 @@ El asistente se usa mayormente desde el teléfono, en el pasillo. Lo que eso imp
   toca la base (por eso está acá) pero **sí gasta la API de visión**, así que el prompt le
   pide llamarla solo cuando necesita los datos, nunca para adjuntar. Ver "Alta desde foto"
 
-**Escritura** (se auditan, requieren `session['gestion_ok']`, guardan snapshot "antes"):
+**Escritura** — `agente.escribir` (se auditan, guardan snapshot "antes"):
 - `crear_entidad(slug, campos)` — alta **en dos pasos con ficha de confirmación**, ver abajo
 - `editar_entidad(slug, id, campos)` — update
 - `adjuntar_foto(slug, id)` — guarda la foto de ESTE turno en la galería de un registro que ya
@@ -232,6 +243,56 @@ El asistente se usa mayormente desde el teléfono, en el pasillo. Lo que eso imp
 - `eliminar_entidad` / `eliminar_prestamo` — **requieren confirmación en turno separado** (el
   system prompt instruye a Claude a no ejecutar en el mismo turno en que se solicita, sino
   responder primero qué va a borrar y esperar confirmación)
+
+### Permisos: no tener la tool, no tenerla prohibida
+
+Un acceso de consulta **no recibe** los esquemas de las diez tools de escritura. La diferencia con
+prohibírselas no es cosmética: una tool que no está en la lista el modelo no la anuncia, no la
+promete y no alucina haberla usado. Prohibida, en cambio, la intenta, se come el error y a veces
+igual contesta "✅ listo".
+
+`tools_permitidas(permisos)` (en `esquemas.py`) es **la única puerta** por la que los esquemas salen
+hacia el modelo. Los dos loops de `llm.py` la usan; `TOOLS_SCHEMA` ya no se pasa crudo a ninguna
+API. Por eso `PERMISO_POR_TOOL` es un dict aparte y no una clave `'permiso'` dentro de cada esquema:
+así `TOOLS_SCHEMA` sigue siendo exactamente lo que las APIs esperan y no hay que acordarse de
+limpiarlo antes de mandarlo — Anthropic rechaza con `400` cualquier clave de más, y como el
+proveedor por defecto es DeepSeek (que traduce copiando tres claves), ese bug sería **invisible en
+desarrollo**.
+
+Tres capas, de afuera hacia adentro:
+
+1. **Filtrado del esquema** — `tools_permitidas()`. El modelo ve 15 tools o 25.
+2. **`ejecutar_tool(..., permisos=None)`** — chequea igual. Cubre `/agente/confirmar`, que escribe
+   sin pasar por el LLM, y el caso de que el modelo invente un nombre de tool. El default `None` es
+   **fail-closed**: un call site nuevo que se olvide de pasar permisos falla cerrado y ruidoso, no
+   abierto y en silencio. Un rechazo de escritura **se audita**: si aparece en `/agente/log`, o
+   alguien forjó el request o el filtrado tiene un agujero.
+3. **El system prompt** — `construir_system_prompt(..., escribe=)`, ver abajo.
+
+Los cuatro call sites de `ejecutar_tool` pasan permisos: los dos del loop Anthropic, el de
+`_loop_openai` y el de `rutas.confirmar`.
+
+Las tools genéricas por slug (`crear_entidad`, `eliminar_entidad`, `buscar_entidad`…) cruzan gestión
+e historia, así que **no** se pueden mapear a `gestion.editar`/`historia.editar` desde el esquema —
+de ahí que el agente tenga permisos propios. Si algún día hace falta el corte fino por área, el
+lugar es `ejecutar_tool` mirando `_modulo(slug)`, no el esquema.
+
+### El system prompt se recorta con las tools (`prompt.py`)
+
+`prompt.py` está partido en bloques y `construir_system_prompt(..., escribe=)` arma la lista.
+Con `escribe=False` no van el circuito de alta, el bloque de hitos, el de carga desde etiqueta, el
+de préstamos (con su padrón de ~1.600 tokens) ni las reglas de borrado; sí va `_SOLO_LECTURA`, que
+le dice explícitamente que esas herramientas **no existen** para él y que no escriba "✅". Las
+reglas numeradas se renumeran solas: saltar del 1 al 3 le marcaría al modelo que hay reglas que no
+está viendo. El prompt de un acceso de consulta queda en ~55% del otro.
+
+`escribe` lo decide `llm.chat_with_tools` mirando **las tools que efectivamente se mandaron**, no
+los permisos del usuario: así es imposible que el prompt hable de dar de alta mientras las tools de
+alta no viajaron. Con `escribe=True` el resultado es byte a byte el prompt de antes de partirlo.
+
+Esto también apaga un problema conocido: `_escritura_no_ejecutada` (`filtros.py`) marca cualquier
+"✅" sin escritura exitosa. Para un acceso de consulta **ninguna** escritura corre nunca, así que
+cualquier ✅ decorativo dispararía el banner — por eso el bloque le prohíbe el símbolo de entrada.
 
 ### Alta con ficha de confirmación (`crear_entidad`)
 
@@ -983,8 +1044,10 @@ que las usa — no en `init_db()`, porque el server puede estar meses sin reinic
   `AGENTE_VISION_API_BASE` (default el endpoint OpenAI-compatible de Google). Con la key
   puesta, el alta desde foto anda con **cualquier** `AGENTE_PROVIDER`, incluido el default.
 - **Env var** `AGENTE_API_BASE` — para APIs custom (Ollama, self-hosted).
-- **Costo**: cada mensaje del chat arrastra el system prompt + `TOOLS_SCHEMA`, ~15.000 tokens
-  de entrada, tenga foto o no — eso domina la factura, no las respuestas. Por eso el lector de
+- **Costo**: cada mensaje del chat arrastra el system prompt + los esquemas de las tools, ~15.000
+  tokens de entrada, tenga foto o no — eso domina la factura, no las respuestas. **Un acceso de
+  solo consulta paga bastante menos**: 15 esquemas en vez de 25, y un prompt de ~55% (sin el
+  circuito de alta ni el padrón de ~1.600 tokens). Por eso el lector de
   fotos va aparte (~2.000 tokens por foto) en vez de mandarle la imagen al agente. Las
   lecturas (búsquedas, horarios) agregan poco (~100–500 tokens); las escrituras
   (create/edit/préstamos) más, porque la salida de la tool vuelve a entrar al modelo. El

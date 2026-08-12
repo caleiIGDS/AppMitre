@@ -4,6 +4,59 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-11] — Accesos por niveles: público / interno / admin
+
+**Tipo**: motor nuevo de capa 1 + DB nueva + cambio de contrato en 5 firmas + una ruta GET→POST
+**Archivos**: `accesos.py` (nuevo), `accesos.db` (nueva), `crud.py`, `gestion.py`, `historia.py`,
+`agente/{__init__,rutas,llm,filtros,prompt}.py`, `agente/tools/{__init__,esquemas}.py`, `app.py`,
+`config.py`, `actualizar.py`, `templates/{crud,accesos,gestion,historia,agente}/`,
+`static/{gestion-agente.js,js/script.js}`, `agent_docs/accesos.md` (nuevo)
+
+Hasta acá había **una sola puerta y un solo nivel**: `GESTION_CLAVE` y la marca binaria
+`session['gestion_ok']` abrían por igual las tres áreas, incluidas las diez tools de escritura del
+asistente. Ahora hay tres niveles y el permiso se declara por área.
+
+**1. `crud.registrar_acceso` → `accesos.registrar_acceso(bp, permiso, ...)`** — el gate se mudó a
+`accesos.py`, un motor de capa 1 hermano de `crud.py`. `crud.py` ya no monta login ni sesión (sí
+importa `accesos` para decorar sus rutas de escritura). Los tres call sites cambiaron. `endpoints_pagina`
+y `endpoint_default` mantienen su semántica; el primer argumento es nuevo.
+
+**2. El contrato de área suma cuatro claves**: `PERMISOS` (`[(clave, etiqueta, verbo)]`),
+`GRUPO_PERMISOS`, `PERMISO_LECTURA` y `PERMISO_ESCRITURA`. `crud.contexto_base` inyecta
+`permiso_escritura` al contexto de los templates. Un área nueva declara sus permisos y entra sola al
+catálogo y a los perfiles; el gate no se toca.
+
+**3. `session['gestion_ok']` ya no existe.** La reemplaza `session['acceso']`
+(`{'tipo': 'admin'|'dispositivo', ...}`), y los permisos se resuelven server-side por request para
+que revocar corte en el acto. Las guardas Jinja `{% if session.get('gestion_ok') %}` pasaron a
+`{% if puede('...') %}` / `{% if acceso_actual() %}` (globals nuevos de Jinja).
+
+**4. `ejecutar_tool(tool, input, contexto_turno, permisos=None)`** — parámetro nuevo, **fail-closed**:
+sin permisos no ejecuta nada. Los cuatro call sites lo pasan.
+
+**5. `chat_with_tools(..., permisos=frozenset())`** y **`construir_system_prompt(..., escribe=True)`**
+— firmas nuevas. `TOOLS_SCHEMA` **ya no se pasa crudo a ninguna API**: la única puerta es
+`esquemas.tools_permitidas(permisos)`. `PERMISO_POR_TOOL` (dict nuevo en `esquemas.py`) es la fuente
+de verdad única de la clasificación lectura/escritura; `filtros.TOOLS_ESCRITURA` y la lista `lectura`
+de `tools/__init__.py` se derivan de ahí en vez de ser copias a mano. Una tool sin permiso declarado
+**rompe el import**, a propósito.
+
+**6. `/api/actualizar` pasa de GET a POST** y exige `horarios.actualizar`. `script.js` manda
+`{method:'POST'}` y el botón se envuelve en `{% if puede('horarios.actualizar') %}`. Era GET, público
+y destructivo (reconstruye `escuela.db` entera).
+
+**7. `accesos.db` nueva**, con `dispositivos` e `invitaciones`. Sumada a `DUENOS` y al paso 4 de
+`actualizar.py`, y a la copia de seguridad del paso 1. Nace vacía: hasta la primera invitación el
+único acceso es el admin por clave.
+
+**8. `config.PRODUCCION` y `config.SESION_DIAS` (nuevos)**. En producción `SECRET_KEY` y
+`GESTION_CLAVE` pasan a ser **obligatorias** (antes tenían default público). La sesión es permanente
+y deslizante: se acabó tener que re-tipear la clave en cada visita.
+
+Detalle completo en `agent_docs/accesos.md`.
+
+---
+
 ## [2026-08-11] — La ficha de `preceptores` suma `turno_del_curso` y `turnos_sin_nadie`
 
 **Tipo**: campos nuevos en la respuesta de una tool + constante compartida nueva

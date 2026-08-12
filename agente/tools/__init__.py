@@ -9,13 +9,16 @@ que el modelo lee en cada turno, y ahí está buena parte del comportamiento del
 """
 import json
 
+import accesos
+
 from ..db import _ahora, conectar
 from ..lore import (EXCUSA_SIN_HISTORIA, _cargar_historia_completa, _historia_fmt,
                     _instruccion_tono)
 from .entidades import (_buscar_entidad_fmt, _desvincular_entidad, _detalle_entidad_fmt,
                         _editar_entidad, _eliminar_entidad, _listar_todos_fmt,
                         _vincular_entidad)
-from .esquemas import TOOLS_SCHEMA
+from .esquemas import (PERMISO_POR_TOOL, TOOLS_ESCRITURA, TOOLS_SCHEMA,
+                       tools_permitidas)
 from .fichas import _crear_entidad
 from .fotos import _adjuntar_foto_entidad, _leer_foto_fmt
 from .hitos import _buscar_hitos_fmt
@@ -29,24 +32,54 @@ from .prestamos import (_crear_prestamo, _detalle_prestamo_fmt, _eliminar_presta
 # Ejecutor de tools
 # ============================================================================
 
-def ejecutar_tool(tool_name, tool_input, contexto_turno=None):
+def _auditar(tool_name, tool_input, antes, resultado, ok):
+    """Deja el rastro en `agente_log`, que es lo que permite deshacer un cambio."""
+    con = conectar()
+    con.execute(
+        "INSERT INTO agente_log (fecha, tool, entrada, antes, resultado, ok) VALUES (?,?,?,?,?,?)",
+        (_ahora(), tool_name, json.dumps(tool_input, default=str),
+         json.dumps(antes, default=str) if antes else None,
+         json.dumps(resultado, default=str), 1 if ok else 0))
+    con.commit()
+    con.close()
+
+
+def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
     """Ejecuta una tool y retorna el resultado + snapshot 'antes' si aplica.
 
     `contexto_turno` es un dict que vive lo que dura UNA respuesta del asistente (varias
     tools seguidas). Sirve para lo que hay que decidir mirando el turno entero y no la
     llamada aislada — hoy: que el alta no se confirme en el mismo turno en que se generó
     la ficha, porque hasta que el loop no termina el usuario no vio nada.
+
+    `permisos` son los de QUIEN está pidiendo. Va como parámetro explícito y no adentro de
+    `contexto_turno` porque ese dict es estado del turno, y una identidad ahí se lee como
+    un dato más que cualquiera puede pisar sin darse cuenta.
+
+    El chequeo de permiso acá es la segunda línea: la primera es no mandarle siquiera el
+    esquema al modelo (`esquemas.tools_permitidas`). Esta cubre lo que no pasa por el
+    modelo — `/agente/confirmar` — y el caso de que el modelo invente un nombre de tool.
+    El default `None` es fail-closed: un call site nuevo que se olvide de pasar permisos
+    falla cerrado y ruidoso, no abierto y en silencio.
     """
     if contexto_turno is None:
         contexto_turno = {}
 
-    lectura = tool_name in [
-        'buscar_profesor', 'buscar_por_rol', 'preceptores', 'horario_profesor',
-        'horario_curso', 'horario_aula',
-        'aulas_libres', 'buscar_entidad', 'listar_todos', 'detalle_entidad',
-        'listar_prestamos', 'detalle_prestamo', 'consultar_historia', 'buscar_hitos',
-        'leer_foto'   # no toca la base; lo que gasta es la API de visión, no el inventario
-    ]
+    permisos = permisos or frozenset()
+    permiso = PERMISO_POR_TOOL.get(tool_name)
+    if permiso is None:
+        return {'ok': False, 'error': f'Tool desconocida: {tool_name}'}
+
+    lectura = tool_name not in TOOLS_ESCRITURA
+
+    if not accesos.tiene(permisos, permiso):
+        resultado = {'ok': False, 'error': 'Este acceso no tiene permiso para esa '
+                                           'operación. No se ejecutó nada.'}
+        # Un rechazo de escritura queda auditado: si aparece en /agente/log es que alguien
+        # forjó el request o que el filtrado de esquemas tiene un agujero.
+        if not lectura:
+            _auditar(tool_name, tool_input, None, resultado, ok=False)
+        return resultado
 
     try:
         if tool_name == 'buscar_profesor':
@@ -138,36 +171,14 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None):
         # y `agente_log` existe para poder deshacer cambios reales, no para guardar borradores.
         es_ficha = isinstance(resultado, dict) and resultado.get('requiere_confirmacion')
         if not lectura and not es_ficha:
-            con = conectar()
-            cur = con.cursor()
             antes = resultado.pop('antes', None) if isinstance(resultado, dict) else None
             ok = resultado.get('ok', False) if isinstance(resultado, dict) else False
-
-            cur.execute(
-                "INSERT INTO agente_log (fecha, tool, entrada, antes, resultado, ok) VALUES (?,?,?,?,?,?)",
-                (
-                    _ahora(),
-                    tool_name,
-                    json.dumps(tool_input, default=str),
-                    json.dumps(antes, default=str) if antes else None,
-                    json.dumps(resultado, default=str),
-                    1 if ok else 0
-                )
-            )
-            con.commit()
-            con.close()
+            _auditar(tool_name, tool_input, antes, resultado, ok)
 
         return resultado
 
     except Exception as e:
         resultado = {'ok': False, 'error': f'Excepción: {str(e)}'}
         if not lectura:
-            con = conectar()
-            cur = con.cursor()
-            cur.execute(
-                "INSERT INTO agente_log (fecha, tool, entrada, antes, resultado, ok) VALUES (?,?,?,?,?,?)",
-                (_ahora(), tool_name, json.dumps(tool_input, default=str), None, json.dumps(resultado, default=str), 0)
-            )
-            con.commit()
-            con.close()
+            _auditar(tool_name, tool_input, None, resultado, ok=False)
         return resultado

@@ -1,7 +1,20 @@
 # config.py
 # Configuración centralizada de AppMitre
 
+import os
 from datetime import datetime, timedelta, timezone
+
+# ¿Estamos en el hosting? PythonAnywhere exporta PYTHONANYWHERE_DOMAIN en el entorno del
+# web app. Separa las dos cosas que tienen que diferir entre local y producción: el flag
+# Secure de la cookie (en localhost es http y con Secure no viajaría) y fallar al arrancar
+# si faltan los secretos, que en desarrollo sería un estorbo.
+PRODUCCION = bool(os.environ.get('PYTHONANYWHERE_DOMAIN'))
+
+# Cuánto vive la cookie de sesión. NO es la política de acceso: esa vive en la tabla
+# `dispositivos` de accesos.db, y revocar corta en el request siguiente. Esto es sólo
+# cuánto puede quedar un dispositivo sin usarse antes de necesitar un link nuevo; la
+# expiración se corre sola en cada visita (SESSION_REFRESH_EACH_REQUEST).
+SESION_DIAS = 730
 
 # Zona horaria de la escuela. El servidor de producción (Render) corre en UTC, así que
 # `datetime.now()` a secas daba la hora 3 horas adelantada: el agente contestaba "ahora
