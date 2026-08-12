@@ -162,16 +162,43 @@ Para agregar un campo: sumarlo al `SCHEMA`, a `campos` y al loop aditivo de `_mi
 
 ## Permisos
 
-Dos, declarados en `historia.py` y montados con `accesos.registrar_acceso(bp, PERMISO_LECTURA)`,
+Tres, declarados en `historia.py` y montados con `accesos.registrar_acceso(bp, PERMISO_LECTURA)`,
 una línea al final del módulo:
 
 | clave | verbo | qué habilita |
 |---|---|---|
-| `historia.leer` | leer | ver hitos y personas. Permiso base del blueprint |
+| `historia.leer` | leer | ver la línea del tiempo de hitos. Permiso base del blueprint |
 | `historia.editar` | escribir | `nuevo`/`editar`/`eliminar`/fotos, que decora `crud.registrar_rutas` |
+| `historia.personas` | admin | **todo lo de la entidad `personas`** — ver abajo |
 
 A diferencia de `/gestion`, acá **no hay rutas fuera del motor**: el área es CRUD puro, así que con
 declarar `PERMISO_ESCRITURA` queda todo cubierto. Motor completo en `agent_docs/accesos.md`.
+
+### `personas` es sólo del admin
+
+La entidad lo declara en su propia cfg y el motor CRUD hace todo lo demás:
+
+```python
+'personas': {..., 'permiso': 'historia.personas'},
+```
+
+Sin ese permiso, `/historia` se ve igual pero **sin personas por ningún lado**: no está la tarjeta
+del home, ni la entrada de la nav, ni el listado, ni una ficha, ni los formularios, ni las rutas de
+fotos (todo 403), y la ficha de un hito no muestra su bloque "Personas involucradas". Editar un hito
+desde ahí **no le borra** los vínculos con personas: el fieldset que no se muestra tampoco se
+guarda (ver `crud.relaciones_visibles`).
+
+El verbo es `'admin'`, así que no entra en ningún preset de interno: sólo lo tiene el admin, por el
+comodín `'*'`. Se puede tildar a mano en el formulario de invitación si algún día hace falta
+dárselo a alguien puntual.
+
+**El motivo es el que ya estaba escrito en este documento**: `descripcion` es un juicio en prosa
+sobre una persona real de la escuela, y buena parte del padrón son alumnos. Eso no es información de
+consulta como los horarios o el stock del pañol. Mientras `personas` era visible con
+`historia.leer`, cualquier dispositivo invitado a consultar el inventario leía las semblanzas.
+
+El asistente respeta lo mismo: lee estas tablas, así que esconderlo sólo en la web no serviría de
+nada (ver `agent_docs/agente-asistente.md`).
 
 ## Búsqueda tolerante (`?q=`)
 

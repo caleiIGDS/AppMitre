@@ -14,20 +14,29 @@
   </div>
 </div>
 
+{# Mandar una foto pide `agente.vision` (verbo admin): es lo único del chat que gasta la API
+   de visión. Sin el permiso no se pinta ni el botón ni el input — y el JS tolera que no
+   estén. Esconderlo es cosmética: quien corta de verdad es `chat()`, que devuelve 403. #}
 <div class="agente-input-area">
+  {% if puede('agente.vision') %}
   <input type="file" id="agente-image-file" accept="image/*" style="display: none;">
+  {% endif %}
 
   <div class="agente-input-row">
+    {% if puede('agente.vision') %}
     <button id="agente-image-btn" class="agente-toolbar-btn" title="Adjuntar imagen" aria-label="Adjuntar imagen">
       📷
     </button>
+    {% endif %}
     <textarea id="agente-input" class="agente-input" placeholder="Escribí tu pregunta..." rows="2"
               autocomplete="off" autocapitalize="sentences" enterkeyhint="send"></textarea>
     <button id="agente-send-btn" class="agente-send-btn" title="Enviar" aria-label="Enviar">
       <span class="agente-send-icon">→</span>
     </button>
   </div>
+  {% if puede('agente.vision') %}
   <span id="agente-image-preview" class="agente-image-preview"></span>
+  {% endif %}
 
   <div class="agente-footer">
     <a href="{{ url_for('agente.agente_log') }}" target="_blank" class="agente-footer-link">📋 Auditoría</a>

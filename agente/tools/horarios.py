@@ -10,9 +10,16 @@ import texto
 from config import DIAS
 from database import obtener_filas
 
-from ..padrones import (_buscar_profesor_scored, _etiqueta_curso, _personas_parecidas,
-                        _preceptores_parecidos, _preceptores_por_curso, _puntaje_nombre,
-                        _lista_preceptores, _roles_no_docentes)
+from ..dominio import ve_entidad
+from ..padrones import (_buscar_profesor_scored, _etiqueta_curso, _personas_conocidas,
+                        _personas_parecidas, _preceptores_parecidos, _preceptores_por_curso,
+                        _puntaje_nombre, _lista_preceptores, _roles_no_docentes)
+
+# Arriba de esto el padrón deja de ser un dato y pasa a ser una pared de texto que come
+# contexto sin que el modelo pueda leerla de verdad. Es el mismo tope que
+# `LIMITE_LISTADO_COMPLETO` en `entidades.py`, y por la misma razón; hoy el padrón son ~344
+# nombres, así que el margen es chico y esto se va a activar antes de lo que parece.
+LIMITE_PADRON = 400
 
 # Explicación de titular/contraturno que acompaña a todas las respuestas de preceptores:
 # sin esto el modelo lee dos nombres y no sabe cuál dar cuando le preguntan "el preceptor"
@@ -46,7 +53,60 @@ NOTA_TURNOS = ('Los turnos de la escuela son TRES: MAÑANA, TARDE y VESPERTINO. 
                'es no haber ninguna fila).')
 
 
-def _buscar_profesor(query):
+def _padron_completo_horarios():
+    """El padrón entero de los horarios, o None si es tan grande que mandarlo no ayudaría.
+
+    Es el SEGUNDO NIVEL de las búsquedas de persona: el equivalente de `listar_todos` para
+    `escuela.db`. Cuando la difusa no puntúa a nadie, "no encontré" NO es "no existe" —se
+    comparan letras, no personas— y el modelo necesita la lista a la vista para reconocer un
+    apodo, un nombre dado vuelta o una errata grande.
+
+    Viaja en la MISMA respuesta y no por una tool aparte, igual que el `padron_completo` de
+    `_buscar_por_rol_fmt`: un round-trip extra re-procesa ~8.050 tokens de piso contra los
+    ~1.670 que cuesta la lista. Ver `dev-log/DECISIONS.md`.
+    """
+    padron = _personas_conocidas()
+    return padron if len(padron) <= LIMITE_PADRON else None
+
+
+def _otros_padrones(permisos):
+    """El recordatorio de que el de horarios es UNO de tres padrones.
+
+    Va al final de las notas del caso vacío: decir "no está" habiendo mirado sólo los
+    horarios repite el mismo error un escalón más arriba. El puntero a las fichas sale sólo
+    con permiso para verlas — mandar a una tool que no se le entregó es peor que callarse.
+    """
+    fichas = ('y la gente CON FICHA que no da clases tampoco (va por '
+              '`buscar_entidad("personas", ...)`)' if ve_entidad('personas', permisos)
+              else 'y tampoco está la gente que no da clases')
+    return ('Y acordate de que este es UNO de tres padrones: los PRECEPTORES no están acá '
+            '(van por `preceptores`) ' + fichas + '.')
+
+
+def _sin_nadie_parecido(query, permisos):
+    """Respuesta de `buscar_profesor` cuando el padrón difuso no puntuó a NADIE.
+
+    Antes esta rama devolvía `[]` pelado —sin nota y sin listado—, y el modelo lo leía como
+    un hecho: "esa persona no está en el sistema". Era la única de las tres búsquedas de
+    persona sin segundo nivel (`buscar_entidad` manda a `listar_todos`, `buscar_por_rol`
+    devuelve el padrón de cargos en la misma respuesta).
+    """
+    padron = _padron_completo_horarios()
+    salida = {'docentes': []}
+    if padron:
+        salida['padron_completo'] = padron
+    salida['nota'] = (
+        f'Nadie del padrón de horarios se parece a "{query}". OJO: la búsqueda compara '
+        'LETRAS, no personas — un apodo, un nombre al revés o una errata grande no matchean, '
+        'así que NO afirmes todavía que no está. '
+        + ('En `padron_completo` tenés los nombres de TODA la gente de los horarios (docentes '
+           'y no docentes): fijate vos si alguno es. Si ninguno lo es, decilo — no ofrezcas el '
+           'más parecido como si fuera el correcto. ' if padron else '')
+        + _otros_padrones(permisos))
+    return salida
+
+
+def _buscar_profesor(query, permisos=frozenset()):
     """Resolución difusa de nombre de profesor.
 
     Devuelve además las personas CON FICHA (`historia.db`) que se parecen al nombre, cuando
@@ -63,6 +123,13 @@ def _buscar_profesor(query):
     Cada candidato lleva su `rol` cuando tiene cargo no docente, y los PRECEPTORES que
     coinciden se devuelven aparte: no están en el padrón difuso (nombres sin normalizar),
     así que sin este cruce alguien como "NOELIA" no existía para el agente.
+
+    El cruce con las fichas sale sólo con permiso para ver `personas`: los horarios son
+    consulta abierta, las semblanzas no. Sin el permiso la tool devuelve los docentes y
+    nada más, que es exactamente lo que era antes de que existiera el cruce.
+
+    Si no coincide NADIE por ningún lado, ver `_sin_nadie_parecido`: no se devuelve la lista
+    vacía sino el padrón entero, porque una lista vacía el modelo la lee como "no existe".
     """
     docentes = []
     for _, nombre, rol in _buscar_profesor_scored(query):
@@ -71,8 +138,10 @@ def _buscar_profesor(query):
             candidato['rol'] = rol
         docentes.append(candidato)
 
-    con_ficha = _personas_parecidas(query)
+    con_ficha = _personas_parecidas(query) if ve_entidad('personas', permisos) else []
     preceptores = _preceptores_parecidos(query)
+    if not docentes and not con_ficha and not preceptores:
+        return _sin_nadie_parecido(query, permisos)
     if not con_ficha and not preceptores:
         return docentes
 
@@ -215,8 +284,16 @@ def _cursos_de_preceptor_fmt(nombre, fichas):
     puntuados = [(s, g) for s, g in puntuados if s >= 0.6][:5]
 
     if not puntuados:
+        # Mismo segundo nivel que el padrón de horarios, y acá sale casi gratis: son 46
+        # nombres (~210 tokens). Es además coherente con el modo por curso, que ya devuelve
+        # `cursos_disponibles` cuando el curso no matchea.
         return {'preceptor': nombre, 'cursos': [],
-                'nota': f'No hay ningún preceptor llamado "{nombre}" ni parecido en la planilla.'}
+                'padron_completo': sorted(_lista_preceptores()),
+                'nota': f'Ningún preceptor se parece a "{nombre}". NO afirmes todavía que no '
+                        'está: en `padron_completo` tenés a todos los de la planilla, fijate '
+                        'vos. Ojo que están cargados a mano, sin normalizar y a veces dados '
+                        'vuelta ("VANESA ROMERO" / "ROMERO VANESA"). Si es alguien que da '
+                        'clases, no es preceptor: eso va por `horario_profesor`.'}
 
     ganador_claro = len(puntuados) == 1 or puntuados[0][0] - puntuados[1][0] >= 0.15
     if not ganador_claro:
@@ -267,7 +344,7 @@ def _horario_no_docente(nombre):
     return {'rol': filas[0]['rol'], 'horario': horario}
 
 
-def _horario_profesor_fmt(nombre):
+def _horario_profesor_fmt(nombre, permisos=frozenset()):
     """Horario de una persona del padrón de horarios, formato interpretado.
 
     `clases.profesor` exige match exacto normalizado, así que un typo ("andrea alvares")
@@ -278,6 +355,10 @@ def _horario_profesor_fmt(nombre):
     Devuelve además el horario de personal NO DOCENTE cuando lo hay, y por eso no corta
     apenas encuentra clases: hay gente que está en las dos tablas (RODRIGUEZ VIRGINIA da
     clases y es EMATP de biología), y devolviendo solo `clases` se perdía media agenda.
+
+    `permisos` es sólo para redactar la nota del caso vacío: no cambia qué horario se
+    devuelve (los horarios son consulta abierta), decide si tiene sentido mandar al modelo a
+    `buscar_entidad("personas", ...)` o si esa tool ni siquiera se le entregó.
     """
     filas = obtener_filas('profesor', nombre)
     nombre_usado = nombre
@@ -325,8 +406,22 @@ def _horario_profesor_fmt(nombre):
                                 f'pero SÍ es preceptor/a de la planilla ({", ".join(preceptores)}). '
                                 'Los preceptores no tienen horario de clases: para saber qué '
                                 'cursos tiene, llamá a preceptores(preceptor="...").'}
-            return {'profesor': nombre, 'clases': {},
-                    'nota': f'No existe ningún docente ni personal no docente llamado "{nombre}" ni parecido.'}
+            # Acá terminaba con "No existe ningún docente ni personal no docente llamado X
+            # ni parecido": una afirmación cerrada, que el modelo repetía como un hecho. Es
+            # justo el punto donde hace falta el segundo nivel — mismo criterio que
+            # `_sin_nadie_parecido`.
+            padron = _padron_completo_horarios()
+            resultado = {'profesor': nombre, 'clases': {}}
+            if padron:
+                resultado['padron_completo'] = padron
+            resultado['nota'] = (
+                f'Nadie del padrón se llama "{nombre}" ni parecido. NO afirmes todavía que no '
+                'existe: la búsqueda compara letras, no personas. '
+                + ('Mirá `padron_completo` —todos los nombres de los horarios, docentes y no '
+                   'docentes— y fijate si alguno es. Si ninguno lo es, ahí sí decilo. '
+                   if padron else '')
+                + _otros_padrones(permisos))
+            return resultado
 
     if not filas:
         # Sin clases pero con horario no docente: es el caso de un EMATP o un portero,

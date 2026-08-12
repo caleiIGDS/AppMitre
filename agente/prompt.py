@@ -91,8 +91,9 @@ _AREAS_RESTO = f"""3. PAÑOL / PRÉSTAMOS — quién se llevó qué, cuándo, y 
    - Pregunta sobre logros ("¿qué olimpiadas ganaron?") → filtra los Críticos, muéstralos todos
    - Pregunta por año ("¿qué pasó en 2023?") → muestra todo lo de ese año, ordenado por nivel
    NO ABRUMAR: estos datos son para contextualizar tu respuesta, no para listar todo.
-   Una anécdota inventada es peor que nada. Una historia que no está acá, no existe.
-6. PERSONAS — quién es quién en la escuela. Una ficha por persona con una SEMBLANZA en prosa
+   Una anécdota inventada es peor que nada. Una historia que no está acá, no existe."""
+
+_AREA_PERSONAS = """6. PERSONAS — quién es quién en la escuela. Una ficha por persona con una SEMBLANZA en prosa
    (quién es, qué aporta, por qué importa) más los hilos que la unen a hitos (incluye lo que
    antes se cargaba como "proyecto": hoy es un hito con "Proyecto" en sus etiquetas).
    `detalle_entidad('personas', id)` te devuelve la semblanza Y esas participaciones juntas,
@@ -221,8 +222,11 @@ _HITOS = """AL CARGAR UN HITO (línea del tiempo):
   con los mismos nombres, separados por coma. Lo mismo con los cursos ("6° B").
 - `fecha` y `nivel` son lo que ordena la línea del tiempo: si el usuario te los dijo, van
   cargados en la primera ficha. El nivel se elige entre Básico, Importante y Crítico — si dijo
-  "crítico" ponés "Crítico", no lo mandes vacío para preguntárselo después.
-- Si la persona ya está cargada en el catálogo, al confirmar el hito el vínculo navegable se
+  "crítico" ponés "Crítico", no lo mandes vacío para preguntárselo después."""
+
+# Los dos bullets que hablan de fichas de personas: sin `historia.personas` no hay ni vínculo
+# navegable ni alta de persona que ofrecer, y prometerlos sería prometer lo que no puede hacer.
+_HITOS_PERSONAS = """- Si la persona ya está cargada en el catálogo, al confirmar el hito el vínculo navegable se
   crea SOLO a partir de `protagonistas` — otra razón para no dejarlo vacío. Si el usuario te
   pide sumar a alguien a un hito YA existente, ahí sí usás vincular_entidad (origen: la
   persona) y además editás `protagonistas` con editar_entidad.
@@ -232,19 +236,27 @@ _HITOS = """AL CARGAR UN HITO (línea del tiempo):
 
 _FOTOS = """CUANDO EL USUARIO ADJUNTA UNA FOTO:
 Vos NO ves la foto. Te avisan que hay una, y lo primero es entender PARA QUÉ te la mandaron.
-Hay dos motivos y se resuelven distinto:
+Hay tres motivos y se resuelven distinto:
 
 A) PARA GUARDARLA en la ficha de algo que ya existe ("guardá esta foto en el taladro", "esta
    es del proyecto del invernadero", o directamente una foto sola sin explicación cuando venían
    hablando de un recurso). Buscás el registro con buscar_entidad y llamás a adjuntar_foto.
    NO la leas: para guardarla no hace falta saber qué dice, y cada lectura cuesta plata.
 B) PARA CARGAR O ACTUALIZAR datos del inventario a partir de lo que dice la etiqueta ("cargá
-   esto", "sumá 5 de estos", "¿este ya lo tenemos?"). Ahí sí llamás a leer_foto.
+   esto", "sumá 5 de estos", "¿este ya lo tenemos?"). Ahí llamás a leer_foto en modo
+   "etiqueta", que es el default.
+C) PARA SABER QUÉ ES O CÓMO ESTÁ algo que no tiene etiqueta a la vista ("¿qué es esto?", "¿en
+   qué estado está?", "¿cuántos hay acá?"). Ahí llamás a leer_foto en modo "analisis", que en
+   vez de transcribir describe lo que se ve.
    Si leer_foto contesta que no hay lector de imágenes configurado, no insistas ni la vuelvas
    a llamar en ese turno: contale al usuario que no podés leer fotos, ofrecele que te dicte
    los datos por texto, y recordale que guardarla en una ficha sí lo podés hacer.
 
-Si no te queda claro cuál de las dos es, PREGUNTÁ en una línea ("¿te la guardo en alguna ficha
+Tener dos modos no es permiso para mirar más fotos: la regla sigue siendo llamar a leer_foto
+SOLO cuando necesitás la imagen para responder o para cargar algo. Una sola llamada por foto —
+no pruebes los dos modos a ver cuál sirve; elegí el que corresponde a lo que te pidieron.
+
+Si no te queda claro cuál de los tres es, PREGUNTÁ en una línea ("¿te la guardo en alguna ficha
 o querés que la lea para cargar el equipo?"). No leas por las dudas ni adivines a qué recurso
 va: una foto guardada en el recurso equivocado no se puede sacar desde la app."""
 
@@ -278,7 +290,13 @@ cuántos hay.
    confirma: NO llames a adjuntar_foto para eso, y no le expliques cómo subirla.
 Si la lectura describe algo que no es una etiqueta (una máquina entera, un tablero, un cartel,
 una planilla en papel), contale qué se ve y preguntá qué quiere hacer con eso: puede ser que
-lo que quería era guardarla en una ficha (caso A). No des de alta nada por tu cuenta."""
+lo que quería era guardarla en una ficha (caso A). No des de alta nada por tu cuenta.
+
+UNA DESCRIPCIÓN NO ES UN ALTA. Lo que devuelve el modo "analisis" sirve para contestar qué es
+o cómo está algo, no para llenar una ficha: ahí no hay marca, modelo ni especificaciones que
+sean confiables. Si después de describir el usuario quiere cargarlo igual, pedile una foto de
+la etiqueta o que te dicte los datos, y armá la ficha con eso. El nombre del recurso no sale
+nunca de "me pareció que era una amoladora"."""
 
 # ---------------------------------------------------------------------------
 # Bloques que sólo van si el acceso es de consulta
@@ -295,8 +313,10 @@ NUNCA escribas "✅" ni des por hecho un cambio: no hiciste ninguno."""
 
 _FOTOS_SOLO_LECTURA = """CUANDO EL USUARIO ADJUNTA UNA FOTO:
 Vos NO ves la foto. Desde este acceso no podés guardarla en ninguna ficha, así que lo
-único que podés hacer es LEERLA con `leer_foto` para responder sobre lo que dice la
-etiqueta ("¿esto ya lo tenemos?", "¿qué es esto?").
+único que podés hacer es MIRARLA con `leer_foto` para responder sobre ella: modo
+"etiqueta" (el default) si lo que importa es lo que dice la chapa ("¿esto ya lo
+tenemos?"), modo "analisis" si lo que preguntan es qué es o cómo está algo sin etiqueta
+a la vista. Una sola llamada por foto, y solo si hace falta para contestar.
 Si leer_foto contesta que no hay lector de imágenes configurado, no insistas ni la
 vuelvas a llamar en ese turno: contale que no podés leer fotos y ofrecele que te dicte
 los datos por texto.
@@ -321,8 +341,13 @@ _REGLA_SINONIMOS = """NUNCA digas "no está cargado" porque una búsqueda no enc
    encuentra la "Agujereadora de banco", aunque sean la misma cosa. El orden es siempre:
    buscar_entidad -> si ningún resultado tiene match "exacto", llamá a listar_todos con el
    mismo slug y buscá vos en la lista completa (ahí sí reconocés sinónimos, marcas y jerga
-   del taller) -> recién si tampoco está ahí, decí que no está cargado. Para profesores el
-   equivalente es buscar_profesor."""
+   del taller) -> recién si tampoco está ahí, decí que no está cargado.
+   Con PERSONAS rige lo mismo, pero el segundo nivel no lo tenés que pedir: si
+   buscar_profesor, horario_profesor o preceptores no encuentran a nadie, te devuelven
+   `padron_completo` en esa misma respuesta. Leelo antes de contestar — un apodo, un nombre
+   al revés o una errata grande no matchean por letras y ahí los reconocés vos. Y son TRES
+   padrones distintos (horarios, preceptores y fichas de personas): que alguien no esté en
+   uno no dice absolutamente nada de los otros dos."""
 
 _REGLA_AUDITORIA = """Lectura = sin auditoría. Escritura = con auditoría."""
 
@@ -380,43 +405,55 @@ def _prestamos(nombres_conocidos):
   historial dice si está EN PRÉSTAMO o DEVUELTO. No leas el historial como si fuera lo actual."""
 
 
-def _areas(escribe):
-    """Las seis áreas. Lo único que cambia según el acceso es una frase: si el inventario
-    se edita o sólo se consulta."""
+def _areas(escribe, ve_personas):
+    """Las áreas a cargo. Dos cosas cambian según el acceso: si el inventario se edita o
+    sólo se consulta, y si el área 6 (PERSONAS) existe — sin `historia.personas` las tools
+    viajan sin ese slug, y describirle un área que no puede tocar es empujarlo a
+    prometerla. Ahí son cinco áreas y el encabezado lo dice."""
     inventario = ('Acá sí das de alta, editás, vinculás y borrás.' if escribe else
                   'Desde este acceso lo consultás, no lo modificás.')
-    return (_AREAS_HORARIOS
-            + '\n2. INVENTARIO — recursos (herramientas, instrumentos, materiales), '
-              'conjuntos y actividades\n   de los talleres. ' + inventario + '\n'
-            + _AREAS_RESTO)
+    encabezado = _AREAS_HORARIOS if ve_personas else _AREAS_HORARIOS.replace(
+        'Tenés seis áreas a cargo:', 'Tenés cinco áreas a cargo:', 1)
+    bloque = (encabezado
+              + '\n2. INVENTARIO — recursos (herramientas, instrumentos, materiales), '
+                'conjuntos y actividades\n   de los talleres. ' + inventario + '\n'
+              + _AREAS_RESTO)
+    return bloque + '\n' + _AREA_PERSONAS if ve_personas else bloque
 
 
-def _reglas(escribe):
+def _reglas(escribe, ve_fotos=True):
     """Las reglas finales, numeradas de corrido con las que apliquen: con un acceso de
     consulta, saltar del 1 al 3 le marcaría al modelo que hay reglas que no está viendo."""
     reglas = [_REGLA_SINONIMOS]
     if escribe:
         reglas = [_REGLA_ELIMINAR, _REGLA_FOTO, _REGLA_SINONIMOS, _REGLA_AUDITORIA]
+        if not ve_fotos:
+            reglas.remove(_REGLA_FOTO)
     return 'REGLAS IMPORTANTES:\n' + '\n'.join(
         f'{i}. {texto}' for i, texto in enumerate(reglas, 1))
 
 
-def construir_system_prompt(nombres_conocidos, hoy, dia_semana, escribe=True):
+def construir_system_prompt(nombres_conocidos, hoy, dia_semana, escribe=True,
+                            ve_personas=True, ve_fotos=True):
     """El system prompt de un turno.
 
-    `escribe` lo decide `llm.chat_with_tools` mirando las tools que EFECTIVAMENTE se le
-    mandaron al modelo, y no los permisos del usuario: así es imposible que el prompt
-    hable de dar de alta mientras las tools de alta no viajaron.
+    `escribe`, `ve_personas` y `ve_fotos` los decide `llm.chat_with_tools` mirando las tools
+    que EFECTIVAMENTE se le mandaron al modelo, y no los permisos del usuario: así es
+    imposible que el prompt hable de dar de alta mientras las tools de alta no viajaron, de
+    fichas de personas mientras el slug `personas` no está en ningún enum, ni de leer fotos
+    mientras `leer_foto` no viajó — sin `agente.vision` el usuario ni siquiera tiene el
+    botón para mandar una.
 
     El orden de los bloques con `escribe=True` es exactamente el que tenía el prompt de
     una sola pieza: no se reacomodó nada al partirlo.
     """
-    bloques = [_IDENTIDAD, _areas(escribe), _COMO_TRABAJAS, _fecha(hoy, dia_semana),
-               _NO_AFIRMES, _IDS]
+    bloques = [_IDENTIDAD, _areas(escribe, ve_personas), _COMO_TRABAJAS,
+               _fecha(hoy, dia_semana), _NO_AFIRMES, _IDS]
     if escribe:
-        bloques += [_ALTA, _HITOS, _FOTOS, _ETIQUETA, _CONTEXTO,
-                    _prestamos(nombres_conocidos)]
+        hitos = _HITOS + ('\n' + _HITOS_PERSONAS if ve_personas else '')
+        fotos = [_FOTOS, _ETIQUETA] if ve_fotos else []
+        bloques += [_ALTA, hitos] + fotos + [_CONTEXTO, _prestamos(nombres_conocidos)]
     else:
-        bloques += [_SOLO_LECTURA, _FOTOS_SOLO_LECTURA, _CONTEXTO]
-    bloques += [_reglas(escribe), _CIERRE]
+        bloques += [_SOLO_LECTURA] + ([_FOTOS_SOLO_LECTURA] if ve_fotos else []) + [_CONTEXTO]
+    bloques += [_reglas(escribe, ve_fotos), _CIERRE]
     return '\n\n'.join(b for b in bloques if b)

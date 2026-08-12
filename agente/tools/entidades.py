@@ -10,7 +10,7 @@ hace en dos pasos.
 import crud
 import texto
 
-from ..dominio import SLUGS_ENTIDAD, _modulo
+from ..dominio import SLUGS_ENTIDAD, _modulo, ve_entidad
 from ..padrones import _gente_horarios_parecida
 
 # Tope de resultados que se le mandan a Claude. La búsqueda difusa no acota: con una
@@ -177,8 +177,13 @@ def _listar_todos_fmt(slug):
     return salida
 
 
-def _detalle_entidad_fmt(slug, id):
-    """Detalle completo de una entidad."""
+def _detalle_entidad_fmt(slug, id, permisos=frozenset()):
+    """Detalle completo de una entidad.
+
+    `permisos` filtra las RELACIONES: el slug propio ya lo chequeó `ejecutar_tool`, pero un
+    hito que se puede ver lista igual las personas que participaron, y esos nombres son lo
+    que esconde `historia.personas`. Mismo criterio que la ficha web (ver crud.detalle).
+    """
     modulo = _modulo(slug)
     con = crud.conectar(modulo)
     cur = con.cursor()
@@ -195,6 +200,7 @@ def _detalle_entidad_fmt(slug, id):
 
     # Relaciones
     secciones = modulo.secciones_detalle(slug, id, cur)
+    secciones = [s for s in secciones if ve_entidad(s.get('slug'), permisos)]
     con.close()
 
     resultado = dict(fila)

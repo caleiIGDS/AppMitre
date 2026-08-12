@@ -110,17 +110,26 @@ python app.py
 
 ---
 
-## Fotos de etiquetas (lector de imágenes)
+## Fotos: etiquetas y descripción (lector de imágenes)
 
 Sacar una foto de la chapa de características es la forma más rápida de cargar algo al
 inventario. **El lector se configura aparte del chat**: no hace falta que el proveedor del
 chat tenga visión, y de hecho el default (DeepSeek) no la tiene.
 
 ```bash
-export AGENTE_VISION_API_KEY=AIza...   # API key de Google AI Studio
+export AGENTE_VISION_API_KEY=...   # API key de Google AI Studio
 ```
 
 Con eso alcanza. La key se saca gratis y sin tarjeta en https://aistudio.google.com/apikey.
+El formato varía según cómo la generes (las clásicas empiezan con `AIza`, las nuevas con
+`AQ.`): las dos sirven, no uses el prefijo para decidir si una key es válida.
+
+> ⚠️ **Si una instalación nueva no lee fotos, sospechá del MODELO antes que de la key.**
+> Google saca de circulación los modelos viejos para las keys nuevas antes de apagarlos
+> para las que ya los venían usando, y devuelve un 404 *"no longer available to new
+> users"*. Pasó con `gemini-2.5-flash-lite`, que fue el default hasta el 2026-08-12.
+> Fuera de producción el error del proveedor ahora se imprime por consola con el prefijo
+> `[vision]`; en producción se sigue tragando (puede traer la key en el texto).
 
 **Por qué va separado del chat**: la foto no se le manda al agente, se lee en una llamada
 suelta sin tools y con un prompt corto, y al chat le entra el resultado como texto. El
@@ -128,22 +137,49 @@ system prompt más el esquema de tools son ~15.000 tokens que viajan en cada tur
 agente; la llamada del lector son ~2.000. Además el chat sigue en su proveedor de siempre,
 sin cambiarle el modelo a las otras 20 tools.
 
-**Solo lee cuando hace falta.** Una foto puede venir por dos motivos, y el asistente los
+**Solo mira cuando hace falta.** Una foto puede venir por tres motivos, y el asistente los
 distingue:
 
 | Le decís… | Qué hace | ¿Consume lectura? |
 |---|---|---|
 | "guardá esta foto en el taladro" | Busca el taladro y le pega la foto a la ficha | **No** |
 | "cargá esto al inventario" | Lee la etiqueta y arma la ficha del recurso | Sí |
-| (mandás la foto sin decir nada) | **Pregunta** cuál de las dos querés | No |
+| "¿qué es esto?" / "¿en qué estado está?" | Describe el objeto: qué es, qué se ve, cuántos hay | Sí |
+| (mandás la foto sin decir nada) | **Pregunta** cuál de las tres querés | No |
 
 Adjuntar no cuesta nada porque para guardar una imagen no hace falta saber qué dice. Si no
 tiene claro a qué recurso va, pregunta en vez de adivinar — una foto guardada en la ficha
 equivocada no se puede sacar desde la app.
 
-**Costo**: el default es Gemini 2.5 Flash-Lite, que tiene **1.000 requests por día gratis**
-(15 por minuto). Una escuela no llega a eso. Pasado el tier gratuito son ~US$0,0004 por
-foto **leída** — las que solo se adjuntan no cuentan.
+**Leer la etiqueta y describir el objeto son dos modos del mismo lector**, misma key y mismo
+modelo: lo único que cambia es el prompt. El modo etiqueta transcribe lo que está escrito y es
+el que alimenta las altas; el modo análisis describe lo que se ve y sirve para lo que no tiene
+etiqueta legible. Los dos tienen prohibido completar con lo que el modelo sepa del producto.
+
+> **Una descripción no da de alta nada.** De "parece una amoladora angular, sin daños
+> visibles" no sale una ficha de inventario: no hay marca ni modelo confiables. Si querés
+> cargarlo, el asistente te va a pedir una foto de la etiqueta o que le dictes los datos.
+> El modo análisis contesta preguntas, no llena fichas.
+
+**Costo**: el default es `gemini-3.5-flash-lite`, que **tiene tier gratuito** y a una
+escuela le sobra. Pasado el tier gratuito son ~US$0,0014 por foto **mirada**, en cualquiera
+de los dos modos — las que solo se adjuntan no cuentan. El asistente tiene prohibido llamar
+al lector dos veces sobre la misma foto para probar los dos modos.
+
+Referencia rápida, calculada sobre la llamada real del lector (~2.000 tokens de entrada,
+~300 de salida). A 300 fotos por mes —un mes movido de inventario— la diferencia entre el
+más barato y el más caro es de un café:
+
+| Modelo | Entrada / Salida $/M | Por foto | 300 fotos |
+|---|---|---|---|
+| `gemini-3.5-flash-lite` (default) | 0,30 / 2,50 | US$0,00135 | US$0,40 |
+| `gemini-3.1-flash-lite` | 0,25 / 1,50 | US$0,00095 | US$0,29 |
+| `gemini-3.5-flash` | 1,50 / 9,00 | US$0,0057 | US$1,71 |
+
+**El precio no es la variable a optimizar acá**: a este volumen todo es ruido. Lo que
+decide es la calidad leyendo texto chico sobre metal sucio (ahí un modelo mejor evita una
+carga mal hecha) y la privacidad del tier gratuito. Si las chapas feas se leen bien con el
+default, no hay razón para subir.
 
 > ⚠️ En el tier gratuito **Google usa las imágenes para mejorar sus productos**. Para chapas
 > de amoladoras da igual; si en alguna foto pudiera salir un alumno, pasá a tier pago (misma
@@ -184,8 +220,8 @@ datos por texto — nunca inventa lo que "vio".
 | `AGENTE_API_KEY` | (vacío) | API key si el provider la requiere |
 | `AGENTE_API_BASE` | Para Ollama: `http://localhost:11434` | URL base de la API (para APIs custom o Ollama) |
 | `AGENTE_VISION` | (vacío) | `1` para declarar que el modelo del **chat** ve imágenes (gpt-4o, llava). Anthropic ya viene en 1 |
-| `AGENTE_VISION_API_KEY` | (vacío) | API key del **lector de fotos**. Sin esto no hay lectura de etiquetas. Fallback: `GEMINI_API_KEY` |
-| `AGENTE_VISION_MODEL` | `gemini-2.5-flash-lite` | Modelo del lector |
+| `AGENTE_VISION_API_KEY` | (vacío) | API key del **lector de fotos**. Sin esto no hay lectura de etiquetas ni descripción de fotos. Fallback: `GEMINI_API_KEY` |
+| `AGENTE_VISION_MODEL` | `gemini-3.5-flash-lite` | Modelo del lector |
 | `AGENTE_VISION_API_BASE` | `https://generativelanguage.googleapis.com/v1beta/openai/` | URL base del lector (cualquier API compatible con OpenAI) |
 
 ---

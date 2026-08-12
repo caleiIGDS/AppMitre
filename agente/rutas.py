@@ -13,11 +13,11 @@ import crud
 import texto
 from config import DIAS, ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION, ahora
 
-from . import PERMISO_ESCRITURA, PERMISO_LECTURA, bp
+from . import PERMISO_ESCRITURA, PERMISO_LECTURA, PERMISO_VISION, bp
 from .db import (FICHAS_MAX, HISTORIAL_AL_MODELO, _conv_borrar, _conv_cargar,
                  _conv_guardar, _foto_pendiente_guardar, _foto_pendiente_tomar,
                  _sin_imagenes, conectar)
-from .dominio import _modulo
+from .dominio import _modulo, ve_entidad
 from .filtros import (AVISO_NO_EJECUTADO, _es_pregunta_relativa, _escritura_no_ejecutada,
                       _extraer_entidad_mencionada, _ocultar_ids, _quitar_acotaciones)
 from .llm import chat_with_tools
@@ -61,6 +61,43 @@ def _contexto_base():
 # es solo de tono: el corte fijo se disparaba ANTES de llamar al modelo, así que también
 # bloqueaba adjuntar, que no necesita lector.
 
+# El aviso de que hay una foto viaja pegado al mensaje del usuario, y son DOS textos porque
+# la foto dura un solo turno. El primero es el que ve el modelo mientras la imagen está en
+# `contexto_turno`; el segundo es el que queda GUARDADO en el historial.
+#
+# Sin esa distinción el aviso quedaba en presente para siempre: en el turno siguiente el
+# modelo leía "adjuntó una foto en este turno, todavía no la vio nadie, llamá a leer_foto",
+# llamaba, y `leer_foto` le contestaba que no hay ninguna foto — porque efectivamente ya no
+# estaba. Un "crea" después de una ficha se iba en esa vuelta perdida en vez de dar el alta.
+AVISO_FOTO_ACTUAL = (
+    "[El usuario adjuntó una foto en este turno. Todavía no la vio nadie: si necesitás lo "
+    "que dice, llamá a leer_foto; si solo hay que guardarla en una ficha, llamá a "
+    "adjuntar_foto. Si no sabés para qué te la mandaron o a qué registro va, preguntale.]")
+
+AVISO_FOTO_VIEJA = (
+    "[En ese turno el usuario adjuntó una foto, que YA NO ESTÁ disponible: las fotos duran "
+    "un solo turno. No llames a leer_foto ni a adjuntar_foto por esta — te van a decir que "
+    "no hay ninguna. Si necesitás datos que estaban en ella y no los tenés escritos más "
+    "abajo en esta conversación, pedile al usuario que la mande de nuevo.]")
+
+# Lo que se le pone al modelo cuando mandan una foto sin escribir nada: un mensaje vacío no
+# es un turno válido. `_texto_visible` lo saca al repintar, igual que el resto de lo que
+# agrega el server — el usuario no lo escribió, y en el chat ya se ve la foto.
+TEXTO_FOTO_SOLA = 'Te mando esta foto.'
+
+
+def _aviso_foto_vieja(lectura=None):
+    """El aviso en pasado, con la lectura pegada si esa foto llegó a leerse.
+
+    Guardar la lectura es lo que permite terminar un alta en el turno siguiente: los
+    resultados de las tools no se persisten, así que sin esto los datos de la etiqueta se
+    perdían apenas el modelo terminaba de contestar.
+    """
+    if not lectura:
+        return AVISO_FOTO_VIEJA
+    return (f"{AVISO_FOTO_VIEJA}\n[Esto es lo que se leyó en esa foto, y es TODO lo que se "
+            f"sabe de ella — usalo en vez de pedirla de nuevo:\n{lectura}]")
+
 
 
 # El sello de hora que se le pega a CADA mensaje del usuario. El system prompt ya trae la
@@ -70,6 +107,30 @@ def _contexto_base():
 # que en un turno de seguimiento se ve cuánto pasó entre un mensaje y otro.
 # `_texto_visible` lo saca antes de repintar el chat: el usuario no lo escribió.
 _SELLO_HORA = re.compile(r'\s*\[Hora de este mensaje:[^\]]*\]')
+
+
+def _foto_en_pasado(mensajes, lectura=None):
+    """Cambia el aviso de foto por su versión en pasado, justo antes de persistir.
+
+    Se hace al guardar y no al construir el mensaje porque durante el turno el aviso en
+    presente es correcto: la foto SÍ está en `contexto_turno`. Lo que no puede quedar es
+    esa misma frase en el historial del turno siguiente.
+    """
+    reemplazo = _aviso_foto_vieja(lectura)
+    limpios = []
+    for msg in mensajes:
+        contenido = msg.get('content')
+        if not isinstance(contenido, list):
+            limpios.append(msg)
+            continue
+        bloques = [
+            {'type': 'text', 'text': b['text'].replace(AVISO_FOTO_ACTUAL, reemplazo)}
+            if isinstance(b, dict) and b.get('type') == 'text' and AVISO_FOTO_ACTUAL in b.get('text', '')
+            else b
+            for b in contenido
+        ]
+        limpios.append({**msg, 'content': bloques})
+    return limpios
 
 
 def _sello_hora():
@@ -101,9 +162,17 @@ def chat():
     data = request.get_json() or {}
     mensaje_usuario = data.get('mensaje', '').strip()
 
+    # Mandar una foto pide `agente.vision`. El front ni siquiera le muestra el botón a quien
+    # no lo tiene, pero eso es cosmética: el corte que vale es éste, porque el POST se arma
+    # a mano en dos líneas. Es un 403 y no un silencio para que el chat lo diga (el fetch ya
+    # traduce el 403 a "Este acceso no puede hacer eso") en vez de tragarse la imagen y
+    # contestar como si el usuario no hubiera mandado nada.
+    if data.get('imagen') and not accesos.puede(PERMISO_VISION):
+        return jsonify({'error': 'Este acceso no puede mandar imágenes.'}), 403
+
     # Una foto sola es un mensaje válido: sacan la etiqueta y la mandan sin escribir nada.
     if not mensaje_usuario and data.get('imagen'):
-        mensaje_usuario = 'Te mando esta foto.'
+        mensaje_usuario = TEXTO_FOTO_SOLA
 
     if not mensaje_usuario:
         return jsonify({'error': 'Mensaje vacío'}), 400
@@ -160,14 +229,15 @@ def chat():
         })
 
     elif imagen_base64:
-        contenido[0]['text'] = (
-            f"{msg_procesado}\n\n[El usuario adjuntó una foto en este turno. Todavía no la vio "
-            "nadie: si necesitás lo que dice, llamá a leer_foto; si solo hay que guardarla en "
-            "una ficha, llamá a adjuntar_foto. Si no sabés para qué te la mandaron o a qué "
-            "registro va, preguntale.]")
+        contenido[0]['text'] = f"{msg_procesado}\n\n{AVISO_FOTO_ACTUAL}"
 
-    # Agregar mensaje del usuario al historial
-    mensajes.append({'role': 'user', 'content': contenido})
+    # Agregar mensaje del usuario al historial. La imagen va en una clave aparte de
+    # `content` (no la ve el LLM, ver `_sin_imagenes`): es lo que permite repintarla en el
+    # chat sin volver a mandarla al modelo en los turnos siguientes.
+    mensaje_usuario_msg = {'role': 'user', 'content': contenido}
+    if imagen_base64:
+        mensaje_usuario_msg['imagen'] = {'b64': imagen_base64, 'tipo': media_type}
+    mensajes.append(mensaje_usuario_msg)
 
     # Obtener respuesta del agente.
     # `fichas_previas` son las fichas de alta que el usuario YA vio en turnos anteriores;
@@ -180,7 +250,10 @@ def chat():
         # que no puede pasarla como parámetro.
         contexto_turno['foto_turno'] = (imagen_base64, media_type)
         contexto_turno['texto_usuario'] = mensaje_usuario
-    respuesta = chat_with_tools(mensajes, trazas=trazas, contexto_turno=contexto_turno,
+    # Sólo `role`+`content` viajan al LLM: la API rechaza claves que no reconoce, y la
+    # clave `imagen` de arriba es puramente para la UI.
+    mensajes_llm = [{'role': m['role'], 'content': m['content']} for m in mensajes]
+    respuesta = chat_with_tools(mensajes_llm, trazas=trazas, contexto_turno=contexto_turno,
                                 permisos=accesos.permisos())
     # Se filtra ANTES de guardar, así el historial repintado tampoco muestra ids — y, en el
     # caso de las acotaciones, el modelo no las tiene como ejemplo a imitar en el turno que viene.
@@ -214,8 +287,10 @@ def chat():
 
     # Se persiste el historial COMPLETO más los dos mensajes de este turno (`mensajes` es
     # solo el recorte que vio el modelo). Las imágenes no se guardan: una foto en base64
-    # pesa megas y no se reusa en turnos siguientes — queda una nota en su lugar.
-    historial = conv['historial'] + _sin_imagenes(mensajes[-2:])
+    # pesa megas y no se reusa en turnos siguientes — queda una nota en su lugar, y el
+    # aviso pasa a su versión en pasado (`_foto_en_pasado`) porque la foto muere con el turno.
+    historial = conv['historial'] + _foto_en_pasado(_sin_imagenes(mensajes[-2:]),
+                                                    contexto_turno.get('lectura_foto'))
     _conv_guardar(historial, entidad, fichas)
 
     # Si quedaron fichas esperando el OK, el front pinta un botón por cada una debajo del
@@ -231,7 +306,8 @@ def _texto_visible(msg):
     Saca lo que `chat()` le agrega al mensaje del usuario para el modelo y que el usuario
     nunca escribió: el "(refiriéndote a: X)" y el aviso de que adjuntó una foto. Los dos son
     instrucciones para el modelo — el de la foto además ocupa varias líneas, y al repintar el
-    chat aparecería como si las hubiera tipeado él. En su lugar queda un "📷 (foto)".
+    chat aparecería como si las hubiera tipeado él. No queda nada en su lugar: la foto se
+    repinta de verdad, desde `msg['imagen']` (ver `historial()`).
     """
     contenido = msg.get('content')
     if isinstance(contenido, str):
@@ -242,8 +318,15 @@ def _texto_visible(msg):
     if msg.get('role') == 'user':
         salida = _SELLO_HORA.sub('', salida)
         salida = re.sub(r'\s*\(refiriéndote a:[^)]*\)\s*$', '', salida)
-        salida = re.sub(r'\s*\[El usuario adjuntó una foto en este turno\.[\s\S]*$',
-                       '\n📷 (foto)', salida)
+        # Los dos avisos: el del turno en curso y el que queda guardado en pasado (que
+        # además arrastra la lectura de la etiqueta). Desde el aviso hasta el final del
+        # mensaje es todo texto para el modelo, así que se corta entero. No queda ningún
+        # "(foto)" en su lugar: la foto se repinta de verdad (ver `_mensaje_visible`).
+        salida = re.sub(r'\s*\[(?:El usuario adjuntó una foto en este turno\.'
+                        r'|En ese turno el usuario adjuntó una foto,)[\s\S]*$',
+                        '', salida)
+        if salida.strip() == TEXTO_FOTO_SOLA:
+            salida = ''
     return salida.strip()
 
 
@@ -275,6 +358,16 @@ def _confirmaciones(fichas):
     return list(por_entidad.values())
 
 
+def _mensaje_visible(msg):
+    """Un mensaje del historial en la forma que espera el chat: texto + imagen si tenía."""
+    item = {'rol': msg.get('role'), 'texto': _texto_visible(msg)}
+    imagen = msg.get('imagen')
+    if imagen:
+        item['imagen'] = 'data:{};base64,{}'.format(imagen.get('tipo', 'image/jpeg'),
+                                                    imagen.get('b64', ''))
+    return item
+
+
 @bp.route('/historial', methods=['GET'])
 def historial():
     """Conversación guardada, para repintar el chat al cargar la página.
@@ -285,8 +378,8 @@ def historial():
     quedado sin confirmar (si no, al cambiar de página se perdía la única forma de darles OK).
     """
     conv = _conv_cargar()
-    mensajes = [{'rol': m.get('role'), 'texto': _texto_visible(m)} for m in conv['historial']]
-    return jsonify({'mensajes': [m for m in mensajes if m['texto']],
+    mensajes = [_mensaje_visible(m) for m in conv['historial']]
+    return jsonify({'mensajes': [m for m in mensajes if m['texto'] or m.get('imagen')],
                     'confirmaciones': _confirmaciones(conv['fichas'])})
 
 
@@ -323,8 +416,14 @@ def _enlazar_protagonistas(hito_id, protagonistas):
 
     Solo vincula personas YA cargadas y con el nombre completo: no crea personas nuevas ni
     adivina con un nombre de pila suelto.
+
+    Y sólo con permiso para ver `personas`: el vínculo se escribe mirando el padrón de
+    fichas, y el texto que devuelve nombra a quién se enlazó. Sin el permiso, el hito se
+    guarda igual con sus `protagonistas` en texto — lo que no se crea es el vínculo.
     """
     if not hito_id or not (protagonistas or '').strip():
+        return ''
+    if not ve_entidad('personas', accesos.permisos()):
         return ''
     try:
         nombradas = _personas_nombradas_en(protagonistas)

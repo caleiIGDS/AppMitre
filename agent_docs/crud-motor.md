@@ -108,12 +108,49 @@ columnas que el código ya no declara: `migrar` no puede saber qué sobra en la 
 ### Config de cada entidad (`ENTIDADES[slug]`)
 
 `tabla`, `singular`, `plural`, `descripcion` (card del home), `campos` (form), `columnas` (listado),
-`relaciones` (M2M editables desde el form, con prefijo `rel_`) y, opcional, **`campo_nombre`**.
+`relaciones` (M2M editables desde el form, con prefijo `rel_`) y, opcionales, **`campo_nombre`** y
+**`permiso`**.
 
 `campo_nombre` (default `'nombre'`) existe porque `historia.hitos` llama `titulo` a su columna de
 nombre. **Todas las lecturas van por `crud.select(cfg)`**, que agrega `titulo AS nombre`, así que
 templates, búsqueda y el agente leen siempre `fila['nombre']` sin enterarse. Las escrituras y la
 validación de obligatorio usan `crud.campo_nombre(cfg)`.
+
+### `permiso`: una entidad que pide más que el área
+
+`permiso` es un permiso **extra**, además del base del área, para ver esa entidad y nada más. Hoy lo
+usa una sola: `historia.personas` pide `historia.personas`, que sólo tiene el admin.
+
+```python
+'personas': {..., 'permiso': 'historia.personas'},
+```
+
+Con eso, sin ese permiso desaparecen de una vez **la tarjeta del home, la entrada de la nav, el
+listado, la ficha, los dos formularios, las dos rutas de fotos y el bloque de esa entidad dentro de
+la ficha de otra** (un hito deja de listar sus personas). El motor lo resuelve en tres lugares:
+
+| función | qué corta |
+|---|---|
+| `permiso_entidad(area, slug)` / `ve_entidad(area, slug)` | la pregunta, en un solo lado |
+| un `before_request` de `registrar_rutas` | **todas** las rutas: el slug está en la URL de las siete |
+| `relaciones_visibles(area, cfg)` | el fieldset del form **y** el `_guardar_form` |
+
+Lo del `before_request` es lo que evita repetir el chequeo en cada vista, y corre después del gate
+de sesión porque el área monta `registrar_acceso` primero. Devuelve `accesos.denegar(permiso)` →
+**403**, igual que `accesos.requiere()`; no se puede usar el decorador porque el permiso depende del
+slug de la URL, que recién existe en tiempo de request.
+
+Lo de `relaciones_visibles` **no es cosmético**: el form postea la lista entera de cada relación, así
+que un fieldset que se esconde y no se saca también de `_guardar_form` haría que guardar un hito
+desde un acceso sin el permiso le borrara los vínculos con personas. Por eso `form.html` itera
+`relaciones` (la lista ya filtrada que pasa la vista) y no `cfg.relaciones`.
+
+`crud.guardar_entidad` — el camino del agente, sin `request.form` — ya era seguro: sólo toca las
+relaciones que vengan explícitas en el dict.
+
+El motor sigue sin nombrar ninguna clave: la pone el área, igual que con `PERMISO_ESCRITURA`. Del
+lado del asistente el mismo dato se respeta con `agente.dominio.ve_entidad` (ver
+`agent_docs/agente-asistente.md`), porque lee las mismas tablas que la web.
 
 ## Cómo se monta un área
 
@@ -187,6 +224,11 @@ suyo.
 `LIMPIEZA_M2M`, y si tiene relaciones que mostrar, una rama en `secciones_detalle`. Las rutas salen
 solas. Si la entidad debe ser visible para el asistente, no hay nada más que hacer:
 `agente.SLUGS_ENTIDAD` se deriva de las `ENTIDADES` de los dos módulos.
+
+**…una entidad que no vea todo el mundo**: declarar el permiso en los `PERMISOS` del área (con el
+verbo que corresponda — `'admin'` si es sólo del admin) y colgárselo a la entidad con la clave
+`permiso` de su cfg. Web y asistente quedan cubiertos por ese único dato; no hay que tocar ninguna
+ruta, ningún template ni el gate.
 
 **…un área nueva**: un archivo con el contrato de arriba, `templates/<area>/` con `base.html`,
 `home.html`, `login.html` y los cuatro stubs, las dos líneas de registro, y

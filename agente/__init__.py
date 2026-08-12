@@ -55,14 +55,22 @@ bp = Blueprint('agente', __name__, url_prefix='/agente')
 # porque sus tools genéricas por slug (crear_entidad, eliminar_entidad, buscar_entidad…)
 # cruzan las dos áreas: no hay forma de mapear una tool a un área desde el esquema. El
 # corte que importa acá es otro — leer contra escribir — y es el que se declara.
+#
+# `agente.vision` va con verbo 'admin' —como `agente.auditar`— y no con 'leer': mandar una
+# foto es lo único del chat que gasta una API aparte (~2.000 tokens por lectura, ver
+# `vision.py`), y el resto de las tools sólo leen la base. Con verbo 'admin' no entra en
+# ningún preset de interno, así que por defecto lo tiene sólo la administración por el
+# comodín; el admin igual puede tildárselo a mano a un dispositivo puntual desde /accesos.
 PERMISOS = [
     ('agente.leer', 'Usar el asistente para consultar', 'leer'),
     ('agente.escribir', 'Que el asistente pueda modificar datos', 'escribir'),
+    ('agente.vision', 'Mandarle fotos al asistente (usa la API de visión)', 'admin'),
     ('agente.auditar', 'Ver el registro de auditoría del asistente', 'admin'),
 ]
 GRUPO_PERMISOS = 'Asistente'
 PERMISO_LECTURA = 'agente.leer'
 PERMISO_ESCRITURA = 'agente.escribir'
+PERMISO_VISION = 'agente.vision'
 
 
 # Al final: `rutas` hace `from . import bp`, así que `bp` tiene que existir antes.

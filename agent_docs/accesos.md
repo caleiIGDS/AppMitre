@@ -54,13 +54,32 @@ tienen ese permiso hasta que el admin lo tilde.
 |---|---|---|
 | `gestion.leer` / `gestion.editar` | leer / escribir | `gestion.py` |
 | `historia.leer` / `historia.editar` | leer / escribir | `historia.py` |
+| `historia.personas` | admin | `historia.py` |
 | `agente.leer` / `agente.escribir` | leer / escribir | `agente/__init__.py` |
+| `agente.vision` | admin | `agente/__init__.py` |
 | `agente.auditar` | admin | `agente/__init__.py` |
 | `horarios.actualizar` | admin | `app.py` |
 | `accesos.admin` | admin | `accesos.py` |
 
 `accesos.admin` es la única clave que nombra este archivo, y es correcta: es el permiso de su propia
 funcionalidad, no el de un área.
+
+**El verbo `'admin'` no es un cuarto perfil**: es lo que hace que un permiso NO entre en ningún
+preset de interno, porque `PERFILES` sólo enumera `'leer'` y `'escribir'`. Quien lo tiene es el admin
+por el comodín `'*'`. El admin igual puede tildarlo a mano en el formulario de invitación, y ahí el
+acceso queda como perfil `custom` — el conjunto de permisos es la verdad, el perfil es la etiqueta.
+
+### Permisos de una entidad sola
+
+`historia.personas` es el primero que no protege un área entera sino **una entidad**: `/historia` se
+sigue viendo con `historia.leer`, pero `personas` desaparece para quien no tenga ese permiso.
+
+No hace falta partir el área en dos ni escribir rutas nuevas: la entidad lo declara con la clave
+`permiso` de su cfg y el motor CRUD hace el resto — tarjeta del home, nav, listado, ficha, formularios,
+fotos y el bloque de personas dentro de un hito. El detalle del mecanismo (y por qué el guardado del
+formulario también tiene que saberlo) está en `agent_docs/crud-motor.md`. El asistente respeta lo
+mismo con `agente.dominio.ve_entidad`: lee las mismas tablas, así que esconderlo sólo en la web no
+serviría de nada.
 
 ## Cómo entra un interno: link → dispositivo
 
@@ -114,11 +133,16 @@ dispositivo sin usarse antes de necesitar un link nuevo.
 ```python
 accesos.registrar_acceso(bp, permiso, endpoints_pagina=None, endpoint_default='home')
 accesos.requiere(permiso, como_json=False)   # decorador para rutas que exigen más que el base
+accesos.denegar(permiso, como_json=False)    # la respuesta 403/401, para permisos que no se
+                                             # pueden marcar de antemano (dependen de la URL)
 accesos.actual()        # dict del acceso vigente o None
 accesos.permisos()      # frozenset
 accesos.puede(permiso)  # también es global de Jinja
 accesos.tiene(conjunto, permiso)   # puro: el agente lo usa fuera del request
 ```
+
+`denegar` es lo que usa `crud.registrar_rutas` para las entidades con permiso propio: el decorador
+`requiere()` no sirve ahí porque el permiso sale del slug de la URL, que recién existe en el request.
 
 `registrar_acceso` reemplaza al viejo `crud.registrar_acceso`. Mantiene `endpoints_pagina` y
 `endpoint_default` con la misma semántica, y suma el permiso base del área.
@@ -158,7 +182,9 @@ callejón.
 `agente.escribir`) y expone `tools_permitidas(permisos)`, **la única puerta por la que los esquemas
 salen hacia el modelo**. Los dos loops de `agente/llm.py` mandan sólo lo filtrado, así que un acceso
 de consulta recibe 15 tools y el modelo ni se entera de que existen las otras diez. Eso es distinto
-a prohibírselas: una tool que no está en la lista no se anuncia y no se alucina.
+a prohibírselas: una tool que no está en la lista no se anuncia y no se alucina. Sobre ese filtro
+hay dos ejes más: `PERMISO_POR_SLUG` (una entidad puede pedir un permiso extra, hoy `personas`) y
+`TOOLS_FOTO` (ver `agente.vision`, más abajo).
 
 `ejecutar_tool(..., permisos=None)` chequea igual, como segunda línea: cubre `/agente/confirmar`
 (que escribe **sin pasar por el LLM**) y el caso de que el modelo invente un nombre. El default
@@ -169,7 +195,29 @@ El system prompt también se recorta (`prompt.construir_system_prompt(..., escri
 de escritura no se le manda el circuito de alta, las reglas de borrado ni el padrón de ~1.600
 tokens, y sí un bloque que le dice explícitamente que no use "✅". `escribe` se deriva de las tools
 que **efectivamente** se mandaron, no de los permisos, para que las dos mitades del mensaje no
-puedan contradecirse. Detalle en `agent_docs/agente-asistente.md`.
+puedan contradecirse. Lo mismo hacen `ve_personas` y `ve_fotos`. Detalle en
+`agent_docs/agente-asistente.md`.
+
+### `agente.vision`: el permiso que corta un gasto, no una tabla
+
+Es el único permiso del proyecto que no protege un dato sino una **factura**: mandar una foto es lo
+único del chat que llama a una API aparte (~2.000 tokens por lectura). Va con verbo `admin` —como
+`agente.auditar`— así que **no entra en ningún preset de interno** y por defecto lo tiene sólo la
+administración, por el comodín. El admin igual puede tildárselo a mano a un dispositivo puntual
+desde `/accesos`, y ese acceso queda con perfil `custom`.
+
+Corta en tres capas, y las tres importan:
+
+| Capa | Qué hace | Por qué no alcanza sola |
+|---|---|---|
+| `_agente_chat_core.html` | no pinta el botón 📷, el input ni el chip | es cosmética: el POST se arma a mano |
+| `agente/rutas.py` (`chat()`) | `403` si viene `imagen` sin el permiso | **es el corte real** |
+| `tools_permitidas()` | `leer_foto` y `adjuntar_foto` no viajan | evita que el modelo ofrezca leer una foto que el usuario no puede mandar |
+
+Las dos tools de foto piden `agente.vision` **además** del permiso que declaran en
+`PERMISO_POR_TOOL`, no en su lugar: si `adjuntar_foto` cambiara su permiso por `agente.vision` a
+secas, un dispositivo con visión tildada a mano escribiría en la galería sin tener
+`agente.escribir`.
 
 ## `accesos.db`
 

@@ -4,6 +4,240 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-12] — Mandarle fotos al asistente pasa a pedir `agente.vision` (administración)
+
+**Tipo**: permiso nuevo en el catálogo + `POST /agente/chat` puede devolver `403` + firma de `construir_system_prompt`
+**Archivos**: `agente/__init__.py`, `agente/tools/esquemas.py`, `agente/tools/__init__.py`,
+`agente/rutas.py`, `agente/prompt.py`, `agente/llm.py`,
+`templates/agente/_agente_chat_core.html`, `static/gestion-agente.js`,
+`agent_docs/accesos.md`, `agent_docs/agente-asistente.md`
+
+**1. Permiso nuevo `agente.vision`**, verbo `admin` (como `agente.auditar`), etiqueta "Mandarle
+fotos al asistente (usa la API de visión)". Entra solo al catálogo por `PERMISOS`. **No migra
+nada**: al ser verbo `admin` no está en ningún preset de interno, así que los dispositivos ya
+invitados no lo tienen y la administración sí, por el comodín. Se exporta como
+`agente.PERMISO_VISION`.
+
+**2. `POST /agente/chat` devuelve `403`** si el body trae `imagen` y el acceso no tiene
+`agente.vision`. Antes cualquier acceso con `agente.leer` podía mandar una foto. Los pedidos sin
+`imagen` no cambian.
+
+**3. `TOOLS_FOTO` (`leer_foto`, `adjuntar_foto`) piden `agente.vision` ADEMÁS del permiso que
+declaran** en `PERMISO_POR_TOOL` — que no cambió (`agente.leer` y `agente.escribir`
+respectivamente). `tools_permitidas()` aplica las dos condiciones. Es el tercer eje de filtrado,
+junto a `PERMISO_POR_TOOL` y `PERMISO_POR_SLUG`.
+
+**4. `construir_system_prompt(..., ve_fotos=True)`** — parámetro nuevo, default `True` (no rompe
+call sites). Con `ve_fotos=False` no van `_FOTOS`, `_ETIQUETA`, `_FOTOS_SOLO_LECTURA` ni
+`_REGLA_FOTO`; las reglas se renumeran de corrido. `_reglas(escribe)` → `_reglas(escribe, ve_fotos)`.
+`llm.chat_with_tools` lo deriva de las tools que efectivamente viajaron, igual que `escribe` y
+`ve_personas`.
+
+**5. El markup de la imagen es condicional.** `_agente_chat_core.html` pinta `#agente-image-btn`,
+`#agente-image-file` y `#agente-image-preview` sólo con `puede('agente.vision')`. `gestion-agente.js`
+ya guardaba los listeners, pero `enviarMensaje()` tocaba `imagePreview` e `imageFile` sin chequear:
+ahora también.
+
+---
+
+## [2026-08-12] — La foto adjunta se ve en el chat y sobrevive a recargar la página
+
+**Tipo**: cambia el contrato de `GET /agente/historial` + lo que se persiste en `agente_conversaciones.historial`
+**Archivos**: `agente/rutas.py`, `agente/db.py`, `static/gestion-agente.js`, `static/gestion.css`,
+`agent_docs/agente-asistente.md`
+
+**1. Los mensajes del historial pueden llevar una clave `imagen`**, hermana de `content`, con
+`{'b64', 'tipo'}`. Antes la foto no se persistía en ninguna forma: `_sin_imagenes()` la
+reemplazaba por una nota de texto y ahí moría. Un consumidor que asuma que un mensaje del
+historial tiene exactamente `role` y `content` sigue andando (la clave es opcional y sólo la
+tienen los turnos con foto), pero **quien reenvíe esos mensajes a una API de LLM tiene que
+recortarlos**: `chat()` ahora arma `mensajes_llm` con `role`+`content` y nada más.
+
+**2. `GET /agente/historial` devuelve `{mensajes: [{rol, texto, imagen?}], …}`.** `imagen` es
+un data URL (`data:image/jpeg;base64,…`) y viene sólo si ese mensaje traía foto. El filtro de
+mensajes vacíos pasó de `if m['texto']` a `if m['texto'] or m['imagen']`: si no, una foto
+mandada sin texto desaparecía del chat.
+
+**3. `_sin_imagenes()` y `_foto_en_pasado()` preservan las claves del mensaje** (`{**msg,
+'content': …}` en vez de reconstruir `{'role', 'content'}`). Las dos siguen limpiando de
+`content` exactamente lo mismo que antes.
+
+**4. `_texto_visible()` ya no deja `📷 (foto)`** donde estaba el aviso: corta y no repone nada,
+porque la foto se ve de verdad. Tampoco muestra `TEXTO_FOTO_SOLA` (constante nueva, el
+`'Te mando esta foto.'` que `chat()` inventa cuando mandan una imagen sin escribir): es texto
+para el modelo, no algo que el usuario haya tipeado.
+
+**5. `agregarMensaje(texto, tipo)` → `agregarMensaje(texto, tipo, imagenUrl)`** en
+`gestion-agente.js`. Con `imagenUrl` pinta la miniatura (clase `.agente-message-image`) dentro
+de un `<a target="_blank">`. Se borró `imagenNombre`, que era del formato viejo
+(`'📷 ' + nombre-del-archivo`) y quedó sin lecturas.
+
+**Lo que NO cambió**: la foto se le sigue mandando al modelo **sólo en el turno en que llega**
+—y sólo si el proveedor ve imágenes—, `agente_fotos_pendientes` sigue siendo la que lleva la
+foto hasta el alta confirmada, y el par `AVISO_FOTO_ACTUAL`/`AVISO_FOTO_VIEJA` sigue igual.
+
+---
+
+## [2026-08-12] — Las búsquedas de persona devuelven `padron_completo` cuando no encuentran a nadie
+
+**Tipo**: cambia la forma de la respuesta de tres tools de lectura (caso vacío) + una firma
+**Archivos**: `agente/tools/horarios.py`, `agente/tools/__init__.py`, `agente/tools/esquemas.py`,
+`agente/prompt.py`, `agent_docs/agente-asistente.md`
+
+Ninguna búsqueda de persona puede terminar ya en una lista vacía: el modelo la leía como "no
+existe" y le contestaba al usuario que la persona no está en el sistema.
+
+**1. `buscar_profesor(query)` con cero candidatos y cero cruces** pasa de devolver `[]` (lista) a
+devolver `{docentes: [], padron_completo: [...344 nombres], nota}` (dict). Los turnos que
+encuentran algo **no cambian**: siguen devolviendo la lista pelada, o el dict con
+`personas_con_ficha`/`preceptores` cuando hay cruce. La forma ya era variable (lista *o* dict),
+así que no hay contrato nuevo, pero un consumidor que asuma lista en el caso vacío se rompe.
+
+**2. `horario_profesor(nombre)`** — la rama final, que devolvía
+`nota: "No existe ningún docente ni personal no docente llamado X ni parecido"`, ahora suma
+`padron_completo` y la nota deja de afirmar que no existe. Las otras dos ramas del caso difuso
+(`sugerencias` con candidatos empatados, cruce a `preceptores`) no se tocaron.
+
+**3. `preceptores(preceptor=…)` sin match** suma `padron_completo` con los 46 nombres de la
+planilla. Coherente con el modo por curso, que ya devolvía `cursos_disponibles`.
+
+**4. `_horario_profesor_fmt(nombre)` → `_horario_profesor_fmt(nombre, permisos=frozenset())`** y
+el call site de `ejecutar_tool` pasa `permisos`. **No cambia qué horario devuelve** —los horarios
+son consulta abierta— sólo si la nota del caso vacío puede nombrar
+`buscar_entidad('personas', …)`, que con un acceso sin `historia.personas` no existe.
+
+**5. Los tres esquemas anuncian `padron_completo`** y `_REGLA_SINONIMOS` del system prompt
+reemplaza su cola rota (*"Para profesores el equivalente es `buscar_profesor`"*) por el protocolo
+real. La regla sigue siendo una sola: no se renumeró nada.
+
+Tope nuevo `LIMITE_PADRON = 400` en `horarios.py`: arriba de eso la nota va sin la lista. Por qué
+inline y no una tool `listar_personal()`, en `DECISIONS.md` de esta misma fecha.
+
+---
+
+## [2026-08-12] — Permiso por entidad: `personas` de historia pasa a ser sólo del admin
+
+**Tipo**: clave nueva y opcional en `ENTIDADES[slug]` + permiso nuevo + 6 firmas cambiadas +
+una variable nueva en `templates/crud/form.html`
+**Archivos**: `crud.py`, `accesos.py`, `historia.py`, `templates/crud/form.html`,
+`agente/{dominio,llm,prompt,rutas}.py`, `agente/tools/{__init__,esquemas,entidades,fichas,horarios}.py`,
+`agent_docs/{crud-motor,accesos,historia-institucional,agente-asistente}.md`
+
+Hasta acá un permiso protegía un **área** entera. `historia.personas` es el primero que protege
+**una entidad**: `/historia` se sigue viendo con `historia.leer`, pero las fichas de personas no.
+
+**1. `ENTIDADES[slug]` acepta la clave opcional `'permiso'`** — un permiso extra, además del base
+del área, para ver esa entidad. Sin la clave nada cambia. Con ella, `crud` corta la tarjeta del
+home, la nav, las siete rutas (403), el fieldset de la relación en los formularios de las otras
+entidades y el bloque de esa entidad en sus fichas de detalle.
+
+**2. `historia.PERMISOS` suma `('historia.personas', ..., 'admin')`** y `ENTIDADES['personas']`
+declara `'permiso': 'historia.personas'`. Las etiquetas de `historia.leer`/`historia.editar`
+cambiaron de "hitos y personas" a "hitos". **Nadie queda migrado**: el verbo `'admin'` no entra en
+ningún preset de interno, y los dispositivos ya dados de alta simplemente no lo tienen.
+
+**3. `accesos._denegar` → `accesos.denegar`** (pública). Es la respuesta 403/401 para un permiso
+que no se puede marcar de antemano con `requiere()` porque depende del slug de la URL.
+
+**4. Nuevas en `crud.py`**: `permiso_entidad(area, slug)`, `ve_entidad(area, slug)`,
+`relaciones_visibles(area, cfg_ent)`.
+
+**5. Firmas internas de `crud.py`**: `_opciones_relaciones(area, relaciones, cur)` y
+`_seleccion_relaciones(relaciones, id, cur)` ahora reciben la **lista de relaciones** ya filtrada,
+no el cfg. `_guardar_form` itera `relaciones_visibles`: una relación que el form no mostró tampoco
+se pisa — sin esto, editar un hito sin el permiso le borraba los vínculos con personas.
+
+**6. `templates/crud/form.html` itera `relaciones`** (nueva variable que pasan `nuevo` y `editar`)
+en vez de `cfg.relaciones`. Los stubs de las áreas no cambian.
+
+**7. Agente**: `dominio.ve_entidad(slug, permisos)` (nueva); `esquemas.PERMISO_POR_SLUG`,
+`_sin_slugs()` y `slug_visible(tools, slug)` (nuevas); `tools_permitidas()` recorta el slug de los
+**enum** de cada esquema, copiando (`TOOLS_SCHEMA` sigue intacto); `ejecutar_tool` rechaza
+`slug`/`slug_origen`/`slug_destino` prohibidos. Cuatro firmas suman `permisos`:
+`_buscar_profesor(query, permisos)`, `_detalle_entidad_fmt(slug, id, permisos)`,
+`_crear_entidad(slug, campos, contexto_turno, permisos)` y, aguas abajo,
+`_ficha_confirmacion(..., permisos)` / `_recordatorio_hito(borrador, permisos)`. Todas con default
+fail-closed (`frozenset()`).
+
+**8. `construir_system_prompt(..., ve_personas=True)`** — nuevo kwarg. Con `False` no van el área 6
+(PERSONAS) ni los dos bullets de `_HITOS` sobre fichas, y el encabezado dice "cinco áreas". Lo
+deriva `llm.chat_with_tools` de las tools que efectivamente viajaron, igual que `escribe`. Con
+`ve_personas=True` el prompt es byte a byte el de antes.
+
+**Ninguna migración de DB**: no cambió ningún schema. Un `git pull` + reload alcanza.
+
+---
+
+## [2026-08-12] — El alta desde foto no se podía terminar: tres bugs encadenados
+
+**Tipo**: fix de contrato en el loop del LLM + persistencia del historial
+**Archivos**: `agente/llm.py`, `agente/rutas.py`, `agente/tools/fotos.py`,
+`agent_docs/agente-asistente.md`
+
+Síntoma: se mandaba la foto de una etiqueta, el asistente armaba bien la respuesta del primer
+turno, y el "dale, creá" del turno siguiente devolvía **"Sin respuesta"**. Reproducido de
+forma determinística; eran tres cosas distintas, en cascada.
+
+**1. `MAX_TOKENS_SALIDA` (nueva constante) = 4096**, antes `max_tokens=1024` hardcodeado en los
+dos loops. `deepseek-v4-pro` razona antes de emitir y ese razonamiento se cobra como salida:
+gasta 700–1600 tokens antes de la primera tool call. Con 1024 devolvía `finish_reason='length'`
+con contenido vacío. **Es la causa raíz de "Sin respuesta"**, y afectaba a cualquier turno
+pesado, no solo a los de foto.
+
+**2. `_loop_openai` distingue el corte por tope** en vez de devolver el literal `'Sin
+respuesta'`: con `finish_reason == 'length'` y sin texto, devuelve un aviso legible. El
+literal quedaba guardado en el historial y envenenaba los turnos siguientes.
+
+**3. El aviso de foto se persiste en pasado.** `rutas.AVISO_FOTO_ACTUAL` (durante el turno) y
+`rutas.AVISO_FOTO_VIEJA` (al guardar, vía `_foto_en_pasado()`) son dos textos distintos. Antes
+se guardaba el de presente y en el turno siguiente el modelo llamaba a `leer_foto` sobre una
+foto que ya no existía. `_texto_visible` reconoce los dos avisos.
+
+**4. La lectura de la foto ahora se persiste.** `_leer_foto_fmt()` la deja en
+`contexto_turno['lectura_foto']` y `chat()` la pega al mensaje guardado. Los resultados de las
+tools no van al historial, así que sin esto los datos de la etiqueta morían con el turno.
+
+---
+
+## [2026-08-12] — `leer_foto` suma el parámetro `modo`: etiqueta o análisis
+
+**Tipo**: parámetro nuevo en una tool + firma de dos funciones internas (compatible hacia atrás)
+**Archivos**: `agente/vision.py`, `agente/tools/{fotos,esquemas,__init__}.py`, `agente/prompt.py`,
+`agent_docs/agente-asistente.md`, `AGENTE_CONFIG.md`
+
+El lector de imágenes siempre pudo mirar la foto entera —el modelo es multimodal, no un OCR—,
+pero `PROMPT_LECTOR_IMAGEN` lo acotaba a transcribir lo escrito. Ahora hay un segundo prompt y
+`leer_foto` elige cuál usar.
+
+**1. `leer_foto` pasa de `input_schema` vacío a aceptar `modo`** (`'etiqueta'` | `'analisis'`,
+default `'etiqueta'`). Sin el parámetro se comporta exactamente como antes.
+
+**2. `_leer_imagen(imagen_base64, media_type, texto_usuario='', modo='etiqueta')`** y
+`_leer_foto_fmt(contexto_turno=None, modo='etiqueta')` — cuarto y segundo argumento nuevos, los
+dos con default. Un `modo` desconocido cae al default en vez de fallar.
+
+**3. `vision.py` exporta `MODOS`, `MODO_DEFAULT`, `PROMPT_ANALISIS_IMAGEN` y
+`VISION_MAX_TOKENS_ANALISIS`** (900, contra los 500 de `VISION_MAX_TOKENS`, que no cambió).
+
+**4. El resultado de `leer_foto` suma la clave `modo`** y la `instruccion` que acompaña la
+lectura ahora depende de él: en `analisis` le prohíbe al agente armar una ficha con lo descripto.
+
+**No cambió el gate**: la foto se sigue mirando solo cuando el modelo la necesita, una vez por
+foto. El prompt le prohíbe explícitamente probar los dos modos sobre la misma imagen.
+
+**5. `VISION_MODEL_DEFAULT` pasa de `gemini-2.5-flash-lite` a `gemini-3.5-flash-lite`.** El
+anterior devuelve `404 no longer available to new users` con cualquier API key nueva de Google
+(verificado el 2026-08-12): las instalaciones viejas seguían andando, las nuevas no leían fotos
+y no había forma de saber por qué. Cambiar el default no afecta a quien tenga
+`AGENTE_VISION_MODEL` seteado.
+
+**6. `_leer_imagen` imprime el error del proveedor por consola fuera de producción**
+(prefijo `[vision]`, guardado por `config.PRODUCCION`). Sigue devolviendo `None` y tragándose
+la excepción: lo que cambia es que el que configura ve el 404 en vez de adivinarlo. En
+producción no se imprime porque el error del proveedor puede traer la API key en el texto.
+
+---
+
 ## [2026-08-11] — Accesos por niveles: público / interno / admin
 
 **Tipo**: motor nuevo de capa 1 + DB nueva + cambio de contrato en 5 firmas + una ruta GET→POST

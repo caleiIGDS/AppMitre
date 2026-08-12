@@ -11,7 +11,8 @@ from config import DIAS, ahora
 from .padrones import _personas_conocidas
 from .prompt import construir_system_prompt
 from .proveedores import _get_config
-from .tools import TOOLS_ESCRITURA, ejecutar_tool, tools_permitidas
+from .tools import (TOOLS_ESCRITURA, TOOLS_FOTO, ejecutar_tool, slug_visible,
+                    tools_permitidas)
 
 
 # ============================================================================
@@ -60,6 +61,15 @@ def _crear_cliente_llm():
         raise ValueError(f"Proveedor LLM desconocido: {provider}")
 
 PROVIDERS_OPENAI = ('openai', 'groq', 'ollama', 'deepseek')
+
+# Tope de salida por vuelta del loop. Estaba en 1024 y era MUY poco: `deepseek-v4-pro`
+# razona antes de emitir, y ese razonamiento se cobra como tokens de salida — medido,
+# gasta entre 700 y 1600 sólo en pensar antes de largar la primera tool call. Con 1024 se
+# quedaba sin presupuesto a mitad de camino y devolvía `finish_reason='length'` con el
+# contenido vacío, que el loop traducía a "Sin respuesta". El síntoma era peor cuanto más
+# difícil el turno: contestar "¿qué preceptor tiene 1° C?" entraba, armar la ficha de un
+# alta no. No es un tope de costo (sólo se cobra lo generado), así que se deja holgado.
+MAX_TOKENS_SALIDA = 4096
 
 
 def _tools_openai(tools):
@@ -148,7 +158,7 @@ def _loop_openai(client, model, system_prompt, mensajes_usuario, trazas, max_ite
         try:
             response = client.chat.completions.create(
                 model=model,
-                max_tokens=1024,
+                max_tokens=MAX_TOKENS_SALIDA,
                 messages=msgs,
                 tools=tools,
             )
@@ -160,7 +170,17 @@ def _loop_openai(client, model, system_prompt, mensajes_usuario, trazas, max_ite
         tool_calls = getattr(msg, 'tool_calls', None)
 
         if not tool_calls:
-            return (msg.content or '').strip() or 'Sin respuesta'
+            texto = (msg.content or '').strip()
+            if texto:
+                return texto
+            # Sin tools y sin texto: casi siempre es el tope de salida cortando el
+            # razonamiento antes de que el modelo escriba nada. Devolver "Sin respuesta"
+            # a secas mandaba al usuario a adivinar —y encima quedaba guardado en el
+            # historial, envenenando los turnos siguientes—, así que se distingue.
+            if choice.finish_reason == 'length':
+                return ('Me quedé sin espacio para responder a mitad de camino. '
+                        'Probá de nuevo, o pedímelo en dos partes más chicas.')
+            return 'Sin respuesta'
 
         # El mensaje del asistente tiene que volver con sus tool_calls intactos, si no
         # la API rechaza los mensajes 'tool' que vienen después.
@@ -234,9 +254,17 @@ def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None,
     # El prompt se deriva de las tools que EFECTIVAMENTE se mandan, no del set de permisos:
     # así es imposible que el prompt hable de dar de alta mientras las tools de alta no
     # viajaron. Una sola fuente para las dos mitades del mismo mensaje.
-    escribe = bool(TOOLS_ESCRITURA & {t['name'] for t in tools})
+    nombres = {t['name'] for t in tools}
+    escribe = bool(TOOLS_ESCRITURA & nombres)
+    # Mismo criterio para las fichas de personas: si `personas` no sobrevivió en los enum
+    # de slug, el prompt tampoco describe el área ni ofrece darlas de alta.
+    ve_personas = slug_visible(tools, 'personas')
+    # Y para las fotos: sin `agente.vision` no viajan `leer_foto` ni `adjuntar_foto`, así que
+    # el prompt tampoco explica qué hacer con una foto — que además el usuario no puede mandar.
+    ve_fotos = bool(TOOLS_FOTO & nombres)
     system_prompt = construir_system_prompt(_personas_conocidas(), hoy, dia_semana,
-                                            escribe=escribe)
+                                            escribe=escribe, ve_personas=ve_personas,
+                                            ve_fotos=ve_fotos)
 
     max_iterations = 10
 
@@ -263,7 +291,7 @@ def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None,
         try:
             response = client.messages.create(
                 model=_get_config()['model'],
-                max_tokens=1024,
+                max_tokens=MAX_TOKENS_SALIDA,
                 system=system_prompt,
                 tools=tools,
                 messages=messages

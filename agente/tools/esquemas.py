@@ -12,9 +12,11 @@ Al final del archivo está `PERMISO_POR_TOOL`, que dice qué permiso pide cada u
 `tools_permitidas()`, la única puerta por la que estos esquemas salen hacia el modelo.
 """
 import accesos
+import crud
 import historia
 
-from ..dominio import SLUGS_ENTIDAD
+from .. import PERMISO_VISION
+from ..dominio import SLUGS_ENTIDAD, _modulo
 
 # ============================================================================
 # Esquemas de tools para Claude
@@ -39,6 +41,10 @@ TOOLS_SCHEMA = [
                         'docente vienen con su `rol` al lado del nombre. Los PRECEPTORES no están '
                         'en este padrón: si el nombre coincide con alguno, te lo devuelve aparte '
                         'en `preceptores` y ahí seguís con la tool `preceptores`. '
+                        'SI NO COINCIDE NADIE te devuelve `padron_completo` con los nombres de '
+                        'toda la gente de los horarios: revisalo vos antes de decir que la '
+                        'persona no está — la búsqueda compara letras y un apodo o una errata '
+                        'grande no matchean. '
                         'Buscar por CARGO ("¿qué EMATP hay?") no es esta tool: es buscar_por_rol.'),
         'input_schema': {
             'type': 'object',
@@ -89,7 +95,10 @@ TOOLS_SCHEMA = [
                         'pregunta es realmente sobre todos. `sin_asignar: true` significa que la '
                         'planilla no tiene preceptor cargado ahí — decilo así, no inventes un '
                         'nombre; `turnos_sin_nadie` lista los turnos que ese curso no tiene '
-                        'cubiertos. Los cursos van como "3° B": el año y la división por separado.'),
+                        'cubiertos. Si el `preceptor` que buscás no coincide con nadie, te '
+                        'devuelve `padron_completo` con todos los de la planilla: revisalo antes '
+                        'de decir que no está (los nombres están cargados a mano y a veces dados '
+                        'vuelta). Los cursos van como "3° B": el año y la división por separado.'),
         'input_schema': {
             'type': 'object',
             'properties': {
@@ -114,7 +123,9 @@ TOOLS_SCHEMA = [
                         'busca difuso y puede responder de tres formas: (a) el horario más `nota_fuzzy` '
                         'si hubo un ganador claro — avisale al usuario a quién resolviste; (b) '
                         '`sugerencias` con varios candidatos parecidos, y ahí tenés que preguntar cuál '
-                        'es en vez de elegir; (c) `nota` diciendo que no encontró a nadie. Que devuelva '
+                        'es en vez de elegir; (c) `padron_completo` con TODOS los nombres de los '
+                        'horarios cuando no coincide nadie — revisalo vos ahí mismo antes de decirle '
+                        'al usuario que la persona no está. Que devuelva '
                         'una sola clase, o ninguna, es un resultado válido y frecuente: informalo tal '
                         'cual, no lo rellenes.'),
         'input_schema': {
@@ -241,16 +252,29 @@ TOOLS_SCHEMA = [
     },
     {
         'name': 'leer_foto',
-        'description': ('Lee la foto que el usuario adjuntó EN ESTE TURNO y te devuelve, en texto, '
-                        'lo que dice: marca, modelo, potencia, tensión, medidas. Para etiquetas, '
-                        'chapas de características y datasheets. '
-                        'Llamala SOLO cuando necesites datos de la imagen para cargar o actualizar '
-                        'algo. Si el usuario solo quiere GUARDAR la foto en una ficha, NO la '
-                        'llames: no hace falta leerla para adjuntarla, usá adjuntar_foto. '
-                        'Tampoco la llames "por las dudas": cada lectura cuesta. '
+        'description': ('Mira la foto que el usuario adjuntó EN ESTE TURNO y te la devuelve en '
+                        'texto. Tiene dos modos, elegí según qué necesitás saber: '
+                        '"etiqueta" (el habitual) transcribe lo que está ESCRITO —marca, modelo, '
+                        'potencia, tensión, medidas— y es el que usás para cargar o actualizar '
+                        'el inventario; "analisis" describe QUÉ SE VE —qué objeto es, en qué '
+                        'estado visible está, cuántos hay— y sirve cuando la foto no tiene '
+                        'etiqueta legible o el usuario pregunta qué es o cómo está algo. '
+                        'Llamala SOLO cuando necesites datos de la imagen. Si el usuario solo '
+                        'quiere GUARDAR la foto en una ficha, NO la llames: no hace falta leerla '
+                        'para adjuntarla, usá adjuntar_foto. Tampoco la llames "por las dudas" '
+                        'ni la llames dos veces con los dos modos a ver cuál sale mejor: cada '
+                        'llamada cuesta, en cualquier modo. '
                         'Si no tenés claro para qué te mandaron la foto, preguntale al usuario '
                         'antes de leer nada.'),
-        'input_schema': {'type': 'object', 'properties': {}}
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'modo': {'type': 'string', 'enum': ['etiqueta', 'analisis'],
+                         'description': 'Default "etiqueta": transcribe lo escrito, es el que '
+                                        'alimenta el alta. Usá "analisis" solo si lo que hace '
+                                        'falta es saber qué es o cómo está el objeto.'}
+            }
+        }
     },
     {
         'name': 'listar_prestamos',
@@ -663,6 +687,43 @@ if _sin_permiso:
 TOOLS_ESCRITURA = frozenset(n for n, p in PERMISO_POR_TOOL.items() if p == 'agente.escribir')
 TOOLS_LECTURA = frozenset(PERMISO_POR_TOOL) - TOOLS_ESCRITURA
 
+# Las dos que sólo tienen sentido si en el turno hay una foto. Piden `agente.vision`
+# ADEMÁS del permiso que declaran arriba, no en su lugar: si `adjuntar_foto` cambiara su
+# permiso por `agente.vision` a secas, un dispositivo al que le tildaran visión a mano
+# podría escribir en la galería sin tener `agente.escribir`. Las dos condiciones se piden
+# juntas en `tools_permitidas`.
+TOOLS_FOTO = frozenset(['leer_foto', 'adjuntar_foto'])
+
+
+# Slugs que piden un permiso propio además del del área (hoy sólo `personas`). Sale de las
+# `ENTIDADES` de cada área y no de una lista a mano, igual que SLUGS_ENTIDAD: una entidad
+# que mañana se esconda entra sola acá.
+PERMISO_POR_SLUG = {s: crud.permiso_entidad(_modulo(s), s) for s in SLUGS_ENTIDAD
+                    if crud.permiso_entidad(_modulo(s), s)}
+
+
+def _sin_slugs(esquema, prohibidos):
+    """Copia del esquema con `prohibidos` afuera de los enum de slug.
+
+    Copia y no muta: TOOLS_SCHEMA es global y lo comparten todos los turnos de todos los
+    accesos. Un slug que no está en el enum no se le ofrece al modelo, que es la misma
+    idea que `tools_permitidas` una escala más abajo — el ejecutor rechaza igual, pero acá
+    el modelo directamente no se entera de que la entidad existe.
+    """
+    props = esquema['input_schema'].get('properties', {})
+    a_recortar = [nombre for nombre, prop in props.items()
+                  if prohibidos & set(prop.get('enum') or ())]
+    if not a_recortar:
+        return esquema
+    copia = dict(esquema)
+    copia['input_schema'] = dict(esquema['input_schema'])
+    copia['input_schema']['properties'] = dict(props)
+    for nombre in a_recortar:
+        prop = dict(props[nombre])
+        prop['enum'] = [v for v in prop['enum'] if v not in prohibidos]
+        copia['input_schema']['properties'][nombre] = prop
+    return copia
+
 
 def tools_permitidas(permisos):
     """Los esquemas que este acceso puede ver.
@@ -671,5 +732,31 @@ def tools_permitidas(permisos):
     rechazar en el ejecutor es la diferencia entre "no tenés esa herramienta" y "tenés esa
     herramienta pero no te dejo": en el primer caso el modelo ni sabe que existe, no la
     anuncia y no inventa que la usó.
+
+    Lo mismo vale para las ENTIDADES: sin `historia.personas`, las tools que toman un slug
+    viajan sin ese valor en su enum, así que el modelo no puede pedir fichas de personas
+    ni contarle al usuario que las hay.
+
+    Y lo mismo con las FOTOS: sin `agente.vision` el acceso no puede ni mandar una imagen
+    (el front no le ofrece el botón y `chat()` la rechaza), así que `leer_foto` y
+    `adjuntar_foto` no viajan. Si viajaran, el modelo ofrecería leer una foto que el
+    usuario no tiene forma de mandarle.
     """
-    return [t for t in TOOLS_SCHEMA if accesos.tiene(permisos, PERMISO_POR_TOOL[t['name']])]
+    prohibidos = {s for s, p in PERMISO_POR_SLUG.items() if not accesos.tiene(permisos, p)}
+    ve_fotos = accesos.tiene(permisos, PERMISO_VISION)
+    return [_sin_slugs(t, prohibidos) if prohibidos else t
+            for t in TOOLS_SCHEMA
+            if accesos.tiene(permisos, PERMISO_POR_TOOL[t['name']])
+            and (ve_fotos or t['name'] not in TOOLS_FOTO)]
+
+
+def slug_visible(tools, slug):
+    """¿`slug` sobrevivió en los esquemas que EFECTIVAMENTE se le mandan al modelo?
+
+    Lo usa `llm.chat_with_tools` para armar el system prompt con la misma fuente que las
+    tools, igual que hace con `escribe`: así las dos mitades del mensaje no se pueden
+    contradecir.
+    """
+    return any(slug in (prop.get('enum') or ())
+               for t in tools
+               for prop in t['input_schema'].get('properties', {}).values())

@@ -12,13 +12,15 @@ import json
 import accesos
 
 from ..db import _ahora, conectar
+from ..dominio import ve_entidad
 from ..lore import (EXCUSA_SIN_HISTORIA, _cargar_historia_completa, _historia_fmt,
                     _instruccion_tono)
+from ..vision import MODO_DEFAULT
 from .entidades import (_buscar_entidad_fmt, _desvincular_entidad, _detalle_entidad_fmt,
                         _editar_entidad, _eliminar_entidad, _listar_todos_fmt,
                         _vincular_entidad)
-from .esquemas import (PERMISO_POR_TOOL, TOOLS_ESCRITURA, TOOLS_SCHEMA,
-                       tools_permitidas)
+from .esquemas import (PERMISO_POR_TOOL, TOOLS_ESCRITURA, TOOLS_FOTO, TOOLS_SCHEMA,
+                       slug_visible, tools_permitidas)
 from .fichas import _crear_entidad
 from .fotos import _adjuntar_foto_entidad, _leer_foto_fmt
 from .hitos import _buscar_hitos_fmt
@@ -81,16 +83,29 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
             _auditar(tool_name, tool_input, None, resultado, ok=False)
         return resultado
 
+    # Segundo eje: la tool puede estar permitida y la ENTIDAD que le pasan no. `personas`
+    # pide `historia.personas` (ver crud.permiso_entidad), y eso no se puede resolver con
+    # PERMISO_POR_TOOL porque no depende de la tool sino del slug que venga en el input.
+    for clave in ('slug', 'slug_origen', 'slug_destino'):
+        slug = tool_input.get(clave)
+        if slug and not ve_entidad(slug, permisos):
+            resultado = {'ok': False,
+                         'error': f'Este acceso no puede ver ni tocar "{slug}". No se '
+                                  f'ejecutó nada: decíselo al usuario y no lo reintentes.'}
+            if not lectura:
+                _auditar(tool_name, tool_input, None, resultado, ok=False)
+            return resultado
+
     try:
         if tool_name == 'buscar_profesor':
-            resultado = _buscar_profesor(tool_input.get('query', ''))
+            resultado = _buscar_profesor(tool_input.get('query', ''), permisos)
         elif tool_name == 'buscar_por_rol':
             resultado = _buscar_por_rol_fmt(tool_input.get('rol'))
         elif tool_name == 'preceptores':
             resultado = _preceptores_fmt(tool_input.get('curso'), tool_input.get('division'),
                                          tool_input.get('preceptor'))
         elif tool_name == 'horario_profesor':
-            resultado = _horario_profesor_fmt(tool_input.get('nombre', ''))
+            resultado = _horario_profesor_fmt(tool_input.get('nombre', ''), permisos)
         elif tool_name == 'horario_curso':
             resultado = _horario_curso_fmt(tool_input.get('curso', ''), tool_input.get('division', ''))
         elif tool_name == 'horario_aula':
@@ -102,7 +117,8 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
         elif tool_name == 'listar_todos':
             resultado = _listar_todos_fmt(tool_input.get('slug', ''))
         elif tool_name == 'detalle_entidad':
-            resultado = _detalle_entidad_fmt(tool_input.get('slug', ''), tool_input.get('id', 0))
+            resultado = _detalle_entidad_fmt(tool_input.get('slug', ''),
+                                             tool_input.get('id', 0), permisos)
         elif tool_name == 'listar_prestamos':
             resultado = _listar_prestamos_fmt(tool_input.get('persona'))
         elif tool_name == 'detalle_prestamo':
@@ -140,9 +156,9 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
             resultado = _crear_entidad(
                 tool_input.get('slug', ''),
                 {k: v for k, v in tool_input.items() if k != 'slug'},
-                contexto_turno)
+                contexto_turno, permisos)
         elif tool_name == 'leer_foto':
-            resultado = _leer_foto_fmt(contexto_turno)
+            resultado = _leer_foto_fmt(contexto_turno, tool_input.get('modo', MODO_DEFAULT))
         elif tool_name == 'adjuntar_foto':
             resultado = _adjuntar_foto_entidad(
                 tool_input.get('slug', ''), tool_input.get('id', 0), contexto_turno)

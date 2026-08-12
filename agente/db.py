@@ -133,11 +133,14 @@ def _conv_guardar(historial, entidad_actual, fichas):
 
 
 def _sin_imagenes(mensajes):
-    """Copia del historial con los bloques de imagen reemplazados por una nota.
+    """Copia del historial con los bloques de imagen de `content` reemplazados por una nota.
 
-    Una foto de etiqueta en base64 son varios MB: guardarla turno a turno engorda la fila
-    y no aporta nada, porque el modelo ya la interpretó cuando llegó. (Con la cookie esto
-    directamente rompía la sesión.)
+    El bloque `type: image` es lo que ve el LLM — una foto de etiqueta en base64 son varios
+    MB, y volver a mandársela al modelo en cada turno siguiente no aporta nada porque ya la
+    interpretó cuando llegó. Por eso se limpia siempre antes de armar el contexto que se le
+    manda. La imagen que sí se guarda para repintar el chat viaja aparte, en la clave
+    `imagen` del mensaje (`{'b64', 'tipo'}`, ver `chat()`), que esta función preserva tal
+    cual: no es parte de `content` y el LLM nunca la ve.
     """
     limpios = []
     for msg in mensajes:
@@ -148,7 +151,7 @@ def _sin_imagenes(mensajes):
         bloques = [b if not (isinstance(b, dict) and b.get('type') == 'image')
                    else {'type': 'text', 'text': '[el usuario adjuntó una imagen]'}
                    for b in contenido]
-        limpios.append({'role': msg.get('role'), 'content': bloques})
+        limpios.append({**msg, 'content': bloques})
     return limpios
 
 

@@ -5,7 +5,8 @@
 //   - la pestaña a pantalla completa en /agente
 // Nunca se renderizan juntas (base.html omite el widget en esa pestaña), así que los
 // getElementById de abajo siempre encuentran uno solo. Los elementos exclusivos del
-// widget (toggle, cerrar) pueden no existir: por eso cada listener va guardado.
+// widget (toggle, cerrar) pueden no existir: por eso cada listener va guardado. Lo mismo
+// con los tres de la imagen (botón, input, chip), que sin `agente.vision` no se pintan.
 
 document.addEventListener('DOMContentLoaded', function() {
   const widget = document.getElementById('agente-widget');
@@ -22,7 +23,6 @@ document.addEventListener('DOMContentLoaded', function() {
   if (!messagesDiv || !inputField || !sendBtn) return;
 
   let imagenSeleccionada = null;
-  let imagenNombre = null;
   let enviando = false;
 
   // Pantalla táctil (celular/tablet): no se enfoca el campo solo, que abriría el teclado
@@ -172,12 +172,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
       achicarImagen(file).then(function(dataUrl) {
         imagenSeleccionada = dataUrl;
-        imagenNombre = file.name;
         imagePreview.textContent = '✓ ' + file.name.substring(0, 20);
         imagePreview.classList.add('active');
       }).catch(function() {
         imagenSeleccionada = null;
-        imagenNombre = null;
         imagePreview.textContent = '✕ no se pudo leer';
         imageFile.value = '';
       });
@@ -196,8 +194,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Un botón de confirmar de un mensaje anterior deja de valer: si el usuario siguió
     // escribiendo, lo más probable es que quiera cambiar algo, no guardar eso de antes.
     quitarConfirmaciones();
-    agregarMensaje(imagenSeleccionada ? ('📷 ' + (mensaje || imagenNombre || 'foto')) : mensaje,
-                   'user');
+    agregarMensaje(mensaje, 'user', imagenSeleccionada);
 
     // Preparar payload
     const payload = { mensaje };
@@ -205,14 +202,16 @@ document.addEventListener('DOMContentLoaded', function() {
       payload.imagen = imagenSeleccionada;
     }
 
-    // Limpiar UI
+    // Limpiar UI. Lo de la imagen puede no existir: sin `agente.vision` el template no
+    // pinta el botón ni el input (ver _agente_chat_core.html).
     inputField.value = '';
     inputField.style.height = 'auto';  // deshacer el auto-resize del textarea
     imagenSeleccionada = null;
-    imagenNombre = null;
-    imagePreview.textContent = '';
-    imagePreview.classList.remove('active');
-    imageFile.value = '';
+    if (imagePreview) {
+      imagePreview.textContent = '';
+      imagePreview.classList.remove('active');
+    }
+    if (imageFile) imageFile.value = '';
 
     // Mostrar loader
     agregarMensaje('', 'loading');
@@ -288,8 +287,9 @@ document.addEventListener('DOMContentLoaded', function() {
     this.style.height = Math.min(this.scrollHeight, tope) + 'px';
   });
 
-  // Agregar mensaje al chat
-  function agregarMensaje(texto, tipo) {
+  // Agregar mensaje al chat. `imagenUrl` (opcional, solo mensajes del usuario) pinta la
+  // foto adjunta como miniatura, clickeable para verla entera.
+  function agregarMensaje(texto, tipo, imagenUrl) {
     const msgDiv = document.createElement('div');
 
     if (tipo === 'loading') {
@@ -300,7 +300,24 @@ document.addEventListener('DOMContentLoaded', function() {
       msgDiv.innerHTML = renderMarkdown(texto);
     } else {
       msgDiv.className = 'agente-message agente-message-' + tipo;
-      msgDiv.textContent = texto;
+      if (imagenUrl) {
+        const link = document.createElement('a');
+        link.href = imagenUrl;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        const img = document.createElement('img');
+        img.src = imagenUrl;
+        img.className = 'agente-message-image';
+        img.alt = 'Imagen adjunta';
+        link.appendChild(img);
+        msgDiv.appendChild(link);
+      }
+      if (texto) {
+        // textContent y no innerHTML: es texto del usuario, no se interpreta como HTML.
+        const linea = document.createElement('div');
+        linea.textContent = texto;
+        msgDiv.appendChild(linea);
+      }
     }
 
     messagesDiv.appendChild(msgDiv);
@@ -403,7 +420,8 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(data => {
         if (!data || !data.mensajes || !data.mensajes.length) return;
         limpiarBienvenida();
-        data.mensajes.forEach(m => agregarMensaje(m.texto, m.rol === 'user' ? 'user' : 'assistant'));
+        data.mensajes.forEach(m => agregarMensaje(m.texto, m.rol === 'user' ? 'user' : 'assistant',
+                                                  m.imagen));
         // Las altas que quedaron sin confirmar recuperan su botón: si no, cambiar de
         // página dejaba las fichas vivas en el servidor y sin forma de darles OK.
         agregarConfirmaciones(data.confirmaciones);

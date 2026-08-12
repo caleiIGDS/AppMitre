@@ -986,6 +986,27 @@ body {
     box-shadow: 0 2px 4px rgba(26, 54, 93, 0.2);
 }
 
+.agente-message-user a {
+    display: block;
+    text-decoration: none;
+}
+
+/* Separa la miniatura del texto sólo cuando el usuario escribió algo junto con la foto. */
+.agente-message-user a:not(:last-child) {
+    margin-bottom: 6px;
+}
+
+/* Chica a propósito: alcanza para reconocer de qué foto se trata, y el que necesite verla
+   entra al link. Una miniatura grande empuja la conversación fuera de pantalla. */
+.agente-message-image {
+    display: block;
+    width: 120px;
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+    cursor: zoom-in;
+}
+
 .agente-message-assistant {
     background: white;
     color: var(--g-dark);

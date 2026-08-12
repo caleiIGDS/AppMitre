@@ -35,7 +35,7 @@ concreta entra por un **hook opcional**, nunca por un `if slug == '...'` acá ad
       ERROR_DUPLICADO                 {slug: mensaje} cuando un UNIQUE rechaza el guardado
 
 Cada cfg de ENTIDADES: tabla, singular, plural, descripcion, campos, columnas,
-relaciones y (opcional) campo_nombre.
+relaciones y (opcional) campo_nombre y permiso.
 """
 
 import base64
@@ -75,6 +75,35 @@ def campo_nombre(cfg_ent):
     que el resto del sistema no tenga que enterarse (ver `select`).
     """
     return cfg_ent.get('campo_nombre', 'nombre')
+
+
+def permiso_entidad(area, slug):
+    """Permiso EXTRA que pide UNA entidad, si su área lo declaró en su cfg (`permiso`).
+
+    Es lo que permite esconder una sola entidad sin partir el área en dos: `/historia`
+    sigue siendo una para todo el mundo, pero `personas` pide `historia.personas`, que
+    sólo tiene el admin. Capa 1 conoce la clave `permiso`; CUÁL permiso es lo dice el
+    área, igual que con `campo_nombre` o `PERMISO_ESCRITURA`.
+
+    Sin la clave no hay permiso extra: la entidad se ve con el permiso base del área.
+    """
+    return area.ENTIDADES.get(slug, {}).get('permiso')
+
+
+def ve_entidad(area, slug):
+    """¿El acceso de ESTE request puede ver `slug`?"""
+    permiso = permiso_entidad(area, slug)
+    return not permiso or accesos.puede(permiso)
+
+
+def relaciones_visibles(area, cfg_ent):
+    """Las relaciones M2M del formulario cuya entidad ajena este acceso puede ver.
+
+    Las que no, quedan afuera del form Y de `_guardar_form`: si sólo desaparecieran del
+    HTML, guardar un hito desde un acceso sin `historia.personas` borraría sus vínculos
+    con personas, porque el form postea la lista entera de cada relación.
+    """
+    return [rel for rel in cfg_ent['relaciones'] if ve_entidad(area, rel['slug_ajeno'])]
 
 
 def select(cfg_ent):
@@ -331,10 +360,10 @@ def agregar_foto(area, slug, id, b64, tipo):
 # Helpers de formulario
 # ---------------------------------------------------------------------------
 
-def _opciones_relaciones(area, cfg_ent, cur):
+def _opciones_relaciones(area, relaciones, cur):
     """Opciones disponibles para cada relación M2M del formulario."""
     opciones = {}
-    for rel in cfg_ent['relaciones']:
+    for rel in relaciones:
         cfg_ajeno = area.ENTIDADES[rel['slug_ajeno']]
         opciones[rel['campo']] = cur.execute(
             f"SELECT id, {campo_nombre(cfg_ajeno)} AS nombre FROM {cfg_ajeno['tabla']} "
@@ -342,10 +371,10 @@ def _opciones_relaciones(area, cfg_ent, cur):
     return opciones
 
 
-def _seleccion_relaciones(cfg_ent, id, cur):
+def _seleccion_relaciones(relaciones, id, cur):
     """IDs actualmente vinculados, por campo de relación."""
     seleccion = {}
-    for rel in cfg_ent['relaciones']:
+    for rel in relaciones:
         filas = cur.execute(
             f"SELECT {rel['col_ajena']} FROM {rel['tabla']} WHERE {rel['col_propia']} = ?",
             (id,)).fetchall()
@@ -373,7 +402,9 @@ def _guardar_form(area, slug, cfg_ent, cur, id=None):
         sets = ','.join(f"{c} = ?" for c in cols)
         cur.execute(f"UPDATE {cfg_ent['tabla']} SET {sets} WHERE id = ?", datos + [id])
 
-    for rel in cfg_ent['relaciones']:
+    # Sólo las visibles: una relación que el form no mostró tampoco se pisa (ver
+    # `relaciones_visibles`).
+    for rel in relaciones_visibles(area, cfg_ent):
         cur.execute(f"DELETE FROM {rel['tabla']} WHERE {rel['col_propia']} = ?", (id,))
         for rid in request.form.getlist(rel['campo']):
             try:
@@ -401,7 +432,8 @@ def contexto_base(bp, area):
     """Lo que todo template del área necesita. `area_nombre` y `base_template` son lo que
     permite que los templates de `templates/crud/` sirvan para cualquier área sin saber
     de cuál son."""
-    nav = [(slug, e['plural']) for slug, e in area.ENTIDADES.items()]
+    nav = [(slug, e['plural']) for slug, e in area.ENTIDADES.items()
+           if ve_entidad(area, slug)]
     nav += list(_hook(area, 'NAV_EXTRA', []))
     ctx = {
         'escuela_nombre': ESCUELA_NOMBRE,
@@ -439,12 +471,27 @@ def registrar_rutas(bp, area):
     def _contexto():
         return contexto_base(bp, area)
 
+    @bp.before_request
+    def _gate_entidad():
+        """La entidad de la URL, si pide un permiso propio (ver `permiso_entidad`).
+
+        Va acá y no en cada vista porque el slug está en la URL de TODAS: una sola puerta
+        para lista, detalle, nuevo, editar, eliminar y las dos de fotos. Corre después del
+        gate de sesión de `accesos.registrar_acceso`, que el área monta primero.
+        """
+        slug = (request.view_args or {}).get('slug')
+        permiso = permiso_entidad(area, slug) if slug else None
+        if permiso and not accesos.puede(permiso):
+            return accesos.denegar(permiso)
+
     @bp.route('/')
     def home():
         con = conectar(area)
         cur = con.cursor()
         tarjetas = []
         for slug, e in area.ENTIDADES.items():
+            if not ve_entidad(area, slug):
+                continue
             total = cur.execute(f"SELECT COUNT(*) FROM {e['tabla']}").fetchone()[0]
             tarjetas.append({'slug': slug, 'plural': e['plural'], 'singular': e['singular'],
                              'descripcion': e['descripcion'], 'total': total})
@@ -501,17 +548,19 @@ def registrar_rutas(bp, area):
                     con.commit()
                     con.close()
                     return redirect(url_for(f'{nombre}.detalle', slug=slug, id=id))
-        opciones = _opciones_relaciones(area, cfg_ent, cur)
+        relaciones = relaciones_visibles(area, cfg_ent)
+        opciones = _opciones_relaciones(area, relaciones, cur)
         con.close()
         seleccion = {rel['campo']: {int(v) for v in request.form.getlist(rel['campo'])}
-                     for rel in cfg_ent['relaciones']}
+                     for rel in relaciones}
         # En el GET el form arranca con los defaults; en un POST fallido se respeta lo tipeado.
         iniciales = _hook(area, 'valores_iniciales')
         valores = request.form if request.method == 'POST' else (
             iniciales(slug) if iniciales else {})
         return render_template(f'{nombre}/form.html', cfg=cfg_ent, slug=slug, fila=None,
                                valores=valores, opciones=opciones, seleccion=seleccion,
-                               error=error, activo=slug, **_extras('nuevo', slug))
+                               relaciones=relaciones, error=error, activo=slug,
+                               **_extras('nuevo', slug))
 
     @bp.route('/<slug>/<int:id>')
     def detalle(slug, id):
@@ -524,6 +573,10 @@ def registrar_rutas(bp, area):
             abort(404)
         secciones_hook = _hook(area, 'secciones_detalle')
         secciones = secciones_hook(slug, id, cur) if secciones_hook else []
+        # Una sección que apunta a una entidad con permiso propio no se muestra: la ficha
+        # de un hito lista sus personas, y esos nombres son justamente lo que el permiso
+        # esconde. Las que no apuntan a una entidad (gestion: "En préstamo") pasan.
+        secciones = [s for s in secciones if ve_entidad(area, s.get('slug'))]
         con.close()
         fila_dict = dict(fila)
         fila_dict['fotos'] = json.loads(fila_dict.get('fotos', '[]'))
@@ -555,13 +608,15 @@ def registrar_rutas(bp, area):
                     con.commit()
                     con.close()
                     return redirect(url_for(f'{nombre}.detalle', slug=slug, id=id))
-        opciones = _opciones_relaciones(area, cfg_ent, cur)
-        seleccion = _seleccion_relaciones(cfg_ent, id, cur)
+        relaciones = relaciones_visibles(area, cfg_ent)
+        opciones = _opciones_relaciones(area, relaciones, cur)
+        seleccion = _seleccion_relaciones(relaciones, id, cur)
         con.close()
         valores = request.form if request.method == 'POST' else fila
         return render_template(f'{nombre}/form.html', cfg=cfg_ent, slug=slug, fila=fila,
                                valores=valores, opciones=opciones, seleccion=seleccion,
-                               error=error, activo=slug, **_extras('editar', slug))
+                               relaciones=relaciones, error=error, activo=slug,
+                               **_extras('editar', slug))
 
     @bp.route('/<slug>/<int:id>/eliminar', methods=['POST'])
     @accesos.requiere(escritura)

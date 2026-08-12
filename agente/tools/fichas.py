@@ -15,7 +15,7 @@ import gestion
 from config import ahora
 
 from ..db import conectar
-from ..dominio import SLUGS_ENTIDAD, _modulo
+from ..dominio import SLUGS_ENTIDAD, _modulo, ve_entidad
 from ..padrones import _personas_cargadas, _personas_nombradas_en
 PADRON_EN_AVISO = 40       # personas con ficha que se listan enteras en un aviso de tool
 
@@ -108,17 +108,21 @@ def _tipos_en_uso():
     return [f[0] for f in filas]
 
 
-def _recordatorio_hito(borrador):
+def _recordatorio_hito(borrador, permisos):
     """Aviso para el modelo cuando una ficha de hito sale con agujeros evitables.
 
     Va acá y no (solo) en el system prompt porque llega como resultado de tool, en el
     mismo turno y con los nombres concretos: el modelo escribía "Pablo Errio y Ezequiel
     Toñanes" en el título y dejaba `protagonistas` vacío, y después le preguntaba al
     usuario la importancia que el usuario le acababa de decir.
+
+    La mitad de `protagonistas` cruza el padrón de fichas, así que sale sólo con permiso
+    para ver `personas`: si no, el aviso le pondría delante al modelo justo los nombres
+    que el permiso esconde. El resto de los avisos (nivel, fecha, tipo) no depende de eso.
     """
     avisos = []
 
-    if not borrador.get('protagonistas'):
+    if not borrador.get('protagonistas') and ve_entidad('personas', permisos):
         texto = (borrador.get('titulo', '') + ' ' + borrador.get('descripcion', ''))
         nombradas = _personas_nombradas_en(texto)
         if nombradas:
@@ -158,7 +162,7 @@ def _recordatorio_hito(borrador):
     return avisos
 
 
-def _ficha_confirmacion(slug, borrador, token, contexto_turno):
+def _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos):
     """Paso 1 del alta: la ficha para mostrarle al usuario. No escribe nada."""
     cfg = _modulo(slug).ENTIDADES.get(slug) or {}
     etiquetas = {c['nombre']: c.get('label', c['nombre']) for c in cfg.get('campos', [])}
@@ -203,13 +207,13 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno):
     if slug == 'recursos':
         resultado['tipos_en_uso'] = _tipos_en_uso()
     if slug == 'hitos':
-        avisos = _recordatorio_hito(borrador)
+        avisos = _recordatorio_hito(borrador, permisos)
         if avisos:
             resultado['antes_de_mostrar'] = avisos
     return resultado
 
 
-def _crear_entidad(slug, campos_dict, contexto_turno=None):
+def _crear_entidad(slug, campos_dict, contexto_turno=None, permisos=frozenset()):
     """Alta de recurso/conjunto/actividad/hito/persona, en DOS PASOS.
 
     Primera llamada con un juego de campos: no toca la base, devuelve la ficha para que el
@@ -249,7 +253,7 @@ def _crear_entidad(slug, campos_dict, contexto_turno=None):
     # (Una mostrada en ESTE turno tampoco cuenta: hasta que el loop no termina, el usuario
     # no vio una sola palabra — por eso se anotan aparte, en `fichas_mostradas`.)
     if token not in previas:
-        return _ficha_confirmacion(slug, borrador, token, contexto_turno)
+        return _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos)
 
     # Se consume: si el asistente vuelve a llamar con los mismos campos, es un alta nueva
     # y arranca otra vez por la ficha, en vez de duplicar el recurso en silencio.

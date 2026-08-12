@@ -28,8 +28,15 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'historia.db'
 # Permisos que declara el área al catálogo de `accesos`. Ver gestion.py para el criterio
 # del verbo.
 PERMISOS = [
-    ('historia.leer', 'Ver hitos y personas', 'leer'),
-    ('historia.editar', 'Cargar, editar y eliminar hitos y personas', 'escribir'),
+    ('historia.leer', 'Ver la línea del tiempo de hitos', 'leer'),
+    ('historia.editar', 'Cargar, editar y eliminar hitos', 'escribir'),
+    # Verbo 'admin' = no entra en ningún preset de interno (ver accesos.PERFILES, que los
+    # arma por verbo): sólo lo tiene el admin, por el comodín '*'. Las semblanzas son
+    # sobre personas concretas de la escuela y no son para el que consulta el inventario.
+    # El permiso lo cuelga la entidad `personas` con la clave `permiso` de su cfg, así que
+    # cubre de una vez ver el listado, la ficha, el formulario y la sección de personas
+    # dentro de un hito — ver crud.permiso_entidad.
+    ('historia.personas', 'Ver y editar las fichas de personas', 'admin'),
 ]
 GRUPO_PERMISOS = 'Historia institucional'
 PERMISO_LECTURA = 'historia.leer'
@@ -78,7 +85,10 @@ ENTIDADES = {
         'tabla': 'personas',
         'singular': 'Persona',
         'plural': 'Personas',
-        'descripcion': 'Quiénes hacen y hicieron la escuela: docentes, preceptores, no docentes. Una semblanza por persona y los hilos que la conectan con hitos.',
+        # Entidad con permiso propio: sin `historia.personas` no se ve ni el listado, ni
+        # una ficha, ni el bloque de personas de un hito. Ver crud.permiso_entidad.
+        'permiso': 'historia.personas',
+        'descripcion':'Quiénes hacen y hicieron la escuela: docentes, preceptores, no docentes. Una semblanza por persona y los hilos que la conectan con hitos.',
         'campos': [
             {'nombre': 'nombre', 'label': 'Nombre y apellido', 'tipo': 'text', 'requerido': True},
             {'nombre': 'descripcion', 'label': 'Semblanza', 'tipo': 'textarea',

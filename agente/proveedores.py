@@ -84,12 +84,19 @@ def _es_verdadero(valor):
 # contra ~2.000 de la llamada del lector — y de paso el chat sigue en su proveedor de
 # siempre, sin degradar el tool-calling ni obligar a que tenga visión.
 #
-# Default: Gemini 2.5 Flash-Lite por su tier gratuito (1.000 requests/día). Se habla por
-# el endpoint compatible con OpenAI, así que alcanza el paquete `openai` que ya es
-# dependencia obligatoria, y cambiando las tres variables se apunta a OpenAI, Groq o un
-# Ollama local sin tocar código.
+# Default: el Flash-Lite de Gemini, por su tier gratuito. Se habla por el endpoint
+# compatible con OpenAI, así que alcanza el paquete `openai` que ya es dependencia
+# obligatoria, y cambiando las tres variables se apunta a OpenAI, Groq o un Ollama local
+# sin tocar código.
+#
+# OJO AL ACTUALIZAR ESTE DEFAULT: Google saca de circulación los modelos viejos para las
+# keys NUEVAS antes de apagarlos para las que ya los venían usando. `gemini-2.5-flash-lite`
+# —el default hasta 2026-08-12— siguió andando acá mientras devolvía 404 "no longer
+# available to new users" en cualquier instalación nueva. Y como `_leer_imagen` se traga
+# toda excepción, eso se veía como "no se pudo leer la foto", nunca como un modelo muerto.
+# Si una instalación nueva no lee fotos, lo primero a descartar es este string.
 
-VISION_MODEL_DEFAULT = 'gemini-2.5-flash-lite'
+VISION_MODEL_DEFAULT = 'gemini-3.5-flash-lite'
 VISION_API_BASE_DEFAULT = 'https://generativelanguage.googleapis.com/v1beta/openai/'
 
 _vision_config_cache = False  # False = sin leer todavía; None = no hay lector configurado

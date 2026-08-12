@@ -29,7 +29,9 @@
     </div>
     {% endfor %}
 
-    {% for rel in cfg.relaciones %}
+    {# `relaciones` y no `cfg.relaciones`: crud.py ya sacó las que apuntan a una entidad
+       que este acceso no puede ver (ver crud.relaciones_visibles). #}
+    {% for rel in relaciones %}
     <fieldset class="g-rel">
         <legend>{{ rel.label | upper }}</legend>
         {% if opciones[rel.campo] %}

@@ -5,6 +5,8 @@ necesita saber si vive en `gestion` o en `historia`.
 """
 import os
 
+import accesos
+import crud
 import gestion
 import historia
 
@@ -25,3 +27,19 @@ SLUGS_ENTIDAD = list(gestion.ENTIDADES) + list(historia.ENTIDADES)
 def _modulo(slug):
     """Módulo (gestion o historia) dueño de `slug`, para resolver conexión/ENTIDADES."""
     return historia if slug in historia.ENTIDADES else gestion
+
+
+def ve_entidad(slug, permisos):
+    """¿Un acceso con estos `permisos` puede ver `slug`?
+
+    Una entidad puede pedir un permiso propio además del del área (hoy `personas`, que es
+    sólo del admin — ver `crud.permiso_entidad`). El agente lee las mismas tablas que la
+    web, así que tiene que respetar lo mismo: si no, esconder `personas` de `/historia` no
+    serviría de nada, alcanzaría con preguntárselo a Emilio.
+
+    Toma los permisos por parámetro y no de la sesión porque el agente los resuelve una vez
+    por turno y los baja al ejecutor, fuera del ciclo request/response (igual que
+    `accesos.tiene`). Un slug desconocido no pide nada: quien lo valida es cada tool.
+    """
+    permiso = crud.permiso_entidad(_modulo(slug), slug) if slug else None
+    return not permiso or accesos.tiene(permisos, permiso)

@@ -17,9 +17,10 @@ horarios, crear recursos, fotografiar etiquetas y cargarlas, gestionar préstamo
 hitos y personas. Todo con auditoría de escrituras en `agente_log`.
 
 **Acceso**: dos vistas del mismo chat, ambas detrás del gate de `accesos.py`
-(`accesos.registrar_acceso(bp, 'agente.leer', ...)`). El asistente declara **tres permisos
-propios** —`agente.leer`, `agente.escribir`, `agente.auditar`— y **con cuáles tenga cambia lo que el
-agente es**: con solo `agente.leer` las diez tools de escritura ni se le mandan al modelo. Ver
+(`accesos.registrar_acceso(bp, 'agente.leer', ...)`). El asistente declara **cuatro permisos
+propios** —`agente.leer`, `agente.escribir`, `agente.vision`, `agente.auditar`— y **con cuáles tenga
+cambia lo que el agente es**: con solo `agente.leer` las diez tools de escritura ni se le mandan al
+modelo, y sin `agente.vision` no hay botón para adjuntar fotos ni tools que las miren. Ver
 "Permisos" más abajo y `agent_docs/accesos.md`.
 - Botón "🤖 ASISTENTE" en el header de `/gestion` y `/historia` → widget flotante, para
   consultar sin salir de la página en la que se está.
@@ -51,6 +52,9 @@ El agente cruza **dos DBs de dominio** más los horarios:
 - **Las relaciones M2M son siempre intra-módulo**: desde que se eliminó `proyecto_recursos` no
   hay ninguna que cruce recursos ↔ historia, así que `_vincular_entidad` resuelve todo con el
   módulo del slug de origen.
+- **Una entidad puede pedir un permiso propio** y entonces no está en `SLUGS_ENTIDAD` *para ese
+  acceso*: `personas` sale de los enum y del prompt sin `historia.personas`. Lo resuelve
+  `dominio.ve_entidad(slug, permisos)` — ver "El segundo eje" más abajo.
 - **`agente.DB_PATH` sigue siendo `gestion.db`**: las tablas propias del agente
   (`agente_log`, `agente_conversaciones`, `agente_fotos_pendientes`) viven ahí — son
   auditoría y sesión, no datos de dominio.
@@ -88,7 +92,7 @@ Las dependencias van en una sola dirección y **no hay ciclos**:
   lo que pida (tools de lectura y escritura), repite hasta respuesta final, audita
   escrituras en `agente_log`. `mensaje` puede venir vacío **si viene `imagen`** (mandar solo
   la foto de una etiqueta es un caso normal); vacío y sin foto es `400`. Ver "Alta desde foto".
-- **`GET /agente/historial`** — devuelve `{mensajes: [{rol, texto}], confirmaciones}`
+- **`GET /agente/historial`** — devuelve `{mensajes: [{rol, texto, imagen?}], confirmaciones}`
   para repintar el chat al cargar la página. `gestion-agente.js` lo llama en el
   `DOMContentLoaded` (`cargarHistorial()`). **Hace falta desde que la conversación pasó a
   `gestion.db`**: el servidor la recuerda entre páginas, pero el chat se dibuja de cero en
@@ -97,6 +101,8 @@ Las dependencias van en una sola dirección y **no hay ciclos**:
   vivas en el servidor y sin forma de darles OK. `_texto_visible()` aplana los bloques de
   contenido y saca lo que `chat()` le agrega al mensaje del usuario y él no escribió: el
   `(refiriéndote a: X)` y el `[Hora de este mensaje: ...]` (ver "La hora en cada mensaje").
+  `imagen` es la foto adjunta de ese turno como data URL, y sólo viene si el mensaje la
+  tenía: la arma `_mensaje_visible()` (ver "La foto se ve en el chat").
 - **`POST /agente/confirmar`** — acepta `{token}` de una ficha de alta pendiente y
   la guarda sin pasar por el modelo. `409` si el token ya se usó, se reinició la
   conversación, o quedó desplazado por fichas más nuevas. Ver "Alta con ficha de
@@ -124,12 +130,17 @@ caso normal y un 401 pelado ahí es un callejón sin salida.
 
 Mismo motor de accesos y mismo `next` scopeado al prefijo propio (contra open redirect) que
 `/gestion` e `/historia`. Con acceso pero **sin** el permiso de la ruta la respuesta es **403**, no
-el login. Dos rutas piden más que el permiso base:
+el login. Tres casos piden más que el permiso base:
 
 | ruta | permiso | por qué |
 |---|---|---|
 | `/agente/confirmar` | `agente.escribir` | **escribe sin pasar por el LLM**: filtrar las tools no la protege en absoluto |
 | `/agente/log` | `agente.auditar` | la auditoría es de administración |
+| `/agente/chat` **con `imagen`** | `agente.vision` | gasta la API de visión; sin el permiso devuelve `403` |
+
+El de `/chat` es un chequeo dentro de la vista y no un decorador porque la ruta **sí** está
+permitida — lo que no está permitido es un campo del body. Un acceso sin `agente.vision` chatea
+normalmente; sólo mandar una imagen le da `403`, que el front ya traduce a un mensaje legible.
 
 **Context processor propio**: `agente.bp` construye su `_contexto_base()` localmente
 (`escuela_nombre`/`escuela_logo`/`escuela_version` salen de `config.py`). Antes delegaba en
@@ -201,20 +212,28 @@ Qué permiso pide cada una está en **`PERMISO_POR_TOOL`** (`agente/tools/esquem
 derivan de ahí. Antes esa clasificación estaba copiada a mano en tres lugares. Una tool nueva sin
 entrada en el dict hace fallar el import, a propósito.
 
+Las dos de foto (`TOOLS_FOTO` = `leer_foto` + `adjuntar_foto`) piden **además** `agente.vision`, que
+es de administración: sin él no viajan, y el usuario tampoco tiene botón para mandar una foto. El
+permiso extra se pide *además* y no *en lugar del* declarado, para que `adjuntar_foto` no pueda
+escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
+
 **Lectura** — `agente.leer` (no se auditan):
 - `buscar_profesor(query)` — resolución difusa de nombre, **sobre el padrón de los
   horarios**: docentes de `clases` **y personal no docente** (ver abajo). Cada candidato lleva
   su `rol` si tiene cargo no docente. Si el nombre también
   coincide con una persona con ficha, devuelve
   `{docentes, personas_con_ficha, aviso}` en vez de la lista pelada (ver "Dos padrones"); si
-  coincide con un preceptor, agrega `preceptores` + `aviso_preceptores`
+  coincide con un preceptor, agrega `preceptores` + `aviso_preceptores`. Si **no** coincide
+  nadie devuelve `padron_completo`, ver "Cuando no coincide nadie"
 - `buscar_por_rol(rol?)` — personal no docente **por cargo**, no por nombre ("¿qué EMATP hay?").
   Sin `rol` devuelve el padrón entero; con un `rol` que no matchea lo devuelve igual en
   `padron_completo`, ver "Buscar por cargo"
 - `preceptores(curso?, division?, preceptor?)` — preceptor ↔ curso, ya digerido: titular y
-  contraturno separados, ver "Los preceptores entran por su propia tool"
+  contraturno separados, ver "Los preceptores entran por su propia tool". Un `preceptor` que no
+  matchea también devuelve `padron_completo`
 - `horario_profesor(nombre)` / `horario_curso(curso, division)` / `horario_aula(aula)`
-  — horarios agrupados por día. `horario_profesor` cubre también al personal no docente
+  — horarios agrupados por día. `horario_profesor` cubre también al personal no docente, y
+  devuelve `padron_completo` cuando no encuentra a nadie
 - `aulas_libres()` — aulas desocupadas ahora, agrupadas por piso
 - `buscar_entidad(slug, query)` — búsqueda de recursos/conjuntos/actividades (gestion.db) y
   de hitos/personas (historia.db); el módulo lo resuelve `_modulo(slug)`
@@ -224,7 +243,8 @@ entrada en el dict hace fallar el import, a propósito.
 - `detalle_entidad(slug, id)` — detalle completo + relaciones (ver "Claves de `relaciones`")
 - `listar_prestamos(persona?)` / `detalle_prestamo(id)` — estados de préstamos
 - `consultar_historia(tema)` — lore de la escuela y guiños internos, ver abajo
-- `leer_foto()` — lee la foto adjuntada en ESTE turno y devuelve lo que dice, en texto. No
+- `leer_foto(modo?)` — mira la foto adjuntada en ESTE turno y la devuelve en texto. `modo`
+  `etiqueta` (default) transcribe lo escrito; `analisis` describe qué se ve. No
   toca la base (por eso está acá) pero **sí gasta la API de visión**, así que el prompt le
   pide llamarla solo cuando necesita los datos, nunca para adjuntar. Ver "Alta desde foto"
 
@@ -267,15 +287,37 @@ Tres capas, de afuera hacia adentro:
    **fail-closed**: un call site nuevo que se olvide de pasar permisos falla cerrado y ruidoso, no
    abierto y en silencio. Un rechazo de escritura **se audita**: si aparece en `/agente/log`, o
    alguien forjó el request o el filtrado tiene un agujero.
-3. **El system prompt** — `construir_system_prompt(..., escribe=)`, ver abajo.
+3. **El system prompt** — `construir_system_prompt(..., escribe=, ve_personas=, ve_fotos=)`, ver abajo.
 
 Los cuatro call sites de `ejecutar_tool` pasan permisos: los dos del loop Anthropic, el de
 `_loop_openai` y el de `rutas.confirmar`.
 
 Las tools genéricas por slug (`crear_entidad`, `eliminar_entidad`, `buscar_entidad`…) cruzan gestión
 e historia, así que **no** se pueden mapear a `gestion.editar`/`historia.editar` desde el esquema —
-de ahí que el agente tenga permisos propios. Si algún día hace falta el corte fino por área, el
-lugar es `ejecutar_tool` mirando `_modulo(slug)`, no el esquema.
+de ahí que el agente tenga permisos propios.
+
+#### El segundo eje: la ENTIDAD, no la tool
+
+`agente.leer` habilita `buscar_entidad`; no dice **sobre qué**. Un área puede pedir un permiso extra
+para una entidad sola (hoy `personas`, que es sólo del admin — ver `agent_docs/crud-motor.md`), y eso
+no se puede expresar en `PERMISO_POR_TOOL` porque no depende de la tool sino del slug que venga en
+el input. El agente lee las mismas tablas que la web, así que esconder `personas` sólo en `/historia`
+no serviría de nada: alcanzaría con preguntárselo a Emilio.
+
+`agente.dominio.ve_entidad(slug, permisos)` es la pregunta, y va por `crud.permiso_entidad`: acá
+tampoco se nombra ninguna clave. Se aplica en las mismas tres capas:
+
+| dónde | qué hace |
+|---|---|
+| `tools_permitidas()` | recorta el slug de **los enum** de cada esquema (`_sin_slugs`, que copia — `TOOLS_SCHEMA` es global) |
+| `ejecutar_tool` | rechaza `slug` / `slug_origen` / `slug_destino` prohibidos, antes del `try` |
+| `construir_system_prompt(ve_personas=)` | saca el área 6 (PERSONAS) y los dos bullets de `_HITOS` que hablan de fichas |
+
+Además hay cuatro lugares que devuelven nombres de personas **sin recibir el slug**, y por eso toman
+`permisos` explícito: `_buscar_profesor` (el cruce `personas_con_ficha`), `_detalle_entidad_fmt` (las
+personas de un hito), `_recordatorio_hito` (el padrón completo en el aviso de `crear_entidad`) y
+`rutas._enlazar_protagonistas` (que además escribe el vínculo al confirmar un hito). Sin el permiso,
+los cuatro se comportan como antes de que existiera el cruce con `personas`.
 
 ### El system prompt se recorta con las tools (`prompt.py`)
 
@@ -289,6 +331,16 @@ está viendo. El prompt de un acceso de consulta queda en ~55% del otro.
 `escribe` lo decide `llm.chat_with_tools` mirando **las tools que efectivamente se mandaron**, no
 los permisos del usuario: así es imposible que el prompt hable de dar de alta mientras las tools de
 alta no viajaron. Con `escribe=True` el resultado es byte a byte el prompt de antes de partirlo.
+
+`ve_personas` sale del mismo lugar y por la misma razón, con `esquemas.slug_visible(tools,
+'personas')`: si el slug no sobrevivió en ningún enum, el prompt no describe el área 6 ni ofrece dar
+de alta una persona. El encabezado pasa a decir "Tenés cinco áreas a cargo" — el número también es
+parte de lo que el modelo lee.
+
+`ve_fotos` es el tercero, y sale de `TOOLS_FOTO & {las tools que se mandaron}`: sin `agente.vision`
+no van `_FOTOS`, `_ETIQUETA`, `_FOTOS_SOLO_LECTURA` ni `_REGLA_FOTO`. No es sólo ahorro de tokens —
+explicarle qué hacer con una foto a un acceso que **no tiene el botón para mandarla** lo llevaría a
+ofrecer algo imposible. Las reglas se renumeran solas también acá.
 
 Esto también apaga un problema conocido: `_escritura_no_ejecutada` (`filtros.py`) marca cualquier
 "✅" sin escritura exitosa. Para un acceso de consulta **ninguna** escritura corre nunca, así que
@@ -447,6 +499,48 @@ cargos y le pide al modelo reconocer la sigla ahí. Es el mismo camino de dos ni
 abreviaturas habría que mantenerlo cada vez que la escuela crea un cargo, y el padrón entero cuesta
 ~60 tokens.
 
+### Cuando no coincide nadie: `padron_completo`
+
+Las búsquedas de persona **no pueden terminar en una lista vacía**. Una lista vacía el modelo la
+lee como un hecho y le contesta al usuario que la persona no está en el sistema — que es
+exactamente lo que "no encontré" no significa, porque `_puntaje_nombre` compara **letras**: un
+apodo, un nombre dado vuelta o una errata grande no matchean.
+
+`buscar_profesor` devolvía `[]` pelado, sin nota ni listado, y `horario_profesor` cerraba con
+`"No existe ningún docente ni personal no docente llamado X ni parecido"` — una afirmación
+categórica, en la única de las tres búsquedas de persona que no tenía segundo nivel. Ahora las
+tres devuelven el padrón entero en la **misma respuesta**:
+
+| tool | qué lista | tamaño |
+|---|---|---|
+| `buscar_profesor` (cero candidatos, cero cruces) | los 344 nombres de los horarios | ~1.670 tokens |
+| `horario_profesor` (rama final, la que afirmaba que no existe) | ídem | ~1.670 tokens |
+| `preceptores(preceptor=…)` sin match | los 46 de la planilla | ~210 tokens |
+
+Tres cosas que sostienen el caso:
+
+- **Va inline, no por una tool aparte.** Mismo criterio que `buscar_por_rol` y contrario a
+  `buscar_entidad` → `listar_todos`: un round-trip extra re-procesa ~8.050 tokens de piso, así
+  que pedir la lista cuesta ~5x mandarla. La diferencia con `buscar_entidad` es que acá el
+  fracaso es un **binario limpio** (cero candidatos), no un "ninguno es exacto" — así que la
+  rama cara no se paga nunca en un turno que encuentra algo. Ver `dev-log/DECISIONS.md`
+  2026-08-12.
+- **Tope `LIMITE_PADRON` (400)**, el mismo de `LIMITE_LISTADO_COMPLETO`: arriba de eso va la
+  `nota` sin la lista, y el texto se adapta (`if padron else ''`). Hoy son 344 y el margen es
+  chico.
+- **La nota nombra los otros dos padrones** (`_otros_padrones`). El de horarios es uno de tres,
+  y decir "no está" habiendo mirado solo éste repite el mismo error un escalón más arriba. El
+  puntero a `buscar_entidad('personas', …)` sale **solo con permiso para verlas**
+  (`ve_entidad('personas', permisos)`): mandar al modelo a una tool que no se le entregó es
+  peor que callarse. Por eso `_horario_profesor_fmt` recibe `permisos` — no cambia **qué**
+  horario devuelve (los horarios son consulta abierta), solo cómo redacta esta nota.
+
+El guardrail es de prompt y por eso vive en tres lugares que se refuerzan, igual que el de
+`listar_todos`: la `nota` de cada tool, la descripción del esquema (un campo que llega sin estar
+anunciado el modelo lo ignora) y la regla de sinónimos del system prompt. Esa regla terminaba en
+*"Para profesores el equivalente es `buscar_profesor`"* — un paralelismo que no existía, porque
+`buscar_profesor` es el **primer** nivel. Ahora dice que el segundo llega solo.
+
 ### Los preceptores entran por su propia tool (`preceptores`)
 
 Sus nombres siguen **fuera del padrón difuso** —están cargados sin normalizar ("ANGELINA",
@@ -488,7 +582,8 @@ curso:
   propósito, porque fusionar a dos personas distintas es el error caro.
 
 Tres modos: un curso (`curso` + `division`, o `curso` solo para todo el año), un preceptor (difuso,
-con `sugerencias` si empata — igual protocolo que `_horario_profesor_fmt`), o **nada**, que devuelve
+con `sugerencias` si empata y con `padron_completo` si no matchea nadie — igual protocolo que
+`_horario_profesor_fmt`, ver "Cuando no coincide nadie"), o **nada**, que devuelve
 la planilla entera (~4.000 tokens; la descripción del esquema pide usarlo solo si la pregunta es
 realmente sobre todos). Los campos de turno le sumaron ~29% a ese modo — 55 de los 64 cursos tienen
 algún turno vacío, así que `turnos_sin_nadie` aparece en casi todos. Se paga igual: una ficha que
@@ -529,6 +624,10 @@ ofrecía esas tres, mientras "Natalia Boo Fiad" estaba cargada con ficha.
 | `buscar_profesor(query)` | horarios | `personas_con_ficha` + `aviso` (la respuesta pasa de lista a dict) |
 | `buscar_entidad('personas', query)` | fichas | `en_horarios` + `aviso_horarios` |
 
+Y si **ninguno** de los dos encuentra nada, ninguna de las dos devuelve una lista vacía a secas:
+`buscar_entidad` manda a `listar_todos`, `buscar_profesor` adjunta el padrón (ver "Cuando no
+coincide nadie").
+
 Las dos solo agregan la clave **cuando hay coincidencia real**, así que los turnos normales
 —horarios por un lado, inventario por el otro— no cambian ni suman ruido. Y los dos avisos
 son distintos según el caso: si `personas` no encontró nada pero los horarios sí, el aviso le
@@ -554,6 +653,11 @@ un hito cruza su `protagonistas` contra `personas` con la misma función y escri
 el LLM, así que en el momento en que el hito se escribe el agente no tiene ningún turno para
 llamar a `vincular_entidad`, y el vínculo no lo creaba nadie. Solo vincula personas ya
 cargadas; nunca crea una ficha de persona nueva.
+
+**Todo este cruce vive detrás de `historia.personas`**: sin ese permiso, `_buscar_profesor` devuelve
+sólo los docentes, el aviso del padrón en `_recordatorio_hito` no sale y `_enlazar_protagonistas` no
+escribe ni un vínculo (el hito se guarda igual, con sus `protagonistas` en texto). Es el mismo dato
+que esconde `personas` de `/historia` — ver "El segundo eje: la ENTIDAD, no la tool".
 
 ### La hora en cada mensaje
 
@@ -661,6 +765,10 @@ DeepSeek (proveedor por defecto) es más frágil que con Claude:
 - la `instruccion` del resultado dice "estos son TODOS; si ninguno es, decilo — no ofrezcas
   el más parecido como si fuera el correcto";
 - la regla 3 del system prompt fija el orden de los tres pasos.
+
+**Con personas el protocolo es el mismo pero se resuelve en una sola llamada**: la tool devuelve
+el padrón entero en la misma respuesta en vez de mandar a pedirlo, igual que `buscar_por_rol`.
+El motivo del corte distinto y los números están en "Cuando no coincide nadie", más arriba.
 
 ### Historia de la escuela (`consultar_historia`)
 
@@ -845,12 +953,13 @@ solar, escriben "tenemos 5" y el recurso queda cargado sin tipear especificacion
    `_adjuntar_foto_pendiente()` la pasa a la galería del registro nuevo con
    `crud.agregar_foto()` — el mismo camino que usa la subida manual desde el detalle.
 
-#### Los dos caminos de una foto
+#### Los tres caminos de una foto
 
 | El usuario quiere… | Tool | ¿Cuesta visión? |
 |---|---|---|
 | Guardarla en una ficha que ya existe ("guardá esta foto en el taladro") | `adjuntar_foto(slug, id)` | **No** |
 | Cargar o actualizar el inventario con lo que dice la etiqueta | `leer_foto()` → `crear_entidad` / `editar_entidad` | Sí (~US$0,0004) |
+| Saber qué es o cómo está algo sin etiqueta legible | `leer_foto(modo='analisis')` | Sí (misma llamada, tope más alto) |
 | No se entiende | — | No: el prompt le pide **preguntar**, no leer por las dudas |
 
 **Leer es una tool, no un paso automático.** La primera versión leía toda foto al entrar a
@@ -881,10 +990,59 @@ del JSON de `fichas` porque esa columna se reescribe entera en cada turno: con h
 escritura. Las filas sin confirmar se barren a los `CONVERSACION_DIAS` días, y `/reset` las
 borra junto con la conversación.
 
-La imagen **sigue sin persistirse en el historial** (`_sin_imagenes`) — lo que queda ahí es
-la lectura en texto, que sí sirve en los turnos siguientes ("sí, tenemos 3"). Al repintar el
-chat, `_texto_visible()` reemplaza ese bloque por "📷 (foto)": es una pista para el modelo,
-no algo que el usuario haya tipeado.
+#### La foto se ve en el chat
+
+La imagen se guarda **fuera de `content`**, en la clave `imagen` del mensaje
+(`{'b64', 'tipo'}`). Es la separación que importa: lo que se persiste **para mostrar** no es
+lo mismo que lo que se le manda **al modelo**.
+
+| | Dónde vive | Quién lo ve |
+|---|---|---|
+| Bloque `type: image` | dentro de `content` | el LLM, y **sólo en el turno en que llegó** |
+| Clave `imagen` | al lado de `content` | el chat, para siempre |
+
+`_sin_imagenes()` limpia lo primero antes de persistir y preserva lo segundo (`{**msg, ...}`),
+igual que `_foto_en_pasado()`. Y `chat()` le pasa al LLM `[{'role', 'content'}]` recortado, así
+que la clave `imagen` **nunca** viaja a la API: el costo que motivó el diseño original —
+reenviar ~1.700 tokens de foto en cada turno siguiente— sigue sin pagarse. Lo que cambia es
+sólo la fila de SQLite, que es el mismo patrón que ya usa la galería de un recurso
+(`crud.agregar_foto`) y está acotado por `HISTORIAL_GUARDADO`: al rotar el historial las
+fotos viejas se van solas.
+
+Del lado del front, `agregarMensaje(texto, tipo, imagenUrl)` pinta la miniatura dentro de un
+`<a target="_blank">` (click → foto entera) y el texto debajo. Antes de esto la burbuja decía
+`📷 nombre-del-archivo.jpg` y la foto no se veía nunca.
+
+**Lo que el usuario no escribió no se muestra**: `_texto_visible()` corta el aviso de foto
+entero (con la lectura de la etiqueta pegada, si la hubo) y también `TEXTO_FOTO_SOLA` —el
+"Te mando esta foto." que `chat()` inventa cuando mandan una imagen sin texto, porque un
+mensaje vacío no es un turno válido para el modelo. Una foto sola queda como una foto sola.
+Por eso `historial()` filtra por `texto or imagen` y no sólo por `texto`: si filtrara por
+texto, ese mensaje desaparecería del chat.
+
+#### La foto dura un turno, la lectura no
+
+**Son dos avisos, no uno**, y esto es lo que hace que un alta se pueda terminar en el turno
+siguiente:
+
+| Constante | Cuándo | Qué dice |
+|---|---|---|
+| `AVISO_FOTO_ACTUAL` | Durante el turno, con la imagen en `contexto_turno` | "hay una foto, todavía no la vio nadie, llamá a `leer_foto`" |
+| `AVISO_FOTO_VIEJA` | Al **persistir**, vía `_foto_en_pasado()` | "esa foto YA NO ESTÁ, no llames a `leer_foto`" + **la lectura completa** |
+
+El aviso en presente quedaba guardado tal cual, y en el turno siguiente el modelo leía "hay
+una foto sin ver, llamá a `leer_foto`", llamaba, y la tool le contestaba que no hay ninguna —
+porque la foto muere con el turno. Un "dale, creá" después de una ficha se iba entero en esa
+vuelta perdida.
+
+**Y la lectura ahora se persiste.** `_leer_foto_fmt()` la deja en
+`contexto_turno['lectura_foto']` y `chat()` la pega al mensaje guardado. Hacía falta porque
+**los resultados de las tools no quedan en el historial**: sin esto, lo único que sobrevivía
+de la etiqueta era lo que el modelo hubiera repetido en su prosa, y al turno siguiente se
+quedaba sin marca, sin modelo y sin specs para armar la ficha.
+
+`_texto_visible()` corta desde cualquiera de los dos avisos hasta el final del mensaje, así
+que la lectura pegada tampoco se le muestra al usuario como si la hubiera escrito él.
 
 **Reglas en el system prompt** (sección "FOTOS DE DATASHEETS…"): el agente trabaja **solo con
 lo que dice la lectura**, nunca completando con lo que sabe de esa marca/modelo; la cantidad
@@ -899,15 +1057,37 @@ papel), se cuenta qué se ve y se pregunta qué hacer, no se da de alta sola.
 #### El lector de imágenes (`_get_vision_config`, `_leer_imagen`)
 
 Config **aparte de la del chat**: `AGENTE_VISION_API_KEY` (fallback `GEMINI_API_KEY`),
-`AGENTE_VISION_MODEL` (default `gemini-2.5-flash-lite`), `AGENTE_VISION_API_BASE` (default
+`AGENTE_VISION_MODEL` (default `gemini-3.5-flash-lite`), `AGENTE_VISION_API_BASE` (default
 el endpoint OpenAI-compatible de Google). Sin API key, `_get_vision_config()` devuelve `None`
 = no hay lector.
 
-Es una llamada suelta, **sin tools**, con `PROMPT_LECTOR_IMAGEN` (solo lectura: transcribir lo
-que se lee, no completar con conocimiento del producto, avisar si no se lee) y `max_tokens`
-500. Todo lo que viene *después* de leer —cantidad, buscar duplicados, circuito de ficha—
-sigue en el system prompt del agente, que es quien tiene las tools. **Solo se dispara desde la
-tool `leer_foto`**: nunca automáticamente al llegar una foto.
+Es una llamada suelta, **sin tools**. Todo lo que viene *después* de leer —cantidad, buscar
+duplicados, circuito de ficha— sigue en el system prompt del agente, que es quien tiene las
+tools. **Solo se dispara desde la tool `leer_foto`**: nunca automáticamente al llegar una foto.
+
+**Dos modos, que son dos prompts sobre la misma llamada y el mismo modelo** (`MODOS` en
+`vision.py`, elegidos con el parámetro `modo` de `leer_foto`):
+
+| Modo | Prompt | `max_tokens` | Para qué |
+|---|---|---|---|
+| `etiqueta` (default) | `PROMPT_LECTOR_IMAGEN` | 500 | Transcribir lo escrito. Es el que alimenta el alta |
+| `analisis` | `PROMPT_ANALISIS_IMAGEN` | 900 | Describir qué objeto es, su estado visible y cuántos hay |
+
+Los dos comparten las mismas anclas —solo lo que se ve, la duda explícita, nunca completar con
+lo que el modelo sepa del producto— pero **se mantienen separados a propósito**: en `etiqueta`
+la regla "quedate corto antes que inventar" es lo que hace confiable el alta, y un prompt que
+además pidiera describir le abriría la puerta a completar la chapa de memoria. Un `modo`
+desconocido cae al default en vez de fallar: lo elige el modelo, y una alucinación en el nombre
+del modo no tiene por qué costar la foto.
+
+**Tener dos modos no relaja el gate**: `leer_foto` se sigue llamando solo cuando hace falta la
+imagen, una vez por foto. El prompt le prohíbe explícitamente probar los dos modos a ver cuál
+sale mejor — cada llamada cuesta igual.
+
+**Una descripción no es un alta.** El resultado de `analisis` vuelve con una `instruccion`
+distinta a la de `etiqueta`: sirve para contestar qué es o cómo está algo, no para llenar una
+ficha (ahí no hay marca ni modelo confiables). Si el usuario quiere cargarlo igual, el prompt
+le pide una foto de la etiqueta o los datos dictados.
 
 **Por qué separado y no `AGENTE_PROVIDER=anthropic`**: el system prompt más `TOOLS_SCHEMA` son
 ~15.000 tokens que viajan en **cada** turno del agente; la llamada del lector son ~2.000. Con
@@ -980,7 +1160,8 @@ agente_fotos_pendientes (token PK, sid, b64, tipo, fecha)
 `agente_conversaciones`: una fila por navegador. La conversación vive acá y no en la cookie
 de Flask porque el historial la pasaba de los ~4 KB que aguanta un navegador y la cookie se
 descartaba **sin avisar**, dejando al usuario deslogueado y sin conversación. En la cookie
-queda solo `agente_sid`.
+queda solo `agente_sid`. Los mensajes que traían una foto la guardan en su clave `imagen`
+(`{'b64', 'tipo'}`), fuera de `content` — ver "La foto se ve en el chat".
 
 `agente_fotos_pendientes`: la foto de la que salió una ficha, esperando que se confirme el
 alta (ver "Alta desde foto"). La clave es el token de contenido de `_token_ficha()`, no el
@@ -1035,12 +1216,21 @@ que las usa — no en `init_db()`, porque el server puede estar meses sin reinic
   claro en vez de fallar en silencio. Ollama no la usa.
 - **Env var** `AGENTE_MODEL` — modelo a usar. Defaults por proveedor: `deepseek-v4-pro`,
   `claude-haiku-4-5-20251001`, `mixtral-8x7b-32768`, `gpt-3.5-turbo`, `mistral`.
+- **`llm.MAX_TOKENS_SALIDA` = 4096** — tope de salida por vuelta del loop, en los dos loops.
+  **No lo bajes.** El default es un modelo de razonamiento (`deepseek-v4-pro`) y ese
+  razonamiento se cobra como tokens de salida: medido, gasta 700–1600 antes de emitir la
+  primera tool call. Estuvo en 1024 y el síntoma era **"Sin respuesta"** — `finish_reason`
+  volvía `'length'` con el contenido vacío y el loop lo traducía a ese literal. Se notaba
+  solo en los turnos difíciles (armar la ficha de un alta entraba justo por encima del
+  tope; contestar "¿qué preceptor tiene 1° C?" entraba holgado), que es lo que lo hacía
+  parecer intermitente. No es un tope de costo: solo se paga lo generado. Cuando aun así
+  se corta, `_loop_openai` distingue el caso y devuelve un aviso legible en vez del literal.
 - **Env var** `AGENTE_VISION` — `1` para declarar que el modelo del **chat** lee imágenes.
   Anthropic ya viene en `1`; esto es para gpt-4o u ollama+llava, donde depende del modelo.
   Solo se consulta si **no** hay lector configurado (rama 2 de `chat()`).
 - **Env vars del lector de fotos**, independientes de todo lo anterior:
   `AGENTE_VISION_API_KEY` (fallback `GEMINI_API_KEY`) — sin ella no hay lectura de etiquetas;
-  `AGENTE_VISION_MODEL` (default `gemini-2.5-flash-lite`);
+  `AGENTE_VISION_MODEL` (default `gemini-3.5-flash-lite`);
   `AGENTE_VISION_API_BASE` (default el endpoint OpenAI-compatible de Google). Con la key
   puesta, el alta desde foto anda con **cualquier** `AGENTE_PROVIDER`, incluido el default.
 - **Env var** `AGENTE_API_BASE` — para APIs custom (Ollama, self-hosted).

@@ -291,8 +291,12 @@ def _es_pagina():
     return paginas is None or request.endpoint in paginas
 
 
-def _denegar(permiso, como_json=False):
+def denegar(permiso, como_json=False):
     """403 para alguien YA identificado al que le falta un permiso.
+
+    Es pública porque no todo permiso se puede marcar de antemano con `requiere()`: el de
+    una entidad con permiso propio depende del slug de la URL, y quien lo resuelve es
+    `crud.registrar_rutas` en tiempo de request.
 
     403 y no un redirect al login a propósito: mandar al login a quien ya entró es un
     bucle, y encima si acierta la clave se convierte en admin — se le concedería de más
@@ -342,7 +346,7 @@ def registrar_acceso(bp, permiso, endpoints_pagina=None, endpoint_default='home'
         # El permiso de esta ruta puntual si `requiere()` la marcó; si no, el base.
         necesario = getattr(request.url_rule, 'mitre_permiso', None) or permiso
         if not puede(necesario):
-            return _denegar(necesario)
+            return denegar(necesario)
 
     @bp.route('/login', methods=['GET', 'POST'])
     def login():
@@ -384,7 +388,7 @@ def requiere(permiso, como_json=False):
         @functools.wraps(f)
         def wrap(*args, **kwargs):
             if not puede(permiso):
-                return _denegar(permiso, como_json)
+                return denegar(permiso, como_json)
             return f(*args, **kwargs)
         wrap.mitre_permiso = permiso
         return wrap

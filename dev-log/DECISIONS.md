@@ -4,6 +4,110 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-08-12] — El primer permiso que protege una factura, no un dato
+
+**Contexto**: mandar una foto estaba habilitado con `agente.leer`, o sea para cualquier dispositivo invitado — el mismo permiso que hace falta para escribir "¿a qué hora tiene clase Pérez?". Es la única cosa del chat que llama a una **API aparte** (~2.000 tokens por lectura, ver la entrada del 2026-08-09), y no tiene tope: nada impide sacar veinte fotos seguidas. El resto de las tools sólo leen SQLite.
+
+**La decisión es `agente.vision` con verbo `admin`**, no con verbo `leer`. Los perfiles se arman por verbo, así que `admin` es exactamente "no entra en ningún preset de interno": los dispositivos ya invitados no lo tienen, no hubo que migrar a nadie, y el admin puede igual tildárselo a mano a alguien puntual (queda con perfil `custom`). Es el mismo mecanismo que `agente.auditar` y `historia.personas`.
+
+**Lo que lo hace distinto de los permisos que ya había**: los demás protegen *datos* — quién ve las semblanzas de `personas`, quién puede borrar un préstamo. Este protege **gasto**. Vale la pena decirlo porque invita a un error de razonamiento: como no hay dato sensible atrás, es tentador implementarlo sólo escondiendo el botón. Esconder el botón no baja ninguna factura; el POST se arma en dos líneas.
+
+**Por eso corta en tres capas y la del medio es la que vale**: el template no pinta el botón (cosmética, y es lo que el usuario pidió), `chat()` devuelve `403` si igual llega una `imagen` (**el corte real**), y `tools_permitidas()` no manda `leer_foto` ni `adjuntar_foto`. La tercera no es redundante: sin ella el modelo le ofrecería a un acceso sin visión que mande una foto que no tiene forma de mandar — es el mismo criterio de siempre acá, no prometer lo que no se puede hacer.
+
+**El permiso extra se pide ADEMÁS del declarado, no en su lugar.** Mapear `adjuntar_foto` a `agente.vision` a secas era más corto y abría un agujero: un dispositivo con visión tildada a mano habría podido escribir en la galería de un recurso sin tener `agente.escribir`. `PERMISO_POR_TOOL` sigue siendo la fuente de verdad de qué hace cada tool; `TOOLS_FOTO` es una condición encima.
+
+**El prompt se recorta con las tools, no con los permisos** — la regla que ya regía para `escribe` y `ve_personas`, ahora también para `ve_fotos`. Sin las tools de foto no van los bloques que explican qué hacer con una foto. No es sólo ahorro: dejarlos habría dejado al modelo describiendo un circuito que del otro lado no existe.
+
+**Lo que queda afuera a propósito**: las fotos que un acceso mandó *antes* de este cambio se le siguen mostrando al repintar su historial. Es su propia conversación y ya está pagada; borrarlas sería tirar contexto que el usuario vio, para tapar un gasto que ya ocurrió.
+
+---
+
+## [2026-08-12] — La foto se guarda para mostrarla, no para volver a mandársela al modelo
+
+**Contexto**: la burbuja del usuario mostraba `📷 nombre-del-archivo.jpg` y la foto no se veía nunca — ni recién mandada ni al volver al chat. El diseño original (2026-08-09, "La foto se lee en una llamada aparte") la descartaba a propósito en `_sin_imagenes()`, con un motivo que sigue siendo correcto: una foto de 1568 px son ~1.700 tokens y reenviarla en cada turno siguiente es pagar por algo que el modelo ya interpretó.
+
+**La decisión es separar dos cosas que estaban pegadas**: lo que se persiste **para mostrar** y lo que se le manda **al modelo**. La imagen ahora vive en la clave `imagen` del mensaje, hermana de `content`; el bloque `type: image` de `content` se sigue limpiando igual que siempre, y `chat()` recorta a `role`+`content` antes de llamar al LLM. **El costo que motivó el diseño viejo no se paga**: la clave `imagen` no viaja a ninguna API. Lo único que crece es la fila de SQLite.
+
+**Por qué la fila de SQLite no es un problema y la cookie sí lo era.** Es la misma distinción que ya se había hecho al mudar la conversación de la cookie a `gestion.db`: una cookie de más de ~4 KB el navegador **la descarta sin avisar** y el usuario se queda deslogueado; una columna JSON con unos MB no le molesta a nadie. Es exactamente el patrón que la galería de un recurso usa hace rato (`crud.agregar_foto`: array de `{b64, tipo, fecha}` en una columna). Y está acotado solo: `HISTORIAL_GUARDADO` (60 mensajes) rota el historial, así que las fotos viejas se van sin que nadie las barra.
+
+**Se descartó una tabla `agente_fotos_chat`** simétrica con `agente_fotos_pendientes`. Esa tabla existe por una razón que acá no aplica: la foto pendiente tiene que sobrevivir *más allá* de la conversación (el alta se confirma después, desde otra página) y su clave es el token de la ficha, no el turno. La foto del chat tiene exactamente la vida del mensaje que la trajo: guardarla aparte sería inventar un ciclo de vida propio y con él el problema de mantener las dos cosas sincronizadas cuando el historial rota o entra `/reset`.
+
+**El bug que casi se cuela: reconstruir un dict es tirar lo que no conocés.** `_sin_imagenes()` y `_foto_en_pasado()` armaban `{'role': …, 'content': …}` en vez de copiar el mensaje. Las dos corren en cadena antes de persistir, así que cualquiera de las dos borraba la clave nueva y la foto no llegaba nunca a la DB — sin error, sin log, simplemente no estaba. Cambiadas a `{**msg, 'content': …}`.
+
+**Lo que el usuario no escribió no se muestra, y eso ahora incluye "Te mando esta foto."** (`TEXTO_FOTO_SOLA`). Es el texto que `chat()` inventa cuando mandan una imagen sin escribir, porque un mensaje vacío no es un turno válido — la misma familia que el `(refiriéndote a: X)` y el sello de hora, y se filtra en el mismo lugar. Sin esto había una inconsistencia visible: al mandar la foto la burbuja quedaba limpia, y al recargar aparecía una frase que el usuario nunca tipeó. La consecuencia es que `_texto_visible()` puede devolver `''` para un mensaje real, y por eso `historial()` filtra por `texto or imagen`: filtrar por texto solo hacía desaparecer del chat las fotos mandadas sin comentario.
+
+---
+
+## [2026-08-12] — El padrón de personas viaja inline, no por una segunda tool
+
+**Contexto**: preguntando por una persona que la búsqueda difusa no puntuaba, el agente contestaba que no estaba en el sistema. `buscar_profesor` devolvía `[]` pelado y `horario_profesor` cerraba con `"No existe ningún docente ni personal no docente llamado X ni parecido"` — una afirmación categórica que el modelo repetía como un hecho. Era la única de las tres búsquedas de persona **sin segundo nivel**: `buscar_entidad` manda a `listar_todos`, `buscar_por_rol` devuelve el padrón de cargos, y `buscar_profesor` no tenía nada. Peor: la regla de sinónimos del system prompt prometía el paralelismo (*"Para profesores el equivalente es `buscar_profesor`"*) cuando `buscar_profesor` es el **primer** nivel, no el segundo.
+
+**Se descartó una tool `listar_personal()`**, que era la opción simétrica con `listar_todos` y la primera que se consideró. Los números la matan: el padrón entero son 344 nombres = ~1.670 tokens, y el piso que se re-procesa en **cada** round-trip de tool es ~8.050 (medición de 2026-08-08). Pedir la lista cuesta ~5x mandarla.
+
+**Por qué acá se inlinea y en `buscar_entidad` no**, si el argumento de costo es el mismo: porque el fracaso tiene otra forma. En `buscar_entidad` la difusa casi siempre devuelve *algo* (~0.6 de similitud), así que "falló" es el juicio blando "ninguno es `exacto`" — inlinear el catálogo ahí lo pagarían también los turnos que encontraron lo que buscaban. En el padrón de horarios el fracaso es un **binario limpio**: cero candidatos sobre el umbral. La rama cara existe sólo en el callejón sin salida y no se paga nunca en un turno normal. Es el mismo criterio que ya había elegido `buscar_por_rol` con sus cuatro cargos, ahora aplicado a una lista 85 veces más grande.
+
+**Cuándo se da vuelta**: `LIMITE_PADRON = 400` (el mismo valor que `LIMITE_LISTADO_COMPLETO`, por la misma razón). Arriba de eso la nota va sin la lista, y el texto se adapta solo. Hoy son 344, así que el margen es de una jubilación y dos suplencias: si la escuela crece, esto se activa y habrá que decidir entre subir el tope o volver a la tool aparte — que a esa altura ya podría convenir, porque la lista se acercaría al costo del round-trip.
+
+**El puntero a las fichas es condicional al permiso.** La nota del caso vacío recuerda que el de horarios es uno de tres padrones, pero sólo nombra `buscar_entidad('personas', …)` si `ve_entidad('personas', permisos)`: mandar al modelo a una tool que no se le entregó es peor que callarse, porque la intenta, se come el error y a veces igual contesta como si hubiera funcionado (es el mismo motivo por el que las tools de escritura no se prohíben sino que no se mandan). Por eso `_horario_profesor_fmt` recibe `permisos` sin que eso cambie qué horario devuelve.
+
+---
+
+## [2026-08-12] — El permiso puede colgar de una entidad, no sólo de un área
+
+**Contexto**: había que dejar las fichas de `personas` sólo para el admin. El motivo no es nuevo, estaba escrito hace rato en `agent_docs/historia-institucional.md`: la `descripcion` de una persona es un juicio en prosa sobre alguien real de la escuela, y buena parte del padrón son alumnos. Eso no es información de consulta como un horario o el stock del pañol. Mientras `personas` se veía con `historia.leer`, cualquier dispositivo invitado a consultar el inventario leía las semblanzas.
+
+**Se descartó partir `/historia` en dos áreas.** Era la opción obvia dado que hasta acá un permiso protegía un área entera, y es la peor: `personas` e `hitos` comparten `historia.db`, la M2M `persona_hitos` y el hook `secciones_detalle`, así que separarlas significaba dos blueprints sobre la misma DB, o una FK cruzando de un área a otra — justo lo que el proyecto no tiene en ningún lado. Además duplicaba `base.html`, `home.html` y el login para esconder una tabla.
+
+**La clave `permiso` en la cfg de la entidad es el mismo mecanismo que `campo_nombre`.** Capa 1 aprende un concepto más ("una entidad puede pedir un permiso extra") y sigue sin conocer ninguna clave concreta; el área pone cuál. Ese es el criterio de siempre acá, y el precio fue bajo: tres funciones en `crud.py` y un `before_request`. El `before_request` en vez de un chequeo por vista no es ahorro de tipeo, es que **el slug está en la URL de las siete rutas**: una sola puerta no se puede olvidar en la ruta que se agregue mañana.
+
+**El bug que casi se cuela: esconder un fieldset no es sacarlo del guardado.** El formulario postea la lista entera de cada relación M2M, y `_guardar_form` hace `DELETE` + `INSERT`. Un fieldset escondido sólo en el template hacía que guardar un hito desde un acceso sin el permiso le **borrara los vínculos con personas**, en silencio y sin que el que guardó supiera que existían. Por eso `relaciones_visibles` filtra las dos cosas a la vez y `form.html` itera la lista que le pasa la vista. (El camino del agente, `crud.guardar_entidad`, ya era seguro: sólo toca las relaciones que vengan explícitas.)
+
+**Verbo `'admin'`, no un perfil nuevo.** `PERFILES` se define por verbos y sólo enumera `'leer'` y `'escribir'`, así que un permiso con verbo `'admin'` no entra en ningún preset de interno y lo tiene el admin por el comodín — como `accesos.admin` o `agente.auditar`. Nadie queda migrado y no hubo que tocar el gate. El admin igual puede tildarlo a mano para alguien puntual; ahí el acceso queda como perfil `custom`, que es el mecanismo que ya existía.
+
+**Esconderlo sólo en la web no habría servido de nada.** El asistente lee las mismas tablas: sin el corte del lado del agente, alcanzaba con preguntarle a Emilio. Y hay dos formas de cortarlo — no darle la tool, o rechazarla — que este proyecto ya distinguió antes (ver 2026-08-11): acá el equivalente a "no darle la tool" es **sacar el slug de los enum** de los esquemas, porque las tools genéricas siguen haciendo falta para recursos e hitos. El modelo no se entera de que `personas` existe, y el prompt se recorta de lo mismo que las tools para que las dos mitades del mensaje no puedan contradecirse.
+
+**Los cuatro cruces laterales fueron el trabajo real.** Bloquear el slug es una línea; lo que filtraba nombres eran los lugares que devuelven personas **sin recibir el slug**: el cruce de padrones de `buscar_profesor`, las relaciones de `detalle_entidad('hitos')`, el padrón completo que `_recordatorio_hito` le pone delante al modelo, y `_enlazar_protagonistas`, que además escribe el vínculo al confirmar un hito sin pasar por el LLM. Es el recordatorio de que un permiso se rompe por donde el dato sale de costado, no por la puerta principal.
+
+---
+
+## [2026-08-12] — El tope de salida es presupuesto de razonamiento, no de respuesta
+
+**Contexto**: `max_tokens=1024` estuvo hardcodeado en los dos loops desde que existe el agente y parecía de sobra — ninguna respuesta del asistente se acerca a las 1000 palabras. La intuición era "es el largo máximo de lo que escribe". Con un modelo de razonamiento eso es falso: `deepseek-v4-pro` piensa antes de emitir y **ese pensamiento se cobra como tokens de salida**. Medido en el turno que fallaba, gastaba entre 700 y 1600 tokens antes de largar la primera tool call.
+
+**Por qué costó tanto encontrarlo.** El corte no se veía como un error. La API devuelve `finish_reason='length'` con el contenido vacío y sin excepción, y el loop hacía `(msg.content or '').strip() or 'Sin respuesta'` — o sea, traducía una respuesta truncada al mismo literal que una respuesta genuinamente vacía. Y como el gasto de razonamiento depende de la dificultad del turno, fallaba de forma aparentemente intermitente: "¿qué preceptor tiene 1° C?" entraba holgado, armar la ficha de un alta no. El usuario lo vivía como "a veces el bot no contesta".
+
+**La lección general, que vale para el próximo proveedor**: con modelos de razonamiento, `max_tokens` no es un tope de verbosidad sino un presupuesto que el modelo consume pensando. Ponerlo justo para la respuesta esperada garantiza que los turnos difíciles —los que más razonamiento piden— sean exactamente los que fallen. No es un tope de costo: solo se paga lo generado, así que dejarlo holgado no cuesta nada.
+
+**Y ningún camino silencioso debe terminar en un literal ambiguo.** `'Sin respuesta'` era indistinguible entre tres causas distintas. Ahora el corte por tope tiene su propio mensaje. Es el mismo patrón que el `except` del lector de imágenes, que también se tragaba un 404 de modelo dado de baja: cuando una falla se colapsa en un mensaje genérico, deja de ser diagnosticable.
+
+---
+
+## [2026-08-12] — La foto dura un turno; la lectura tiene que durar la conversación
+
+**Contexto**: los resultados de las tools no se persisten en el historial (es deliberado: son ruido y pesan). Pero la lectura de una etiqueta no es un resultado cualquiera — es el único registro de datos que **no están en ningún otro lado**, porque la imagen tampoco se guarda. Se perdía apenas terminaba el turno, y lo único que sobrevivía era lo que el modelo hubiera repetido en su prosa. En un alta que se confirma en el turno siguiente ("dale, creá"), eso significa quedarse sin marca, sin modelo y sin specs.
+
+**El aviso de la foto además mentía.** Se guardaba en presente — "adjuntó una foto en este turno, todavía no la vio nadie, llamá a `leer_foto`" — y esa frase seguía ahí tres turnos después. El modelo obedecía: llamaba a `leer_foto`, la tool le decía que no hay ninguna foto, y la vuelta se perdía. Un aviso que era correcto cuando se escribió se volvió una instrucción falsa por el solo hecho de persistir.
+
+**Por eso son dos textos y la sustitución ocurre al guardar, no al construir.** Durante el turno el presente es la verdad: la imagen está en `contexto_turno`. Lo que no puede quedar es esa misma frase en el historial. Se evaluó reescribir el aviso al leer el historial en vez de al guardarlo, y se descartó: hacerlo una vez al persistir es más barato y deja el dato ya correcto en la base, en vez de depender de que todos los lectores apliquen la misma transformación.
+
+**Regla general**: cualquier texto que se le inyecta al modelo con deícticos —"este turno", "recién", "todavía"— tiene que tener una versión en pasado antes de entrar al historial, o va a mentir en el turno siguiente.
+
+---
+
+## [2026-08-12] — Dos prompts de visión, no uno que haga las dos cosas
+
+**Contexto**: se quería que el asistente pudiera *analizar* una foto (qué objeto es, en qué estado está) y no solo transcribir etiquetas. La primera lectura del problema fue "hace falta otra IA": es falsa. `gemini-2.5-flash-lite` —y cualquier modelo que se ponga en `AGENTE_VISION_MODEL`— es multimodal y siempre pudo describir la imagen. Lo que lo acotaba a transcribir era `PROMPT_LECTOR_IMAGEN`, que dice "ÚNICAMENTE lo que se lee en ella". El cambio es de prompt, no de proveedor: misma key, mismo modelo, misma llamada.
+
+**Por qué dos prompts y no uno solo que transcriba y además describa.** Porque son dos exigencias opuestas y fusionarlas rompe la que importa. En el modo etiqueta la regla que hace confiable el alta es "preferí quedarte corto antes que inventar": si en la chapa no dice la potencia, la potencia no va. Un prompt que en el mismo aliento pida describir el objeto le da permiso para hablar de lo que no está escrito, y de ahí a completar la chapa con lo que el modelo sabe de esa marca hay un paso — que es exactamente el error que no se puede tener en una ficha de inventario. Separados, cada modo tiene una sola instrucción y no hay tensión que negociar.
+
+**El modo lo elige el modelo, no una heurística nuestra.** Se evaluó decidirlo en el server mirando el texto del usuario y se descartó: el modelo ya tiene que decidir *si* mirar la foto (caso A/B/C del system prompt), y esa decisión y la del modo son la misma. Un `modo` desconocido cae al default en vez de fallar, porque una alucinación en el nombre no tiene por qué costar la foto.
+
+**Tener dos modos no relajó el gate.** El riesgo del cambio era ese: que "ahora también puede describir" se leyera como permiso para mirar toda foto que entra. Sigue valiendo lo de siempre —leer es una tool, no un paso automático— y se agregó una prohibición explícita de llamar dos veces con los dos modos a ver cuál sale mejor. Cada llamada cuesta igual en los dos modos.
+
+**Una descripción no da de alta.** El resultado del modo análisis vuelve con una instrucción que se lo prohíbe al agente: ahí no hay marca ni modelo confiables, y una ficha armada sobre "me pareció que era una amoladora" contamina el inventario con datos que nadie escribió nunca. Para cargar hace falta la etiqueta o el dictado del usuario.
+
+---
+
 ## [2026-08-11] — El acceso interno se da por dispositivo, no por contraseña
 
 **Contexto**: hacía falta darle el asistente en modo consulta a gente que no es staff — el alumno encargado de un curso, por ejemplo. Con una contraseña compartida eso es imposible en la práctica: se propaga por WhatsApp en una tarde, y rotarla obliga a avisarle de nuevo a todos.
