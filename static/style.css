@@ -1281,6 +1281,161 @@ input:checked + .tech-slider:before {
 body.is-fullscreen .header-actions { display: none; }
 
 /* ════════════════════════════════════════════════════════════════════════
+   MENÚ DE ÁREAS (☰) — sólo para quien tiene sesión
+   El markup lo pinta Jinja con un link por permiso y no existe para el público:
+   sin acceso no se renderiza nada de esto. El comportamiento está en
+   `static/areas-nav.js`.
+
+   A diferencia del sidebar de gestion.css (que es sólo ≤900px y MUEVE nodos del
+   header), éste vive a cualquier ancho y su contenido es propio: el header del SPA
+   ya está cargado y sumarle cuatro links más lo desbordaría.
+   ════════════════════════════════════════════════════════════════════════ */
+.tech-btn-menu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.15s, color 0.15s;
+}
+
+.tech-btn-menu:hover { background: var(--accent); color: #fff; }
+
+.tech-menu-bars,
+.tech-menu-bars::before,
+.tech-menu-bars::after {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: currentColor;
+}
+
+.tech-menu-bars { position: relative; }
+
+.tech-menu-bars::before,
+.tech-menu-bars::after {
+    content: '';
+    position: absolute;
+    left: 0;
+}
+
+.tech-menu-bars::before { top: -6px; }
+.tech-menu-bars::after { top: 6px; }
+
+/* ---------- Panel lateral ---------- */
+.areas-panel {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10001;
+    width: min(82vw, 320px);
+    background: var(--primary);
+    border-left: 4px solid var(--accent);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3);
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+}
+
+body.areas-abierto .areas-panel { transform: none; }
+
+.areas-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(15, 23, 42, 0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+body.areas-abierto .areas-overlay { opacity: 1; pointer-events: auto; }
+
+/* Con el panel abierto la página de atrás no scrollea. */
+body.areas-abierto { overflow: hidden; }
+
+.areas-panel-head {
+    position: sticky;
+    top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 16px;
+    background: var(--primary);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.areas-panel-title {
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 3px;
+}
+
+.areas-panel-close {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #fff;
+    font-family: var(--font-ui);
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.areas-panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px;
+    /* Barra gestual del iPhone. */
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+.areas-panel-body a {
+    display: block;
+    padding: 12px 14px;
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-decoration: none;
+    text-transform: uppercase;
+    transition: background 0.15s, color 0.15s;
+}
+
+.areas-panel-body a:hover { background: var(--accent); color: #fff; }
+
+/* SALIR se despega del resto: no es una sección más. */
+.areas-panel-body .areas-salir {
+    margin-top: 10px;
+    border-color: rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.areas-panel-body .areas-salir:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+/* En kiosko (F11) se va el header entero, así que el ☰ no queda a la vista; el panel
+   y su fondo se esconden también por si estaba abierto al entrar al modo. */
+body.is-fullscreen .areas-panel,
+body.is-fullscreen .areas-overlay { display: none; }
+
+/* ════════════════════════════════════════════════════════════════════════
    TEMA OSCURO — variables (nocturno)
    Tokens extra: --text (texto), --panel (header/inputs), --block-bg (bloques)
    ════════════════════════════════════════════════════════════════════════ */

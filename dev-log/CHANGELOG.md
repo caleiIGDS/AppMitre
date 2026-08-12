@@ -49,7 +49,14 @@ y destructivo (reconstruye `escuela.db` entera).
 `actualizar.py`, y a la copia de seguridad del paso 1. Nace vacía: hasta la primera invitación el
 único acceso es el admin por clave.
 
-**8. `config.PRODUCCION` y `config.SESION_DIAS` (nuevos)**. En producción `SECRET_KEY` y
+**8. Ruta `/salir` nueva a nivel app** (`salir_general`) — cierra sesión y vuelve a `/`. Convive con
+el `/salir` de cada blueprint, que sigue devolviendo al login de su área. La usa el menú del SPA.
+
+**9. El SPA de horarios muestra un ☰ con las áreas internas cuando hay sesión** — `templates/index.html`
++ `static/areas-nav.js` (nuevo) + clases `.tech-btn-menu` / `.areas-*` en `style.css`. Para el público
+no se renderiza nada: la página es idéntica a antes. No usa `mobile-nav.js` (ver `frontend-ui.md`).
+
+**10. `config.PRODUCCION` y `config.SESION_DIAS` (nuevos)**. En producción `SECRET_KEY` y
 `GESTION_CLAVE` pasan a ser **obligatorias** (antes tenían default público). La sesión es permanente
 y deslizante: se acabó tener que re-tipear la clave en cada visita.
 

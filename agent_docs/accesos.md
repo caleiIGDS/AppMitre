@@ -139,6 +139,19 @@ En los templates:
 `templates/crud/lista.html` y `detalle.html` usan `permiso_escritura` para que el motor siga sin
 nombrar ningún permiso concreto: la clave la pone el área.
 
+### Cómo se llega a las áreas desde la home
+
+El SPA de horarios (`/`) muestra un **☰ con las áreas internas, pero sólo si hay sesión** — para el
+público la página es idéntica a como era, sin botón, sin panel y sin el script. Cada link va por su
+permiso, así que el admin ve las cuatro áreas y un interno de consulta ve sólo las suyas. Es lo que
+evita que alguien con acceso tenga que guardarse `/agente` en favoritos: le alcanza con la dirección
+de la escuela. Detalle de implementación en `agent_docs/frontend-ui.md`.
+
+`/salir` (a nivel app) cierra la sesión y vuelve a `/`. Convive con el `/salir` de cada área, que
+devuelve al login de esa área: eso está bien para el staff que se va a volver a loguear ahí, pero
+mandar a `/gestion/login` a alguien que entró por link y no tiene ninguna contraseña sería un
+callejón.
+
 ## El agente: no tener la tool, no tenerla prohibida
 
 `agente/tools/esquemas.py` declara `PERMISO_POR_TOOL` para las 25 tools (15 `agente.leer`, 10

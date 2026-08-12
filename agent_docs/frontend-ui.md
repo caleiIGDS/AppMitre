@@ -147,6 +147,39 @@ Clase base: `.materia-bloque`
 
 ---
 
+## Menú de áreas (☰) — sólo con sesión
+
+El SPA de horarios es público y **para el público no cambió nada**: sin sesión no se renderiza ni
+el botón ni el panel ni el `<script>`, así que la página es byte a byte la de antes. Con sesión
+aparece un `☰` al lado del botón de tema, que abre un panel lateral desde la derecha con las áreas
+internas.
+
+**El markup lo pinta Jinja, no el JS** (`templates/index.html`, al final del `<body>`), con un
+`{% if puede('...') %}` por link. Es lo que hace que nunca viaje al navegador un link que el
+usuario no puede usar: el admin ve las cuatro áreas, un interno de consulta ve sólo las suyas.
+`SALIR` apunta a `url_for('salir_general')` — el logout de la app, que vuelve a `/`, y no al
+`/salir` de un área, que devolvería a un login donde un interno no tiene contraseña que poner.
+
+**No es el mismo mecanismo que `mobile-nav.js`**, y la diferencia importa si algún día se
+unifican:
+
+| | `mobile-nav.js` (`/gestion`, `/historia`, `/agente`) | `areas-nav.js` (SPA de horarios) |
+|---|---|---|
+| Cuándo | sólo ≤900px | a cualquier ancho |
+| Qué contiene | **mueve** `.g-nav` y `.g-header-actions` que ya existen | markup propio, renderizado en el server |
+| Por qué | preservar los listeners de `gestion.js` y `gestion-agente.js` | son links puros, no hay nada que preservar |
+| Lado | izquierda | derecha |
+
+En el SPA no se optó por meter los links en el header porque ya tiene logo, versión, tema y
+ACTUALIZAR: cuatro botones más lo desbordan en cualquier notebook.
+
+**Clases** (en `style.css`, con los tokens del SPA — respetan el tema nocturno):
+`.tech-btn-menu` + `.tech-menu-bars` (el botón, mismo tamaño y borde que `.tech-btn-tema`),
+`.areas-panel` / `.areas-overlay` / `.areas-panel-head` / `.areas-panel-body` / `.areas-salir`.
+El estado abierto es `body.areas-abierto`, que además bloquea el scroll de atrás.
+
+---
+
 ## Modo kiosco (fullscreen)
 
 Activado con F11 via `document.documentElement.requestFullscreen()`. El event `fullscreenchange` agrega/quita la clase `is-fullscreen` en `body`.
@@ -160,6 +193,10 @@ body.is-fullscreen .tech-tags { display: none !important; }
 body.is-fullscreen #tab-profesor { display: none !important; }
 body.is-fullscreen #tab-aula { display: none !important; }
 body.is-fullscreen #tab-curso { display: none !important; }
+/* El ☰ se va con el header; el panel y su fondo se esconden aparte por si estaba
+   abierto al entrar al modo kiosco. */
+body.is-fullscreen .areas-panel,
+body.is-fullscreen .areas-overlay { display: none; }
 ```
 
 El tab "TIEMPO REAL" y su contenido sí son visibles (`.tech-live-module`, `.sys-clock`).

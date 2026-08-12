@@ -648,6 +648,18 @@ def registrar_app(app, modulos):
 
     app.register_blueprint(bp)
 
+    @app.route('/salir')
+    def salir_general():
+        """Cerrar sesión y volver a la home pública.
+
+        Cada área tiene su `/salir`, que devuelve a SU login — bien para el staff que se
+        va a volver a loguear ahí. Éste es para el menú del SPA de horarios: mandar a
+        `/gestion/login` a alguien que entró por link y no tiene ninguna contraseña sería
+        un callejón.
+        """
+        session.clear()
+        return redirect('/')
+
     # El canje va sobre `app` y no sobre un blueprint con gate: es justamente la puerta
     # por la que entra alguien que todavía no tiene ningún acceso.
     @app.route('/acceso/<token>', methods=['GET'])
