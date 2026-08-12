@@ -147,36 +147,55 @@ Clase base: `.materia-bloque`
 
 ---
 
-## Menú de áreas (☰) — sólo con sesión
+## Menú de áreas (☰) — en las cinco páginas, sólo con sesión
 
-El SPA de horarios es público y **para el público no cambió nada**: sin sesión no se renderiza ni
-el botón ni el panel ni el `<script>`, así que la página es byte a byte la de antes. Con sesión
-aparece un `☰` al lado del botón de tema, que abre un panel lateral desde la derecha con las áreas
-internas.
+Todas las páginas tienen un **☰** que abre un panel lateral con las otras áreas. Cada página omite
+la suya, y cada link va por su permiso, así que el admin las ve todas y un interno de consulta ve
+sólo las que puede abrir. **Sin sesión no se renderiza nada**: la home pública es byte a byte la de
+antes.
 
-**El markup lo pinta Jinja, no el JS** (`templates/index.html`, al final del `<body>`), con un
-`{% if puede('...') %}` por link. Es lo que hace que nunca viaje al navegador un link que el
-usuario no puede usar: el admin ve las cuatro áreas, un interno de consulta ve sólo las suyas.
+### Qué va dónde
+
+El criterio, después de mover los links cruzados al ☰:
+
+| | contenido |
+|---|---|
+| `.g-nav` | las **entidades de esta área** (RECURSOS, CONJUNTOS, HITOS…). El 🤖 ASISTENTE salió de acá: no era una entidad |
+| `.g-header-actions` | acciones **de esta página**: el toggle del widget del asistente, el carrito de préstamo, y `‹ SISTEMA DE HORARIOS` como salida |
+| el ☰ | **saltar a otra área** + SALIR |
+
 `SALIR` apunta a `url_for('salir_general')` — el logout de la app, que vuelve a `/`, y no al
 `/salir` de un área, que devolvería a un login donde un interno no tiene contraseña que poner.
 
-**No es el mismo mecanismo que `mobile-nav.js`**, y la diferencia importa si algún día se
-unifican:
+### Dos implementaciones, porque son dos shells
 
-| | `mobile-nav.js` (`/gestion`, `/historia`, `/agente`) | `areas-nav.js` (SPA de horarios) |
+| | `mobile-nav.js` (`gestion.css`: /gestion, /historia, /agente, /accesos) | `areas-nav.js` (`style.css`: el SPA de horarios) |
 |---|---|---|
-| Cuándo | sólo ≤900px | a cualquier ancho |
-| Qué contiene | **mueve** `.g-nav` y `.g-header-actions` que ya existen | markup propio, renderizado en el server |
-| Por qué | preservar los listeners de `gestion.js` y `gestion-agente.js` | son links puros, no hay nada que preservar |
-| Lado | izquierda | derecha |
+| Panel | `.g-sidebar`, entra desde la **izquierda** | `.areas-panel`, entra desde la **derecha** |
+| Menú de áreas | `.g-areas`, server-rendered al final del `<body>`; el JS lo **mueve** al panel, a cualquier ancho | `.areas-panel-body`, ya renderizado adentro del panel |
+| Además, ≤900px | **mueve** también `.g-nav` y `.g-header-actions`, y los devuelve al header al agrandar | nada: ese header no se desborda |
+| Por qué mueve | preservar los listeners de `gestion.js` (carrito) y `gestion-agente.js` (widget) | no hay nada que preservar, son links puros |
 
-En el SPA no se optó por meter los links en el header porque ya tiene logo, versión, tema y
-ACTUALIZAR: cuatro botones más lo desbordan en cualquier notebook.
+En ninguno de los dos se optó por dejar los links en el header: el de horarios ya tiene logo,
+versión, tema y ACTUALIZAR, y el de gestión tiene el widget y el carrito.
 
-**Clases** (en `style.css`, con los tokens del SPA — respetan el tema nocturno):
-`.tech-btn-menu` + `.tech-menu-bars` (el botón, mismo tamaño y borde que `.tech-btn-tema`),
-`.areas-panel` / `.areas-overlay` / `.areas-panel-head` / `.areas-panel-body` / `.areas-salir`.
-El estado abierto es `body.areas-abierto`, que además bloquea el scroll de atrás.
+**El ☰ aparece sólo si el panel tiene algo adentro.** Lo decide `mobile-nav.js` con la clase
+`.g-visible`: en escritorio sin sesión (la pantalla de login) no hay áreas que ofrecer y el botón
+no se dibuja; en celular siempre hay algo (el nav, las acciones).
+
+**`.g-areas` está oculto fuera del panel** (`display: none`, y `display: flex` sólo bajo
+`.g-sidebar`). Sin eso se vería suelto abajo del footer hasta que corra el JS. La contra: sin JS no
+hay salto entre áreas — queda el `‹ SISTEMA DE HORARIOS` del header, que es la salida que importa.
+
+**Clases**: en `gestion.css`, `.g-menu-btn` (+ `.g-visible`), `.g-menu-bars`, `.g-sidebar*`,
+`.g-areas` / `.g-areas-salir`; estado abierto `body.g-sidebar-abierto`. En `style.css`,
+`.tech-btn-menu` + `.tech-menu-bars` (mismo tamaño y borde que `.tech-btn-tema`), `.areas-panel` /
+`.areas-overlay` / `.areas-panel-*` / `.areas-salir`; estado abierto `body.areas-abierto`. Los dos
+bloquean el scroll de atrás mientras están abiertos.
+
+En escritorio `.g-header-actions` lleva `margin-left: auto`: el header pasó a tener tres hijos
+(marca, acciones, ☰) y con `space-between` las acciones quedarían flotando en el medio. Adentro del
+panel se resetea a `0`, o el margen las correría en el eje cruzado.
 
 ---
 

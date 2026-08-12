@@ -1583,12 +1583,6 @@ body.g-sin-scroll {
     border-radius: 0;
 }
 
-.g-nav-tag-agente.active {
-    background: var(--g-accent);
-    border-color: var(--g-accent);
-    color: white;
-}
-
 /* ---------- Chat en celular: pantalla completa, input siempre visible ---------- */
 @media (max-width: 700px) {
     /* Scrollea SOLO el historial, no la página: si scrollea el body, al abrir el
@@ -1737,131 +1731,181 @@ body.g-sin-scroll {
    .g-header-actions del header (los mueve, no los clona). Sin JS no hay panel y
    ambos bloques siguen en el header, envolviendo en varias filas. */
 
-/* Fuera de celular no existen: ni el botón ☰ ni el panel ni el fondo oscuro. */
-.g-menu-btn,
-.g-sidebar,
-.g-sidebar-overlay { display: none; }
+/* El panel existe a CUALQUIER ancho: en escritorio lleva el menú de áreas y en celular
+   además se le mudan el nav y las acciones del header. El botón sólo se muestra si el
+   panel tiene algo adentro — `mobile-nav.js` le pone `.g-visible`. */
+.g-menu-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    /* 44px: mínimo usable con el dedo. */
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    padding: 0;
+    background: transparent;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    color: white;
+    cursor: pointer;
+}
+
+.g-menu-btn.g-visible { display: inline-flex; }
+
+.g-menu-btn:hover {
+    border-color: var(--g-accent);
+    color: var(--g-accent);
+}
+
+/* En escritorio el header es brand | acciones | ☰ y el `space-between` dejaría las
+   acciones flotando en el medio: el margen automático las empuja contra el botón. */
+.g-header-actions { margin-left: auto; }
+
+.g-menu-bars,
+.g-menu-bars::before,
+.g-menu-bars::after {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: currentColor;
+}
+
+.g-menu-bars { position: relative; }
+
+.g-menu-bars::before,
+.g-menu-bars::after {
+    content: '';
+    position: absolute;
+    left: 0;
+}
+
+.g-menu-bars::before { top: -6px; }
+.g-menu-bars::after { top: 6px; }
+
+/* ---------- Panel lateral ---------- */
+/* Arriba del widget del asistente (z-index 9999) para que no lo tape. */
+.g-sidebar {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 10001;
+    width: min(82vw, 320px);
+    background: var(--g-primary);
+    border-right: 4px solid var(--g-accent);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+body.g-sidebar-abierto .g-sidebar { transform: none; }
+
+.g-sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(15, 23, 42, 0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+body.g-sidebar-abierto .g-sidebar-overlay {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Con el panel abierto la página de atrás no scrollea. */
+body.g-sidebar-abierto { overflow: hidden; }
+
+.g-sidebar-head {
+    position: sticky;
+    top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 16px;
+    background: var(--g-primary);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.g-sidebar-title {
+    color: white;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 3px;
+}
+
+.g-sidebar-close {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: white;
+    font-family: var(--g-font);
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.g-sidebar-body {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 16px;
+    /* Barra gestual del iPhone. */
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ---------- Menú de áreas adentro del panel ---------- */
+/* El server lo renderiza al final del `body` y `mobile-nav.js` lo mueve al panel. Fuera
+   del panel no se muestra: si no, se vería suelto abajo del footer hasta que corra el JS.
+   Sin JS no hay panel y por lo tanto no hay salto entre áreas — queda el
+   `‹ SISTEMA DE HORARIOS` del header, que es la salida que importa. */
+.g-areas { display: none; }
+
+.g-sidebar .g-areas {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.g-sidebar .g-areas a {
+    display: block;
+    padding: 12px 14px;
+    background: transparent;
+    border: 2px solid var(--g-accent);
+    color: var(--g-accent);
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-decoration: none;
+    text-transform: uppercase;
+    transition: background 0.15s, color 0.15s;
+}
+
+.g-sidebar .g-areas a:hover { background: var(--g-accent); color: white; }
+
+/* SALIR se despega del resto: no es un área más. */
+.g-sidebar .g-areas-salir {
+    margin-top: 10px;
+    border-color: rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.g-sidebar .g-areas-salir:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: white;
+}
 
 @media (max-width: 900px) {
 
-    /* ---------- Botón hamburguesa ---------- */
-    .g-menu-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        /* 44px: mínimo usable con el dedo. */
-        width: 44px;
-        height: 44px;
-        flex-shrink: 0;
-        margin-left: auto;
-        padding: 0;
-        background: transparent;
-        border: 2px solid rgba(255, 255, 255, 0.5);
-        color: white;
-        cursor: pointer;
-    }
-
-    .g-menu-bars,
-    .g-menu-bars::before,
-    .g-menu-bars::after {
-        display: block;
-        width: 20px;
-        height: 2px;
-        background: white;
-    }
-
-    .g-menu-bars { position: relative; }
-
-    .g-menu-bars::before,
-    .g-menu-bars::after {
-        content: '';
-        position: absolute;
-        left: 0;
-    }
-
-    .g-menu-bars::before { top: -6px; }
-    .g-menu-bars::after { top: 6px; }
-
-    /* ---------- Panel lateral ---------- */
-    /* Arriba del widget del asistente (z-index 9999) para que no lo tape. */
-    .g-sidebar {
-        display: flex;
-        flex-direction: column;
-        position: fixed;
-        top: 0;
-        left: 0;
-        bottom: 0;
-        z-index: 10001;
-        width: min(82vw, 320px);
-        background: var(--g-primary);
-        border-right: 4px solid var(--g-accent);
-        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
-        transform: translateX(-100%);
-        transition: transform 0.25s ease;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    body.g-sidebar-abierto .g-sidebar { transform: none; }
-
-    .g-sidebar-overlay {
-        display: block;
-        position: fixed;
-        inset: 0;
-        z-index: 10000;
-        background: rgba(15, 23, 42, 0.55);
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.25s ease;
-    }
-
-    body.g-sidebar-abierto .g-sidebar-overlay {
-        opacity: 1;
-        pointer-events: auto;
-    }
-
-    /* Con el panel abierto la página de atrás no scrollea. */
-    body.g-sidebar-abierto { overflow: hidden; }
-
-    .g-sidebar-head {
-        position: sticky;
-        top: 0;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        padding: 14px 16px;
-        background: var(--g-primary);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    }
-
-    .g-sidebar-title {
-        color: white;
-        font-size: 13px;
-        font-weight: 700;
-        letter-spacing: 3px;
-    }
-
-    .g-sidebar-close {
-        width: 40px;
-        height: 40px;
-        flex-shrink: 0;
-        background: transparent;
-        border: 1px solid rgba(255, 255, 255, 0.35);
-        color: white;
-        font-family: var(--g-font);
-        font-size: 16px;
-        cursor: pointer;
-    }
-
-    .g-sidebar-body {
-        display: flex;
-        flex-direction: column;
-        gap: 18px;
-        padding: 16px;
-        /* Barra gestual del iPhone. */
-        padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-    }
+    /* Con el nav y las acciones adentro, el ☰ es lo último del header. */
+    .g-menu-btn { margin-left: auto; }
 
     /* Nav adentro del panel: pestañas apiladas a lo ancho.
        Va con `body` adelante para ganarle a body.g-chat-page .g-nav (≤700px), que
@@ -1892,11 +1936,14 @@ body.g-sin-scroll {
         border-bottom: 3px solid white;
     }
 
-    /* Acciones del header adentro del panel: botones a lo ancho, separados del nav. */
+    /* Acciones del header adentro del panel: botones a lo ancho, separados del nav.
+       El `margin-left: auto` que las empuja a la derecha en el header no sirve acá
+       adentro (columna): las correría en el eje cruzado. */
     .g-sidebar .g-header-actions {
         flex-direction: column;
         align-items: stretch;
         gap: 8px;
+        margin-left: 0;
         padding-top: 16px;
         border-top: 1px solid rgba(255, 255, 255, 0.2);
     }

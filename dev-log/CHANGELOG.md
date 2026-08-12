@@ -52,9 +52,20 @@ y destructivo (reconstruye `escuela.db` entera).
 **8. Ruta `/salir` nueva a nivel app** (`salir_general`) — cierra sesión y vuelve a `/`. Convive con
 el `/salir` de cada blueprint, que sigue devolviendo al login de su área. La usa el menú del SPA.
 
-**9. El SPA de horarios muestra un ☰ con las áreas internas cuando hay sesión** — `templates/index.html`
-+ `static/areas-nav.js` (nuevo) + clases `.tech-btn-menu` / `.areas-*` en `style.css`. Para el público
-no se renderiza nada: la página es idéntica a antes. No usa `mobile-nav.js` (ver `frontend-ui.md`).
+**9. Las cinco páginas muestran un ☰ con las otras áreas cuando hay sesión.** Para el público no se
+renderiza nada. Dos implementaciones, una por shell:
+- SPA de horarios (`style.css`): `templates/index.html` + `static/areas-nav.js` (nuevo) + clases
+  `.tech-btn-menu` / `.areas-*`.
+- Las cuatro de `gestion.css`: bloque `.g-areas` en cada `base.html`, que **`mobile-nav.js` ahora
+  mueve al panel a cualquier ancho** — antes el panel era sólo ≤900px. El nav y las acciones del
+  header siguen mudándose sólo en celular. El botón se muestra con `.g-visible` y sólo si el panel
+  tiene contenido, así el login de escritorio no lo dibuja.
+
+**Reacomodo de la navegación** (afecta a los cuatro `base.html`): los links entre áreas salieron del
+header y del `.g-nav` y viven en el ☰. El header queda con las acciones de la página (widget del
+asistente, carrito, vuelta al SPA) y el `.g-nav` sólo con las entidades del área — el 🤖 ASISTENTE
+salió del nav de `/gestion`, no era una entidad. Se borró `.g-nav-tag-agente` de `gestion.css`, que
+quedó sin uso.
 
 **10. `config.PRODUCCION` y `config.SESION_DIAS` (nuevos)**. En producción `SECRET_KEY` y
 `GESTION_CLAVE` pasan a ser **obligatorias** (antes tenían default público). La sesión es permanente

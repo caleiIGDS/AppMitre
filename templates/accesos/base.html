@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block titulo %}Accesos{% endblock %} — {{ escuela_nombre }}</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=15">
-    {# En celular mueve el nav y las acciones del header a un panel lateral. #}
-    <script src="{{ url_for('static', filename='mobile-nav.js') }}?v=1" defer></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=16">
+    {# El ☰ y su panel lateral: menú de áreas siempre, y en celular además el nav
+       y las acciones del header. #}
+    <script src="{{ url_for('static', filename='mobile-nav.js') }}?v=2" defer></script>
 </head>
 <body>
     <div class="g-bg">
@@ -20,14 +21,9 @@
                         <p>Accesos</p>
                     </div>
                 </div>
+                {# Saltar a otra área es el ☰ (bloque `.g-areas` al final del body). #}
                 <div class="g-header-actions">
                     <a class="g-btn-outline" href="/">‹ SISTEMA DE HORARIOS</a>
-                    {% if puede('gestion.leer') %}
-                    <a class="g-btn-outline" href="{{ url_for('gestion.home') }}">‹ GESTIÓN DE RECURSOS</a>
-                    {% endif %}
-                    {% if acceso_actual() %}
-                    <a class="g-btn-outline" href="{{ url_for('accesos.salir') }}">SALIR</a>
-                    {% endif %}
                 </div>
             </div>
         </header>
@@ -42,5 +38,22 @@
             <p>Programa hecho por Calei | <a href="https://github.com/caleiIGDS/AppMitre" target="_blank">Repositorio en GitHub</a></p>
         </footer>
     </div>
+
+    {# Menú de áreas: lo mueve al panel lateral `mobile-nav.js`, a cualquier ancho.
+       Un link por permiso, renderizado en el server. #}
+    {% if acceso_actual() %}
+    <nav class="g-areas" aria-label="Áreas">
+        {% if puede('gestion.leer') %}
+        <a href="{{ url_for('gestion.home') }}">GESTIÓN DE RECURSOS</a>
+        {% endif %}
+        {% if puede('historia.leer') %}
+        <a href="{{ url_for('historia.home') }}">HISTORIA INSTITUCIONAL</a>
+        {% endif %}
+        {% if puede('agente.leer') %}
+        <a href="{{ url_for('agente.chat_page') }}">🤖 ASISTENTE</a>
+        {% endif %}
+        <a class="g-areas-salir" href="{{ url_for('salir_general') }}">SALIR</a>
+    </nav>
+    {% endif %}
 </body>
 </html>

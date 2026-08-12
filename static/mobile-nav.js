@@ -1,18 +1,27 @@
-// mobile-nav.js — Menú lateral ocultable para celular.
-// Lo usan las tres áreas que comparten el shell de gestion.css: /gestion, /historia
-// y /agente.
+// mobile-nav.js — El panel lateral (☰) de las áreas que comparten el shell de
+// gestion.css: /gestion, /historia, /agente y /accesos.
 //
-// En celular (≤900px) las pestañas del nav y los botones del header no entran en
-// una fila: se MUEVEN a un panel lateral que se abre con el botón ☰. En escritorio
-// (>900px) el script no toca nada — header y nav quedan exactamente como estaban, y
-// si la pantalla se agranda los bloques vuelven a su lugar original.
+// Mueve DOS clases de bloque al panel, con reglas distintas:
+//
+//   .g-areas    — el menú para saltar de área (server-rendered, un link por permiso).
+//                 Va al panel SIEMPRE, a cualquier ancho: es lo que hace que el ☰
+//                 exista también en escritorio. Sin sesión el server no lo renderiza.
+//   .g-nav      — las pestañas de las entidades del área.
+//   .g-header-actions — las acciones de la página (widget del asistente, carrito).
+//                 Estos dos van al panel SÓLO en celular (≤900px), porque ahí no
+//                 entran en una fila; al agrandar la pantalla vuelven al header, a su
+//                 lugar exacto.
 //
 // MUEVE los nodos, no los clona: así los listeners ya enganchados por gestion.js
 // (carrito) y gestion-agente.js (botón del asistente) siguen funcionando, y no se
 // duplican los IDs del markup original.
 //
-// Sin JS no hay sidebar: el nav y las acciones quedan en el header envolviendo en
-// varias filas, que es el comportamiento de siempre.
+// El botón ☰ sólo se muestra si el panel tiene algo adentro: en escritorio sin sesión
+// (la pantalla de login, por ejemplo) no hay áreas que ofrecer y no aparece.
+//
+// El SPA de horarios (`/`) NO usa este archivo: tiene otro shell y otra hoja de
+// estilos, y su panel es `areas-nav.js` — ahí el contenido es sólo links, no hay nada
+// que mover. Ver agent_docs/frontend-ui.md.
 (function () {
     'use strict';
 
@@ -20,11 +29,12 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         var header = document.querySelector('.g-header .g-header-flex');
+        var areas = document.querySelector('.g-areas');
         var nav = document.querySelector('.g-nav');
         var acciones = document.querySelector('.g-header-actions');
-        if (!header || (!nav && !acciones)) return;
+        if (!header || (!areas && !nav && !acciones)) return;
 
-        // ---- Botón hamburguesa (solo visible en celular, ver gestion.css) ----
+        // ---- Botón hamburguesa ----
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'g-menu-btn';
@@ -64,19 +74,24 @@
             return { el: el, marca: marca };
         }
 
-        var bloques = [recordar(nav), recordar(acciones)].filter(Boolean);
+        // Las áreas se mudan una sola vez y se quedan; el nav y las acciones van y vienen.
+        // El orden importa: las áreas primero, que es lo que se ve al abrir en escritorio.
+        var fijo = recordar(areas);
+        if (fijo) cuerpo.appendChild(fijo.el);
+
+        var moviles = [recordar(nav), recordar(acciones)].filter(Boolean);
         var enPanel = false;
 
         function aPanel() {
             if (enPanel) return;
-            bloques.forEach(function (b) { cuerpo.appendChild(b.el); });
+            moviles.forEach(function (b) { cuerpo.appendChild(b.el); });
             enPanel = true;
         }
 
         function aHeader() {
             if (!enPanel) return;
             cerrar();
-            bloques.forEach(function (b) { b.marca.parentNode.insertBefore(b.el, b.marca); });
+            moviles.forEach(function (b) { b.marca.parentNode.insertBefore(b.el, b.marca); });
             enPanel = false;
         }
 
@@ -115,7 +130,14 @@
 
         // ---- Cambio de tamaño: mover al panel o devolver al header ----
         var mq = window.matchMedia(MOBILE);
-        function aplicar() { if (mq.matches) aPanel(); else aHeader(); }
+
+        function aplicar() {
+            if (mq.matches) aPanel(); else aHeader();
+            // Un panel vacío no merece botón. En celular siempre hay algo (el nav o las
+            // acciones); en escritorio, sólo si el server renderizó el bloque de áreas.
+            btn.classList.toggle('g-visible', cuerpo.children.length > 0);
+            if (!cuerpo.children.length) cerrar();
+        }
 
         if (mq.addEventListener) mq.addEventListener('change', aplicar);
         else if (mq.addListener) mq.addListener(aplicar);  // Safari viejo

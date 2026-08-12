@@ -43,32 +43,34 @@ el motor genérico `crud.py`, que no importa a ninguno de los dos — ver `agent
 - **`static/gestion.js`** — único JS del módulo: búsqueda en vivo del listado + el stepper
   del carrito (vanilla, sin build step). Cargado en `base.html` con `defer`; no hace nada
   fuera de las páginas donde encuentra sus hooks (guarda por existencia de elementos).
-- **`static/mobile-nav.js`** — menú lateral de celular, compartido con `/historia` y
-  `/agente` (ver "Celular" abajo). No es lógica de dominio: solo mueve nodos del shell.
+- **`static/mobile-nav.js`** — el ☰ y su panel lateral, compartido con `/historia`,
+  `/agente` y `/accesos` (ver "Celular" abajo). No es lógica de dominio: solo mueve nodos
+  del shell.
 - `base.html` incluye el widget flotante del asistente (`agente/_agente_widget.html`) y
-  linkea a las otras áreas en el header.
+  el bloque `.g-areas` con los links a las otras áreas, que van al ☰. El header queda
+  para lo de esta página: el toggle del widget, el carrito y la vuelta al SPA.
 - Integración: `app.py` hace `app.register_blueprint(gestion.bp)` + `gestion.init_db()`
-  en import (funciona bajo gunicorn/WSGI). No hay link visible desde el SPA principal:
-  `/gestion` es deliberadamente "oculto", se accede escribiendo la URL (decisión
-  2026-07-17, ver `dev-log/DECISIONS.md`). `base.html` sí tiene el link de vuelta al SPA.
+  en import (funciona bajo gunicorn/WSGI). Desde el SPA principal ya no se entra sólo por
+  URL: si hay sesión y el permiso, aparece en su ☰ (ver `agent_docs/accesos.md`). Para el
+  público el SPA no muestra nada — el "oculto" de la decisión 2026-07-17 lo sostiene ahora
+  el gate de accesos, no la ausencia de links.
 
 ## Celular
 
 Todo el shell (header + nav + fichas) es **el mismo markup en celular y en escritorio**:
-lo único que cambia es CSS, más un script que reubica dos bloques. **Arriba de 900px no
-se aplica nada de esto** — el escritorio quedó igual que siempre. Es común a las tres
-áreas que comparten `gestion.css` (`/gestion`, `/historia`, `/agente`).
+lo único que cambia es CSS, más un script que reubica bloques. Es común a las cuatro
+áreas que comparten `gestion.css` (`/gestion`, `/historia`, `/agente`, `/accesos`).
 
-- **Menú lateral ocultable (`static/mobile-nav.js`)** — abajo de 900px, el `.g-nav` de
-  pestañas y el `.g-header-actions` del header **se mueven** (no se clonan) a un panel
-  `.g-sidebar` que se abre con el botón ☰. Se mueven, no se clonan, por dos razones:
-  los listeners ya enganchados por `gestion.js` (carrito) y `gestion-agente.js` (botón
-  del asistente) siguen funcionando en el nodo movido, y no se duplican IDs como
-  `#agente-toggle-btn`. Cada bloque deja un comentario-marcador en su lugar original,
-  así al agrandar la ventana vuelve exactamente ahí (se escucha `matchMedia`, no
-  `resize`). El panel se cierra con ✕, Esc, tocando el fondo o cualquier link de adentro.
-  Sin JS no hay panel: nav y acciones quedan en el header envolviendo en varias filas,
-  como siempre.
+- **El ☰ y su panel (`static/mobile-nav.js`)** — el panel existe **a cualquier ancho** y
+  lleva el menú de áreas (`.g-areas`, ver `agent_docs/frontend-ui.md`). **Abajo de 900px**
+  se le suman el `.g-nav` de pestañas y el `.g-header-actions` del header, que **se
+  mueven** (no se clonan) por dos razones: los listeners ya enganchados por `gestion.js`
+  (carrito) y `gestion-agente.js` (botón del asistente) siguen funcionando en el nodo
+  movido, y no se duplican IDs como `#agente-toggle-btn`. Cada bloque deja un
+  comentario-marcador en su lugar original, así al agrandar la ventana vuelve exactamente
+  ahí (se escucha `matchMedia`, no `resize`). El panel se cierra con ✕, Esc, tocando el
+  fondo o cualquier link de adentro. Sin JS no hay panel: nav y acciones quedan en el
+  header envolviendo en varias filas, como siempre, y el menú de áreas no se ve.
 - **Listados como tarjetas (≤700px)** — una tabla de 5 columnas en 360px obliga a
   scrollear de costado y deja RETIRAR / Ver / Editar fuera de pantalla. Abajo de 700px
   cada `<tr>` de `.g-table` pasa a `display: block` y se ve como una tarjeta: el nombre

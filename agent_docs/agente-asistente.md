@@ -188,9 +188,9 @@ El asistente se usa mayormente desde el teléfono, en el pasillo. Lo que eso imp
   agrega el `<meta viewport>` de `base.html`) para no quedar abajo de la barra gestual.
 - Objetivos táctiles de 44px, header comprimido y footer oculto.
 - **El nav ya no está en la página en celular**: abajo de 900px `static/mobile-nav.js` lo
-  mueve —junto con los botones del header— al menú lateral que se abre con ☰, así el chat
-  se queda con toda la altura. Ver la sección "Celular" de
-  `agent_docs/gestion-conocimiento.md`. La regla vieja que lo hacía scrollear en
+  mueve —junto con los botones del header— al panel que se abre con ☰, así el chat se
+  queda con toda la altura. (En escritorio ese mismo panel existe igual, pero sólo con el
+  menú de áreas.) Ver la sección "Celular" de `agent_docs/gestion-conocimiento.md`. La regla vieja que lo hacía scrollear en
   horizontal (`body.g-chat-page .g-nav`) sigue en `gestion.css` como fallback para cuando
   no hay JS y el nav se queda en su lugar.
 
