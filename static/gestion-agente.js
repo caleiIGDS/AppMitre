@@ -22,8 +22,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (!messagesDiv || !inputField || !sendBtn) return;
 
-  let imagenSeleccionada = null;
+  // Las fotos van de a tandas: se mandan varias y sale una ficha por cada una, que después
+  // se revisan de a una antes de guardar nada (ver "Botones de revisión del lote").
+  let imagenesSeleccionadas = [];
   let enviando = false;
+  // Las fichas pendientes tal como las devuelve el server, para saber si hay un lote abierto.
+  let loteAbierto = [];
 
   // Pantalla táctil (celular/tablet): no se enfoca el campo solo, que abriría el teclado
   // de entrada. Enter envía en todos lados (ver listener de keydown).
@@ -99,6 +103,9 @@ document.addEventListener('DOMContentLoaded', function() {
       fetch('/agente/reset', { method: 'POST' })
         .catch(() => {})
         .finally(() => {
+          // El server borró las fichas y sus fotos: si el lote quedara marcado acá, el
+          // próximo turno pintaría botones de fichas que ya no existen.
+          loteAbierto = [];
           messagesDiv.innerHTML = `
             <div class="agente-welcome">
               <div class="agente-welcome-icon">🤖</div>
@@ -162,20 +169,54 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  // Cuántas fotos se pueden mandar de una. Tiene que coincidir con db.FOTOS_MAX: acá es
+  // para avisar antes de subirlas (en el wifi de la escuela, subir diez para que el server
+  // descarte dos es un rato perdido), pero el corte que vale es el del server.
+  const FOTOS_MAX = 8;
+
+  function textoChip() {
+    if (!imagenesSeleccionadas.length) return '';
+    return imagenesSeleccionadas.length === 1
+      ? '✓ 1 foto (tocá para sacarla)'
+      : '✓ ' + imagenesSeleccionadas.length + ' fotos (tocá para sacarlas)';
+  }
+
+  function limpiarImagenes() {
+    imagenesSeleccionadas = [];
+    if (imagePreview) {
+      imagePreview.textContent = '';
+      imagePreview.classList.remove('active');
+    }
+    if (imageFile) imageFile.value = '';
+  }
+
+  // El chip es también el botón de deshacer: se eligieron seis fotos de la galería y salió
+  // una de más, y sin esto la única salida era mandar el mensaje o recargar la página.
+  if (imagePreview) {
+    imagePreview.addEventListener('click', function() {
+      if (imagenesSeleccionadas.length) limpiarImagenes();
+    });
+  }
+
   if (imageFile) {
     imageFile.addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (!file) return;
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
 
-      imagePreview.textContent = '⏳ preparando…';
+      const entran = files.slice(0, FOTOS_MAX);
+      const sobran = files.length - entran.length;
+
+      imagePreview.textContent = '⏳ preparando ' + entran.length + '…';
       imagePreview.classList.add('active');
 
-      achicarImagen(file).then(function(dataUrl) {
-        imagenSeleccionada = dataUrl;
-        imagePreview.textContent = '✓ ' + file.name.substring(0, 20);
+      // Todas en paralelo: son canvas locales, y de a una se hace notar con ocho.
+      Promise.all(entran.map(achicarImagen)).then(function(dataUrls) {
+        imagenesSeleccionadas = dataUrls;
+        imagePreview.textContent = textoChip()
+          + (sobran ? ' — quedaron afuera ' + sobran + ', entran ' + FOTOS_MAX : '');
         imagePreview.classList.add('active');
       }).catch(function() {
-        imagenSeleccionada = null;
+        imagenesSeleccionadas = [];
         imagePreview.textContent = '✕ no se pudo leer';
         imageFile.value = '';
       });
@@ -188,30 +229,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const mensaje = inputField.value.trim();
     // Una foto sola vale como mensaje: sacan la etiqueta y la mandan sin escribir nada.
-    if (!mensaje && !imagenSeleccionada) return;
+    if (!mensaje && !imagenesSeleccionadas.length) return;
 
     limpiarBienvenida();
-    // Un botón de confirmar de un mensaje anterior deja de valer: si el usuario siguió
-    // escribiendo, lo más probable es que quiera cambiar algo, no guardar eso de antes.
-    quitarConfirmaciones();
-    agregarMensaje(mensaje, 'user', imagenSeleccionada);
+    // El botón verde de una ficha sola deja de valer: si el usuario siguió escribiendo, lo
+    // más probable es que quiera cambiar algo, no guardar eso de antes. Un LOTE en cambio se
+    // deja en pantalla: la revisión de ocho fichas está guardada en el server y no se puede
+    // perder porque el usuario haya preguntado otra cosa en el medio (se repinta al llegar
+    // la respuesta, con su estado).
+    if (loteAbierto.length < 2) quitarConfirmaciones();
+    agregarMensaje(mensaje, 'user', imagenesSeleccionadas);
 
     // Preparar payload
     const payload = { mensaje };
-    if (imagenSeleccionada) {
-      payload.imagen = imagenSeleccionada;
+    if (imagenesSeleccionadas.length) {
+      payload.imagenes = imagenesSeleccionadas;
     }
 
     // Limpiar UI. Lo de la imagen puede no existir: sin `agente.vision` el template no
     // pinta el botón ni el input (ver _agente_chat_core.html).
     inputField.value = '';
     inputField.style.height = 'auto';  // deshacer el auto-resize del textarea
-    imagenSeleccionada = null;
-    if (imagePreview) {
-      imagePreview.textContent = '';
-      imagePreview.classList.remove('active');
-    }
-    if (imageFile) imageFile.value = '';
+    limpiarImagenes();
 
     // Mostrar loader
     agregarMensaje('', 'loading');
@@ -287,10 +326,12 @@ document.addEventListener('DOMContentLoaded', function() {
     this.style.height = Math.min(this.scrollHeight, tope) + 'px';
   });
 
-  // Agregar mensaje al chat. `imagenUrl` (opcional, solo mensajes del usuario) pinta la
-  // foto adjunta como miniatura, clickeable para verla entera.
-  function agregarMensaje(texto, tipo, imagenUrl) {
+  // Agregar mensaje al chat. `imagenes` (opcional, solo mensajes del usuario) pinta las
+  // fotos adjuntas como miniaturas, clickeables para verlas enteras. Acepta una sola URL
+  // suelta además de la lista, que es como la llama el historial viejo.
+  function agregarMensaje(texto, tipo, imagenes) {
     const msgDiv = document.createElement('div');
+    const urls = !imagenes ? [] : (Array.isArray(imagenes) ? imagenes : [imagenes]);
 
     if (tipo === 'loading') {
       msgDiv.className = 'agente-message agente-message-loading';
@@ -300,17 +341,32 @@ document.addEventListener('DOMContentLoaded', function() {
       msgDiv.innerHTML = renderMarkdown(texto);
     } else {
       msgDiv.className = 'agente-message agente-message-' + tipo;
-      if (imagenUrl) {
-        const link = document.createElement('a');
-        link.href = imagenUrl;
-        link.target = '_blank';
-        link.rel = 'noopener';
-        const img = document.createElement('img');
-        img.src = imagenUrl;
-        img.className = 'agente-message-image';
-        img.alt = 'Imagen adjunta';
-        link.appendChild(img);
-        msgDiv.appendChild(link);
+      if (urls.length) {
+        // Con varias van en grilla y numeradas: el asistente las nombra por número ("la 3
+        // no la pude leer") y sin el número no hay forma de saber a cuál se refiere.
+        const galeria = document.createElement('div');
+        galeria.className = 'agente-message-fotos';
+        if (urls.length > 1) galeria.classList.add('is-multiple');
+        urls.forEach(function(url, i) {
+          const link = document.createElement('a');
+          link.href = url;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.className = 'agente-message-foto';
+          const img = document.createElement('img');
+          img.src = url;
+          img.className = 'agente-message-image';
+          img.alt = 'Imagen adjunta ' + (i + 1);
+          link.appendChild(img);
+          if (urls.length > 1) {
+            const num = document.createElement('span');
+            num.className = 'agente-message-foto-num';
+            num.textContent = i + 1;
+            link.appendChild(num);
+          }
+          galeria.appendChild(link);
+        });
+        msgDiv.appendChild(galeria);
       }
       if (texto) {
         // textContent y no innerHTML: es texto del usuario, no se interpreta como HTML.
@@ -326,14 +382,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // --- Botones de confirmar alta ---
   // El alta en el catálogo no se confirma escribiendo "sí": el backend manda
-  // `confirmaciones` con el token de cada ficha pendiente y acá se pinta un botón por
-  // ficha. Al tocarlo, /confirmar guarda directo desde lo que quedó en la sesión — sin
-  // pasar por el modelo, así que es instantáneo, gratis, y guarda exactamente lo que el
-  // usuario leyó.
+  // `confirmaciones` con el token de cada ficha pendiente y acá se pintan sus botones.
   //
-  // Es una LISTA y no una sola: "creá a Pablo y a Ezequiel" arma dos fichas en un turno y
-  // antes solo se pintaba el botón de la última, así que la otra quedaba viva en el
-  // servidor sin forma de guardarla y el usuario creía que se habían dado de alta las dos.
+  // Hay DOS circuitos, según cuántas fichas queden:
+  //
+  //   1 ficha  → el botón verde de siempre. /confirmar guarda directo desde lo que quedó en
+  //              la sesión, sin pasar por el modelo: instantáneo, gratis, y guarda
+  //              exactamente lo que el usuario leyó. Un solo click, que es lo que
+  //              corresponde al caso de siempre.
+  //
+  //   2 o más  → el LOTE. Cada ficha se marca (está bien / corregir + qué está mal / no va)
+  //              con /revisar, que NO escribe nada, y recién cuando están todas revisadas se
+  //              habilita "Guardar" → /lote, que guarda las aprobadas y le manda al
+  //              asistente las acotaciones juntas para que rearme esas fichas. Es el flujo
+  //              de cargar una estantería entera: con el botón que guarda al toque había que
+  //              decidir de a una y sin vuelta atrás, y pedir una corrección se llevaba
+  //              puesto lo ya revisado.
+  //
+  // Es una LISTA y no una sola ficha porque un turno puede dar de alta varias cosas ("creá a
+  // Pablo y a Ezequiel", u ocho fotos de etiquetas). Antes solo se pintaba el botón de la
+  // última, así que las otras quedaban vivas en el servidor sin forma de guardarlas y el
+  // usuario creía que se habían dado de alta todas.
 
   function quitarConfirmaciones() {
     messagesDiv.querySelectorAll('.agente-confirm').forEach(el => el.remove());
@@ -344,6 +413,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // persona" repetido no dice cuál es cuál.
     return '✅ ' + (conf.etiqueta || 'Guardar') + (conf.nombre ? ': ' + conf.nombre : '');
   }
+
+  // --- Circuito de una sola ficha: guardar al toque ---
 
   function botonConfirmar(conf, caja) {
     const btn = document.createElement('button');
@@ -363,15 +434,11 @@ document.addEventListener('DOMContentLoaded', function() {
       })
         .then(r => r.json().then(data => ({ ok: r.ok, data })))
         .then(({ data }) => {
-          btn.remove();
+          caja.remove();
           agregarMensaje(data.respuesta || 'Sin respuesta', data.ok ? 'assistant' : 'error');
-          // Si quedan altas sin confirmar, la caja se remonta al final para que sus
-          // botones sigan abajo del "✅ Guardado" y no queden perdidos más arriba.
-          if (caja.querySelector('.agente-confirm-btn')) {
-            messagesDiv.appendChild(caja);
-          } else {
-            caja.remove();
-          }
+          // Si quedaron altas sin guardar, vuelven a pintarse abajo del "✅ Guardado": si
+          // se quedaran arriba, el usuario no las ve y las da por hechas.
+          agregarConfirmaciones(data.confirmaciones);
           irAlFinal();
         })
         .catch(error => {
@@ -388,20 +455,248 @@ document.addEventListener('DOMContentLoaded', function() {
     return btn;
   }
 
+  // --- Circuito del lote: revisar primero, guardar al final ---
+
+  const ETIQUETA_ESTADO = {
+    ok: '✅ va',
+    observada: '✏️ a corregir',
+    descartada: '🗑️ no va'
+  };
+
+  // Marca una ficha sin escribir nada en el inventario. El estado vive en el server, así
+  // que sobrevive a recargar la página o a mandar otro mensaje en el medio.
+  //
+  // No se pisa `loteAbierto` con lo que devuelve: es el MISMO array que quedó en `caja._fichas`,
+  // y reemplazarlo por objetos nuevos dejaría a la barra contando sobre una copia vieja. Acá
+  // se muta la ficha que cambió y con eso alcanza — el server ya tiene la verdad.
+  //
+  // Las marcas se encolan de a una (`colaRevision`). Cada /revisar es un lee-modifica-escribe
+  // sobre la misma fila de la conversación, así que dos clicks rápidos en fichas distintas
+  // pueden pisarse y perder una marca: el usuario la ve marcada y el server no.
+  let colaRevision = Promise.resolve();
+
+  function revisarFicha(token, estado, nota) {
+    const pedido = colaRevision.then(() => fetch('/agente/revisar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: token, estado: estado, nota: nota || '' })
+    }).then(r => r.json()));
+    // La cola no se corta si uno falla; el error lo recibe igual quien llamó.
+    colaRevision = pedido.catch(() => {});
+    return pedido;
+  }
+
+  function filaRevision(conf, caja) {
+    const fila = document.createElement('div');
+    fila.className = 'agente-revision';
+
+    const cabecera = document.createElement('div');
+    cabecera.className = 'agente-revision-cabecera';
+
+    const nombre = document.createElement('span');
+    nombre.className = 'agente-revision-nombre';
+    nombre.textContent = (conf.foto ? conf.foto + '. ' : '') + (conf.nombre || 'sin nombre');
+    cabecera.appendChild(nombre);
+
+    const marca = document.createElement('span');
+    marca.className = 'agente-revision-marca';
+    cabecera.appendChild(marca);
+    fila.appendChild(cabecera);
+
+    const botones = document.createElement('div');
+    botones.className = 'agente-revision-botones';
+
+    // El campo de la acotación vive plegado en la fila: escribir qué está mal no puede
+    // obligar a mandar un mensaje suelto, que es justo lo que rompía la revisión.
+    const cajaNota = document.createElement('div');
+    cajaNota.className = 'agente-revision-nota';
+    cajaNota.hidden = true;
+    const campo = document.createElement('input');
+    campo.type = 'text';
+    campo.className = 'agente-revision-input';
+    campo.placeholder = '¿qué está mal? (ej: la marca es Makita)';
+    campo.value = conf.nota || '';
+    const anotar = document.createElement('button');
+    anotar.className = 'agente-revision-anotar';
+    anotar.textContent = 'Anotar';
+    cajaNota.appendChild(campo);
+    cajaNota.appendChild(anotar);
+
+    function pintarEstado(estado, nota) {
+      fila.classList.remove('is-ok', 'is-observada', 'is-descartada');
+      if (estado && estado !== 'pendiente') fila.classList.add('is-' + estado);
+      marca.textContent = ETIQUETA_ESTADO[estado] || '';
+      botones.querySelectorAll('button').forEach(b => {
+        b.setAttribute('aria-pressed', b.dataset.estado === estado ? 'true' : 'false');
+      });
+      if (estado === 'observada' && nota) {
+        marca.textContent = '✏️ ' + nota;
+      }
+      cajaNota.hidden = estado !== 'observada';
+    }
+
+    function marcar(estado, nota) {
+      if (enviando) return;
+      revisarFicha(conf.token, estado, nota)
+        .then(data => {
+          if (data.ok === false) {
+            agregarMensaje(data.respuesta || 'No se pudo marcar esa ficha', 'error');
+            return;
+          }
+          conf.estado = estado;
+          conf.nota = estado === 'observada' ? (nota || '') : '';
+          pintarEstado(estado, conf.nota);
+          actualizarBarra(caja);
+        })
+        .catch(error => agregarMensaje('Error de conexión: ' + error.message, 'error'));
+    }
+
+    [['ok', '✅ está bien'], ['observada', '✏️ corregir'], ['descartada', '✕ no va']]
+      .forEach(function(par) {
+        const btn = document.createElement('button');
+        btn.className = 'agente-revision-btn agente-revision-' + par[0];
+        btn.dataset.estado = par[0];
+        btn.textContent = par[1];
+        btn.addEventListener('click', function() {
+          if (par[0] === 'observada') {
+            // Abrir el campo no marca nada todavía: lo que marca es "Anotar", porque una
+            // ficha observada sin decir qué está mal no le sirve al asistente.
+            cajaNota.hidden = false;
+            campo.focus();
+            return;
+          }
+          marcar(par[0], '');
+        });
+        botones.appendChild(btn);
+      });
+
+    anotar.addEventListener('click', function() {
+      const nota = campo.value.trim();
+      if (!nota) { campo.focus(); return; }
+      marcar('observada', nota);
+    });
+    campo.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.isComposing) {
+        e.preventDefault();
+        anotar.click();
+      }
+    });
+
+    fila.appendChild(botones);
+    fila.appendChild(cajaNota);
+    pintarEstado(conf.estado || 'pendiente', conf.nota);
+    return fila;
+  }
+
+  // La barra de abajo: el botón que recién ahí escribe, y cuánto falta para poder tocarlo.
+  function actualizarBarra(caja) {
+    const barra = caja.querySelector('.agente-lote');
+    if (!barra) return;
+    const btn = barra.querySelector('.agente-lote-btn');
+    const nota = barra.querySelector('.agente-lote-nota');
+
+    const fichas = caja._fichas || [];
+    const pendientes = fichas.filter(f => (f.estado || 'pendiente') === 'pendiente').length;
+    const aprobadas = fichas.filter(f => f.estado === 'ok').length;
+    const acotadas = fichas.filter(f => f.estado === 'observada').length;
+    const tachadas = fichas.filter(f => f.estado === 'descartada').length;
+
+    const partes = [];
+    if (aprobadas) partes.push('Guardar ' + aprobadas);
+    if (acotadas) partes.push('corregir ' + acotadas);
+    if (tachadas && !aprobadas && !acotadas) partes.push('descartar ' + tachadas);
+    btn.textContent = '📦 ' + (partes.length ? partes.join(' y ') : 'Guardar');
+
+    // Se habilita recién cuando están todas revisadas: la idea del lote es mirar las ocho
+    // antes de tocar nada, y con el botón vivo desde el principio es fácil mandar media
+    // tanda sin querer.
+    btn.disabled = pendientes > 0 || fichas.length === 0;
+    nota.textContent = pendientes
+      ? 'falta' + (pendientes > 1 ? 'n ' : ' ') + pendientes + ' por revisar'
+      : 'nada se guardó todavía — esto lo escribe todo junto';
+  }
+
+  function barraLote(caja) {
+    const barra = document.createElement('div');
+    barra.className = 'agente-lote';
+
+    const btn = document.createElement('button');
+    btn.className = 'agente-lote-btn';
+    const nota = document.createElement('span');
+    nota.className = 'agente-lote-nota';
+    barra.appendChild(btn);
+    barra.appendChild(nota);
+
+    btn.addEventListener('click', function() {
+      if (enviando || btn.disabled) return;
+      enviando = true;
+      sendBtn.disabled = true;
+      btn.disabled = true;
+      btn.textContent = 'Guardando…';
+      // La segunda vuelta pasa por el modelo y tarda; sin loader parece colgado.
+      const hayCorrecciones = (caja._fichas || []).some(f => f.estado === 'observada');
+      if (hayCorrecciones) agregarMensaje('', 'loading');
+
+      fetch('/agente/lote', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        .then(r => r.json().then(data => ({ ok: r.ok, data })))
+        .then(({ ok, data }) => {
+          const loader = messagesDiv.querySelector('.agente-message-loading');
+          if (loader) loader.remove();
+          // Si falló, el lote SIGUE ahí: no se borra la revisión que el usuario ya hizo por
+          // un error del server. Sólo se rehabilita el botón y se cuenta qué pasó.
+          if (!ok) {
+            agregarMensaje(data.respuesta || 'No se pudo guardar el lote', 'error');
+            actualizarBarra(caja);
+            irAlFinal();
+            return;
+          }
+          caja.remove();
+          agregarMensaje(data.respuesta || 'Sin respuesta', 'assistant');
+          agregarConfirmaciones(data.confirmaciones);
+          irAlFinal();
+        })
+        .catch(error => {
+          const loader = messagesDiv.querySelector('.agente-message-loading');
+          if (loader) loader.remove();
+          agregarMensaje('Error de conexión: ' + error.message, 'error');
+          actualizarBarra(caja);
+        })
+        .finally(() => {
+          enviando = false;
+          sendBtn.disabled = false;
+        });
+    });
+
+    return barra;
+  }
+
   function agregarConfirmaciones(lista) {
-    if (!lista || !lista.length) return;
+    quitarConfirmaciones();
+    loteAbierto = lista || [];
+    if (!loteAbierto.length) return;
 
     const caja = document.createElement('div');
     caja.className = 'agente-confirm';
 
-    const nota = document.createElement('span');
-    nota.className = 'agente-confirm-nota';
-    nota.textContent = lista.length > 1
-      ? 'confirmá las que estén bien, una por una — o seguí escribiendo para cambiar algo'
-      : 'o seguí escribiendo para cambiar algo';
+    if (loteAbierto.length === 1) {
+      const nota = document.createElement('span');
+      nota.className = 'agente-confirm-nota';
+      nota.textContent = 'o seguí escribiendo para cambiar algo';
+      caja.appendChild(botonConfirmar(loteAbierto[0], caja));
+      caja.appendChild(nota);
+    } else {
+      caja.classList.add('agente-confirm-lote');
+      caja._fichas = loteAbierto;
+      const titulo = document.createElement('span');
+      titulo.className = 'agente-confirm-nota';
+      titulo.textContent = 'Revisá las ' + loteAbierto.length
+        + ' fichas: marcá cuáles van y cuáles hay que corregir. No se guarda nada hasta el final.';
+      caja.appendChild(titulo);
+      loteAbierto.forEach(conf => caja.appendChild(filaRevision(conf, caja)));
+      caja.appendChild(barraLote(caja));
+      actualizarBarra(caja);
+    }
 
-    lista.forEach(conf => caja.appendChild(botonConfirmar(conf, caja)));
-    caja.appendChild(nota);
     messagesDiv.appendChild(caja);
     irAlFinal();
   }
@@ -421,9 +716,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!data || !data.mensajes || !data.mensajes.length) return;
         limpiarBienvenida();
         data.mensajes.forEach(m => agregarMensaje(m.texto, m.rol === 'user' ? 'user' : 'assistant',
-                                                  m.imagen));
-        // Las altas que quedaron sin confirmar recuperan su botón: si no, cambiar de
-        // página dejaba las fichas vivas en el servidor y sin forma de darles OK.
+                                                  m.imagenes));
+        // Las altas sin guardar recuperan sus botones, y con el estado de revisión que
+        // tenían: si no, cambiar de página dejaba las fichas vivas en el servidor y sin
+        // forma de darles OK — y con un lote a medio revisar, había que revisarlo de nuevo.
         agregarConfirmaciones(data.confirmaciones);
       })
       .catch(() => {});  // sin historial el chat igual funciona: no vale molestar con un error

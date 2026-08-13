@@ -4,6 +4,40 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-08-13] — La foto se ata al número, no a la ficha
+
+**Contexto**: cargar una estantería entera obligaba a un mensaje por objeto, porque el chat aceptaba una foto por turno y cada ficha se guardaba con un botón que escribía al instante. Al pasar a tandas de ocho apareció el problema real, que no es el volumen sino la **corrección**: de ocho fichas, dos siempre salen mal, y pedir un cambio escribiendo se llevaba puesto lo ya revisado (`quitarConfirmaciones()` borra los botones apenas el usuario tipea).
+
+**La foto pendiente se guardaba con el token de la ficha como clave** — el SHA-1 de su contenido. Funciona mientras la ficha se confirme tal cual salió; en cuanto el modelo la rearma con la corrección, el token es otro y **la foto queda huérfana**: el recurso se crea sin imagen y nadie se entera. No es un bug del lote, es un bug que el lote hace inevitable.
+
+**La decisión es numerar las fotos y que el número sea lo que viaja.** `leer_foto` devuelve cada lectura con el número de su foto, `crear_entidad(foto=N)` lo recibe, y el prompt le insiste en volver a mandar el mismo al rearmar. La clave de `agente_fotos_pendientes` pasa a ser `sid:n`. La columna se sigue llamando `token` porque es la PK y no hacía falta migrar nada.
+
+**Lo interesante es que ese número resolvió tres cosas de una**: la foto sobrevive a la corrección, `_fusionar_fichas()` sabe qué ficha nueva reemplaza a cuál vieja (sin eso quedaban dos botones para la misma alta, con contenidos distintos y el mismo nombre), y el chat puede numerar las miniaturas para que "la 3 no se lee" signifique algo. Buscamos lo primero; los otros dos salieron gratis.
+
+**`foto` va al lado de los campos y no adentro.** Metido en el borrador cambiaría el token — que es el hash de **lo que el usuario leyó** — por un dato que no está en la ficha. Es la misma regla de siempre acá: el token identifica lo aprobado, nada más.
+
+**La numeración no reinicia en cada turno**, sigue desde la última foto pendiente. Arrancando de 1, mandar dos fotos con un lote a medio revisar pisaba las de ese lote; y el modelo ya venía hablando de "la foto 2" en el historial.
+
+---
+
+## [2026-08-13] — Revisar no es guardar: el lote no escribe hasta el final
+
+**Contexto**: el botón verde de una ficha guarda al toque, y eso está bien para una. Con ocho en pantalla obliga a decidir de a una y sin vuelta atrás — y la única forma de corregir era escribir, que borraba los botones de las otras siete.
+
+**La decisión es separar marcar de escribir.** `POST /agente/revisar` guarda un estado por ficha (`ok` / `observada` / `descartada`) y **no toca el inventario ni llama al modelo**; `POST /agente/lote` es el único que escribe. Hasta ese click no hay una sola fila nueva en `gestion.db`, así que mirar las ocho fichas es gratis y reversible.
+
+**El estado vive en la DB, no en el DOM.** Es lo que hace que la revisión sobreviva a recargar la página, a navegar a `/gestion` y a mandar otro mensaje en el medio — y por lo tanto lo que permite dejar de borrar los botones al escribir, que era el problema original. Un lote a medio revisar es un estado con valor: son ocho decisiones que el usuario ya tomó.
+
+**Las acotadas NO se guardan.** Fue lo primero que se decidió y ordena todo lo demás: "corregir" significa que la ficha no va como está, y una ficha que el usuario marcó como mala no puede terminar escrita porque el modelo no haya entendido la corrección. Salen de las pendientes y vuelven rearmadas desde cero, con token nuevo; lo que sobrevive es la foto, que está atada al número.
+
+**Todas las correcciones van en un solo mensaje al modelo**, no una llamada por ficha: ocho fichas serían ocho turnos y ocho respuestas para leer. Y **si no quedó ninguna observada, no se llama al modelo**: la respuesta se arma en Python, como `/confirmar`. Un lote todo aprobado es el caso más común y no tiene por qué costar un turno de LLM.
+
+**El botón de cerrar se habilita recién cuando no queda ninguna pendiente.** La idea del lote es mirar las ocho antes de tocar nada; con el botón vivo desde el principio es fácil mandar media tanda sin querer, y lo que se manda ya está escrito.
+
+**Con una sola ficha no hay lote.** Meterle dos pasos al caso de siempre sería un click de más para el 90% de los usos. El circuito de revisión se activa a partir de dos.
+
+---
+
 ## [2026-08-12] — El primer permiso que protege una factura, no un dato
 
 **Contexto**: mandar una foto estaba habilitado con `agente.leer`, o sea para cualquier dispositivo invitado — el mismo permiso que hace falta para escribir "¿a qué hora tiene clase Pérez?". Es la única cosa del chat que llama a una **API aparte** (~2.000 tokens por lectura, ver la entrada del 2026-08-09), y no tiene tope: nada impide sacar veinte fotos seguidas. El resto de las tools sólo leen SQLite.

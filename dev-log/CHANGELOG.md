@@ -4,6 +4,58 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-13] — Carga en lote: varias fotos por mensaje y revisión antes de escribir
+
+**Tipo**: contrato de `POST /agente/chat` y `GET /agente/historial` + dos rutas nuevas + firma de
+tres tools + semántica de una columna
+**Archivos**: `agente/rutas.py`, `agente/db.py`, `agente/tools/fotos.py`,
+`agente/tools/fichas.py`, `agente/tools/esquemas.py`, `agente/tools/__init__.py`,
+`agente/prompt.py`, `agente/llm.py`, `static/gestion-agente.js`, `static/gestion.css`,
+`templates/agente/_agente_chat_core.html`, `agent_docs/agente-asistente.md`
+
+**1. `POST /agente/chat` acepta `imagenes` (lista) en vez de `imagen` (una).** Tope
+`db.FOTOS_MAX` = 8; si mandan más, se recortan y el modelo avisa. **`imagen` singular se sigue
+aceptando** — cuesta una línea y evita que una pestaña abierta desde antes del deploy pierda la
+foto. La respuesta suma `confirmaciones[].estado` / `.nota` / `.foto`.
+
+**2. `GET /agente/historial` devuelve `mensajes[].imagenes` (lista de data URLs)** en vez de
+`imagen`. Los mensajes ya guardados con la clave `imagen` singular se siguen leyendo, así que
+un historial viejo se repinta igual. `confirmaciones` viene con el estado de revisión.
+
+**3. Dos rutas nuevas, las dos con `agente.escribir`**:
+- `POST /agente/revisar` `{token, estado, nota?}` — marca una ficha (`ok` / `observada` /
+  `descartada`). No escribe en el dominio ni llama al LLM. `400` estado inválido, `409` ficha
+  inexistente.
+- `POST /agente/lote` — escribe las aprobadas, tira las descartadas y manda las observadas al
+  modelo en un único turno para que las rearme. `409` si no hay nada revisado.
+
+**4. Tres tools cambian de firma** (el esquema que ve el modelo):
+- `leer_foto(modo?, **foto?**)` — sin `foto` lee **todas** las del turno y devuelve
+  `{lecturas: [{foto, lectura}]}` en vez de `{lectura}`.
+- `adjuntar_foto(slug, id, **foto?**)` — sin `foto` adjunta todas las del turno.
+- `crear_entidad(slug, campos, **foto?**)` — de qué foto salió la ficha. **No entra en el hash
+  del token**: viaja al lado de los campos.
+
+**5. `contexto_turno['foto_turno']` → `['fotos_turno']`**, que es una lista de
+`{n, b64, tipo}`. `['lectura_foto']` pasa de string a lista de `{foto, lectura}`.
+
+**6. `agente_fotos_pendientes.token` cambia de semántica**: era el hash de la ficha, ahora es
+`sid:n` (el número de la foto en la conversación). **Sin migración de schema**; las filas viejas
+que hubiera quedan huérfanas y las barre el limpiador de 30 días.
+
+**7. `conv['fichas']`** pasa de `{token: {slug, campos}}` a
+`{token: {slug, campos, estado, nota?, foto?}}`. Las fichas viejas sin `estado` se leen como
+`pendiente`.
+
+**8. `AVISO_FOTO_ACTUAL` / `AVISO_FOTO_VIEJA` dejan de ser constantes** y pasan a ser
+`_aviso_foto_actual(numeros)` / `_aviso_foto_vieja(numeros, lecturas)`. `_foto_en_pasado()` toma
+dos parámetros más. `_adjuntar_foto_pendiente()` recibe la ficha entera en vez del token.
+
+**9. `llm.chat_with_tools` sube `max_iterations` de 10 a 14**: una tanda de ocho fichas se
+quedaba sin vueltas y cortaba en "Máximo de iteraciones alcanzado".
+
+---
+
 ## [2026-08-12] — Mandarle fotos al asistente pasa a pedir `agente.vision` (administración)
 
 **Tipo**: permiso nuevo en el catálogo + `POST /agente/chat` puede devolver `403` + firma de `construir_system_prompt`

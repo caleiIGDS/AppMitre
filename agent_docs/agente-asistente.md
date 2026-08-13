@@ -87,26 +87,34 @@ tocar dos archivos para agregar una tool en vez de uno. Ver `dev-log/DECISIONS.m
 
 Las dependencias van en una sola dirección y **no hay ciclos**:
 `dominio → proveedores/db → padrones/lore/vision → tools → prompt/llm → rutas`.
-- **`POST /agente/chat`** — acepta `{mensaje, imagen?}` (imagen en base64 o data URL);
-  retorna `{respuesta}`. El backend llama al modelo con el mensaje + tools disponibles, ejecuta
-  lo que pida (tools de lectura y escritura), repite hasta respuesta final, audita
-  escrituras en `agente_log`. `mensaje` puede venir vacío **si viene `imagen`** (mandar solo
-  la foto de una etiqueta es un caso normal); vacío y sin foto es `400`. Ver "Alta desde foto".
-- **`GET /agente/historial`** — devuelve `{mensajes: [{rol, texto, imagen?}], confirmaciones}`
+- **`POST /agente/chat`** — acepta `{mensaje, imagenes?}` (lista de hasta `FOTOS_MAX`=8 fotos
+  en base64 o data URL; también acepta `imagen` singular, el contrato viejo);
+  retorna `{respuesta, confirmaciones}`. El backend llama al modelo con el mensaje + tools
+  disponibles, ejecuta lo que pida (tools de lectura y escritura), repite hasta respuesta final,
+  audita escrituras en `agente_log`. `mensaje` puede venir vacío **si vienen `imagenes`** (mandar
+  solo la foto de una etiqueta es un caso normal); vacío y sin fotos es `400`. El cuerpo del turno
+  vive en **`_turno()`**, no en el endpoint, porque `/lote` lo usa igual. Ver "Alta desde foto".
+- **`GET /agente/historial`** — devuelve `{mensajes: [{rol, texto, imagenes?}], confirmaciones}`
   para repintar el chat al cargar la página. `gestion-agente.js` lo llama en el
   `DOMContentLoaded` (`cargarHistorial()`). **Hace falta desde que la conversación pasó a
   `gestion.db`**: el servidor la recuerda entre páginas, pero el chat se dibuja de cero en
-  cada carga, así que el historial existía y no se veía. Devuelve también los botones de las
-  altas que hayan quedado sin confirmar — si no, navegar a otra página dejaba las fichas
-  vivas en el servidor y sin forma de darles OK. `_texto_visible()` aplana los bloques de
+  cada carga, así que el historial existía y no se veía. Devuelve también las fichas que hayan
+  quedado sin guardar **con su estado de revisión** — si no, navegar a otra página dejaba las
+  fichas vivas en el servidor y sin forma de darles OK, y con un lote a medio revisar había que
+  revisarlo entero de nuevo. `_texto_visible()` aplana los bloques de
   contenido y saca lo que `chat()` le agrega al mensaje del usuario y él no escribió: el
   `(refiriéndote a: X)` y el `[Hora de este mensaje: ...]` (ver "La hora en cada mensaje").
-  `imagen` es la foto adjunta de ese turno como data URL, y sólo viene si el mensaje la
-  tenía: la arma `_mensaje_visible()` (ver "La foto se ve en el chat").
+  `imagenes` son las fotos adjuntas de ese turno como data URLs, y sólo vienen si el mensaje las
+  tenía: las arma `_mensaje_visible()` (ver "Las fotos se ven en el chat").
 - **`POST /agente/confirmar`** — acepta `{token}` de una ficha de alta pendiente y
-  la guarda sin pasar por el modelo. `409` si el token ya se usó, se reinició la
-  conversación, o quedó desplazado por fichas más nuevas. Ver "Alta con ficha de
-  confirmación".
+  la guarda sin pasar por el modelo. Es el camino de **una sola ficha**. `409` si el token ya se
+  usó, se reinició la conversación, o quedó desplazado por fichas más nuevas. Ver "Alta con ficha
+  de confirmación".
+- **`POST /agente/revisar`** — acepta `{token, estado, nota?}` y marca una ficha del lote como
+  `ok` / `observada` / `descartada`. **No escribe en el inventario ni llama al modelo.** `400` si
+  el estado no existe, `409` si la ficha ya no está. Ver "Cargar de a muchas: el lote".
+- **`POST /agente/lote`** — cierra la revisión: escribe las aprobadas y manda las acotadas a una
+  segunda vuelta con el modelo. `409` si no hay ninguna ficha revisada.
 - **`POST /agente/reset`** — limpia `session['agente_historial']` y
   `session['agente_entidad_actual']`; usado por el botón ↺ del widget para arrancar una
   conversación nueva sin arrastrar contexto viejo.
@@ -130,13 +138,15 @@ caso normal y un 401 pelado ahí es un callejón sin salida.
 
 Mismo motor de accesos y mismo `next` scopeado al prefijo propio (contra open redirect) que
 `/gestion` e `/historia`. Con acceso pero **sin** el permiso de la ruta la respuesta es **403**, no
-el login. Tres casos piden más que el permiso base:
+el login. Cinco casos piden más que el permiso base:
 
 | ruta | permiso | por qué |
 |---|---|---|
 | `/agente/confirmar` | `agente.escribir` | **escribe sin pasar por el LLM**: filtrar las tools no la protege en absoluto |
+| `/agente/lote` | `agente.escribir` | ídem: escribe todas las fichas aprobadas de una |
+| `/agente/revisar` | `agente.escribir` | no toca el dominio, pero es el circuito de alta: quien no puede escribir no tiene fichas que revisar |
 | `/agente/log` | `agente.auditar` | la auditoría es de administración |
-| `/agente/chat` **con `imagen`** | `agente.vision` | gasta la API de visión; sin el permiso devuelve `403` |
+| `/agente/chat` **con `imagenes`** | `agente.vision` | gasta la API de visión; sin el permiso devuelve `403` |
 
 El de `/chat` es un chequeo dentro de la vista y no un decorador porque la ruta **sí** está
 permitida — lo que no está permitido es un campo del body. Un acceso sin `agente.vision` chatea
@@ -243,17 +253,22 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
 - `detalle_entidad(slug, id)` — detalle completo + relaciones (ver "Claves de `relaciones`")
 - `listar_prestamos(persona?)` / `detalle_prestamo(id)` — estados de préstamos
 - `consultar_historia(tema)` — lore de la escuela y guiños internos, ver abajo
-- `leer_foto(modo?)` — mira la foto adjuntada en ESTE turno y la devuelve en texto. `modo`
+- `leer_foto(modo?, foto?)` — mira las fotos adjuntadas en ESTE turno y las devuelve en texto,
+  cada lectura con el número de su foto. **Sin `foto` lee todas de una sola llamada**, que es
+  como hay que usarla. `modo`
   `etiqueta` (default) transcribe lo escrito; `analisis` describe qué se ve. No
-  toca la base (por eso está acá) pero **sí gasta la API de visión**, así que el prompt le
-  pide llamarla solo cuando necesita los datos, nunca para adjuntar. Ver "Alta desde foto"
+  toca la base (por eso está acá) pero **sí gasta la API de visión** (una por foto), así que el
+  prompt le pide llamarla solo cuando necesita los datos, nunca para adjuntar. Ver "Alta desde
+  foto"
 
 **Escritura** — `agente.escribir` (se auditan, guardan snapshot "antes"):
-- `crear_entidad(slug, campos)` — alta **en dos pasos con ficha de confirmación**, ver abajo
+- `crear_entidad(slug, campos, foto?)` — alta **en dos pasos con ficha de confirmación**, ver
+  abajo. `foto` es de qué foto del turno salió la ficha, y es lo que hace que la imagen termine
+  en el registro correcto
 - `editar_entidad(slug, id, campos)` — update
-- `adjuntar_foto(slug, id)` — guarda la foto de ESTE turno en la galería de un registro que ya
-  existe. Sin ficha de confirmación (es aditivo); la imagen sale de `contexto_turno`, no de un
-  parámetro
+- `adjuntar_foto(slug, id, foto?)` — guarda las fotos de ESTE turno en la galería de un registro
+  que ya existe (sin `foto` van todas, con `foto` sólo esa). Sin ficha de confirmación (es
+  aditivo); las imágenes salen de `contexto_turno`, no de un parámetro
 - `vincular_entidad` / `desvincular_entidad` — gestionar M2M
 - `crear_prestamo(persona, destino?, notas?, items)` — crear préstamo (cantidad topeada
   a stock, recurso por nombre o id con resolución ambigua). Devuelve `ajustes` si lo guardado
@@ -359,36 +374,96 @@ quedar guardado. Circuito:
    ("¿de qué medida es?", "¿sabés la marca?"). **No son bloqueantes**: si el usuario no
    contesta, se guarda igual — está en el prompt y en el `instruccion` de la ficha.
 3. Si el usuario pide cambios, el asistente vuelve a llamar con los campos corregidos y
-   sale otra ficha (con su botón). Se repite hasta el OK.
+   sale otra ficha (con sus botones). Se repite hasta el OK.
 4. **El OK es un botón, no una respuesta escrita.** `/chat` devuelve además
-   `confirmaciones: [{token, etiqueta, nombre}, …]` con las fichas pendientes, y
-   `gestion-agente.js` pinta un botón verde por ficha debajo del mensaje
-   (`agregarConfirmaciones()`). El botón pega en **`POST /agente/confirmar`** con
-   su token: el alta se resuelve ahí, en Python, **sin llamar al modelo** — instantánea,
-   gratis, y sin margen para que el modelo escriba otra cosa. Los campos salen de la
-   sesión, nunca del request. El resultado se agrega al `agente_historial` como un turno
+   `confirmaciones: [{token, etiqueta, nombre, estado, nota?, foto?}, …]` con las fichas
+   pendientes, y `gestion-agente.js` las pinta debajo del mensaje
+   (`agregarConfirmaciones()`). **Con una sola ficha** es el botón verde de siempre, que pega
+   en **`POST /agente/confirmar`** con su token: el alta se resuelve ahí, en Python, **sin
+   llamar al modelo** — instantánea, gratis, y sin margen para que el modelo escriba otra
+   cosa. Los campos salen de la sesión, nunca del request. **Con dos o más** entra el circuito
+   de revisión en lote (ver abajo). El resultado se agrega al historial como un turno
    más, con el nombre de lo que se guardó, para que el asistente sepa después que eso ya
    está y qué sigue pendiente.
 5. Escribir "dale, guardalo" también funciona: el modelo llama **otra vez con exactamente
    los mismos campos** y el hash coincide. Los dos caminos terminan en el mismo lugar.
 
 **Varias altas en un turno** (`_confirmaciones`). "Creá a Pablo y a Ezequiel" son dos
-llamadas a `crear_entidad` en la misma respuesta y **dos fichas con dos botones**. Antes se
-mandaba una sola confirmación —la última— y las anteriores quedaban vivas en la sesión sin
-ningún botón que las guardara: el usuario veía las dos fichas, confirmaba, y se daba de alta
-una sola sin que nada avisara. Tres reglas sostienen el caso:
+llamadas a `crear_entidad` en la misma respuesta y **dos fichas con dos juegos de botones**.
+Antes se mandaba una sola confirmación —la última— y las anteriores quedaban vivas en la
+sesión sin ningún botón que las guardara: el usuario veía las dos fichas, confirmaba, y se
+daba de alta una sola sin que nada avisara. Tres reglas sostienen el caso:
 - `contexto_turno['fichas_mostradas']` es un dict con **todas** las del turno, y `/chat`
-  arma un botón por cada una.
-- Se devuelven **todas las pendientes, no solo las de este turno**: el front borra los
-  botones apenas el usuario escribe (`quitarConfirmaciones()`), así que una ficha sin
-  confirmar tiene que reaparecer debajo de la respuesta siguiente o se pierde igual.
-  Reaparecer no escribe nada: confirmar es siempre un click explícito.
+  arma una fila por cada una.
+- Se devuelven **todas las pendientes, no solo las de este turno**: una ficha sin guardar
+  tiene que reaparecer debajo de la respuesta siguiente o se pierde igual. Reaparecer no
+  escribe nada: guardar es siempre un click explícito.
 - Si dos fichas pendientes son de la **misma entidad** (el usuario pidió un cambio y el
   modelo la rearmó), se muestra solo la última: son la misma alta, y dos botones con el
-  mismo nombre y distinto contenido no hay forma de distinguirlos.
+  mismo nombre y distinto contenido no hay forma de distinguirlos. Cuando salieron de una
+  foto la desduplicación es más temprana y más confiable — por número de foto, en
+  `_fusionar_fichas()`; el nombre queda para las altas de texto, que no tienen otra identidad.
 
 El nombre va **dentro** del botón ("✅ Guardar persona: Pablo Errio"): con dos o tres
 seguidos, "Guardar persona" repetido no dice cuál es cuál.
+
+### Cargar de a muchas: el lote
+
+Es el flujo de vaciar una estantería en el inventario: se mandan hasta ocho fotos, sale una
+ficha por foto, **se revisan todas antes de que se escriba nada**, y un botón al final guarda
+las aprobadas y manda las acotadas de vuelta al asistente.
+
+El botón que guardaba al toque no servía para esto por dos razones concretas: obligaba a
+decidir de a una y sin vuelta atrás, y pedir una corrección escribiendo se llevaba puesto lo
+ya revisado (`quitarConfirmaciones()` borraba los botones apenas el usuario tipeaba algo).
+
+**Cuándo se activa**: cuando quedan **dos o más** fichas pendientes. Con una sola sigue el
+botón verde directo — meterle dos pasos al caso de siempre sería un click de más.
+
+**Los tres estados** (`ESTADOS_REVISION`, en `conv['fichas'][token]['estado']`):
+
+| botón | estado | qué pasa al cerrar el lote |
+|---|---|---|
+| ✅ está bien | `ok` | se escribe, con su foto y sus vínculos |
+| ✏️ corregir + qué está mal | `observada` | **no se escribe**: vuelve al modelo para que la rearme |
+| ✕ no va | `descartada` | se tira, junto con su foto pendiente |
+
+Marcar pega en **`POST /agente/revisar`**, que no toca el inventario ni llama al modelo. El
+estado vive en la DB y no en el DOM: por eso sobrevive a recargar la página, a navegar a
+`/gestion` y a mandar otro mensaje en el medio — `/historial` lo devuelve y el front repinta
+la revisión tal cual estaba. Es también lo que permite que **escribir no borre el lote**: con
+dos o más fichas el front ya no las quita al enviar un mensaje, las repinta con la respuesta.
+
+**El botón de cerrar se habilita recién cuando no queda ninguna pendiente.** La idea del lote
+es mirar las ocho antes de tocar nada; con el botón vivo desde el principio es fácil mandar
+media tanda sin querer. Mientras falten, dice "faltan 3 por revisar".
+
+**`POST /agente/lote`** hace las tres cosas en una: escribe las `ok` (con `_guardar_ficha()`,
+el mismo camino que `/confirmar`), borra las `descartada` con su foto, y arma **un solo
+mensaje** con todas las correcciones para el modelo (`_mensaje_correcciones()`):
+
+```
+(revisé las fichas con los botones)
+Guardé: Panel solar 250W, Inversor Growatt 3kW.
+Descarté: Cargador viejo.
+Estas NO se guardaron. Rearmá cada una con la corrección que te digo […]:
+- "Taladro Bosch" (foto 3): la marca está mal, es Makita
+```
+
+Es **un turno para todo el lote y no uno por corrección**: ocho fichas serían ocho llamadas al
+modelo y ocho respuestas para leer. Y **si no quedó ninguna observada no se llama al modelo**:
+la respuesta se arma en Python, como `/confirmar`. Un lote todo aprobado es el caso más común
+y no tiene por qué costar un turno de LLM.
+
+Tres detalles que no son obvios:
+- **Las observadas salen de `fichas` antes de la segunda vuelta.** El modelo las rearma desde
+  cero, con token nuevo; dejar la vieja viva daría dos botones para la misma alta. Lo que
+  sobrevive es la **foto**, que está atada al número y no al token.
+- **Se persiste antes de llamar al modelo**, porque `_turno()` recarga la conversación de la
+  DB: si no, las fichas recién guardadas seguirían ahí y el modelo las vería como pendientes.
+- **El mensaje sintético no se le muestra al usuario**: `_texto_visible()` lo corta entero por
+  su prefijo (`MARCA_LOTE`). Son instrucciones para el modelo, y el resumen de lo guardado ya
+  se lo dice la respuesta de abajo.
 
 **Cómo se sabe que el usuario aprobó** (`_token_ficha`): cada ficha se identifica por un
 SHA-1 de su contenido (`slug` + los campos normalizados). Una llamada escribe solo si su
@@ -400,14 +475,19 @@ hash ya se mostró en un turno **anterior**. Consecuencias buscadas:
 - El hash se **consume** al escribir; repetir la llamada arranca de nuevo por la ficha en
   vez de duplicar el recurso.
 
-Los hashes viven en `session['agente_fichas']` — un dict `{token: {slug, campos}}`, tope 3
-porque la sesión de Flask es una cookie firmada de ~4KB y el historial ya ocupa lo suyo.
-El endpoint `/chat` lo carga en `contexto_turno['fichas_previas']` antes de llamar al modelo
-y lo vuelve a guardar después; `/confirmar` lee de ahí los campos a escribir.
-**Tiene que ser la sesión y no el turno**: los resultados de tools no se persisten en
-`agente_historial`, así que en el turno siguiente el modelo no tiene la ficha a la vista —
+Los hashes viven en la columna `fichas` de `agente_conversaciones` — un dict
+`{token: {slug, campos, estado, nota?, foto?}}`, tope `FICHAS_MAX` = 20, que es lo que hace
+falta para un lote de ocho más su segunda vuelta. `_turno()` lo carga en
+`contexto_turno['fichas_previas']` antes de llamar al modelo y lo vuelve a guardar después;
+`/confirmar`, `/revisar` y `/lote` leen de ahí.
+**Tiene que ser la conversación y no el turno**: los resultados de tools no se persisten en
+el historial, así que en el turno siguiente el modelo no tiene la ficha a la vista —
 un token que tuviera que repetir de memoria no le llega, y el alta quedaba trabada en un
-bucle de fichas (así falló el primer diseño). `/reset` limpia `agente_fichas`.
+bucle de fichas (así falló el primer diseño). `/reset` limpia las fichas y sus fotos.
+
+`foto` va **al lado** de los campos y no adentro: no es un campo de la entidad, y metido en
+el borrador cambiaría el token —que es el hash de lo que el usuario leyó— por un dato que no
+está en la ficha.
 
 Las fichas **no se auditan** en `agente_log`: no tocaron la base, y esa tabla existe para
 deshacer cambios reales. Sí se audita el alta efectiva.
@@ -931,36 +1011,71 @@ leen (varían, típicamente 200–500 tokens por historia).
 ### Alta desde foto (datasheets, etiquetas, chapas de características)
 
 Caso de uso central del asistente en el taller: sacan la foto de la etiqueta de un panel
-solar, escriben "tenemos 5" y el recurso queda cargado sin tipear especificaciones.
+solar, escriben "tenemos 5" y el recurso queda cargado sin tipear especificaciones. Y en
+tandas: **hasta `FOTOS_MAX` = 8 fotos por mensaje**, una ficha por foto (ver "Cargar de a
+muchas: el lote").
 
-**Recorrido de la foto**:
-1. `gestion-agente.js` la lee con `FileReader`, la **achica en un canvas** a 1568 px de lado
-   largo / JPEG calidad 0.85 y la deja en `imagenSeleccionada` como data URL. Sin ese paso
+**Recorrido de las fotos**:
+1. `gestion-agente.js` las lee con `FileReader`, las **achica en un canvas** a 1568 px de lado
+   largo / JPEG calidad 0.85 —todas en paralelo, que con ocho se nota— y las deja en
+   `imagenesSeleccionadas` como data URLs. Sin ese paso
    una foto de celular (3–8 MB, ~11 MB en base64) no entra en el límite de la API de visión
    y tarda una eternidad por el wifi de la escuela. 1568 px es lo que el modelo llega a
    aprovechar y alcanza para leer la letra chica de un datasheet. Si el navegador no puede
    decodificar el archivo (HEIC de iPhone), se manda tal cual en vez de perder la foto.
-2. `POST /chat` con `{mensaje, imagen}`. **La foto sola es un mensaje válido**: si no
+2. `POST /chat` con `{mensaje, imagenes}`. **Las fotos solas son un mensaje válido**: si no
    escribieron nada, el front igual envía y el backend pone "Te mando esta foto." como texto.
-3. `chat()` **no le manda la foto al agente ni la lee**: la deja en
-   `contexto_turno['foto_turno']` y le agrega al mensaje del usuario una nota diciendo que hay
-   una foto disponible. El agente nunca ve un píxel.
-4. **El agente decide qué hacer con ella**, y ahí se abren los dos caminos (ver abajo): leerla
-   con `leer_foto` si necesita los datos, o guardarla con `adjuntar_foto` si va a una ficha que
-   ya existe. Si no está claro, pregunta.
-5. En el camino de alta, el modelo arma la ficha con `crear_entidad` → botón de confirmar, y la
-   foto queda en `agente_fotos_pendientes` atada al **token de la ficha**. Al confirmar,
-   `_adjuntar_foto_pendiente()` la pasa a la galería del registro nuevo con
-   `crud.agregar_foto()` — el mismo camino que usa la subida manual desde el detalle.
+   Si mandan más de ocho, el server **recorta y avisa** en vez de rechazar el mensaje: perder
+   las ocho primeras por haber mandado diez es peor.
+3. `_turno()` **no le manda las fotos al agente ni las lee**: las numera con
+   `_fotos_lote_guardar()`, las deja en `contexto_turno['fotos_turno']` y le agrega al mensaje
+   del usuario una nota diciendo cuántas hay **y con qué números**. El agente nunca ve un píxel:
+   lo único que maneja de una foto es su número.
+4. **El agente decide qué hacer con ellas**, y ahí se abren los caminos (ver abajo): leerlas
+   con `leer_foto` si necesita los datos, o guardarlas con `adjuntar_foto` si van a una ficha
+   que ya existe. Si no está claro, pregunta.
+5. En el camino de alta, el modelo arma una ficha por foto con `crear_entidad(foto=N)` → fila
+   de revisión. La imagen quedó en `agente_fotos_pendientes` atada al **número**, no a la
+   ficha. Al aprobarla, `_adjuntar_foto_pendiente()` la pasa a la galería del registro nuevo
+   con `crud.agregar_foto()` — el mismo camino que usa la subida manual desde el detalle.
 
-#### Los tres caminos de una foto
+#### La foto se ata al NÚMERO, no al token de la ficha
+
+Es lo que hace posible corregir una ficha sin perder su imagen, y por lo tanto lo que hace
+posible el lote entero.
+
+Antes la foto pendiente se guardaba con el **token de la ficha** como clave, que es el SHA-1
+de su contenido. Funcionaba mientras la ficha se confirmara tal cual salió: en cuanto el
+usuario pedía un cambio y el modelo la rearmaba, el token era otro y **la foto quedaba
+huérfana** — el recurso se creaba sin imagen y nadie se enteraba.
+
+Ahora las fotos se numeran por conversación (`_fotos_lote_guardar()` devuelve los números) y
+se guardan con clave `sid:n`. El número es lo que el modelo arrastra: `leer_foto` se lo
+devuelve en cada lectura, `crear_entidad(foto=N)` lo recibe, y el prompt le insiste en volver
+a mandar **el mismo** al rearmar una ficha corregida. La columna sigue llamándose `token`
+—es la PK de la tabla y no hacía falta migrar nada— pero ahora guarda esa clave.
+
+**La numeración no arranca de 1 en cada turno**: sigue desde la última foto pendiente de esa
+conversación. Si arrancara de cero, mandar dos fotos nuevas con un lote a medio revisar
+pisaría las de ese lote — y el modelo ya venía hablando de "la foto 2" en el historial.
+
+El mismo número es además la **identidad de la ficha dentro del lote**: `_fusionar_fichas()`
+hace que una ficha nueva con `foto: 3` reemplace a la vieja con `foto: 3`, así el usuario no
+ve dos botones para la misma alta con contenidos distintos.
+
+#### Los caminos de una foto
 
 | El usuario quiere… | Tool | ¿Cuesta visión? |
 |---|---|---|
-| Guardarla en una ficha que ya existe ("guardá esta foto en el taladro") | `adjuntar_foto(slug, id)` | **No** |
-| Cargar o actualizar el inventario con lo que dice la etiqueta | `leer_foto()` → `crear_entidad` / `editar_entidad` | Sí (~US$0,0004) |
+| Guardarlas en una ficha que ya existe ("guardá estas fotos en el taladro") | `adjuntar_foto(slug, id)` — sin `foto` van todas | **No** |
+| Cargar o actualizar el inventario con lo que dicen las etiquetas | `leer_foto()` → `crear_entidad(foto=N)` / `editar_entidad` | Sí (~US$0,0004 por foto) |
 | Saber qué es o cómo está algo sin etiqueta legible | `leer_foto(modo='analisis')` | Sí (misma llamada, tope más alto) |
 | No se entiende | — | No: el prompt le pide **preguntar**, no leer por las dudas |
+
+**`leer_foto` se llama UNA VEZ para todas.** Sin el parámetro `foto` lee todas las del turno y
+devuelve `{lecturas: [{foto, lectura}, …]}`. No es comodidad: el loop de tool-calling tiene un
+tope de vueltas (`max_iterations`, 14) y una llamada por foto se comía el turno antes de llegar
+a armar las fichas. El esquema y el prompt se lo dicen en esos términos.
 
 **Leer es una tool, no un paso automático.** La primera versión leía toda foto al entrar a
 `chat()`, y eso pagaba una llamada de visión también cuando lo único que querían era adjuntar —
@@ -969,9 +1084,11 @@ saber qué dice. El costo de la vuelta extra del loop es despreciable al lado de
 DeepSeek cachea el prefijo (system prompt + tools): los cache hits salen US$0,003625/M contra
 US$0,435/M de un miss.
 
-Las dos tools sacan la imagen de `contexto_turno['foto_turno']`, nunca de un parámetro: el
-modelo no ve la foto, así que pedirle el base64 sería pedirle que lo invente. Si en el turno no
-vino ninguna, las dos devuelven un error que se lo explica en vez de fallar en silencio.
+Las dos tools sacan las imágenes de `contexto_turno['fotos_turno']` (vía `_fotos_del_turno()`),
+nunca de un parámetro: el modelo no ve la foto, así que pedirle el base64 sería pedirle que lo
+invente. Si en el turno no vino ninguna, las dos devuelven un error que se lo explica en vez de
+fallar en silencio; y un **número que no existe** se contesta listando los que sí, en vez de
+fallar en seco — el número lo elige el modelo y una confusión no tiene por qué costar el turno.
 
 `adjuntar_foto` **corre directo, sin ficha de confirmación**: es aditivo (no pisa ni borra
 nada) y el listón lo marca `editar_entidad`, que sobrescribe campos y tampoco la pide. Queda
@@ -982,64 +1099,75 @@ visión, no el inventario.
 > nada saca). Por eso el prompt y la descripción de `adjuntar_foto` insisten en preguntar
 > cuando el destino es ambiguo: una foto en el recurso equivocado se saca editando la base.
 
-**Por qué la foto se guarda por token y no por turno**: la confirmación puede llegar mucho
-después, incluso desde otra página (el historial se repinta y el botón sigue ahí). El token
-de `_token_ficha()` es lo único que atraviesa esa distancia. Va en tabla propia y no dentro
-del JSON de `fichas` porque esa columna se reescribe entera en cada turno: con hasta
-`FICHAS_MAX` fotos en base64 adentro, cada mensaje del chat arrastraría varios MB de
-escritura. Las filas sin confirmar se barren a los `CONVERSACION_DIAS` días, y `/reset` las
-borra junto con la conversación.
+**Por qué la foto se guarda en la DB y no en el turno**: la confirmación puede llegar mucho
+después, incluso desde otra página (el historial se repinta y los botones siguen ahí). Va en
+tabla propia y no dentro del JSON de `fichas` porque esa columna se reescribe entera en cada
+turno: con hasta ocho fotos en base64 adentro, cada mensaje del chat arrastraría varios MB de
+escritura. Las que quedan sin usar se barren a los `CONVERSACION_DIAS` días, al cerrar el lote
+(`_cerrar_lote()`, cuando ya no queda ninguna ficha que las necesite) y con `/reset`.
 
-#### La foto se ve en el chat
+#### Las fotos se ven en el chat
 
-La imagen se guarda **fuera de `content`**, en la clave `imagen` del mensaje
-(`{'b64', 'tipo'}`). Es la separación que importa: lo que se persiste **para mostrar** no es
-lo mismo que lo que se le manda **al modelo**.
+Las imágenes se guardan **fuera de `content`**, en la clave `imagenes` del mensaje
+(lista de `{'b64', 'tipo'}`). Es la separación que importa: lo que se persiste **para
+mostrar** no es lo mismo que lo que se le manda **al modelo**.
 
 | | Dónde vive | Quién lo ve |
 |---|---|---|
-| Bloque `type: image` | dentro de `content` | el LLM, y **sólo en el turno en que llegó** |
-| Clave `imagen` | al lado de `content` | el chat, para siempre |
+| Bloques `type: image` | dentro de `content` | el LLM, y **sólo en el turno en que llegaron** |
+| Clave `imagenes` | al lado de `content` | el chat, para siempre |
 
 `_sin_imagenes()` limpia lo primero antes de persistir y preserva lo segundo (`{**msg, ...}`),
-igual que `_foto_en_pasado()`. Y `chat()` le pasa al LLM `[{'role', 'content'}]` recortado, así
-que la clave `imagen` **nunca** viaja a la API: el costo que motivó el diseño original —
-reenviar ~1.700 tokens de foto en cada turno siguiente— sigue sin pagarse. Lo que cambia es
+igual que `_foto_en_pasado()`. Y `_turno()` le pasa al LLM `[{'role', 'content'}]` recortado,
+así que la clave `imagenes` **nunca** viaja a la API: el costo que motivó el diseño original —
+reenviar ~1.700 tokens por foto en cada turno siguiente— sigue sin pagarse. Lo que cambia es
 sólo la fila de SQLite, que es el mismo patrón que ya usa la galería de un recurso
 (`crud.agregar_foto`) y está acotado por `HISTORIAL_GUARDADO`: al rotar el historial las
 fotos viejas se van solas.
 
-Del lado del front, `agregarMensaje(texto, tipo, imagenUrl)` pinta la miniatura dentro de un
+Del lado del front, `agregarMensaje(texto, tipo, imagenes)` pinta cada miniatura dentro de un
 `<a target="_blank">` (click → foto entera) y el texto debajo. Antes de esto la burbuja decía
-`📷 nombre-del-archivo.jpg` y la foto no se veía nunca.
+`📷 nombre-del-archivo.jpg` y la foto no se veía nunca. **Con varias van en grilla y
+numeradas** (`.agente-message-fotos.is-multiple`): el asistente las nombra por número ("la 3
+no se lee"), así que sin el número visible no hay forma de saber a cuál se refiere.
 
-**Lo que el usuario no escribió no se muestra**: `_texto_visible()` corta el aviso de foto
-entero (con la lectura de la etiqueta pegada, si la hubo) y también `TEXTO_FOTO_SOLA` —el
+`_mensaje_visible()` sigue leyendo la clave `imagen` **singular** de las conversaciones
+anteriores al lote, para que no queden mensajes mancos al repintar un historial viejo.
+
+**Lo que el usuario no escribió no se muestra**: `_texto_visible()` corta el aviso de fotos
+entero (con las lecturas de las etiquetas pegadas, si las hubo), `TEXTO_FOTO_SOLA` —el
 "Te mando esta foto." que `chat()` inventa cuando mandan una imagen sin texto, porque un
-mensaje vacío no es un turno válido para el modelo. Una foto sola queda como una foto sola.
-Por eso `historial()` filtra por `texto or imagen` y no sólo por `texto`: si filtrara por
+mensaje vacío no es un turno válido para el modelo— y el mensaje que arma `/lote`
+(`MARCA_LOTE`). Una foto sola queda como una foto sola.
+Por eso `historial()` filtra por `texto or imagenes` y no sólo por `texto`: si filtrara por
 texto, ese mensaje desaparecería del chat.
 
-#### La foto dura un turno, la lectura no
+#### La foto dura un turno, la lectura y el número no
 
 **Son dos avisos, no uno**, y esto es lo que hace que un alta se pueda terminar en el turno
 siguiente:
 
-| Constante | Cuándo | Qué dice |
+| Función | Cuándo | Qué dice |
 |---|---|---|
-| `AVISO_FOTO_ACTUAL` | Durante el turno, con la imagen en `contexto_turno` | "hay una foto, todavía no la vio nadie, llamá a `leer_foto`" |
-| `AVISO_FOTO_VIEJA` | Al **persistir**, vía `_foto_en_pasado()` | "esa foto YA NO ESTÁ, no llames a `leer_foto`" + **la lectura completa** |
+| `_aviso_foto_actual(numeros)` | Durante el turno, con las imágenes en `contexto_turno` | "hay N fotos, numeradas X, Y, Z, todavía no las vio nadie, llamá a `leer_foto` UNA vez" |
+| `_aviso_foto_vieja(numeros, lecturas)` | Al **persistir**, vía `_foto_en_pasado()` | "esas fotos YA NO ESTÁN, no llames a `leer_foto`" + **las lecturas completas** + "los números sí siguen valiendo" |
 
 El aviso en presente quedaba guardado tal cual, y en el turno siguiente el modelo leía "hay
 una foto sin ver, llamá a `leer_foto`", llamaba, y la tool le contestaba que no hay ninguna —
 porque la foto muere con el turno. Un "dale, creá" después de una ficha se iba entero en esa
 vuelta perdida.
 
-**Y la lectura ahora se persiste.** `_leer_foto_fmt()` la deja en
-`contexto_turno['lectura_foto']` y `chat()` la pega al mensaje guardado. Hacía falta porque
+Son **funciones y no constantes** desde el lote: el texto lleva los números de las fotos de
+ese turno. Por eso `_foto_en_pasado()` recibe el aviso que se armó, en vez de mirar una
+constante global — tiene que reemplazar exactamente ese string.
+
+**Y la lectura se persiste.** `_leer_foto_fmt()` deja las lecturas numeradas en
+`contexto_turno['lectura_foto']` y `_turno()` las pega al mensaje guardado. Hacía falta porque
 **los resultados de las tools no quedan en el historial**: sin esto, lo único que sobrevivía
 de la etiqueta era lo que el modelo hubiera repetido en su prosa, y al turno siguiente se
-quedaba sin marca, sin modelo y sin specs para armar la ficha.
+quedaba sin marca, sin modelo y sin specs para armar la ficha. Con el lote pasó a ser todavía
+más importante: la segunda vuelta de correcciones ocurre cuando las fotos ya no están, y el
+modelo rearma esas fichas **sólo** con lo que quedó escrito acá.
 
 `_texto_visible()` corta desde cualquiera de los dos avisos hasta el final del mensaje, así
 que la lectura pegada tampoco se le muestra al usuario como si la hubiera escrito él.
@@ -1105,15 +1233,16 @@ que `_leer_foto_fmt()` chequea `_get_vision_config()` *antes* de llamarlo y devu
 propio que dice justamente eso y ofrece adjuntar. Ver "Sin lector, adjuntar sigue funcionando"
 abajo.
 
-**Las dos ramas de `chat()`**:
+**Las dos ramas de `_turno()`**:
 1. El chat ve imágenes (`_get_config()['vision']`: Anthropic siempre, el resto con
-   `AGENTE_VISION=1`) **y no hay lector aparte** → el bloque `image` viaja al agente y
-   `_mensajes_openai(..., vision=True)` lo traduce a `image_url` si el proveedor es
-   OpenAI-compatible. Es el único caso donde el que razona mira la foto, así que acá
+   `AGENTE_VISION=1`) **y no hay lector aparte** → un bloque `image` por foto viaja al agente y
+   `_mensajes_openai(..., vision=True)` los traduce a `image_url` si el proveedor es
+   OpenAI-compatible. Es el único caso donde el que razona mira las fotos, así que acá
    `leer_foto` no hace falta.
-2. En cualquier otro caso —haya lector o no— la foto queda en `contexto_turno['foto_turno']` y
-   el mensaje del usuario lleva una nota diciendo que está disponible. **No se lee acá**:
-   decide el modelo. Anda con cualquier `AGENTE_PROVIDER`.
+2. En cualquier otro caso —haya lector o no— las fotos quedan en
+   `contexto_turno['fotos_turno']` (con su número) y el mensaje del usuario lleva una nota
+   diciendo cuántas hay y cuáles son. **No se leen acá**: decide el modelo. Anda con cualquier
+   `AGENTE_PROVIDER`.
 
 **Sin lector, adjuntar sigue funcionando.** Antes había una tercera rama: sin lector y sin
 chat con visión, `chat()` cortaba antes de llamar al modelo con un `AVISO_SIN_VISION` fijo. La
@@ -1160,12 +1289,16 @@ agente_fotos_pendientes (token PK, sid, b64, tipo, fecha)
 `agente_conversaciones`: una fila por navegador. La conversación vive acá y no en la cookie
 de Flask porque el historial la pasaba de los ~4 KB que aguanta un navegador y la cookie se
 descartaba **sin avisar**, dejando al usuario deslogueado y sin conversación. En la cookie
-queda solo `agente_sid`. Los mensajes que traían una foto la guardan en su clave `imagen`
-(`{'b64', 'tipo'}`), fuera de `content` — ver "La foto se ve en el chat".
+queda solo `agente_sid`. Los mensajes que traían fotos las guardan en su clave `imagenes`
+(lista de `{'b64', 'tipo'}`), fuera de `content` — ver "Las fotos se ven en el chat". La
+columna `fichas` guarda las altas sin confirmar **con su estado de revisión** (ver "Cargar de
+a muchas: el lote").
 
-`agente_fotos_pendientes`: la foto de la que salió una ficha, esperando que se confirme el
-alta (ver "Alta desde foto"). La clave es el token de contenido de `_token_ficha()`, no el
-turno, porque la confirmación puede llegar desde otra página o mucho después.
+`agente_fotos_pendientes`: las fotos del lote, esperando que se apruebe la ficha que las
+usa (ver "Alta desde foto"). La clave (columna `token`) es **`sid:n`**, el número de la foto
+dentro de la conversación — no el turno, porque la confirmación puede llegar desde otra
+página o mucho después, y no el token de la ficha, porque ese cambia en cuanto la ficha se
+rearma con una corrección. Ver "La foto se ata al NÚMERO, no al token de la ficha".
 
 Las dos se barren a los `CONVERSACION_DIAS` (30) días de inactividad, en la misma escritura
 que las usa — no en `init_db()`, porque el server puede estar meses sin reiniciar.

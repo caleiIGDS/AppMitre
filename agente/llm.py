@@ -266,7 +266,11 @@ def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None,
                                             escribe=escribe, ve_personas=ve_personas,
                                             ve_fotos=ve_fotos)
 
-    max_iterations = 10
+    # Una tanda de fotos es el turno más largo que existe: leer todas (1 vuelta) + una
+    # `crear_entidad` por foto. Si el modelo no las paraleliza, ocho fichas son ocho vueltas,
+    # y con el tope en 10 el turno se cortaba en "Máximo de iteraciones alcanzado" — con las
+    # fichas a medio armar y el usuario sin nada que revisar.
+    max_iterations = 14
 
     # Estado compartido por todas las tools de ESTE turno (ver ejecutar_tool). Lo puede
     # sembrar el endpoint de chat con lo que venga de la sesión (fichas ya mostradas).

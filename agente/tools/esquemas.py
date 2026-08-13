@@ -252,19 +252,23 @@ TOOLS_SCHEMA = [
     },
     {
         'name': 'leer_foto',
-        'description': ('Mira la foto que el usuario adjuntó EN ESTE TURNO y te la devuelve en '
-                        'texto. Tiene dos modos, elegí según qué necesitás saber: '
+        'description': ('Mira las fotos que el usuario adjuntó EN ESTE TURNO y te las devuelve en '
+                        'texto. Puede haber VARIAS: llamala UNA SOLA VEZ, sin el parámetro '
+                        '`foto`, y te devuelve todas las lecturas juntas, cada una con el número '
+                        'de su foto. NO la llames una vez por foto: el turno tiene un tope de '
+                        'vueltas y te quedás sin ninguna para armar las fichas. '
+                        'Tiene dos modos, elegí según qué necesitás saber: '
                         '"etiqueta" (el habitual) transcribe lo que está ESCRITO —marca, modelo, '
                         'potencia, tensión, medidas— y es el que usás para cargar o actualizar '
                         'el inventario; "analisis" describe QUÉ SE VE —qué objeto es, en qué '
                         'estado visible está, cuántos hay— y sirve cuando la foto no tiene '
                         'etiqueta legible o el usuario pregunta qué es o cómo está algo. '
                         'Llamala SOLO cuando necesites datos de la imagen. Si el usuario solo '
-                        'quiere GUARDAR la foto en una ficha, NO la llames: no hace falta leerla '
-                        'para adjuntarla, usá adjuntar_foto. Tampoco la llames "por las dudas" '
-                        'ni la llames dos veces con los dos modos a ver cuál sale mejor: cada '
-                        'llamada cuesta, en cualquier modo. '
-                        'Si no tenés claro para qué te mandaron la foto, preguntale al usuario '
+                        'quiere GUARDAR las fotos en una ficha, NO la llames: no hace falta '
+                        'leerlas para adjuntarlas, usá adjuntar_foto. Tampoco la llames "por las '
+                        'dudas" ni la llames dos veces con los dos modos a ver cuál sale mejor: '
+                        'cada foto cuesta, en cualquier modo. '
+                        'Si no tenés claro para qué te mandaron las fotos, preguntale al usuario '
                         'antes de leer nada.'),
         'input_schema': {
             'type': 'object',
@@ -272,7 +276,12 @@ TOOLS_SCHEMA = [
                 'modo': {'type': 'string', 'enum': ['etiqueta', 'analisis'],
                          'description': 'Default "etiqueta": transcribe lo escrito, es el que '
                                         'alimenta el alta. Usá "analisis" solo si lo que hace '
-                                        'falta es saber qué es o cómo está el objeto.'}
+                                        'falta es saber qué es o cómo está el objeto.'},
+                'foto': {'type': 'integer',
+                         'description': 'Número de UNA foto puntual. Casi nunca hace falta: sin '
+                                        'esto se leen todas las del turno de una sola vez, que '
+                                        'es lo que querés. Usalo solo para releer una que ya '
+                                        'leíste en otro modo.'}
             }
         }
     },
@@ -359,12 +368,20 @@ TOOLS_SCHEMA = [
                         'te lo dieron, va vacío — no inventes. Antes de dar de alta un recurso, '
                         'buscá con buscar_entidad para no duplicar uno que ya existe. Si te piden '
                         'dar de alta varias cosas de una, llamala una vez por cada una en el mismo '
-                        'turno: cada ficha sale con su propio botón y el usuario las confirma por '
+                        'turno: cada ficha sale con sus propios botones y el usuario las revisa por '
                         'separado.'),
         'input_schema': {
             'type': 'object',
             'properties': {
                 'slug': {'type': 'string', 'enum': SLUGS_ENTIDAD},
+                'foto': {'type': 'integer',
+                         'description': 'Número de la foto de la que salió esta ficha, el mismo '
+                                        'que te devolvió leer_foto. Mandalo SIEMPRE que el alta '
+                                        'venga de una foto: es lo que hace que la imagen termine '
+                                        'en la ficha correcta y no en otra. Si rearmás una ficha '
+                                        'porque el usuario pidió un cambio, volvé a mandar el '
+                                        'MISMO número — si no, la foto se pierde. Para un alta '
+                                        'que no salió de ninguna foto, omitilo'},
                 'nombre': {'type': 'string', 'description': 'Nombre, redactado por VOS con lo que dijo el usuario: corto y reconocible para quien lo busque en el pañol (ej: "Taladro percutor Bosch GSB 550"). OBLIGATORIO en todos los slugs MENOS hitos, que usa `titulo` en su lugar'},
                 'titulo': {'type': 'string', 'description': 'Título del hito, redactado por VOS: qué pasó, corto y reconocible en una línea de tiempo (ej: "Olimpiada Matemática Argentina — Certamen Nacional"). OBLIGATORIO en hitos, y solo aplica a hitos: es el campo que en el resto de los slugs se llama `nombre`'},
                 'tipo': {'type': 'string', 'description': ('RECURSOS: categoría que proponés VOS, texto libre, pero REUSÁ una de las que ya están en uso — la ficha del paso 1 te las devuelve en `tipos_en_uso` — antes de inventar una nueva; si no, el campo se llena de sinónimos y deja de servir para agrupar. HITOS: elegí uno de estos valores cerrados (si lo que estás cargando es lo que antes se llamaba "proyecto", va como hito con "Proyecto" en `etiquetas`, no acá): '
@@ -432,23 +449,30 @@ TOOLS_SCHEMA = [
     },
     {
         'name': 'adjuntar_foto',
-        'description': ('Guarda la foto que el usuario adjuntó EN ESTE TURNO en la galería de un '
+        'description': ('Guarda las fotos que el usuario adjuntó EN ESTE TURNO en la galería de un '
                         'registro que YA existe. Es lo que hay que usar cuando mandan una foto para '
-                        'que quede en la ficha de algo ("guardá esta foto en el taladro", "esta es '
-                        'la foto del hito"). '
+                        'que quede en la ficha de algo ("guardá esta foto en el taladro", "estas son '
+                        'las fotos del hito"). Sin el parámetro `foto` van TODAS las del turno al '
+                        'mismo registro, que es el caso normal cuando mandan varias de la misma '
+                        'cosa; si cada foto va a un registro distinto, llamala una vez por cada una '
+                        'con su número. '
                         'NO necesitás leer la foto para adjuntarla: no llames a leer_foto para esto. '
                         'El id sale de buscar_entidad, nunca de tu memoria. '
                         'IMPORTANTE: si no tenés claro a qué registro va, o la búsqueda devuelve '
                         'varios parecidos, PREGUNTALE al usuario cuál es. No elijas por tu cuenta: '
                         'una foto guardada en el recurso equivocado no se puede sacar desde la app. '
                         'Para un alta nueva no la uses: la foto de un alta se guarda sola cuando el '
-                        'usuario confirma la ficha.'),
+                        'usuario confirma la ficha (para eso está el parámetro `foto` de '
+                        'crear_entidad).'),
         'input_schema': {
             'type': 'object',
             'properties': {
                 'slug': {'type': 'string', 'enum': SLUGS_ENTIDAD,
                          'description': 'Tipo de registro al que va la foto'},
-                'id': {'type': 'integer', 'description': 'ID exacto obtenido de buscar_entidad'}
+                'id': {'type': 'integer', 'description': 'ID exacto obtenido de buscar_entidad'},
+                'foto': {'type': 'integer',
+                         'description': 'Número de UNA foto puntual del turno. Omitilo para '
+                                        'adjuntar todas las que mandó al mismo registro'}
             },
             'required': ['slug', 'id']
         }

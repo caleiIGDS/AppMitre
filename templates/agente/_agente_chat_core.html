@@ -19,12 +19,14 @@
    estén. Esconderlo es cosmética: quien corta de verdad es `chat()`, que devuelve 403. #}
 <div class="agente-input-area">
   {% if puede('agente.vision') %}
-  <input type="file" id="agente-image-file" accept="image/*" style="display: none;">
+  {# `multiple`: se manda una tanda de fotos y sale una ficha por cada una (ver el lote de
+     revisión en gestion-agente.js). El tope real lo pone el server, en db.FOTOS_MAX. #}
+  <input type="file" id="agente-image-file" accept="image/*" multiple style="display: none;">
   {% endif %}
 
   <div class="agente-input-row">
     {% if puede('agente.vision') %}
-    <button id="agente-image-btn" class="agente-toolbar-btn" title="Adjuntar imagen" aria-label="Adjuntar imagen">
+    <button id="agente-image-btn" class="agente-toolbar-btn" title="Adjuntar imágenes" aria-label="Adjuntar imágenes">
       📷
     </button>
     {% endif %}

@@ -55,6 +55,12 @@ HISTORIAL_AL_MODELO = 24   # mensajes que se le mandan al LLM por turno (12 turn
 FICHAS_MAX = 20            # altas sin confirmar que se recuerdan a la vez
 CONVERSACION_DIAS = 30     # a los N días sin uso, la conversación se descarta
 
+# Fotos por mensaje. Cada una cuesta una llamada de visión y ~300 KB de subida: ocho son
+# ~2,4 MB por el wifi de la escuela, que es una tanda de estantería y entra cómodo. Más que
+# eso el POST se hace largo y el turno se llena de lecturas. `chat()` recorta y avisa en vez
+# de rechazar el mensaje entero: perder las ocho primeras por mandar diez es peor.
+FOTOS_MAX = 8
+
 def conectar():
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
@@ -164,41 +170,84 @@ def _conv_borrar():
 
 
 # ---------------------------------------------------------------------------
-# Fotos esperando que se confirme el alta
+# Fotos del lote, esperando que se confirmen las altas
 # ---------------------------------------------------------------------------
-# La foto llega en un turno y el alta se confirma en otro (o desde otra página, después
-# de repintar el historial), así que hay que guardarla en el medio atada a la ficha que
-# el usuario vio: la clave es el mismo token de contenido que usa `_crear_entidad`.
+# La foto llega en un turno y el alta se confirma en otro (o desde otra página, después de
+# repintar el historial), así que hay que guardarla en el medio atada a algo que atraviese
+# esa distancia.
 #
-# Va en tabla propia y no dentro del JSON de `fichas` porque esa columna se reescribe
-# entera en cada turno; con hasta FICHAS_MAX fotos en base64 adentro, cada mensaje del
-# chat pasaría a arrastrar varios MB de escritura.
+# Ese "algo" es el NÚMERO de la foto dentro de la conversación, no el token de la ficha.
+# Antes era el token —el hash del contenido de la ficha— y funcionaba mientras la ficha se
+# confirmaba tal cual salía: en cuanto el usuario pide un cambio y el modelo la rearma, el
+# hash es otro y la foto quedaba huérfana. El número, en cambio, lo arrastra el modelo
+# (`crear_entidad(foto=3)`) y sobrevive a cualquier corrección. Ver dev-log/DECISIONS.md.
+#
+# La columna se sigue llamando `token` (es la PK de la tabla y no hace falta migrar nada),
+# pero ahora guarda `sid:n`. Va en tabla propia y no dentro del JSON de `fichas` porque esa
+# columna se reescribe entera en cada turno; con hasta FOTOS_MAX fotos en base64 adentro,
+# cada mensaje del chat pasaría a arrastrar varios MB de escritura.
 
-def _foto_pendiente_guardar(token, b64, tipo):
+def _clave_foto(n):
+    return f'{_sid()}:{n}'
+
+
+def _fotos_lote_guardar(fotos):
+    """Guarda las fotos de este turno y devuelve el número que le tocó a cada una.
+
+    La numeración NO arranca de 1 en cada turno: sigue desde la última foto que quedó
+    pendiente en esta conversación. Si arrancara de cero, mandar dos fotos nuevas mientras
+    hay un lote a medio revisar pisaría las de ese lote — y el modelo ya venía hablando de
+    "la foto 2" en el historial.
+    """
+    if not fotos:
+        return []
     con = conectar()
-    con.execute(
-        "INSERT INTO agente_fotos_pendientes (token, sid, b64, tipo, fecha) VALUES (?,?,?,?,?) "
-        "ON CONFLICT(token) DO UPDATE SET b64=excluded.b64, tipo=excluded.tipo, "
-        "fecha=excluded.fecha",
-        (token, _sid(), b64, tipo, _ahora())
-    )
+    fila = con.execute(
+        "SELECT token FROM agente_fotos_pendientes WHERE sid = ?", (_sid(),)
+    ).fetchall()
+    usados = [int(f['token'].rsplit(':', 1)[-1]) for f in fila
+              if f['token'].rsplit(':', 1)[-1].isdigit()]
+    base = max(usados) if usados else 0
+
+    numeros = []
+    for i, (b64, tipo) in enumerate(fotos, start=1):
+        n = base + i
+        con.execute(
+            "INSERT INTO agente_fotos_pendientes (token, sid, b64, tipo, fecha) "
+            "VALUES (?,?,?,?,?) ON CONFLICT(token) DO UPDATE SET b64=excluded.b64, "
+            "tipo=excluded.tipo, fecha=excluded.fecha",
+            (_clave_foto(n), _sid(), b64, tipo, _ahora()))
+        numeros.append(n)
+
     # Barrido de las que quedaron sin confirmar, con el mismo criterio que las
     # conversaciones abandonadas (ver _conv_guardar).
     con.execute("DELETE FROM agente_fotos_pendientes WHERE fecha < ?",
                 ((ahora() - timedelta(days=CONVERSACION_DIAS)).strftime('%Y-%m-%d %H:%M:%S'),))
     con.commit()
     con.close()
+    return numeros
 
 
-def _foto_pendiente_tomar(token):
-    """Devuelve (b64, tipo) de la foto de esa ficha y la borra. None si no hay."""
+def _foto_lote_tomar(n):
+    """Devuelve (b64, tipo) de la foto N de esta conversación y la borra. None si no hay."""
+    if not n:
+        return None
+    clave = _clave_foto(n)
     con = conectar()
     fila = con.execute(
         "SELECT b64, tipo FROM agente_fotos_pendientes WHERE token = ? AND sid = ?",
-        (token, _sid())
+        (clave, _sid())
     ).fetchone()
     if fila:
-        con.execute("DELETE FROM agente_fotos_pendientes WHERE token = ?", (token,))
+        con.execute("DELETE FROM agente_fotos_pendientes WHERE token = ?", (clave,))
         con.commit()
     con.close()
     return (fila['b64'], fila['tipo']) if fila else None
+
+
+def _fotos_lote_borrar():
+    """Tira las fotos que quedaron sin usar. Se llama al cerrar el lote."""
+    con = conectar()
+    con.execute("DELETE FROM agente_fotos_pendientes WHERE sid = ?", (_sid(),))
+    con.commit()
+    con.close()

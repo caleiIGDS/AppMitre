@@ -153,15 +153,19 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
                 limite=tool_input.get('limite', 50)
             )
         elif tool_name == 'crear_entidad':
+            # `foto` queda AFUERA de los campos: no es un campo de la entidad sino de qué
+            # imagen salió la ficha (ver fichas._ficha_confirmacion).
             resultado = _crear_entidad(
                 tool_input.get('slug', ''),
-                {k: v for k, v in tool_input.items() if k != 'slug'},
-                contexto_turno, permisos)
+                {k: v for k, v in tool_input.items() if k not in ('slug', 'foto')},
+                contexto_turno, permisos, tool_input.get('foto'))
         elif tool_name == 'leer_foto':
-            resultado = _leer_foto_fmt(contexto_turno, tool_input.get('modo', MODO_DEFAULT))
+            resultado = _leer_foto_fmt(contexto_turno, tool_input.get('modo', MODO_DEFAULT),
+                                       tool_input.get('foto'))
         elif tool_name == 'adjuntar_foto':
             resultado = _adjuntar_foto_entidad(
-                tool_input.get('slug', ''), tool_input.get('id', 0), contexto_turno)
+                tool_input.get('slug', ''), tool_input.get('id', 0), contexto_turno,
+                tool_input.get('foto'))
         elif tool_name == 'editar_entidad':
             resultado = _editar_entidad(tool_input.get('slug', ''), tool_input.get('id', 0), {k: v for k, v in tool_input.items() if k not in ['slug', 'id']})
         elif tool_name == 'vincular_entidad':

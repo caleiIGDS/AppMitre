@@ -162,7 +162,7 @@ def _recordatorio_hito(borrador, permisos):
     return avisos
 
 
-def _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos):
+def _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos, foto=None):
     """Paso 1 del alta: la ficha para mostrarle al usuario. No escribe nada."""
     cfg = _modulo(slug).ENTIDADES.get(slug) or {}
     etiquetas = {c['nombre']: c.get('label', c['nombre']) for c in cfg.get('campos', [])}
@@ -181,7 +181,15 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos):
     #
     # Es un dict con TODAS las del turno, no la última: "creá a Pablo y a Ezequiel" arma dos
     # fichas en un solo turno y las dos necesitan su botón (ver _confirmaciones).
-    contexto_turno.setdefault('fichas_mostradas', {})[token] = {'slug': slug, 'campos': borrador}
+    #
+    # `foto` va AL LADO de los campos y no adentro: no es un campo de la entidad, y si
+    # entrara al borrador cambiaría el token —que es el hash del contenido de la ficha— por
+    # un dato que el usuario no lee. Es lo que ata la ficha a su imagen aunque después se
+    # rearme con correcciones (ver db._fotos_lote_guardar).
+    anotada = {'slug': slug, 'campos': borrador, 'estado': 'pendiente'}
+    if foto:
+        anotada['foto'] = foto
+    contexto_turno.setdefault('fichas_mostradas', {})[token] = anotada
 
     resultado = {
         'ok': False,
@@ -195,15 +203,17 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos):
             'sumar, hacele 1 a 3 preguntas cortas y concretas (medida, marca y modelo, dónde '
             'se guarda, cuántos hay). Aclarale que son opcionales: si no las contesta se '
             'guarda igual. NO le pidas que escriba "sí" ni "confirmo": debajo de tu mensaje '
-            'le aparece un botón para guardar. Cerrá diciéndole que si está bien, lo confirme '
-            'con ese botón. Si pide cambios, volvé a llamar a crear_entidad con los campos '
-            'corregidos y te devuelve la ficha nueva (con su botón). '
+            'le aparecen los botones para revisarla. Cerrá diciéndole que la revise ahí. '
+            'Si pide cambios, volvé a llamar a crear_entidad con los campos '
+            'corregidos y te devuelve la ficha nueva (con sus botones). '
             'Si te pidió dar de alta VARIAS cosas, llamá a crear_entidad una vez por cada una '
-            'en este mismo turno y mostrá las fichas una abajo de la otra: cada una lleva su '
-            'propio botón, así que el usuario las confirma por separado. Nunca dejes una sin '
+            'en este mismo turno y mostrá las fichas una abajo de la otra: cada una lleva sus '
+            'propios botones, así que el usuario las revisa por separado. Nunca dejes una sin '
             'armar "para el próximo turno".'
         ),
     }
+    if foto:
+        resultado['foto'] = foto
     if slug == 'recursos':
         resultado['tipos_en_uso'] = _tipos_en_uso()
     if slug == 'hitos':
@@ -213,7 +223,7 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos):
     return resultado
 
 
-def _crear_entidad(slug, campos_dict, contexto_turno=None, permisos=frozenset()):
+def _crear_entidad(slug, campos_dict, contexto_turno=None, permisos=frozenset(), foto=None):
     """Alta de recurso/conjunto/actividad/hito/persona, en DOS PASOS.
 
     Primera llamada con un juego de campos: no toca la base, devuelve la ficha para que el
@@ -253,7 +263,7 @@ def _crear_entidad(slug, campos_dict, contexto_turno=None, permisos=frozenset())
     # (Una mostrada en ESTE turno tampoco cuenta: hasta que el loop no termina, el usuario
     # no vio una sola palabra — por eso se anotan aparte, en `fichas_mostradas`.)
     if token not in previas:
-        return _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos)
+        return _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos, foto)
 
     # Se consume: si el asistente vuelve a llamar con los mismos campos, es un alta nueva
     # y arranca otra vez por la ficha, en vez de duplicar el recurso en silencio.

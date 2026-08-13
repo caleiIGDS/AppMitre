@@ -1565,6 +1565,199 @@ body.g-sin-scroll {
     padding-left: 2px;
 }
 
+/* ---------- Revisión en lote ---------- */
+/* Con dos o más fichas pendientes, en vez del botón que guarda al toque va una fila por
+   ficha (está bien / corregir / no va) y un botón al final que recién ahí escribe todo.
+   Ver "Circuito del lote" en gestion-agente.js. Los botones son de 44px porque esto se usa
+   parado en el taller, con el celular en una mano. */
+
+.agente-confirm-lote {
+    align-self: stretch;
+    gap: 8px;
+    border-left: 3px solid var(--g-primary);
+    padding: 10px 0 10px 10px;
+    background: var(--g-bg);
+    border-radius: 0 6px 6px 0;
+}
+
+.agente-revision {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px 8px 8px;
+    border: 1px solid var(--g-border);
+    border-left: 3px solid var(--g-border);
+    border-radius: 4px;
+    background: var(--g-surface);
+}
+
+.agente-revision.is-ok          { border-left-color: #16a34a; }
+.agente-revision.is-observada   { border-left-color: var(--g-accent); }
+.agente-revision.is-descartada  { border-left-color: var(--g-muted); opacity: 0.6; }
+
+.agente-revision-cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.agente-revision-nombre {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--g-dark);
+}
+
+.agente-revision-marca {
+    font-size: 11px;
+    color: var(--g-muted);
+}
+
+.agente-revision-botones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.agente-revision-btn {
+    flex: 1 1 auto;
+    min-height: 44px;
+    padding: 8px 10px;
+    border: 1px solid var(--g-border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--g-muted);
+    font-family: var(--g-font);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.agente-revision-btn:hover { border-color: var(--g-primary); color: var(--g-primary); }
+
+/* El estado marcado se ve en el botón que lo puso: con ocho fichas, un color en el borde
+   izquierdo solo no alcanza para saber cuál de los tres se tocó. */
+.agente-revision-ok[aria-pressed="true"] {
+    background: #16a34a; border-color: #16a34a; color: #fff;
+}
+.agente-revision-observada[aria-pressed="true"] {
+    background: var(--g-accent); border-color: var(--g-accent); color: #fff;
+}
+.agente-revision-descartada[aria-pressed="true"] {
+    background: var(--g-muted); border-color: var(--g-muted); color: #fff;
+}
+
+.agente-revision-nota {
+    display: flex;
+    gap: 6px;
+}
+
+.agente-revision-input {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 10px;
+    border: 1px solid var(--g-border);
+    border-radius: 6px;
+    font-family: var(--g-font);
+    /* 16px o iOS hace zoom al enfocar y descuadra el chat (misma razón que .agente-input) */
+    font-size: 16px;
+    background: var(--g-bg);
+    color: var(--g-dark);
+}
+
+.agente-revision-anotar {
+    min-height: 44px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    background: var(--g-primary);
+    color: #fff;
+    font-family: var(--g-font);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.agente-lote {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding-top: 4px;
+}
+
+.agente-lote-btn {
+    background: #16a34a;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 12px 20px;
+    font-family: var(--g-font);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    min-height: 44px;
+    box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3);
+    transition: all 0.2s;
+}
+
+.agente-lote-btn:hover:not(:disabled) {
+    background: #15803d;
+    transform: translateY(-1px);
+}
+
+.agente-lote-btn:disabled {
+    background: var(--g-border);
+    color: var(--g-muted);
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+.agente-lote-nota {
+    font-size: 11px;
+    color: var(--g-muted);
+    padding-left: 2px;
+}
+
+/* ---------- Fotos adjuntas en el chat ---------- */
+/* Una sola foto va suelta; varias van en grilla y numeradas, porque el asistente las
+   nombra por número ("la 3 no se lee") y hay que poder ubicarla. */
+
+.agente-message-fotos.is-multiple {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.agente-message-foto {
+    position: relative;
+    display: block;
+}
+
+.agente-message-foto-num {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    min-width: 18px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.agente-message-fotos.is-multiple .agente-message-image {
+    width: 100%;
+    height: 84px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
 /* ========== PESTAÑA DEDICADA AL CHAT (/gestion/agente) ========== */
 /* Mismo markup que el widget (_agente_chat_core.html), otro contenedor. */
 
