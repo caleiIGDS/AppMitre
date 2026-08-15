@@ -190,7 +190,7 @@ tbody tr:nth-child(even){background:#fafbfc}
     <p>Res. 3871/24 (DGCyE) · Anexos III a IX · Escuela Técnica Emilio Mitre</p>
   </div>
   <div class="acciones">
-    <a class="btn-fantasma" href="{{ url_for('normativa') }}" target="_blank">📄 Ver Resolución</a>
+    <a class="btn-fantasma" href="{{ url_for('static', filename='salidas/resolucion-3871-24.pdf') }}" target="_blank">📄 Ver Resolución</a>
     <a class="btn-fantasma" href="{{ url_for('salidas.lista') }}">‹ Salidas guardadas</a>
     <button class="btn-fantasma" id="btn-abrir-todo">Expandir todo</button>
     <button class="btn-fantasma" id="btn-cargar">Cargar borrador</button>
@@ -565,6 +565,9 @@ const AYUDA_SEGURO = {
 };
 Object.assign(AYUDA_COMUN, AYUDA_SEGURO);
 
+/* Normativa — referencias a la Resolución 3871/24 para cada campo/aviso */
+const NORMATIVA = {{ normativa | tojson }};
+
 /* Datos fijos que alimentan campos del Anexo IX que no son del bloque de seguro (ese
    bloque ya no es "auto": tiene su propio selector de preset, ver SEGUROS_PRESET y
    selectorPresetSeguro — necesita quedar editable a mano sin que refrescarDerivados() lo
@@ -598,6 +601,7 @@ if (datosPrecargar) {
   idEditar = {{ id_editar | tojson }};
   estado.comunes = datosPrecargar.datos_comunes || {};
   estado.personas = datosPrecargar.personas || [];
+  normalizarPersonas();
   ANEXOS.forEach(a => estado.anexos[a.n] = (datosPrecargar.anexos && datosPrecargar.anexos[a.n]) || {});
 }
 
@@ -622,14 +626,35 @@ function el(tag, attrs, ...hijos){
   return n;
 }
 
-function botonAyuda(texto){
+function botonAyuda(texto, clave){
   if (!texto) return null;
   const b = el("button", {class:"info", type:"button", title:"Qué va en este campo", "aria-label":"Ayuda"}, "i");
   b.addEventListener("click", () => {
     const caja = b.closest(".campo").querySelector(".ayuda");
     if (caja) caja.classList.toggle("visible");
   });
+  // Si hay referencia normativa para esta clave, marcar el botón
+  if (clave && NORMATIVA && NORMATIVA[clave] && NORMATIVA[clave].pagina_pdf) {
+    b.style.borderColor = "#FF6B00";
+    b.title = "Qué va en este campo (con referencia a la Resolución)";
+  }
   return b;
+}
+
+function agregarLinkNormativa(cajaAyuda, clave){
+  if (!clave || !NORMATIVA || !NORMATIVA[clave] || !NORMATIVA[clave].pagina_pdf) return;
+  const ref = NORMATIVA[clave];
+  const pag = ref.pagina_pdf;
+  const buscar = ref.frase_resaltar || "";
+  let href = "{{ url_for('static', filename='salidas/resolucion-3871-24.pdf') }}#page=" + pag;
+  if (buscar) href += "&search=" + encodeURIComponent(buscar);
+  const link = el("a", {href:href, target:"_blank", rel:"noopener", class:"link-normativa", text:"📄 Ver en la Resolución"});
+  link.style.display = "block";
+  link.style.marginTop = "8px";
+  link.style.fontSize = "11px";
+  link.style.color = "var(--primary)";
+  link.style.textDecoration = "underline";
+  cajaAyuda.appendChild(link);
 }
 
 function fechaLarga(iso){
@@ -673,6 +698,13 @@ function valorAuto(anexo, campo){
   return "";
 }
 
+function normalizarPersonas(){
+  estado.personas.forEach(p => {
+    if (!("cargo" in p)) p.cargo = "";
+    if (!("fecha_nacimiento" in p)) p.fecha_nacimiento = "";
+  });
+}
+
 function contarPersonas(){
   const p = {estudiantes:0, docentes:0, no_docentes:0, total:0, menores16:0, desde16:0};
   estado.personas.forEach(x => {
@@ -709,10 +741,15 @@ function renderComunes(){
 function campoComun(c){
   const wrap = el("div", {class:"campo" + (c.ancho ? " ancho" : "")});
   const lab = el("label", {}, el("span", {text:c.label}));
-  const info = botonAyuda(c.a); if (info) lab.appendChild(info);
+  const info = botonAyuda(c.a, "COMUN." + c.id); if (info) lab.appendChild(info);
   if (c.fijo) lab.appendChild(el("span", {class:"tag tag-auto", text:"precargado"}));
   wrap.appendChild(lab);
-  if (c.a) wrap.appendChild(el("div", {class:"ayuda", text:c.a}));
+  const claveComun = "COMUN." + c.id;
+  if (c.a) {
+    const ayuda = el("div", {class:"ayuda", text:c.a});
+    agregarLinkNormativa(ayuda, claveComun);
+    wrap.appendChild(ayuda);
+  }
 
   let inp;
   if (c.tipo === "select"){
@@ -753,8 +790,11 @@ function renderPersonas(){
       el("th", {style:"width:44px"}, "N°"),
       el("th", {}, "Apellido y Nombre"),
       el("th", {style:"width:130px"}, "Documento"),
+      el("th", {style:"width:120px", id:"th-cargo"}, "Cargo"),
+      el("th", {style:"width:120px", id:"th-fecha-nac"}, "Fecha Nac."),
+      el("th", {style:"width:60px", id:"th-edad"}, "Edad"),
       el("th", {style:"width:190px"}, "Rol"),
-      el("th", {style:"width:80px"}, "-16 años"),
+      el("th", {style:"width:80px", id:"th-menor16"}, "-16 años"),
       el("th", {style:"width:46px"}, ""))),
     el("tbody", {id:"cuerpo-personas"}));
 
@@ -773,16 +813,36 @@ function renderPersonas(){
 }
 
 function agregarPersona(sinPintar){
-  estado.personas.push({apellido_nombre:"", documento:"", rol:"estudiante", cargo:"", menor16:false});
+  estado.personas.push({apellido_nombre:"", documento:"", rol:"estudiante", cargo:"", fecha_nacimiento:"", menor16:false});
   marcarCambio();
   if (!sinPintar) pintarPersonas();
+}
+
+function calcularEdad(fechaNac){
+  if (!fechaNac) return "";
+  const hoy = new Date(estado.comunes.fecha_salida || new Date());
+  const nac = new Date(fechaNac);
+  let edad = hoy.getFullYear() - nac.getFullYear();
+  const mesHoy = hoy.getMonth();
+  const mesNac = nac.getMonth();
+  if (mesHoy < mesNac || (mesHoy === mesNac && hoy.getDate() < nac.getDate())) edad--;
+  return edad >= 0 ? String(edad) : "";
 }
 
 function pintarPersonas(){
   const tb = document.getElementById("cuerpo-personas");
   tb.textContent = "";
+  const hayDocentes = estado.personas.some(p => p.rol.startsWith("docente"));
+  const hayEstudiantes = estado.personas.some(p => p.rol === "estudiante");
+
+  document.getElementById("th-cargo").style.display = hayDocentes ? "" : "none";
+  document.getElementById("th-fecha-nac").style.display = hayEstudiantes ? "" : "none";
+  document.getElementById("th-edad").style.display = hayEstudiantes ? "" : "none";
+  document.getElementById("th-menor16").style.display = hayEstudiantes ? "" : "none";
+
   if (!estado.personas.length){
-    tb.appendChild(el("tr", {}, el("td", {colspan:"6", class:"vacio"},
+    const span = 9;
+    tb.appendChild(el("tr", {}, el("td", {colspan:String(span), class:"vacio"},
       "Todavía no hay nadie cargado. Usá \"Agregar persona\".")));
   }
   estado.personas.forEach((p, i) => {
@@ -791,6 +851,16 @@ function pintarPersonas(){
 
     const inpDoc = el("input", {type:"text", value:p.documento, placeholder:"DNI"});
     inpDoc.addEventListener("input", () => { p.documento = inpDoc.value; marcarCambio(); });
+
+    const inpCargo = el("input", {type:"text", value:p.cargo, placeholder:"Ej: Profesor de Matemática"});
+    inpCargo.addEventListener("input", () => { p.cargo = inpCargo.value; marcarCambio(); });
+    const tdCargo = el("td", {style:p.rol.startsWith("docente") ? "" : "display:none"}, inpCargo);
+
+    const inpFechaNac = el("input", {type:"date", value:p.fecha_nacimiento || ""});
+    inpFechaNac.addEventListener("change", () => { p.fecha_nacimiento = inpFechaNac.value; marcarCambio(); pintarPersonas(); });
+    const tdFechaNac = el("td", {style:p.rol === "estudiante" ? "" : "display:none"}, inpFechaNac);
+
+    const tdEdad = el("td", {style:p.rol === "estudiante" ? "text-align:center; color:var(--tinta-suave);" : "display:none", text:calcularEdad(p.fecha_nacimiento)});
 
     const selRol = el("select", {});
     ROLES.forEach(r => {
@@ -804,6 +874,7 @@ function pintarPersonas(){
     chk.checked = !!p.menor16;
     chk.disabled = p.rol !== "estudiante";
     chk.addEventListener("change", () => { p.menor16 = chk.checked; marcarCambio(); pintarTotales(); });
+    const tdMenor16 = el("td", {style:p.rol === "estudiante" ? "text-align:center" : "display:none"}, chk);
 
     const btn = el("button", {class:"btn-borrar", type:"button", title:"Quitar"}, "×");
     btn.addEventListener("click", () => { estado.personas.splice(i,1); marcarCambio(); pintarPersonas(); });
@@ -812,8 +883,11 @@ function pintarPersonas(){
       el("td", {text:String(i+1)}),
       el("td", {}, inpNombre),
       el("td", {}, inpDoc),
+      tdCargo,
+      tdFechaNac,
+      tdEdad,
       el("td", {}, selRol),
-      el("td", {style:"text-align:center"}, chk),
+      tdMenor16,
       el("td", {}, btn)));
   });
   pintarTotales();
@@ -899,11 +973,15 @@ function campoAnexo(anexo, campo){
   const lab = el("label", {},
     el("span", {text:campo.label}),
     campo.req ? el("span", {class:"req", text:"*"}) : null);
-  const info = botonAyuda(ayuda); if (info) lab.appendChild(info);
+  const info = botonAyuda(ayuda, clave); if (info) lab.appendChild(info);
   if (campo.auto) lab.appendChild(el("span", {class:"tag tag-auto", text:"auto"}));
   if (campo.calc) lab.appendChild(el("span", {class:"tag tag-auto", text:"calculado"}));
   wrap.appendChild(lab);
-  if (ayuda) wrap.appendChild(el("div", {class:"ayuda", text:ayuda}));
+  if (ayuda) {
+    const cajaAyuda = el("div", {class:"ayuda", text:ayuda});
+    agregarLinkNormativa(cajaAyuda, clave);
+    wrap.appendChild(cajaAyuda);
+  }
 
   let inp;
   if (campo.tipo === "textarea"){
@@ -1209,6 +1287,7 @@ function cargar(archivo){
       const d = JSON.parse(e.target.result);
       estado.comunes = d.datos_comunes || {};
       estado.personas = d.personas || [];
+      normalizarPersonas();
       ANEXOS.forEach(a => estado.anexos[a.n] = (d.anexos && d.anexos[a.n]) || {});
       dibujarTodo();
       document.getElementById("estado").textContent = "Borrador cargado. Seguí donde lo dejaste.";

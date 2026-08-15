@@ -40,7 +40,11 @@
       "PowerShell(Stop-Process -Name python -Force -ErrorAction SilentlyContinue)",
       "Bash(python -c \"import json; data=json.load\\(open\\('Salidas/advertencias_normativa.json', encoding='utf-8'\\)\\); print\\(f'OK: {len\\(data\\)} mensajes cargados'\\); [print\\(f'  {m[\\\\\"clave\\\\\"]}: pág. {m[\\\\\"pagina_pdf\\\\\"]}'\\) for m in data if m['pagina_pdf']]\")",
       "PowerShell(Start-Process python -ArgumentList \"app.py\" -WorkingDirectory \"c:\\\\Users\\\\calei\\\\projects\\\\AppMitre\" -NoNewWindow -PassThru)",
-      "Bash(cd \"c:\\\\Users\\\\calei\\\\projects\\\\AppMitre\\\\static\\\\vendor\\\\pdfjs\" && \\\\ *)"
+      "Bash(cd \"c:\\\\Users\\\\calei\\\\projects\\\\AppMitre\\\\static\\\\vendor\\\\pdfjs\" && \\\\ *)",
+      "Bash(powershell -Command \"Invoke-WebRequest http://127.0.0.1:5000/salidas/nueva -ErrorAction Stop | Select-Object -ExpandProperty StatusCode\")",
+      "Bash(netstat -ano)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Force -ErrorAction SilentlyContinue)"
     ],
     "additionalDirectories": [
       "C:\\Users\\calei\\projects\\AppMitre\\static\\vendor\\pdfjs\\build"
