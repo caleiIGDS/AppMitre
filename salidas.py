@@ -769,9 +769,6 @@ def regenerar_pdfs(id):
 _RE_ANEXO_IX_EXTRA = re.compile(r'^IX_(\d+)$')
 
 
-@bp.route('/normativa')
-def normativa():
-    return render_template('salidas/normativa.html')
 
 
 @bp.route('/<int:id>/pdf/<anexo>')

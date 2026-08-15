@@ -59,8 +59,21 @@
       "notas": null
     },
     {
-      "id": "fecha",
+      "id": "nota_validez_ciclo_lectivo",
       "orden": 5,
+      "label": "La presente autorización es válida para actividades académicas, deportivas, culturales o comunitarias que se realicen durante el actual ciclo lectivo.",
+      "tipo": "nota",
+      "requerido": false,
+      "completa": null,
+      "seccion": null,
+      "opciones": null,
+      "columnas": null,
+      "condicion": null,
+      "notas": null
+    },
+    {
+      "id": "fecha",
+      "orden": 6,
       "label": "Fecha",
       "tipo": "fecha",
       "requerido": true,
@@ -73,7 +86,7 @@
     },
     {
       "id": "firma_aclaracion_responsable",
-      "orden": 6,
+      "orden": 7,
       "label": "Firma y aclaración (madre, padre o adulto responsable)",
       "tipo": "text",
       "requerido": true,
@@ -86,7 +99,7 @@
     },
     {
       "id": "dni_responsable",
-      "orden": 7,
+      "orden": 8,
       "label": "DNI del adulto responsable",
       "tipo": "text",
       "requerido": true,

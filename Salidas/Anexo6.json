@@ -280,8 +280,21 @@
       "notas": null
     },
     {
-      "id": "telefonos_urgencia",
+      "id": "nota_declaracion_salud",
       "orden": 22,
+      "label": "Dejo constancia de que he sido informado de las características particulares de dicha salida, como así también de las/los responsables de las actividades a desarrollar, medios de transporte a utilizar y lugares donde se realizarán dichas actividades.\n\nAutorizo a las/los responsables de la salida a disponer cambios con relación a la planificación de las actividades en aspectos acotados, que resulten necesarios, a su solo criterio y sin aviso previo, sobre lo cual me deberán informar y fundamentar al regreso.\n\nAutorizo, en caso de necesidad y urgencia, a hacer atender al estudiante por profesionales médicos y a que se adopten las prescripciones que ellos indiquen, sobre lo cual requiero inmediato aviso.\n\nLos docentes a cargo del cuidado y vigilancia activa de las/los estudiantes con menos de 18 años de edad no serán responsables de los objetos u otros elementos de valor que los mismos puedan llevar.",
+      "tipo": "nota",
+      "requerido": false,
+      "completa": null,
+      "seccion": "salud",
+      "opciones": null,
+      "columnas": null,
+      "condicion": null,
+      "notas": null
+    },
+    {
+      "id": "telefonos_urgencia",
+      "orden": 23,
       "label": "Teléfonos de contacto en caso de urgencia",
       "tipo": "textarea",
       "requerido": true,
@@ -294,7 +307,7 @@
     },
     {
       "id": "firma_aclaracion_responsable",
-      "orden": 23,
+      "orden": 24,
       "label": "Firma y aclaración del Padre, Madre, Tutor o Responsable",
       "tipo": "text",
       "requerido": true,
@@ -307,7 +320,7 @@
     },
     {
       "id": "dni_responsable",
-      "orden": 24,
+      "orden": 25,
       "label": "DNI del responsable",
       "tipo": "text",
       "requerido": true,
@@ -320,7 +333,7 @@
     },
     {
       "id": "fecha_firma",
-      "orden": 25,
+      "orden": 26,
       "label": "Fecha",
       "tipo": "fecha",
       "requerido": true,

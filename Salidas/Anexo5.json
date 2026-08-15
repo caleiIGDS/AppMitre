@@ -4,7 +4,7 @@
   "titulo": "Planilla de estudiantes y acompañantes — Planilla de asistencia",
   "fuente": "IF-2024-35029666-GDEBA-CGCYEDGCYE",
   "completa_general": "equipo_directivo",
-  "notas_generales": "Se completa de forma digital y se envía al/la Inspector/a en ese formato. Luego se imprime y firma para la Salida Educativa, registrando ese mismo día las asistencias/inasistencias y cualquier cambio de último momento (docentes reemplazantes, etc.).",
+  "notas_generales": "El presente formulario puede ser completado de forma digital y enviado al/la Inspector/a en este formato.\n\nEl mismo debe ser impreso y firmado para la Salida Educativa, registrando ese mismo día las asistencias o inasistencias, tanto de estudiantes como de docentes o acompañantes no docentes, así como cualquier modificación de último momento (docentes reemplazantes, etc.).",
   "campos": [
     {
       "id": "institucion_educativa",
@@ -106,8 +106,21 @@
       "notas": "Para ser completado ante cualquier eventualidad"
     },
     {
-      "id": "lugar_y_fecha",
+      "id": "nota_validez",
       "orden": 8,
+      "label": "La presente planilla tendrá validez para toda tramitación oficial que se realice.",
+      "tipo": "nota",
+      "requerido": false,
+      "completa": null,
+      "seccion": null,
+      "opciones": null,
+      "columnas": null,
+      "condicion": null,
+      "notas": null
+    },
+    {
+      "id": "lugar_y_fecha",
+      "orden": 9,
       "label": "Lugar y fecha",
       "tipo": "text",
       "requerido": true,
@@ -120,7 +133,7 @@
     },
     {
       "id": "firma_autoridad",
-      "orden": 9,
+      "orden": 10,
       "label": "Firma de Autoridad del Establecimiento",
       "tipo": "text",
       "requerido": true,

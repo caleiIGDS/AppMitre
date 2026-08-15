@@ -137,8 +137,21 @@
       "notas": null
     },
     {
-      "id": "indicaciones_salud",
+      "id": "nota_declaracion_legal",
       "orden": 11,
+      "label": "Dejo constancia de que he sido informada/o de las características de la salida, las actividades a realizar, el modo de traslado, docentes responsables y los lugares donde se desarrollarán las actividades.\n\nAutorizo a las y los responsables de la salida a disponer cambios con relación a la planificación de las actividades en aspectos acotados, que resulten necesarios, a su solo criterio y sin previo aviso, sobre lo cual seré informada/o durante el desarrollo de la salida.\n\nTomo conocimiento de que las y los docentes a cargo de la organización de la salida no son responsables de los objetos que llevo conmigo.\n\nAsumo el carácter pedagógico de las experiencias a realizar y la importancia que tienen para mi formación.",
+      "tipo": "nota",
+      "requerido": false,
+      "completa": null,
+      "seccion": null,
+      "opciones": null,
+      "columnas": null,
+      "condicion": null,
+      "notas": null
+    },
+    {
+      "id": "indicaciones_salud",
+      "orden": 12,
       "label": "Indicaciones que deba conocer el personal docente y médico",
       "tipo": "textarea",
       "requerido": false,
@@ -150,8 +163,21 @@
       "notas": null
     },
     {
+      "id": "nota_consulta_medica",
+      "orden": 13,
+      "label": "Asimismo autorizo, en caso de necesidad y urgencia, a que se realice una consulta médica y la adopción de las prescripciones que las y los profesionales de la salud indiquen.",
+      "tipo": "nota",
+      "requerido": false,
+      "completa": null,
+      "seccion": null,
+      "opciones": null,
+      "columnas": null,
+      "condicion": null,
+      "notas": null
+    },
+    {
       "id": "tiene_obra_social",
-      "orden": 12,
+      "orden": 14,
       "label": "Tiene Obra Social/Prepaga",
       "tipo": "bool",
       "requerido": true,
@@ -164,7 +190,7 @@
     },
     {
       "id": "nombre_obra_social",
-      "orden": 13,
+      "orden": 15,
       "label": "Nombre de la Obra Social/Prepaga",
       "tipo": "text",
       "requerido": false,
@@ -177,7 +203,7 @@
     },
     {
       "id": "numero_socio",
-      "orden": 14,
+      "orden": 16,
       "label": "N° Socio",
       "tipo": "text",
       "requerido": false,
@@ -190,7 +216,7 @@
     },
     {
       "id": "telefonos_urgencia",
-      "orden": 15,
+      "orden": 17,
       "label": "Teléfonos de contacto en caso de urgencia",
       "tipo": "textarea",
       "requerido": true,
@@ -203,7 +229,7 @@
     },
     {
       "id": "firma",
-      "orden": 16,
+      "orden": 18,
       "label": "Firma",
       "tipo": "text",
       "requerido": true,
@@ -216,7 +242,7 @@
     },
     {
       "id": "dni_firma",
-      "orden": 17,
+      "orden": 19,
       "label": "DNI (junto a la firma)",
       "tipo": "text",
       "requerido": true,
@@ -229,7 +255,7 @@
     },
     {
       "id": "fecha",
-      "orden": 18,
+      "orden": 20,
       "label": "Fecha",
       "tipo": "fecha",
       "requerido": true,

@@ -199,7 +199,7 @@
       "opciones": null,
       "columnas": null,
       "condicion": null,
-      "notas": "\"en caso de corresponder\", según el propio anexo"
+      "notas": "en caso de corresponder"
     },
     {
       "id": "itinerario",
@@ -212,7 +212,7 @@
       "opciones": null,
       "columnas": null,
       "condicion": null,
-      "notas": "Detalle pormenorizado del itinerario"
+      "notas": "detalle pormenorizado del mismo"
     },
     {
       "id": "actividades",

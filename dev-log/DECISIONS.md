@@ -4,6 +4,175 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-08-15] — Más de un seguro escolar en el Anexo IX: copias completas, no una tabla
+
+**Contexto**: al cargar los datos fijos de la escuela apareció un instructivo interno con
+**tres** pólizas de seguro escolar vigentes a la vez (Responsabilidad Civil para
+estudiantes menores de edad, para mayores, y un seguro de accidentes personales aparte).
+El Anexo IX (`compania_aseguradora`/`tipo_seguro`/`numero_poliza`/`vigencia_poliza`) sólo
+tenía lugar para una póliza — ni el JSON del anexo ni el renderer soportaban más de una.
+
+**Decisión**: en el papel real, cada Declaración Jurada (Anexo IX) sólo declara una
+póliza — no existe una versión del formulario con una tabla de seguros. Por eso un seguro
+adicional **no** se modela como una fila más de una tabla (a diferencia de, por ejemplo,
+`V.listado_personas`): genera una **copia completa del Anexo IX**, con los mismos datos de
+identificación y declaración, y sólo el bloque de seguro distinto — tantas copias como
+seguros haya. En el formulario, `estado.anexos.IX._seguros_adicionales` es un array plano
+que vive fuera del schema de `Salidas/Anexo9.json` (el renderer sólo itera
+`schema['campos']`, así que no le afecta); en `salidas.py`, `_generar_pdfs` llama al mismo
+`_generar_pdf_anexo('IX', ...)` una vez por cada entrada, pisando sólo los 5 campos del
+seguro, y guarda `AnexoIX_2.pdf`, `AnexoIX_3.pdf`, etc.
+
+Se agregó además un selector de 3 **presets** conocidos (`SEGUROS_PRESET` en
+`formulario.html`) que completa los 4 campos del seguro con un click, pero los deja
+editables a mano después — no reemplaza la carga manual, la acelera. Esto obligó a sacarle
+`auto:true` a esos 4 campos: estaban atados a `DATOS_FIJOS` vía `SEGURO_A_FIJO`, y
+`refrescarDerivados()` los pisa con el valor "fijo" cada vez que se toca cualquier campo
+de Datos Comunes — con un preset elegido a mano, eso hubiese descartado la elección en
+cuanto el usuario tocara otra cosa. Los campos de identificación del Anexo IX que sí siguen
+atados a un dato fijo real de la escuela (representante legal, entidad propietaria) quedan
+como estaban.
+
+**Alternativa descartada**: modelar `seguros` como `tipo: "tabla"` en el JSON, como
+`listado_personas`. Se descartó porque en el papel real **no hay ninguna tabla** — cada
+seguro es una hoja aparte con la declaración jurada completa repetida, y renderizar una
+tabla ahí hubiera sido, otra vez, el mismo tipo de invención-de-formato-que-no-existe-en-
+el-papel que ya se corrigió para otros anexos (ver la entrada de arriba).
+
+**Consecuencia**: `ver_pdf` deja de aceptar sólo el allowlist fijo `ANEXOS_NUMEROS` — ahora
+también matchea `IX_<n>` por regex (sigue siendo allowlist estricto, `anexo` arma una ruta
+de archivo). `detalle()` detecta las copias extra por archivo en disco, no por releer
+`datos_json`, para que la lista de PDF siempre refleje lo que hay generado de verdad.
+Editar una salida y sacar un seguro borra las copias extra viejas antes de regenerar
+(`_limpiar_pdfs_ix_extra`), para no dejar un `AnexoIX_3.pdf` huérfano de una versión
+anterior de la salida.
+
+---
+
+## [2026-08-15] — Auditoría de texto impreso: notas al pie, mayúsculas y estilo inline que no se habían verificado
+
+**Contexto**: se encontró que `notas_generales` del Anexo V, aunque marcada como "verificada
+contra el original", en realidad era una paráfrasis mía, no el texto literal del papel. Ante
+la pregunta directa de si ese mismo error estaba en otro lado, se repasó **todo el texto que
+efectivamente se imprime** (labels, notas, títulos, párrafos narrativos) anexo por anexo
+contra las imágenes reales de la Resolución, no sólo el que se había tocado en la sesión.
+
+**Lo que apareció, todo en el Anexo IX** (el más auditado en detalle, por ser donde
+`NOTAS_A_IMPRIMIR` ya tenía dos ids marcados como "verificados"):
+1. El texto de las notas (1)/(2) estaba mal: decía "Debe constar..." cuando el original dice
+   "Deberá constar...", y la nota (2) estaba truncada (le faltaba "En este rubro se dejará
+   constancia de todas las...").
+2. Encima, el *lugar* donde se imprimían estaba mal: iban pegadas inline junto al campo
+   (`"Tipo de seguro: valor (Debe constar...)"`), pero en el papel real son notas al pie de
+   página de verdad — separadas, después de la declaración jurada, antes de "Lugar y Fecha".
+3. Casi todos los labels del Anexo IX están en mayúscula en el papel y no tenían el permiso
+   en `LABELS_MAYUSCULA` (nunca se había revisado este anexo para eso, sólo V).
+4. El bloque de firmas ("FIRMA Y SELLO" / "DIRECTOR/A" y "FIRMA Y SELLO" / "REPRESENTANTE
+   LEGAL") es a dos columnas lado a lado en el papel; se imprimía como dos líneas sueltas.
+5. Anexo VII: dentro del párrafo narrativo, "salida educativa / de representación
+   institucional" va en negrita y "(tachar lo que no corresponda)" en itálica en el papel;
+   se imprimía todo con el mismo estilo.
+
+**Decisión**: corregir los cinco puntos (footnotes reales vía un campo `nota` en su lugar
+correcto — `nota_pie_seguro` — en vez de `NOTAS_A_IMPRIMIR`; `LABELS_MAYUSCULA['IX']`;
+`CAMPOS_FIRMA_IX`/`_dibujar_firmas_ix` para las dos columnas; `segmentos` en
+`PARRAFOS_NARRATIVA` para mezclar negrita/itálica dentro de un párrafo). Además, el título de
+cada anexo (`ANEXO {n}` + `titulo`) pasó a imprimirse siempre en mayúscula — se confirmó
+visualmente que es así en los 7 anexos, así que no hizo falta un permiso por anexo ahí.
+
+**Consecuencia**: no se encontraron más errores de este tipo en III, IV, V, VI, VIII (se
+revisaron con el mismo método). El criterio general se mantiene: nada de esto se hubiera
+encontrado sin comparar contra la imagen real, página por página — un `pdftotext` a veces
+alcanza para el texto, pero no para saber si algo va en negrita, en mayúscula, o en qué
+lugar exacto de la página.
+
+---
+
+## [2026-08-15] — Párrafos narrativos con blancos, no "label: valor", para lo que en el papel es una oración corrida
+
+**Contexto**: revisando anexo por anexo contra el original (ver la entrada de abajo), quedó
+un tipo de desvío que la recalibración anterior no cubría: los Anexos III, VI y VII no
+abren con una lista de campos en el papel — abren con una oración corrida con blancos
+intercalados ("Por la presente autorizo a ____, DNI ____, estudiante de ____ Año..."), y
+VI (sección `salud`), VII e IX además tienen bloques legales de varios párrafos
+("Autorizo...", "Declaramos bajo juramento...") que no corresponden a ningún campo — son
+texto fijo, sin ningún blanco. El renderer venía imprimiendo esos datos como líneas sueltas
+`"Nombre: ___"`, `"DNI: ___"`, uno debajo del otro, y directamente omitía los bloques
+legales por no tener campo asociado.
+
+**Decisión**: separar el problema en dos mecanismos, sin tocar el JSON existente para el
+primer caso. Para las oraciones con blancos intercalados, `PARRAFOS_NARRATIVA` (en
+`salidas.py`) declara, por anexo, qué ids de campo consume y una plantilla `.format()` que
+los teje en el texto real; el JSON sigue pidiendo esos mismos campos sueltos (los sigue
+necesitando el formulario HTML tal cual), sólo cambia cómo se imprimen en el PDF —
+presentación, no esquema. Para los bloques legales fijos, que no tienen ningún dato
+variable, se usaron campos `tipo: "nota"` nuevos agregados directo al JSON (mismo mecanismo
+que ya existía para el "tendrá validez..." del Anexo V), con los párrafos unidos por `\n\n`
+en el `label`.
+
+**Alternativa descartada**: reescribir esos campos del JSON como un solo campo de texto
+libre por bloque (ej. fusionar `nombre_estudiante`+`dni_estudiante`+`anio_curso`+
+`seccion_curso` en un campo `autorizacion_texto`). Se descartó porque el formulario HTML
+sigue necesitando esos datos como campos separados y validables (DNI, año, sección son
+datos estructurados en otras partes del legajo) — mezclar la oración de papel con el dato
+real le rompería la carga digital para ganar nada del lado del PDF.
+
+**Consecuencia**: `_generar_pdf_anexo` ahora también hace un pase para saltear, en el loop
+principal, los ids que un bloque narrativo ya va a imprimir (`ids_narrativa_resto`) —mismo
+patrón que ya existía para `pares_segundo` de `CAMPOS_MISMA_LINEA`—, así que agregar un
+campo nuevo a un bloque narrativo existente requiere tocar `PARRAFOS_NARRATIVA`, no sólo el
+JSON. Verificado página por página contra el original para III, VI y VII (los únicos que
+abren con un párrafo así) — los demás anexos siguen campo por campo, sin cambios.
+
+---
+
+## [2026-08-15] — El PDF de cada anexo se recalibró contra el papel real, no contra la lógica de un form
+
+**Contexto**: la primera versión del renderer (ver la entrada de más abajo, "guardado en
+servidor...") dibujaba cada campo como una tarjeta — label en negrita arriba, valor
+subrayado abajo — que es el lenguaje visual de un formulario web moderno, no el del papel
+oficial. El pedido fue puntual: sin cambiar ningún dato que se muestra, hacer que el PDF
+generado se parezca al anexo real todo lo posible. Antes de tocar código se revisó el PDF
+de la Resolución (`Resol 3871-24...pdf`) página por página, anexo por anexo, en vez de
+asumir cómo se vería.
+
+**Lo que el papel realmente hace, y que no era obvio sin mirarlo**: casi todo el contenido
+de los Anexos III, IV, VI, VII, VIII y IX es texto corrido con blancos para completar a
+mano ("Nombre y apellido …………………………. DNI ……………………"), **no** una grilla de
+campo-por-caja. Sólo hay dos excepciones tabulares de verdad: el listado de personas del
+Anexo V (una grilla con bordes, encabezados y ~18 filas) y una cajita chica de 3 renglones
+que repiten el VI y el VII para "Tiene Obra Social/Prepaga · Sí/No · Nombre · N° Socio".
+Las "tablas" de docentes del Anexo IV que el JSON modela como `tipo:"tabla"` **no** son una
+grilla en el papel — son renglones de texto repetidos.
+
+**La decisión fue ajustar el renderer a esa realidad, no genérica el problema al revés**:
+en vez de un único modo de dibujo (campo → caja), quedaron tres, elegidos por lo que el
+campo realmente es en el papel — línea corrida (`_dibujar_campo`, el caso general), grilla
+con bordes (`_dibujar_tabla`, sólo para el listado de personas) y la cajita de obra social
+(`_dibujar_obra_social`, detectada por id porque VI y VII repiten el mismo grupo de
+campos). Sigue sin haber 7 layouts a mano: los tres modos son genéricos y los elige el
+`tipo` del campo (o su `id`, para los dos casos puntuales que no se pueden inferir del
+`tipo`), no el nombre del anexo.
+
+**Los encabezados de sección resultaron ser otro punto de fricción**: `Salidas/AnexoN.json`
+usa `seccion` como clave de agrupación interna (`"hospedaje_mas_24hs"`, `"informativa"`),
+no como el texto que hay que imprimir — imprimirlo tal cual daba encabezados en
+mayúsculas-de-slug, ilegibles y sin relación con lo que dice el papel. Se agregó
+`SECCION_TITULOS` en `salidas.py` como tabla de traducción slug → texto real, en vez de
+reescribir los JSON: el JSON es el esquema de datos, cómo se titula una sección en un PDF
+es una decisión de presentación, y separarlas evita que un cambio de wording en el PDF
+obligue a tocar el archivo que se usa como referencia del formulario completo.
+
+**Se verificó visualmente, no sólo por ausencia de excepción.** Con `pdftoppm` (ya
+disponible en el sistema, sin agregar una dependencia de Python) se rasterizó cada anexo
+generado a PNG y se lo miró página por página contra las capturas del PDF original —
+incluyendo casos límite (Anexo IX con `tipo_gestion=privada`, Anexo VI/VII con y sin obra
+social, Anexo IV con y sin docentes reemplazantes). Es el mismo método que destapó el
+problema del `logo-pba.svg` (ver la entrada de abajo): mirar el PDF, no asumir que el
+código que "no tira error" hace lo que se pidió.
+
+---
+
 ## [2026-08-15] — El logo-pba.svg no se puede dibujar directo en un PDF de fpdf2
 
 **Contexto**: al agregar membrete a los PDF de Salidas (escudo en el header, logo de la

@@ -32,7 +32,18 @@
       "Bash(pkill -f \"python app.py\")",
       "Bash(rm -f salidas.db /tmp/cookies.txt /tmp/salida_test.json /tmp/detalle.html /tmp/AnexoV.pdf /tmp/appmitre_server.log /tmp/login_body.html)",
       "Bash(rm -rf salidas_pdfs)",
-      "Bash(python -m py_compile salidas.py app.py)"
+      "Bash(python -m py_compile salidas.py app.py)",
+      "PowerShell(head -10)",
+      "Bash(python -m py_compile salidas.py)",
+      "PowerShell(Start-Process python -ArgumentList \"app.py\" -WorkingDirectory \"c:\\\\Users\\\\calei\\\\projects\\\\AppMitre\" -NoNewWindow)",
+      "PowerShell(Invoke-RestMethod -Uri \"http://127.0.0.1:5000/salidas/\" -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Name python -Force -ErrorAction SilentlyContinue)",
+      "Bash(python -c \"import json; data=json.load\\(open\\('Salidas/advertencias_normativa.json', encoding='utf-8'\\)\\); print\\(f'OK: {len\\(data\\)} mensajes cargados'\\); [print\\(f'  {m[\\\\\"clave\\\\\"]}: pág. {m[\\\\\"pagina_pdf\\\\\"]}'\\) for m in data if m['pagina_pdf']]\")",
+      "PowerShell(Start-Process python -ArgumentList \"app.py\" -WorkingDirectory \"c:\\\\Users\\\\calei\\\\projects\\\\AppMitre\" -NoNewWindow -PassThru)",
+      "Bash(cd \"c:\\\\Users\\\\calei\\\\projects\\\\AppMitre\\\\static\\\\vendor\\\\pdfjs\" && \\\\ *)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\calei\\projects\\AppMitre\\static\\vendor\\pdfjs\\build"
     ]
   }
 }

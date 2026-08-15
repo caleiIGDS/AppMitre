@@ -80,6 +80,11 @@ accesos.registrar_app(app, [gestion, historia, agente, salidas, sys.modules[__na
 
 # obtener_filas se importa desde database (ver database.py)
 
+# Visor público de la Resolución 3871/24 (sin gate de permisos)
+@app.route('/normativa-3871')
+def normativa():
+    return render_template('salidas/normativa.html')
+
 @app.route('/')
 def index():
     con = database.conectar()

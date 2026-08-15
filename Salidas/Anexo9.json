@@ -152,7 +152,7 @@
     {
       "id": "tipo_seguro",
       "orden": 12,
-      "label": "Tipo de seguro",
+      "label": "Tipo de seguro (1)",
       "tipo": "text",
       "requerido": true,
       "completa": "director",
@@ -160,7 +160,7 @@
       "opciones": null,
       "columnas": null,
       "condicion": null,
-      "notas": "Debe constar en la póliza que el tipo de seguro es de responsabilidad civil"
+      "notas": "El (1) remite a la nota al pie: debe constar en la póliza que el tipo de seguro es de responsabilidad civil"
     },
     {
       "id": "numero_poliza",
@@ -191,7 +191,7 @@
     {
       "id": "observaciones",
       "orden": 15,
-      "label": "Observaciones",
+      "label": "Observaciones (2)",
       "tipo": "textarea",
       "requerido": false,
       "completa": "director",
@@ -199,11 +199,37 @@
       "opciones": null,
       "columnas": null,
       "condicion": null,
-      "notas": "Situaciones que puedan surgir y no estén previstas en el presente formulario"
+      "notas": "El (2) remite a la nota al pie: situaciones que puedan surgir y no estén previstas en el presente formulario"
+    },
+    {
+      "id": "nota_declaracion_jurada",
+      "orden": 16,
+      "label": "En nuestro carácter de Director/a y/o Representante Legal del establecimiento educativo de referencia declaramos bajo juramento haber dado cumplimiento a los requerimientos del Anexo II de la Resolución de Salidas Educativas/ de Representación Institucional referidos a: Lugar de realización de la Salida Educativa y Salida de Representación Institucional, transporte, autorizaciones de madre, padre, tutor o responsable de los/as estudiantes con menos de 18 años de edad y Declaración Jurada de las/los estudiantes mayores de 18 años; garantizando el cumplimiento de la relación docente/estudiante y la información a los responsables legales de la Salida Educativa / Salida de Representación Institucional que realizará la institución educativa en el marco de su Proyecto Institucional.\n\nPonemos asimismo a disposición de la autoridad educativa que lo requiera los Anexos III, IV, V, VI, VII, VIII y IX completos (según corresponda, conforme lo estipulado en el Anexo II), como así también el libro de Actas Institucionales.",
+      "tipo": "nota",
+      "requerido": false,
+      "completa": null,
+      "seccion": null,
+      "opciones": null,
+      "columnas": null,
+      "condicion": null,
+      "notas": null
+    },
+    {
+      "id": "nota_pie_seguro",
+      "orden": 17,
+      "label": "1) Deberá constar en la póliza que el tipo de seguro es de responsabilidad civil.\n2) En este rubro se dejará constancia de todas las situaciones que puedan surgir y no estén previstas en el presente formulario.",
+      "tipo": "nota",
+      "requerido": false,
+      "completa": null,
+      "seccion": null,
+      "opciones": null,
+      "columnas": null,
+      "condicion": null,
+      "notas": null
     },
     {
       "id": "lugar_y_fecha",
-      "orden": 16,
+      "orden": 18,
       "label": "Lugar y Fecha",
       "tipo": "text",
       "requerido": true,
@@ -216,7 +242,7 @@
     },
     {
       "id": "firma_sello_director",
-      "orden": 17,
+      "orden": 19,
       "label": "Firma y sello del Director/a",
       "tipo": "text",
       "requerido": true,
@@ -229,7 +255,7 @@
     },
     {
       "id": "firma_sello_representante_legal",
-      "orden": 18,
+      "orden": 20,
       "label": "Firma y sello del Representante Legal",
       "tipo": "text",
       "requerido": false,
