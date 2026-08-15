@@ -42,7 +42,7 @@ Cada `AnexoN.json` (N = 3 a 9) lista los campos a completar de ese formulario, e
 | `id` | Clave estable en snake_case, **única dentro del archivo** (no global — si se necesita un id global, prefijar con el anexo: `IV.fecha_salida`). |
 | `orden` | Entero secuencial, posición en el formulario original. Sirve para renderizar en el mismo orden sin depender del orden de las claves del JSON. |
 | `label` | Texto tal como aparece en el anexo. |
-| `tipo` | Uno de: `text`, `textarea`, `fecha`, `hora`, `number`, `bool`, `select`, `tabla`, `archivo`. |
+| `tipo` | Uno de: `text`, `textarea`, `fecha`, `hora`, `number`, `bool`, `select`, `tabla`, `archivo`, `nota`. |
 | `requerido` | Mismo nombre de clave que usa `gestion.py` en sus `CAMPOS` (`'requerido': True`), a propósito — si esto se vuelve una entidad real del motor CRUD, el mapeo es casi directo. |
 | `completa` | Quién llena el campo: `escuela` (equipo directivo/preceptoría), `familia`, `estudiante` (mayor de 18 o emancipado/a), `empresa_transporte`, `director`, `representante_legal`. |
 | `seccion` | Agrupador opcional dentro del anexo (ej. Anexo VI tiene `informativa` / `autorizacion` / `salud`). `null` si el anexo no tiene subdivisiones. |
@@ -58,9 +58,45 @@ La Resolución no marca los campos con asteriscos ni dice explícitamente "opcio
 - **`requerido: true`** por default.
 - **`requerido: false`** solo cuando el propio texto dice "en caso de corresponder", "sólo para..." (ej. hospedaje en salidas de +24hs), o cuando el campo es estructuralmente un catch-all ("Observaciones", "Otros datos de interés") o secundario (docentes reemplazantes).
 
+`tipo: "nota"` es distinto del resto: no es un dato a completar, es texto fijo impreso en
+el original entre dos campos (ej. "La presente planilla tendrá validez para toda
+tramitación oficial que se realice." en el Anexo V, entre `observaciones` y
+`lugar_y_fecha`). Su `label` es el texto completo a imprimir tal cual, sin "label: valor" —
+`id`/`orden` sirven igual que en cualquier otro campo para intercalarlo en su lugar exacto.
+
 ## Campos que no vienen del formulario, agregados para poder condicionar
 
 - **Anexo IX → `tipo_gestion`**: el formulario no lo pide como campo, pero el propio Anexo I dice que el Representante Legal solo firma "en el caso de las Escuelas Públicas de Gestión Privada". Sin este dato no se puede decidir programáticamente si pedir `representante_legal`, `entidad_propietaria` y su firma. Está marcado en sus `notas`.
+
+## Archivo de advertencias y referencias normativas
+
+**`advertencias_normativa.json`** — mapeo de todos los mensajes informativos/advertencias del
+formulario con sus referencias normativas (Resolución 3871/24). Cada objeto del array tiene:
+
+```json
+{
+  "clave": "IV.itinerario",
+  "anexo": "IV",
+  "tipo": "ayuda_campo",
+  "mensaje": "Detalle pormenorizado del recorrido...",
+  "razon": "Explicación extendida de por qué existe este mensaje...",
+  "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I, punto 8.5.1",
+  "pagina_pdf": 13,
+  "frase_resaltar": "8.5.1 Para ello debe contar con un informe detallado de"
+}
+```
+
+- `clave`: identificador único (ej. `"IV.itinerario"`, `"ANEXO_III.NOTA"`, `"PERSONAS.RATIO"`,
+  `"AVISO_GENERAL"`).
+- `tipo`: `aviso_general | nota_anexo | ayuda_campo | nota_seccion | alerta_dinamica`.
+- `mensaje`: el texto exacto tal como aparece en la UI del formulario.
+- `razon`: explicación más desarrollada, redactada a partir del texto real de la Resolución
+  cuando se cita normativa.
+- `referencia_normativa` / `pagina_pdf` / `frase_resaltar`: `null` para mensajes sin cita
+  normativa explícita.
+
+**Nota**: el `mensaje` es una copia manual del texto de `formulario.html`; si se edita una
+ayuda ahí, debe actualizarse también en este JSON para mantener sincronía.
 
 ## Archivos
 
@@ -73,3 +109,4 @@ La Resolución no marca los campos con asteriscos ni dice explícitamente "opcio
 | `Anexo7.json` | VII — Declaración jurada estudiante mayor de 18 | Estudiante |
 | `Anexo8.json` | VIII — Informe de transporte a contratar | Empresa de transporte / escuela |
 | `Anexo9.json` | IX — Declaración jurada de directivos | Director/a (+ Representante Legal si es gestión privada) |
+| `advertencias_normativa.json` | Ref. — Referencias a la Resolución 3871/24 para cada mensaje | (datos) |

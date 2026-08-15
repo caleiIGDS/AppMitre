@@ -1,0 +1,242 @@
+[
+  {
+    "clave": "AVISO_GENERAL",
+    "anexo": null,
+    "tipo": "aviso_general",
+    "mensaje": "Nada se guarda solo. Los datos viven únicamente en esta pestaña. Guardar borrador descarga un JSON a esta computadora para retomarlo después con Cargar borrador — no llega al servidor. Recién con Guardar salida la salida queda registrada en el servidor de la escuela (con DNI y datos de salud) durante 1 año, y se generan los PDF de cada anexo para poder verlos después. Si cerrás la pestaña sin usar ninguna de las dos, se pierde lo cargado.\n\nLos anexos marcados [firma en papel] se completan acá sólo para imprimirlos ya cargados: la Resolución exige firma original del adulto responsable o del/la estudiante, así que igual hay que imprimirlos y hacerlos firmar.",
+    "razon": "Advierte sobre la persistencia de datos sensibles (DNI, salud) en el servidor durante 1 año, el almacenamiento local en el navegador mientras se completa, y la necesidad de firma original en papel para varios anexos según exige la Resolución.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE",
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "ANEXO_III.NOTA",
+    "anexo": "III",
+    "tipo": "nota_anexo",
+    "mensaje": "Se firma una sola vez por año y vale para todas las salidas dentro del barrio o área geográfica inmediata que no usen transporte. Se archiva en el Legajo del estudiante. Debe imprimirse y llevar firma original aunque se complete acá.",
+    "razon": "Este anexo es la autorización general del ciclo lectivo, válida por todo el año para salidas a pie en el barrio. Requiere firma original en papel y debe guardarse en el legajo del estudiante.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo III",
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "ANEXO_IV.NOTA",
+    "anexo": "IV",
+    "tipo": "nota_anexo",
+    "mensaje": "Se completa de forma digital y se envía al/la Inspector/a en ese mismo formato. Es el anexo que describe la propuesta: sin él no hay salida autorizada.",
+    "razon": "El Anexo IV es la presentación formal del proyecto pedagógico ante la inspección. Se completa en formato digital y debe ser enviado así al Inspector de Enseñanza.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo IV",
+    "pagina_pdf": 17,
+    "frase_resaltar": "Anexo IV- Presentación de la Salida Educativa: Este anexo lo completa y lo firma el Equipo Directivo"
+  },
+  {
+    "clave": "ANEXO_V.NOTA",
+    "anexo": "V",
+    "tipo": "nota_anexo",
+    "mensaje": "El listado se arma solo desde la sección Personas de más arriba. Se envía digital al/la Inspector/a, pero además hay que imprimirla y llevarla en el viaje: la asistencia se registra ese mismo día, a mano, junto con cualquier cambio de último momento.",
+    "razon": "El Anexo V (planilla de estudiantes y docentes) se genera automáticamente desde la tabla de Personas, pero debe imprimirse para llevar en el viaje y registrar la asistencia a mano.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo V",
+    "pagina_pdf": 17,
+    "frase_resaltar": "Anexo V- Planilla de Estudiantes y Docentes"
+  },
+  {
+    "clave": "ANEXO_VI.NOTA",
+    "anexo": "VI",
+    "tipo": "nota_anexo",
+    "mensaje": "La escuela completa la parte informativa y se lo envía a las familias. Vuelve en papel, con firma original, y el/la docente responsable debe llevarlo consigo el día de la salida.",
+    "razon": "El Anexo VI tiene dos partes: la escuela completa la sección 1 (datos informativos), y las familias firman la sección 2 (autorización). Vuelve en papel con firma original y debe portarse el día de la salida.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VI",
+    "pagina_pdf": 17,
+    "frase_resaltar": "Anexo VI- Planilla Informativa y Autorización: El punto 1 debe ser completado por la Escuela"
+  },
+  {
+    "clave": "ANEXO_VII.NOTA",
+    "anexo": "VII",
+    "tipo": "nota_anexo",
+    "mensaje": "Reemplaza la autorización familiar para estudiantes mayores de edad o emancipados/as. No hace falta para salidas dentro del barrio (ahí alcanza con la declaración general del inicio del ciclo). El/la docente responsable debe llevarla el día de la salida.",
+    "razon": "Para estudiantes mayores de 18 años o emancipados/as, en lugar de una autorización parental, se usa esta declaración jurada de consentimiento informado.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VII",
+    "pagina_pdf": 17,
+    "frase_resaltar": "Anexo VII - Declaración Jurada de la y el estudiante mayor de 18 años"
+  },
+  {
+    "clave": "ANEXO_VIII.NOTA",
+    "anexo": "VIII",
+    "tipo": "nota_anexo",
+    "mensaje": "Se completa una vez visada toda la documentación del transporte, cosa que después el/la directora/a declara bajo juramento en el Anexo IX. Si se viaja en transporte público de línea, en lugar de estos datos se consignan los del pasaje o boleto. Ojo: el seguro que se carga acá es el de la empresa, distinto del seguro escolar del Anexo IX.",
+    "razon": "El Anexo VIII es la Declaración Jurada del responsable de la empresa de transporte (o de la escuela si se autoriza la documentación). El seguro aquí es del transporte, no el seguro escolar que va en el Anexo IX.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VIII",
+    "pagina_pdf": 17,
+    "frase_resaltar": "Anexo VIII - Planilla Informe de Transporte a contratar"
+  },
+  {
+    "clave": "ANEXO_IX.NOTA",
+    "anexo": "IX",
+    "tipo": "nota_anexo",
+    "mensaje": "Además de completarlo, hay que transcribirlo de puño y letra en el Libro de Actas Institucionales de Salidas Educativas, con fecha anterior a la partida. Para enviarlo al/la Inspector/a y al Seguro Escolar, puede hacerse con el formato digital o bien sacarle una foto a la transcripción en PDF.",
+    "razon": "El Anexo IX es una Declaración Jurada del director/a (y Representante Legal si es gestión privada). Debe transcribirse en el Libro de Actas Institucionales antes de la salida, y puede enviarse en formato digital o como foto de la transcripción.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo IX",
+    "pagina_pdf": 17,
+    "frase_resaltar": "Anexo IX - Declaración Jurada de Directivos y/o Representantes Legales"
+  },
+  {
+    "clave": "COMUN.denominacion_proyecto",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Nombre con el que se identifica la propuesta pedagógica. La salida tiene que desprenderse de un proyecto enmarcado en el Proyecto Institucional (Anexo I). Se replica en los Anexos IV y VI.",
+    "razon": "Toda salida educativa debe ser parte de un proyecto pedagógico enmarcado en el proyecto institucional de la escuela, no un paseo aislado.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I",
+    "pagina_pdf": 6,
+    "frase_resaltar": "enmarcada en el proyecto institucional"
+  },
+  {
+    "clave": "COMUN.fecha_salida",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Día de partida. De acá se calculan solos el día, mes y año que piden los Anexos VI y VII, y la fecha de la planilla de asistencia del Anexo V. Ojo con los plazos del Anexo II: 5 días hábiles de anticipación si es dentro del distrito con regreso en el día, 10 si supera las 24 horas, 20 si es fuera de la provincia o del país.",
+    "razon": "Los plazos de presentación ante Inspección dependen del tipo de salida (lugar y duración). Ver la tabla del Anexo II para los tiempos de anticipación requeridos.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo II",
+    "pagina_pdf": 19,
+    "frase_resaltar": "5 días de anticipación"
+  },
+  {
+    "clave": "COMUN.hora_salida",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Horario de partida. Si el traslado de estudiantes mayores de edad es por sus propios medios, la salida se computa desde el horario y lugar donde arranca la experiencia pedagógica (Anexo I, punto 8.11).",
+    "razon": "Para estudiantes mayores de 18 años que se trasladan por sus propios medios, el cómputo de la salida comienza desde donde arranca la actividad pedagógica real, no desde el establecimiento.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I, punto 8.11",
+    "pagina_pdf": 15,
+    "frase_resaltar": "8.11 Cuando el traslado de las y los estudiantes mayores de 18 años"
+  },
+  {
+    "clave": "COMUN.tipo_gestion",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Estatal o privada. No es un campo del formulario original: define si el Anexo IX además necesita los datos y la firma del/la Representante Legal, como exige el Anexo I para las escuelas de gestión privada.",
+    "razon": "En escuelas de gestión privada, el Representante Legal (DIEGEP) también firma la Declaración Jurada del Anexo IX, además del director/a.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I",
+    "pagina_pdf": 17,
+    "frase_resaltar": "también por el/la Representante Legal"
+  },
+  {
+    "clave": "IV.itinerario",
+    "anexo": "IV",
+    "tipo": "ayuda_campo",
+    "mensaje": "Detalle pormenorizado del recorrido: por dónde se va, paradas intermedias con lugar y hora, y qué recorridos se hacen en el destino. Si se viaja en un vehículo de la escuela o de la cooperadora, el Anexo I (punto 8.5.1) exige este detalle sí o sí.",
+    "razon": "El punto 8.5.1 del Anexo I exige un informe detallado que incluya: estudiante transportado (apellido, nombre, DNI, nivel/modalidad), hora y lugar de partida, hora y lugar de llegada con trayecto intermedio, recorridos en el destino, docentes acompañantes-preceptores (apellido, nombre, DNI, cargo), y nombre de la compañía aseguradora con fecha de vigencia.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I, punto 8.5.1",
+    "pagina_pdf": 13,
+    "frase_resaltar": "8.5.1 Para ello debe contar con un informe detallado de"
+  },
+  {
+    "clave": "IV.actividades",
+    "anexo": "IV",
+    "tipo": "ayuda_campo",
+    "mensaje": "Qué van a hacer concretamente los/las estudiantes durante la salida. Si hay alguna actividad de riesgo considerable o inusual, hay que fundamentarla y pedir autorización especial y explícita a las familias (Anexo I, punto 4).",
+    "razon": "Toda actividad educativa debe estar descrita. Si hay riesgos considerables o actividades inusuales (ej. buceo, rappel, trabajos en altura), deben fundamentarse pedagógicamente, solicitarse autorización especial explícita a las familias, y constar en la planilla con descripción de la actividad.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I, punto 4",
+    "pagina_pdf": 9,
+    "frase_resaltar": "riesgo considerable o inusual"
+  },
+  {
+    "clave": "IV.cantidad_no_docentes_acompanantes",
+    "anexo": "IV",
+    "tipo": "ayuda_campo",
+    "mensaje": "Se calcula solo desde la tabla de Personas. Puede ser cero: los acompañantes no docentes nunca son responsables de la vigilancia del grupo (Anexo I, punto 3.4).",
+    "razon": "El punto 3.4 establece que bajo ningún aspecto los acompañantes no docentes pueden considerarse responsables de la vigilancia de estudiantes menores de 18 años, aunque pueden ayudar con tareas que coadyuven al mejor cuidado del grupo.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I, punto 3.4",
+    "pagina_pdf": 9,
+    "frase_resaltar": "3.4 Bajo ningún aspecto se los podrá considerar responsables"
+  },
+  {
+    "clave": "IV.total_personas",
+    "anexo": "IV",
+    "tipo": "ayuda_campo",
+    "mensaje": "Se calcula solo. No puede superar la cantidad de asientos declarada del transporte (Anexo I, punto 8.5.2).",
+    "razon": "El punto 8.5.2 establece que el total de personas a transportar no puede exceder la cantidad de asientos declarada para el vehículo utilizado.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I, punto 8.5.2",
+    "pagina_pdf": 13,
+    "frase_resaltar": "8.5.2 La cantidad total de personas a transportar"
+  },
+  {
+    "clave": "V.observaciones",
+    "anexo": "V",
+    "tipo": "ayuda_campo",
+    "mensaje": "Para completar ante cualquier eventualidad: un estudiante que no viajó, un docente que se reemplazó a último momento, un accidente. Si hubo un accidente, esta planilla se presenta ante la aseguradora junto con los Anexos IV y IX.",
+    "razon": "En caso de accidente durante la salida, debe acompañarse la denuncia de siniestro junto con copias autenticadas de los Anexos IV (presentación de la salida), V (planilla de asistencia) y IX (declaración jurada) para presentar ante la compañía de seguros.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I, punto 7.6",
+    "pagina_pdf": 11,
+    "frase_resaltar": "la denuncia de siniestro, junto con la copia autenticada de los Anexos IV, V y IX"
+  },
+  {
+    "clave": "VIII.nombre_empresa",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Razón social del prestador del servicio. Si se contrata una agencia de viajes, además hay que cumplir la Ley 25599 (Art. 12 de la Resolución).",
+    "razon": "El artículo 12 de la Resolución establece que cuando se contraten agencias de viajes, debe darse cumplimiento con las prescripciones de la Ley Nacional Nº 25599 T.O., Ley Nº 26208 y Ley Provincial Nº 13122 de adhesión, como requisito imprescindible para autorización.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Artículo 12",
+    "pagina_pdf": 4,
+    "frase_resaltar": "Ley Nacional N° 25599"
+  },
+  {
+    "clave": "VIII.habilitacion_vehiculo",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Número de registro, fecha, tipo de habilitación, cantidad de asientos y vigencia de la VTV hasta el regreso. Qué organismo habilita depende del destino: dentro de la provincia rige la Res. 122/18; a otra provincia es obligatoria la habilitación de la CNRT; a CABA sirve el transporte escolar habilitado si la salida no supera las 48 horas.",
+    "razon": "La habilitación del vehículo depende del destino: para salidas dentro de la provincia rige la Resolución 122/18 de la Subsecretaría de Transporte; para salidas a otra provincia es obligatoria la habilitación de la Comisión Nacional de Regulación del Transporte (C.N.R.T.); para CABA funciona el transporte escolar habilitado si la propuesta no supera 48 horas.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I, punto 8.1-8.3",
+    "pagina_pdf": 12,
+    "frase_resaltar": "Resolución 122/18"
+  },
+  {
+    "clave": "VIII.nombre_conductor",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Puede haber más de uno. Si el día de la partida cambia el conductor por una indisposición, hay que comunicarlo a la autoridad educativa (Anexo I, punto 9.4).",
+    "razon": "El punto 9.4 establece que cualquier cambio en las condiciones de aprobación, incluida la sustitución del conductor por indisposición personal, debe comunicarse a la autoridad educativa competente para tal aprobación, responsabilizándose por la veracidad de los datos.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I, punto 9.4",
+    "pagina_pdf": 16,
+    "frase_resaltar": "9.4 Lo expuesto en el apartado anterior se aplica... del conductor por una indisposición"
+  },
+  {
+    "clave": "IX.tipo_seguro",
+    "anexo": "IX",
+    "tipo": "ayuda_campo",
+    "mensaje": "Tiene que ser Responsabilidad Civil: es lo que exige el art. 1767 del Código Civil y Comercial para los establecimientos educativos.",
+    "razon": "El artículo 1767 del Código Civil y Comercial establece que 'El titular de un establecimiento educativo responde por el daño causado o sufrido por sus alumnos menores de edad cuando se hallen o deban hallarse bajo el control de la autoridad escolar. La responsabilidad es objetiva y se exime sólo con la prueba del caso fortuito. El establecimiento educativo debe contratar un seguro de responsabilidad civil, de acuerdo a los requisitos que fije la autoridad en materia aseguradora.'",
+    "referencia_normativa": "Código Civil y Comercial de la República Argentina, art. 1767",
+    "pagina_pdf": 2,
+    "frase_resaltar": "artículo 1767 del Código Civil y Comercial"
+  },
+  {
+    "clave": "PERSONAS.RATIO",
+    "anexo": null,
+    "tipo": "nota_seccion",
+    "mensaje": "Marcá 'menor de 16' en los estudiantes para que se controle la relación docente-estudiante que exige el Anexo I (1 adulto cada 12 estudiantes de menos de 16 años; 1 cada 15 a partir de los 16, en Nivel Secundario).",
+    "razon": "El Anexo I punto 2.3 (Nivel Secundario) especifica que debe haber 1 docente y/o acompañante no docente cada 12 estudiantes de menos de 16 años de edad, y 1 cada 15 estudiantes a partir de los 16 años.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I, punto 2.3",
+    "pagina_pdf": 7,
+    "frase_resaltar": "doce (12) estudiantes de menos de 16 años... quince (15) a partir de los 16"
+  },
+  {
+    "clave": "ANEXO_IV.ESPEJO_DOCENTES",
+    "anexo": "IV",
+    "tipo": "nota_seccion",
+    "mensaje": "Son los/las docentes en actividad que asumen la responsabilidad del grupo; el Anexo I aclara que esa responsabilidad es indelegable y nunca puede recaer en un acompañante no docente.",
+    "razon": "El Anexo I punto 3.3 establece que los acompañantes quedan sujetos a las indicaciones del docente a cargo, 'cuya responsabilidad es indelegable.' El punto 3.4 aclara que bajo ningún aspecto los acompañantes no docentes pueden considerarse responsables de la vigilancia.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I, puntos 3.3 y 3.4",
+    "pagina_pdf": 9,
+    "frase_resaltar": "responsabilidad es indelegable"
+  },
+  {
+    "clave": "DETALLE.FIRMA_ORIGINAL",
+    "anexo": null,
+    "tipo": "nota_anexo",
+    "mensaje": "Se abren en una pestaña nueva del navegador. La Resolución exige firma original en varios de ellos — hay que imprimirlos y hacerlos firmar igual.",
+    "razon": "Varios anexos requieren firma original en papel según el instructivo (Anexo III, VI, VII, IX). Aunque se completen digitalmente, deben imprimirse y constar con firma original del responsable antes de ejecutar la salida.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, sección 10 'Instructivo para completar los anexos'",
+    "pagina_pdf": 16,
+    "frase_resaltar": "10. INSTRUCTIVO PARA COMPLETAR LOS ANEXOS"
+  }
+]

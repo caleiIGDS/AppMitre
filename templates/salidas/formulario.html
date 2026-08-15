@@ -107,6 +107,19 @@ section.bloque{
 }
 .ayuda.visible{display:block}
 
+.preset-seguro select{
+  font-family:inherit; font-size:13px; padding:8px 10px;
+  border:1px solid var(--linea); border-radius:var(--radio); background:var(--auto);
+}
+.tarjeta-seguro{
+  border:1px solid var(--linea); border-radius:var(--radio); background:#f8fafc;
+  padding:14px; margin-bottom:12px;
+}
+.tarjeta-seguro-head{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  margin-bottom:12px; font-size:12px; color:var(--primary);
+}
+
 input,select,textarea{
   font-family:inherit; font-size:13px; color:var(--tinta);
   border:1px solid var(--linea); border-radius:var(--radio); padding:8px 10px;
@@ -173,15 +186,16 @@ tbody tr:nth-child(even){background:#fafbfc}
 
 <header>
   <div>
-    <h1>Salidas Educativas — Carga de Anexos</h1>
+    <h1>Salidas Educativas — {% if id_editar %}Edición{% else %}Carga{% endif %} de Anexos</h1>
     <p>Res. 3871/24 (DGCyE) · Anexos III a IX · Escuela Técnica Emilio Mitre</p>
   </div>
   <div class="acciones">
+    <a class="btn-fantasma" href="{{ url_for('salidas.normativa') }}" target="_blank">📄 Ver Resolución</a>
     <a class="btn-fantasma" href="{{ url_for('salidas.lista') }}">‹ Salidas guardadas</a>
     <button class="btn-fantasma" id="btn-abrir-todo">Expandir todo</button>
     <button class="btn-fantasma" id="btn-cargar">Cargar borrador</button>
     <button class="btn-fantasma" id="btn-borrador">Guardar borrador</button>
-    <button class="btn-primario" id="btn-exportar">Guardar salida</button>
+    <button class="btn-primario" id="btn-exportar">{% if id_editar %}Guardar cambios{% else %}Guardar salida{% endif %}</button>
     <input type="file" id="input-archivo" accept=".json,application/json" class="oculto">
   </div>
 </header>
@@ -214,23 +228,41 @@ tbody tr:nth-child(even){background:#fafbfc}
    sola vez (con un editor de texto) y queda listo para todo el ciclo lectivo.
    ============================================================================ */
 const DATOS_FIJOS = {
-  institucion_educativa: "ESCUELA TÉCNICA EMILIO MITRE",
-  numero_institucion:    "",              // N° de establecimiento
-  cue:                   "",              // Código Único de Establecimiento
-  region:                "",
-  distrito:              "",
-  domicilio:             "",
-  telefono:              "",
-  director:              "",              // Apellido y nombre del/la director/a
+  institucion_educativa: "E.E.S.T. 'Ing. Emilio Mitre'",
+  numero_institucion:    "4",             // N° de establecimiento
+  cue:                   "061155400",     // Código Único de Establecimiento
+  region:                "7",
+  distrito:              "General San Martín",
+  domicilio:             "San Martín 1714",
+  telefono:              "011 4755-2116",
+  director:              "Moschet Javier", // Apellido y nombre del/la director/a
   tipo_gestion:          "estatal",       // "estatal" | "privada"
   representante_legal:   "",              // sólo gestión privada (DIEGEP)
-  entidad_propietaria:   "",              // sólo gestión privada (DIEGEP)
-  // Seguro escolar de la ESCUELA (Anexo IX). Ojo: no es el seguro del transporte.
-  seguro_compania:       "",
-  seguro_tipo:           "Responsabilidad Civil",
-  seguro_poliza:         "",
-  seguro_vigencia:       ""
+  entidad_propietaria:   ""               // sólo gestión privada (DIEGEP)
 };
+
+/* ============================================================================
+   SEGUROS ESCOLARES CONOCIDOS (Anexo IX — el de la ESCUELA, no el del transporte).
+   La escuela puede tener más de una póliza vigente a la vez (ej. una para
+   estudiantes menores de edad y otra para mayores) — por eso no hay un solo
+   "seguro fijo": el formulario ofrece estos presets para elegir y completa los
+   4 campos solo, pero quedan editables a mano igual. Instructivo interno,
+   actualizar acá cuando cambien las pólizas.
+   ============================================================================ */
+const SEGUROS_PRESET = [
+  { id:"menores", label:"Estudiantes menores de edad — Provincia Seguros (129690)",
+    compania_aseguradora:"Provincia Seguros",
+    tipo_seguro:"Seguro de Responsabilidad Civil para estudiantes menores de edad",
+    numero_poliza:"129690", vigencia_poliza:"31/12/25-31/12/26" },
+  { id:"mayores", label:"Estudiantes mayores de edad — Provincia Seguros (129904)",
+    compania_aseguradora:"Provincia Seguros",
+    tipo_seguro:"Seguro de Responsabilidad Civil para estudiantes mayores de edad",
+    numero_poliza:"129904", vigencia_poliza:"31/12/25-31/12/26" },
+  { id:"accidentes", label:"Accidentes personales — Provincia/Sancor Seguros (13239265)",
+    compania_aseguradora:"Provincia Seguros/ Sancor Seguros",
+    tipo_seguro:"Seguro de accidentes personales (Seguro escolar)",
+    numero_poliza:"13239265", vigencia_poliza:"1/01/26-1/01/27" }
+];
 
 /* ============================================================================
    DATOS COMUNES — se cargan una vez y se replican en todos los anexos.
@@ -504,17 +536,16 @@ const ANEXOS = [
     {id:"domicilio", label:"Domicilio", tipo:"text", req:true, auto:true},
     {id:"distrito", label:"Distrito", tipo:"text", req:true, auto:true},
     {id:"director", label:"Director/a del establecimiento", tipo:"text", req:true, auto:true},
-    {id:"tipo_gestion", label:"Tipo de gestión", tipo:"select", opciones:["estatal","privada"], req:true, auto:true},
     {id:"representante_legal", label:"Representante Legal (DIEGEP)", tipo:"text", req:false, cond:{campo:"tipo_gestion", valor:"privada"},
      a:"Sólo para escuelas de gestión privada. En ese caso el/la Representante Legal también firma la declaración."},
     {id:"entidad_propietaria", label:"Entidad propietaria (DIEGEP)", tipo:"text", req:false, cond:{campo:"tipo_gestion", valor:"privada"},
      a:"Sólo para gestión privada: en esas escuelas la entidad propietaria es la responsable de la salida."},
     {id:"fecha_lugar_realizacion", label:"Fecha y lugar de realización de la salida", tipo:"text", req:true, calc:true,
      a:"Se arma solo con los datos comunes de la salida."},
-    {id:"compania_aseguradora", label:"Compañía aseguradora (seguro escolar)", tipo:"text", req:true, auto:true, seccion:"Seguro escolar"},
-    {id:"tipo_seguro", label:"Tipo de seguro", tipo:"text", req:true, auto:true, seccion:"Seguro escolar"},
-    {id:"numero_poliza", label:"Póliza N°", tipo:"text", req:true, auto:true, seccion:"Seguro escolar"},
-    {id:"vigencia_poliza", label:"Vigencia", tipo:"text", req:true, auto:true, seccion:"Seguro escolar"},
+    {id:"compania_aseguradora", label:"Compañía aseguradora (seguro escolar)", tipo:"text", req:true, seccion:"Seguro escolar"},
+    {id:"tipo_seguro", label:"Tipo de seguro", tipo:"text", req:true, seccion:"Seguro escolar"},
+    {id:"numero_poliza", label:"Póliza N°", tipo:"text", req:true, seccion:"Seguro escolar"},
+    {id:"vigencia_poliza", label:"Vigencia", tipo:"text", req:true, seccion:"Seguro escolar"},
     {id:"observaciones", label:"Observaciones", tipo:"textarea", req:false, ancho:true, seccion:"Seguro escolar",
      a:"Todo lo que pueda surgir y no esté previsto en el formulario. Si la salida es fuera de la provincia o del país, acá se deja constancia de la ampliación de la póliza."}
   ]
@@ -534,12 +565,11 @@ const AYUDA_SEGURO = {
 };
 Object.assign(AYUDA_COMUN, AYUDA_SEGURO);
 
-/* Datos fijos que alimentan los campos de seguro del Anexo IX */
+/* Datos fijos que alimentan campos del Anexo IX que no son del bloque de seguro (ese
+   bloque ya no es "auto": tiene su propio selector de preset, ver SEGUROS_PRESET y
+   selectorPresetSeguro — necesita quedar editable a mano sin que refrescarDerivados() lo
+   pise en cada tecla que se toca en Datos Comunes). */
 const SEGURO_A_FIJO = {
-  "IX.compania_aseguradora":"seguro_compania",
-  "IX.tipo_seguro":"seguro_tipo",
-  "IX.numero_poliza":"seguro_poliza",
-  "IX.vigencia_poliza":"seguro_vigencia",
   "IX.representante_legal":"representante_legal",
   "IX.entidad_propietaria":"entidad_propietaria"
 };
@@ -560,6 +590,16 @@ ANEXOS.forEach(a => estado.anexos[a.n] = {});
 COMUNES.forEach(g => g.campos.forEach(c => {
   if (c.fijo && DATOS_FIJOS[c.id] !== undefined) estado.comunes[c.id] = DATOS_FIJOS[c.id];
 }));
+
+// Precarga de datos si se está editando una salida existente
+let idEditar = null;
+const datosPrecargar = {{ datos_precargar | tojson }};
+if (datosPrecargar) {
+  idEditar = {{ id_editar | tojson }};
+  estado.comunes = datosPrecargar.datos_comunes || {};
+  estado.personas = datosPrecargar.personas || [];
+  ANEXOS.forEach(a => estado.anexos[a.n] = (datosPrecargar.anexos && datosPrecargar.anexos[a.n]) || {});
+}
 
 let tocado = false;
 function marcarCambio(){
@@ -682,11 +722,17 @@ function campoComun(c){
   } else {
     inp = el("input", {type:c.tipo});
   }
+  inp.setAttribute("data-comun-id", c.id);
   inp.value = estado.comunes[c.id] || "";
   inp.addEventListener("input", () => {
     estado.comunes[c.id] = inp.value;
     marcarCambio();
     refrescarDerivados();
+    // Autocompletados
+    if (c.id === "fecha_salida" && inp.value) {
+      estado.comunes.fecha_regreso = inp.value;
+      refrescarDerivados();
+    }
   });
   wrap.appendChild(inp);
   return wrap;
@@ -708,7 +754,6 @@ function renderPersonas(){
       el("th", {}, "Apellido y Nombre"),
       el("th", {style:"width:130px"}, "Documento"),
       el("th", {style:"width:190px"}, "Rol"),
-      el("th", {style:"width:150px"}, "Cargo / observación"),
       el("th", {style:"width:80px"}, "-16 años"),
       el("th", {style:"width:46px"}, ""))),
     el("tbody", {id:"cuerpo-personas"}));
@@ -737,7 +782,7 @@ function pintarPersonas(){
   const tb = document.getElementById("cuerpo-personas");
   tb.textContent = "";
   if (!estado.personas.length){
-    tb.appendChild(el("tr", {}, el("td", {colspan:"7", class:"vacio"},
+    tb.appendChild(el("tr", {}, el("td", {colspan:"6", class:"vacio"},
       "Todavía no hay nadie cargado. Usá \"Agregar persona\".")));
   }
   estado.personas.forEach((p, i) => {
@@ -755,9 +800,6 @@ function pintarPersonas(){
     });
     selRol.addEventListener("change", () => { p.rol = selRol.value; marcarCambio(); pintarPersonas(); });
 
-    const inpCargo = el("input", {type:"text", value:p.cargo, placeholder:p.rol.startsWith("docente") ? "Cargo" : "Vínculo"});
-    inpCargo.addEventListener("input", () => { p.cargo = inpCargo.value; marcarCambio(); });
-
     const chk = el("input", {type:"checkbox"});
     chk.checked = !!p.menor16;
     chk.disabled = p.rol !== "estudiante";
@@ -771,7 +813,6 @@ function pintarPersonas(){
       el("td", {}, inpNombre),
       el("td", {}, inpDoc),
       el("td", {}, selRol),
-      el("td", {}, inpCargo),
       el("td", {style:"text-align:center"}, chk),
       el("td", {}, btn)));
   });
@@ -821,11 +862,24 @@ function renderAnexo(anexo){
       grilla = el("div", {class:"grilla"});
       cuerpo.appendChild(grilla);
     }
+    // El selector de preset va justo antes del primer campo del seguro escolar — elegir
+    // uno completa los 4 campos, que siguen editables a mano después (ver SEGUROS_PRESET).
+    if (anexo.n === "IX" && campo.id === "compania_aseguradora"){
+      grilla.appendChild(campoPresetSeguro("Usar un seguro conocido", preset => {
+        copiarPreset(estado.anexos.IX, preset);
+        ["compania_aseguradora", "tipo_seguro", "numero_poliza", "vigencia_poliza"].forEach(id => {
+          const inp = document.querySelector(`[data-campo="IX.${id}"]`);
+          if (inp) inp.value = preset[id];
+        });
+        marcarCambio();
+      }));
+    }
     grilla.appendChild(campoAnexo(anexo, campo));
   });
 
   if (anexo.n === "IV") cuerpo.appendChild(espejoDocentes());
   if (anexo.n === "V")  cuerpo.appendChild(espejoPersonas());
+  if (anexo.n === "IX") cuerpo.appendChild(segurosAdicionales());
 
   const h2 = el("h2", {onclick:e => e.currentTarget.parentElement.classList.toggle("cerrado")},
     el("span", {text:`Anexo ${anexo.n} — ${anexo.titulo}`}),
@@ -881,8 +935,8 @@ function campoAnexo(anexo, campo){
 
 function docentesPorRol(rol){
   return estado.personas
-    .filter(p => p.rol === rol && (p.apellido_nombre || p.cargo))
-    .map(p => ({apellido_nombre:p.apellido_nombre, cargo:p.cargo}));
+    .filter(p => p.rol === rol && p.apellido_nombre)
+    .map(p => ({apellido_nombre:p.apellido_nombre, cargo:p.cargo || ""}));
 }
 
 function espejoDocentes(){
@@ -955,6 +1009,96 @@ function pintarEspejo(){
   });
 }
 
+/* Selector de preset de seguro escolar (ver SEGUROS_PRESET) — reutilizado por el seguro
+   principal del Anexo IX y por cada tarjeta de segurosAdicionales(). Elegir un preset
+   copia sus 4 campos a `destinoObj` vía `onElegir`; el select vuelve a "— elegir —"
+   después (el preset ya se copió, y los campos quedan editables a mano igual). */
+function campoPresetSeguro(labelTexto, onElegir){
+  const wrap = el("div", {class:"campo ancho preset-seguro"});
+  wrap.appendChild(el("label", {}, el("span", {text:labelTexto})));
+  const sel = el("select", {});
+  sel.appendChild(el("option", {value:""}, "— elegir preset (o cargar los datos a mano abajo) —"));
+  SEGUROS_PRESET.forEach(p => sel.appendChild(el("option", {value:p.id}, p.label)));
+  sel.addEventListener("change", () => {
+    const preset = SEGUROS_PRESET.find(p => p.id === sel.value);
+    if (preset) onElegir(preset);
+    sel.value = "";
+  });
+  wrap.appendChild(sel);
+  return wrap;
+}
+
+function copiarPreset(destinoObj, preset){
+  destinoObj.compania_aseguradora = preset.compania_aseguradora;
+  destinoObj.tipo_seguro = preset.tipo_seguro;
+  destinoObj.numero_poliza = preset.numero_poliza;
+  destinoObj.vigencia_poliza = preset.vigencia_poliza;
+}
+
+/* Seguros escolares además del principal (Anexo IX.compania_aseguradora y compañía). En
+   el papel real cada Declaración Jurada sólo tiene lugar para una póliza, así que cada
+   entrada acá genera su propia copia completa del Anexo IX al guardar (mismos datos de
+   identificación, sólo cambia el seguro) — ver `_seguros_adicionales` en salidas.py. */
+function segurosAdicionales(){
+  const caja = el("div", {style:"margin-top:18px"});
+  caja.appendChild(el("div", {class:"subtitulo", text:"Otros seguros escolares"}));
+  caja.appendChild(el("p", {class:"nota-anexo", text:
+    "Si la escuela tiene más de una póliza vigente (ej. una para estudiantes menores de edad y otra para mayores), agregalas acá: cada una imprime su propia copia del Anexo IX, con los mismos datos de identificación y esa póliza."}));
+  caja.appendChild(el("div", {id:"lista-seguros-extra"}));
+  const btn = el("button", {type:"button", class:"btn-chico", text:"+ Agregar otro seguro"});
+  btn.addEventListener("click", () => {
+    if (!estado.anexos.IX._seguros_adicionales) estado.anexos.IX._seguros_adicionales = [];
+    estado.anexos.IX._seguros_adicionales.push(
+      {compania_aseguradora:"", tipo_seguro:"", numero_poliza:"", vigencia_poliza:"", observaciones:""});
+    marcarCambio();
+    pintarSegurosAdicionales();
+  });
+  caja.appendChild(btn);
+  return caja;
+}
+
+function pintarSegurosAdicionales(){
+  const cont = document.getElementById("lista-seguros-extra");
+  if (!cont) return;
+  cont.textContent = "";
+  const extras = (estado.anexos.IX && estado.anexos.IX._seguros_adicionales) || [];
+  extras.forEach((seg, i) => {
+    const encabezado = el("div", {class:"tarjeta-seguro-head"},
+      el("strong", {text:`Seguro adicional #${i + 2} (imprime su propio Anexo IX)`}));
+    const btnQuitar = el("button", {type:"button", class:"btn-borrar", text:"✕", title:"Quitar este seguro"});
+    btnQuitar.addEventListener("click", () => { extras.splice(i, 1); marcarCambio(); pintarSegurosAdicionales(); });
+    encabezado.appendChild(btnQuitar);
+
+    const grilla = el("div", {class:"grilla"});
+    [["compania_aseguradora", "Compañía aseguradora"], ["tipo_seguro", "Tipo de seguro"],
+     ["numero_poliza", "Póliza N°"], ["vigencia_poliza", "Vigencia"]].forEach(([campo, label]) => {
+      const wrap = el("div", {class:"campo"});
+      wrap.appendChild(el("label", {}, el("span", {text:label})));
+      const inp = el("input", {type:"text"});
+      inp.value = seg[campo] || "";
+      inp.addEventListener("input", () => { seg[campo] = inp.value; marcarCambio(); });
+      wrap.appendChild(inp);
+      grilla.appendChild(wrap);
+    });
+    const wrapObs = el("div", {class:"campo ancho"});
+    wrapObs.appendChild(el("label", {}, el("span", {text:"Observaciones"})));
+    const ta = el("textarea", {});
+    ta.value = seg.observaciones || "";
+    ta.addEventListener("input", () => { seg.observaciones = ta.value; marcarCambio(); });
+    wrapObs.appendChild(ta);
+    grilla.appendChild(wrapObs);
+
+    cont.appendChild(el("div", {class:"tarjeta-seguro"},
+      encabezado,
+      campoPresetSeguro("Usar un seguro conocido", preset => {
+        copiarPreset(seg, preset);
+        marcarCambio();
+        pintarSegurosAdicionales();
+      }),
+      grilla));
+  });
+}
+
 /* ============================================================================
    DERIVADOS Y CONDICIONES
    ============================================================================ */
@@ -1008,7 +1152,7 @@ function aplicarCondiciones(){
      cada anexo. Es la única acción que persiste algo fuera de esta pestaña.
    ============================================================================ */
 function datosActuales(){
-  return {
+  const datos = {
     formato: "appmitre.salidas.v1",
     resolucion: "RESOC-2024-3871-GDEBA-DGCYE",
     generado: new Date().toISOString(),
@@ -1017,6 +1161,10 @@ function datosActuales(){
     totales: contarPersonas(),
     anexos: estado.anexos
   };
+  // Asegurar que tipo_gestion es siempre "estatal"
+  datos.anexos.IX.tipo_gestion = "estatal";
+  if (idEditar) datos._id_editar = idEditar;
+  return datos;
 }
 
 function guardarBorrador(){
@@ -1045,7 +1193,8 @@ async function guardarEnServidor(){
     if (!resp.ok || !data.id) throw new Error(data.error || ("HTTP " + resp.status));
     tocado = false;
     document.getElementById("estado").textContent = "Guardado en el servidor. Redirigiendo...";
-    location.href = "{{ url_for('salidas.lista') }}" + data.id;
+    const destino = idEditar ? ("{{ url_for('salidas.detalle', id=0) }}".slice(0,-1) + data.id) : ("{{ url_for('salidas.lista') }}" + data.id);
+    location.href = destino;
   } catch (err) {
     boton.disabled = false;
     document.getElementById("estado").textContent = "No se pudo guardar en el servidor.";
@@ -1071,6 +1220,19 @@ function cargar(archivo){
   lector.readAsText(archivo);
 }
 
+function autocompletarLugarPartida(){
+  if (!estado.comunes.lugar_salida) {
+    const institucion = estado.comunes.institucion_educativa || "";
+    const domicilio = estado.comunes.domicilio || "";
+    if (institucion || domicilio) {
+      estado.comunes.lugar_salida = [institucion, domicilio].filter(Boolean).join(", ");
+      // Actualizar el input si existe
+      const inp = document.querySelector('input[data-comun-id="lugar_salida"]');
+      if (inp) inp.value = estado.comunes.lugar_salida;
+    }
+  }
+}
+
 /* ============================================================================
    ARRANQUE
    ============================================================================ */
@@ -1091,7 +1253,9 @@ function dibujarTodo(){
   }));
 
   pintarPersonas();
+  pintarSegurosAdicionales();
   refrescarDerivados();
+  autocompletarLugarPartida();
 }
 
 document.getElementById("btn-exportar").addEventListener("click", guardarEnServidor);
