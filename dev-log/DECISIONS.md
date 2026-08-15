@@ -4,6 +4,86 @@ Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones ti
 
 ---
 
+## [2026-08-15] — El logo-pba.svg no se puede dibujar directo en un PDF de fpdf2
+
+**Contexto**: al agregar membrete a los PDF de Salidas (escudo en el header, logo de la
+DGCyE en el footer — ver la entrada de más abajo), `logo-pba.svg` (en el root del repo) se
+dibujaba en blanco: nada de error, sólo un aviso de log ("Ignoring unsupported SVG tag:
+`<pattern>`") fácil de no ver entre los demás avisos inofensivos que ya tira fpdf2 con
+`escudo.svg` (`<filter>`, `<stop>` sin offset). Se verificó rasterizando el PDF con
+`pdftoppm` y mirando la página: el escudo del header salía bien, el logo del footer no
+salía nada.
+
+**La causa**: `logo-pba.svg` no es un SVG "de verdad" con paths vectoriales — es un
+`<rect>` con `fill: url(#pattern0)`, y ese patrón envuelve un `<image>` con un PNG entero
+codificado en base64 (`xlink:href="data:image/png;base64,..."`). Es una forma común de
+exportar un SVG desde herramientas de diseño cuando el "vector" en realidad es una imagen
+rasterizada. **fpdf2 no soporta `<pattern>`** (es una limitación conocida y documentada del
+proyecto), así que ese `<rect>` — que es todo el contenido visible del archivo — no dibuja
+nada.
+
+**La decisión es extraer el PNG embebido una sola vez** (`base64.b64decode` del contenido
+de `xlink:href`) y commitear el resultado como `static/images/logo-pba.png`, que es lo que
+usa `salidas._PDFAnexo.footer()`. **No** apuntar de nuevo al `.svg` del root pensando que
+"ya debería andar": si el logo se reemplaza más adelante, hay que repetir la extracción (o
+conseguir directamente un PNG/JPG del logo). `escudo.svg` sí se puede seguir usando tal
+cual porque tiene paths vectoriales de verdad además de algún filtro/gradiente que fpdf2
+ignora sin perder la forma reconocible del escudo.
+
+---
+
+## [2026-08-15] — Salidas educativas: guardado en servidor, vigencia de 1 año, y por qué no es una `ENTIDAD` de crud.py
+
+**Contexto**: `Salidas/formulario-salidas.html` (herramienta standalone del 2026-08-14) armaba
+el legajo digital de una salida educativa enteramente en el navegador, sin servidor
+involucrado — la única salida era descargar un JSON. El pedido siguiente fue guardar la
+salida en el servidor con vigencia de 1 año, tener una previsualización de todas las
+guardadas, y generar los PDF de cada anexo para verlos en el navegador sin descargarlos
+solos. Eso obligaba a que dejara de ser un archivo aislado.
+
+**Por qué no es una `ENTIDAD` de `crud.py`.** El motor genérico asume filas planas de
+campos escalares: `_guardar_form` hace `INSERT`/`UPDATE` columna=valor desde
+`request.form`, y `templates/crud/form.html` sólo sabe pintar `text/number/select/textarea`
+sin arrays ni anidamiento. Una salida es un blob con datos comunes + una tabla de personas
+de largo variable + 7 anexos, cada uno con sus propios campos (algunos con sub-tablas de
+largo variable, como el listado de docentes o de personas). Forzarlo a `ENTIDADES` habría
+significado escribir por fuera del motor de todos modos para las partes que no entran, y
+mantener dos formas de completar lo mismo. El precedente correcto ya estaba en el propio
+código: **préstamos**, en `gestion.py`, tampoco es una `ENTIDAD` — tiene ítems con cantidad
+y un ciclo prestado→devuelto — y resuelve exactamente este tipo de caso con rutas y tabla
+propias, reutilizando sólo lo compartido (`accesos`, `crud.conectar`/`crud.init_db`,
+`respaldos`). `salidas.py` sigue ese mismo molde.
+
+**La vigencia se borra sola y del todo, sin papelera.** Al año de guardada, una salida (fila
++ sus 7 PDF) se elimina automáticamente. Es una decisión explícita de minimizar datos
+retenidos: una salida guarda DNI y datos de salud de estudiantes, y ese mismo criterio ya
+había regido el diseño del formulario standalone ("no persistente en la compu que se esté
+usando"). Se evaluaron alternativas menos agresivas (ocultar pasado el año pero conservar,
+o sólo marcar como vencida) y se descartaron a propósito: cualquiera de las dos deja datos
+sensibles viviendo en el servidor más tiempo del que hace falta.
+
+**Por qué el testigo de `crud.init_db` no es la tabla `salidas`.** `crud.init_db` levanta
+`RuntimeError` si la tabla testigo está vacía pero hay respaldos previos — es el guard que
+evitó repetir la pérdida de datos del 2026-08-08 (ver la entrada de ese día). El problema es
+que `salidas` queda **legítimamente vacía** cada vez que todas las salidas guardadas vencen
+y se purgan solas: si esa fuera la tabla testigo, el primer año sin ninguna salida activa
+tumbaría el arranque de la app entera confundiendo "vencieron todas" con "se perdió el
+archivo". La solución fue separar las dos preguntas: `salidas_meta` es una tabla de un solo
+renglón, sembrada una vez en el primer `init_db()` y nunca más tocada — sirve de testigo
+("¿esta DB se inicializó alguna vez?") sin depender de si hay salidas activas ahora mismo.
+
+**El PDF de cada anexo se genera con un renderer genérico, no 7 layouts a mano.** Recorre
+`Salidas/AnexoN.json` (ya existente, la referencia completa del formulario en papel) en vez
+de duplicar la lista de campos en Python. Como esos JSON incluyen los campos de firma y
+"lugar y fecha" que el formulario digital dejó de tipear a propósito (ver la decisión del
+2026-08-14), el PDF los imprime en blanco — que es exactamente lo que hace falta: se
+completan a mano después de imprimir. Al escribirlo apareció un detalle no obvio de fpdf2:
+`multi_cell()` por default deja el cursor pegado al margen derecho (`new_x=XPos.RIGHT`), así
+que el siguiente `multi_cell()` revienta con `FPDFException: Not enough horizontal space to
+render a single character` — hay que pasar `new_x='LMARGIN', new_y='NEXT'` en cada llamada.
+
+---
+
 ## [2026-08-13] — La foto se ata al número, no a la ficha
 
 **Contexto**: cargar una estantería entera obligaba a un mensaje por objeto, porque el chat aceptaba una foto por turno y cada ficha se guardaba con un botón que escribía al instante. Al pasar a tandas de ocho apareció el problema real, que no es el volumen sino la **corrección**: de ocho fichas, dos siempre salen mal, y pedir un cambio escribiendo se llevaba puesto lo ya revisado (`quitarConfirmaciones()` borra los botones apenas el usuario tipea).

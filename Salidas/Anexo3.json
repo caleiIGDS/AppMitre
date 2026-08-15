@@ -1,0 +1,101 @@
+{
+  "anexo": "III",
+  "numero": 3,
+  "titulo": "Autorización general para actividades durante el ciclo lectivo — Salida educativa/representación institucional para estudiantes con menos de 18 años de edad",
+  "fuente": "IF-2024-35029272-GDEBA-CGCYEDGCYE",
+  "completa_general": "familia",
+  "notas_generales": "Se completa una única vez al inicio del ciclo lectivo y vale para todas las salidas dentro del barrio o área geográfica inmediata que no requieran medio de transporte. Debe imprimirse y llevar firma original aunque se complete de forma digital. Se archiva en el Legajo del estudiante.",
+  "campos": [
+    {
+      "id": "nombre_estudiante",
+      "orden": 1,
+      "label": "Nombre y apellido del estudiante",
+      "tipo": "text",
+      "requerido": true,
+      "completa": "familia",
+      "seccion": null,
+      "opciones": null,
+      "columnas": null,
+      "condicion": null,
+      "notas": null
+    },
+    {
+      "id": "dni_estudiante",
+      "orden": 2,
+      "label": "DNI del estudiante",
+      "tipo": "text",
+      "requerido": true,
+      "completa": "familia",
+      "seccion": null,
+      "opciones": null,
+      "columnas": null,
+      "condicion": null,
+      "notas": null
+    },
+    {
+      "id": "anio_curso",
+      "orden": 3,
+      "label": "Año",
+      "tipo": "text",
+      "requerido": true,
+      "completa": "familia",
+      "seccion": null,
+      "opciones": null,
+      "columnas": null,
+      "condicion": null,
+      "notas": "Año que cursa el estudiante, ej. \"3°\""
+    },
+    {
+      "id": "seccion_curso",
+      "orden": 4,
+      "label": "Sección",
+      "tipo": "text",
+      "requerido": true,
+      "completa": "familia",
+      "seccion": null,
+      "opciones": null,
+      "columnas": null,
+      "condicion": null,
+      "notas": null
+    },
+    {
+      "id": "fecha",
+      "orden": 5,
+      "label": "Fecha",
+      "tipo": "fecha",
+      "requerido": true,
+      "completa": "familia",
+      "seccion": null,
+      "opciones": null,
+      "columnas": null,
+      "condicion": null,
+      "notas": "Fecha de la firma, no de una salida puntual — la autorización vale para todo el ciclo lectivo."
+    },
+    {
+      "id": "firma_aclaracion_responsable",
+      "orden": 6,
+      "label": "Firma y aclaración (madre, padre o adulto responsable)",
+      "tipo": "text",
+      "requerido": true,
+      "completa": "familia",
+      "seccion": null,
+      "opciones": null,
+      "columnas": null,
+      "condicion": null,
+      "notas": null
+    },
+    {
+      "id": "dni_responsable",
+      "orden": 7,
+      "label": "DNI del adulto responsable",
+      "tipo": "text",
+      "requerido": true,
+      "completa": "familia",
+      "seccion": null,
+      "opciones": null,
+      "columnas": null,
+      "condicion": null,
+      "notas": null
+    }
+  ]
+}

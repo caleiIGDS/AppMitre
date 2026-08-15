@@ -777,7 +777,7 @@ def tools_permitidas(permisos):
 def slug_visible(tools, slug):
     """¿`slug` sobrevivió en los esquemas que EFECTIVAMENTE se le mandan al modelo?
 
-    Lo usa `llm.chat_with_tools` para armar el system prompt con la misma fuente que las
+    Lo usa `llm.chat_with_tools_stream` para armar el system prompt con la misma fuente que las
     tools, igual que hace con `escribe`: así las dos mitades del mensaje no se pueden
     contradecir.
     """

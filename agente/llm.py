@@ -149,12 +149,16 @@ def _loop_openai(client, model, system_prompt, mensajes_usuario, trazas, max_ite
     importa: el método (`chat.completions.create` vs `messages.create`), el finish_reason
     ('tool_calls' vs 'tool_use'), dónde va el system prompt (mensaje vs parámetro) y cómo
     se devuelven los resultados (rol 'tool' vs bloques 'tool_result' en un mensaje user).
+
+    Es un GENERADOR: va largando eventos de progreso (ver `chat_with_tools_stream`) y
+    devuelve la respuesta final como valor de retorno.
     """
     msgs = ([{'role': 'system', 'content': system_prompt}]
             + _mensajes_openai(mensajes_usuario, vision=_get_config()['vision']))
     tools = _tools_openai(tools_disponibles)
 
-    for _ in range(max_iterations):
+    for vuelta in range(max_iterations):
+        yield {'paso': 'pensando', 'vuelta': vuelta + 1}
         try:
             response = client.chat.completions.create(
                 model=model,
@@ -205,6 +209,7 @@ def _loop_openai(client, model, system_prompt, mensajes_usuario, trazas, max_ite
             if not isinstance(tool_input, dict):
                 tool_input = {}
 
+            yield {'paso': 'tool', 'tool': tc.function.name}
             resultado = ejecutar_tool(tc.function.name, tool_input, contexto_turno,
                                       permisos=permisos)
             trazas.append({
@@ -220,12 +225,24 @@ def _loop_openai(client, model, system_prompt, mensajes_usuario, trazas, max_ite
     return 'Máximo de iteraciones alcanzado'
 
 
-def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None,
-                    permisos=frozenset()):
+def chat_with_tools_stream(mensajes_usuario, trazas=None, contexto_turno=None,
+                           permisos=frozenset()):
     """
     Llama al LLM configurado con la lista de tools, ejecuta lo que pida, repite hasta
     que el modelo da una respuesta final de texto. Retorna la respuesta final.
     Agnóstico del proveedor LLM (Anthropic, Groq, OpenAI, Ollama, DeepSeek).
+
+    Es un GENERADOR. Va largando eventos de progreso — `{'paso': 'pensando', 'vuelta': n}`
+    antes de cada llamada al modelo y `{'paso': 'tool', 'tool': nombre}` antes de cada
+    tool — y la respuesta final es el valor de retorno (`StopIteration.value`). Quien no
+    tenga a nadie mirando la pantalla lo drena con un `while` y se queda con ese valor:
+    eso es `rutas._turno`.
+
+    Generador y no un callback `on_evento` porque el consumidor es una respuesta HTTP que
+    va streameando: con callback habría que correr el turno en un hilo aparte y pasarle los
+    eventos por una cola, y ese hilo se queda sin el request context de Flask (la sesión, de
+    donde sale el id de conversación). Como generador el turno corre en el mismo hilo de
+    siempre y lo único que cambia es quién pide la próxima vuelta.
 
     `trazas`: lista opcional donde se registra cada tool ejecutada en este turno
     (nombre + ok). Las lecturas no van a `agente_log` (sería ruido), así que sin esto
@@ -278,9 +295,9 @@ def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None,
         contexto_turno = {}
 
     if _get_config()['provider'] in PROVIDERS_OPENAI:
-        return _loop_openai(client, _get_config()['model'], system_prompt,
-                            mensajes_usuario, trazas, max_iterations, contexto_turno,
-                            permisos=permisos, tools_disponibles=tools)
+        return (yield from _loop_openai(
+            client, _get_config()['model'], system_prompt, mensajes_usuario, trazas,
+            max_iterations, contexto_turno, permisos=permisos, tools_disponibles=tools))
 
     # Copiar la lista para no mutar el historial original (que se persiste en sesión
     # como texto plano) con objetos complejos de la API (ToolUseBlock, etc.)
@@ -291,6 +308,7 @@ def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None,
 
     while iteration < max_iterations:
         iteration += 1
+        yield {'paso': 'pensando', 'vuelta': iteration}
 
         try:
             response = client.messages.create(
@@ -345,6 +363,7 @@ def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None,
                         tool_input = block.input
                         tool_use_id = block.id
 
+                        yield {'paso': 'tool', 'tool': tool_name}
                         resultado = ejecutar_tool(tool_name, tool_input, contexto_turno,
                                                   permisos=permisos)
                         trazas.append({
@@ -367,6 +386,7 @@ def chat_with_tools(mensajes_usuario, trazas=None, contexto_turno=None,
                         except:
                             tool_input = tool_call.function.arguments
 
+                        yield {'paso': 'tool', 'tool': tool_name}
                         resultado = ejecutar_tool(tool_name, tool_input, contexto_turno,
                                                   permisos=permisos)
                         trazas.append({

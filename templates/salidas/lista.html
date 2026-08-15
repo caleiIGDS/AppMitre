@@ -1,0 +1,38 @@
+{% extends 'salidas/base.html' %}
+{% block titulo %}Salidas guardadas{% endblock %}
+{% block contenido %}
+<div class="g-toolbar">
+    <h2>SALIDAS GUARDADAS <span class="g-count">{{ filas | length }}</span></h2>
+    {% if puede('salidas.editar') %}
+    <a class="g-btn" href="{{ url_for('salidas.nueva') }}">+ NUEVA SALIDA</a>
+    {% endif %}
+</div>
+
+{% if filas %}
+<div class="g-table-wrap">
+    <table class="g-table">
+        <thead>
+            <tr><th>PROYECTO</th><th>FECHA DE SALIDA</th><th>GUARDADA</th><th>VIGENTE HASTA</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for f in filas %}
+            <tr>
+                <td data-label="PROYECTO"><a class="g-item-link" href="{{ url_for('salidas.detalle', id=f['id']) }}">{{ f['nombre_proyecto'] or '(sin nombre de proyecto)' }}</a></td>
+                <td data-label="FECHA DE SALIDA">{{ f['fecha_salida'] or '—' }}</td>
+                <td data-label="GUARDADA">{{ f['fecha_creacion'][:10] }}</td>
+                <td data-label="VIGENTE HASTA">{{ f['vigencia_hasta'][:10] }}</td>
+                <td class="g-td-actions">
+                    <a class="g-link" href="{{ url_for('salidas.detalle', id=f['id']) }}">Ver</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="g-help g-section-empty">Todavía no hay ninguna salida guardada.
+    {% if puede('salidas.editar') %}Empezá por <a href="{{ url_for('salidas.nueva') }}">cargar una nueva</a>.{% endif %}</p>
+{% endif %}
+
+<p class="g-help">Cada salida guardada queda disponible durante 1 año; al vencer se borra sola del servidor, junto con sus PDF.</p>
+{% endblock %}

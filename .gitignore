@@ -2,6 +2,9 @@
 escuela.db
 *.db
 
+# PDFs generados por Salidas educativas (contienen DNI y datos de salud)
+salidas_pdfs/
+
 # Python
 __pycache__/
 *.pyc

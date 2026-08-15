@@ -222,6 +222,9 @@
             {% if puede('agente.leer') %}
             <a href="{{ url_for('agente.chat_page') }}">🤖 ASISTENTE</a>
             {% endif %}
+            {% if puede('salidas.leer') %}
+            <a href="{{ url_for('salidas.lista') }}">SALIDAS EDUCATIVAS</a>
+            {% endif %}
             {% if puede('accesos.admin') %}
             <a href="{{ url_for('accesos.panel') }}">🔑 ACCESOS</a>
             {% endif %}

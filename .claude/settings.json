@@ -24,7 +24,15 @@
       "PowerShell(cd \"c:\\\\Users\\\\calei\\\\projects\\\\AppMitre\"; $env:PYTHONPATH = \"c:\\\\Users\\\\calei\\\\projects\\\\AppMitre\"; python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\b16f2f1d-052b-401d-b466-90d247f34556\\\\scratchpad\\\\test_dos_caminos.py\")",
       "Bash(python -c \"import ast,sys; ast.parse\\(open\\('agente.py',encoding='utf-8'\\).read\\(\\)\\); print\\('sintaxis OK'\\)\")",
       "Bash(echo \"refs restantes: $?\")",
-      "Bash(python -X utf8 -c ' *)"
+      "Bash(python -X utf8 -c ' *)",
+      "Bash(node --check _check.js)",
+      "Bash(node _harness.js)",
+      "Bash(python -c \"import fpdf; print\\(fpdf.__version__\\)\")",
+      "Bash(python -c \"from fpdf import FPDF; import inspect; print\\(inspect.signature\\(FPDF.table\\)\\)\")",
+      "Bash(pkill -f \"python app.py\")",
+      "Bash(rm -f salidas.db /tmp/cookies.txt /tmp/salida_test.json /tmp/detalle.html /tmp/AnexoV.pdf /tmp/appmitre_server.log /tmp/login_body.html)",
+      "Bash(rm -rf salidas_pdfs)",
+      "Bash(python -m py_compile salidas.py app.py)"
     ]
   }
 }

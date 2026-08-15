@@ -13,6 +13,7 @@ import database
 import gestion
 import historia
 import agente
+import salidas
 import sys
 
 # El SPA de horarios es público: lo único que declara es quién puede regenerar la DB
@@ -65,12 +66,17 @@ historia.init_db()
 app.register_blueprint(agente.bp)
 agente.init_db()
 
+# Salidas educativas (/salidas) — módulo independiente con DB propia (salidas.db).
+# No pasa por el motor de crud.py (ver salidas.py); rutas y schema propios.
+app.register_blueprint(salidas.bp)
+salidas.init_db()
+
 # Accesos y permisos (accesos.db) — junta el catálogo que declaró cada área, engancha los
 # globals de Jinja y monta el canje de invitaciones + el panel /accesos. Esta lista es lo
 # único que hay que tocar al sumar un área nueva, y está al lado del register_blueprint
 # que ya hay que tocar igual.
 accesos.init_db()
-accesos.registrar_app(app, [gestion, historia, agente, sys.modules[__name__]])
+accesos.registrar_app(app, [gestion, historia, agente, salidas, sys.modules[__name__]])
 
 # obtener_filas se importa desde database (ver database.py)
 

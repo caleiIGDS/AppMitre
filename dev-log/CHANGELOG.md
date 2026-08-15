@@ -4,7 +4,31 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
-## [2026-08-13] — Carga en lote: varias fotos por mensaje y revisión antes de escribir
+## [2026-08-15] — Salidas educativas: de archivo standalone a quinta área con guardado en servidor
+
+**Tipo**: área nueva (`salidas.py`, `salidas.db`), 2 permisos nuevos, 1 contrato nuevo (`POST /salidas/api/guardar`)
+**Archivos**: `salidas.py` (nuevo), `templates/salidas/*.html` (nuevo), `app.py`,
+`templates/{gestion,historia,agente,accesos}/base.html`, `templates/index.html`,
+`actualizar.py`, `.gitignore`, `agent_docs/salidas-educativas.md` (nuevo)
+
+**1. `Salidas/formulario-salidas.html` (archivo standalone, sin servidor) se reemplaza por
+`templates/salidas/formulario.html`, servido en `GET /salidas/nueva`.** El botón "Guardar
+JSON" (que descargaba un Blob local) se separa en dos: "Guardar borrador" conserva ese
+comportamiento (local, sin servidor), y "Guardar salida" es nuevo — `fetch POST
+/salidas/api/guardar` con el mismo JSON, ahora persistido en `salidas.db`.
+
+**2. `POST /salidas/api/guardar`** recibe el payload `{formato, resolucion, generado,
+datos_comunes, personas, totales, anexos}` (mismo shape que ya armaba `exportar()`),
+inserta una fila en `salidas`, genera 7 PDF (uno por anexo) en `salidas_pdfs/<id>/` y
+responde `{id}`. Redirige el navegador a `GET /salidas/<id>`.
+
+**3. Dos permisos nuevos en el catálogo de `accesos`**: `salidas.leer` (verbo `leer`) y
+`salidas.editar` (verbo `escribir`) — entran solos en los perfiles `interno-lectura` /
+`interno-gestion` existentes, sin migrar ningún dispositivo ya invitado.
+
+**4. `salidas.db` se suma a la lista de DBs con datos propios** (junto a `gestion.db`,
+`historia.db`, `accesos.db`): persiste entre deploys, tiene respaldo rotativo propio via
+`respaldos.py`, y `actualizar.py` la crea/migra igual que a las otras tres.
 
 **Tipo**: contrato de `POST /agente/chat` y `GET /agente/historial` + dos rutas nuevas + firma de
 tres tools + semántica de una columna

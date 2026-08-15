@@ -74,8 +74,8 @@ toda la superficie pública.
 | `padrones.py` | Los dos padrones de personas y el cruce entre ellos. Fuera de `tools/` porque lo usan las tools **y** el system prompt. |
 | `lore.py` | La historia de la escuela y la voz de Emilio (`QUIEN_ES_EMILIO`, `COMO_CUENTA_EMILIO`, `EXCUSA_SIN_HISTORIA`). |
 | `vision.py` | El lector de etiquetas: una llamada suelta, sin tools. |
-| `prompt.py` | `construir_system_prompt()` — ~280 líneas de contenido, aparte del motor. |
-| `llm.py` | Clientes por proveedor y los **dos** loops de tool-calling. |
+| `prompt.py` | `construir_system_prompt()` — ~280 líneas de contenido, aparte del motor. Lo que cambia en cada turno va al **final** (ver "El orden de los bloques es el cache"). |
+| `llm.py` | Clientes por proveedor y los **dos** loops de tool-calling. `chat_with_tools_stream()` es un **generador**: larga el progreso y devuelve la respuesta. |
 | `filtros.py` | `_ocultar_ids`, `_quitar_acotaciones` y las utilidades de contexto. |
 | `rutas.py` | Los endpoints Flask + el gate de acceso + el context processor. |
 | `tools/` | Lo que el agente sabe hacer: `esquemas.py` (lo único que el modelo ve) y un módulo por área con los ejecutores. `tools/__init__.py` tiene `ejecutar_tool`, el dispatch. |
@@ -94,6 +94,13 @@ Las dependencias van en una sola dirección y **no hay ciclos**:
   audita escrituras en `agente_log`. `mensaje` puede venir vacío **si vienen `imagenes`** (mandar
   solo la foto de una etiqueta es un caso normal); vacío y sin fotos es `400`. El cuerpo del turno
   vive en **`_turno()`**, no en el endpoint, porque `/lote` lo usa igual. Ver "Alta desde foto".
+  **El front ya no lo usa** — usa `/chat/stream`, que hace el mismo turno. Queda porque es el
+  contrato que conocen las pestañas abiertas de antes del deploy.
+- **`POST /agente/chat/stream`** — el mismo turno que `/chat` y el mismo body, pero la respuesta
+  es **Server-Sent Events**: va largando `{tipo:'paso', texto}` mientras trabaja y termina con
+  `{tipo:'fin', ...}`, cuyo contenido es **exactamente** el payload de `/chat`. Si algo revienta
+  con el turno ya empezado sale `{tipo:'error', error}`, porque a esa altura los headers ya se
+  mandaron y no hay forma de contestar un `500`. Ver "Contar en qué anda mientras tarda".
 - **`GET /agente/historial`** — devuelve `{mensajes: [{rol, texto, imagenes?}], confirmaciones}`
   para repintar el chat al cargar la página. `gestion-agente.js` lo llama en el
   `DOMContentLoaded` (`cargarHistorial()`). **Hace falta desde que la conversación pasó a
@@ -130,7 +137,8 @@ crud.registrar_acceso(bp, endpoints_pagina=_ENDPOINTS_PAGINA, endpoint_default='
 ```
 
 `/agente` es el único blueprint que **mezcla páginas HTML con endpoints JSON**, y por eso pasa
-`endpoints_pagina`: los endpoints JSON (`/chat`, `/reset`, `/confirmar`, `/historial`) devuelven
+`endpoints_pagina`: los endpoints JSON (`/chat`, `/chat/stream`, `/reset`, `/confirmar`,
+`/historial`) devuelven
 `401` sin sesión, que es lo que el `fetch` del frontend sabe manejar; un redirect a HTML le
 llegaría como un 200 sin sentido. Los que devuelven HTML —los de `_ENDPOINTS_PAGINA`— redirigen
 a `/agente/login?next=...`, porque entrar por link directo a `/agente` desde el celular es el
@@ -146,7 +154,7 @@ el login. Cinco casos piden más que el permiso base:
 | `/agente/lote` | `agente.escribir` | ídem: escribe todas las fichas aprobadas de una |
 | `/agente/revisar` | `agente.escribir` | no toca el dominio, pero es el circuito de alta: quien no puede escribir no tiene fichas que revisar |
 | `/agente/log` | `agente.auditar` | la auditoría es de administración |
-| `/agente/chat` **con `imagenes`** | `agente.vision` | gasta la API de visión; sin el permiso devuelve `403` |
+| `/agente/chat` y `/agente/chat/stream` **con `imagenes`** | `agente.vision` | gasta la API de visión; sin el permiso devuelve `403` |
 
 El de `/chat` es un chequeo dentro de la vista y no un decorador porque la ruta **sí** está
 permitida — lo que no está permitido es un campo del body. Un acceso sin `agente.vision` chatea
@@ -157,6 +165,56 @@ normalmente; sólo mandar una imagen le da `403`, que el front ya traduce a un m
 `gestion._contexto_base()`; ya no, porque `nav_entidades`/`carrito_count` son del layout de
 recursos y no de este. Los context processors de un blueprint no corren para requests de otro,
 así que sin esto el header renderiza vacío.
+
+### Contar en qué anda mientras tarda (`/chat/stream`)
+
+**El costo de un turno no es una llamada al modelo, son varias.** Cada vuelta del loop es un
+viaje completo: se manda el prompt entero, el modelo **razona antes de pedir la primera tool**
+(con `deepseek-v4-pro` son entre 700 y 1.600 tokens de razonamiento, ver el comentario de
+`MAX_TOKENS_SALIDA`), pide las tools, se ejecutan —eso es SQLite local, milisegundos— y se
+vuelve a empezar. Las tools no son el problema: **el tiempo se va en el razonamiento,
+multiplicado por la cantidad de vueltas**. Un turno de cuatro vueltas puede ser un minuto.
+
+Con la respuesta de una sola pieza eso eran tres puntitos quietos y ninguna señal de si estaba
+pasando algo o se había colgado. Ahora el turno se streamea:
+
+```
+data: {"tipo":"paso","texto":"pensando"}
+data: {"tipo":"paso","texto":"leyendo las fotos"}
+data: {"tipo":"paso","texto":"armando la ficha"}
+data: {"tipo":"fin","respuesta":"...","tools":[...],"confirmaciones":{...}}
+```
+
+**Es un generador, no un hilo con una cola.** `chat_with_tools_stream()` hace `yield` de cada
+paso y **devuelve** la respuesta final como valor de retorno (`StopIteration.value`);
+`_turno_stream()` lo encadena con `yield from` y agrega su propio payload. Con un callback
+`on_evento` habría que correr el turno en un hilo aparte para poder ir escribiendo la respuesta,
+y ese hilo **se queda sin el request context de Flask** — de donde sale el id de conversación.
+Como generador todo corre en el hilo de siempre y lo único que cambia es quién pide la próxima
+vuelta. Los dos call sites que no tienen a nadie esperando (`/chat` y `/lote`) usan `_turno()`,
+que es un `while` de tres líneas que drena el generador y se queda con el valor.
+
+Dos detalles que no se ven:
+
+- **El `_sid()` se toca ANTES de devolver la `Response`.** El id de conversación vive en la
+  cookie, y la cookie viaja en los headers — que ya salieron cuando el cuerpo empieza a
+  streamear. Sin esa línea, un visitante nuevo que arranca mandando un mensaje abría una
+  conversación nueva en cada mensaje.
+- **`X-Accel-Buffering: no`**, porque si no Nginx bufferea el stream entero y lo entrega junto
+  al final, que es exactamente lo que este endpoint viene a evitar.
+
+Lo otro que resuelve es la conexión: PythonAnywhere corta las requests que se quedan calladas, y
+un turno largo se moría entero sin devolver nada. Un evento cada pocos segundos la mantiene viva.
+
+Las etiquetas en castellano (`rutas.ETIQUETA_TOOL`) son **copy de pantalla, no un atributo de la
+tool**: el esquema de `tools/esquemas.py` es lo único que ve el modelo y esto es lo único que ve
+el usuario. Una tool sin entrada en el mapa cae en `'consultando'`, así que agregar una tool no
+rompe nada.
+
+Del lado del navegador se parsea a mano (`leerStream()` en `gestion-agente.js`) y no con
+`EventSource`, porque `EventSource` sólo hace GET y acá hay que mandar el mensaje —y hasta ocho
+fotos en base64— en el body de un POST. Si el stream se corta antes del `fin`, el chat lo dice:
+pintar un mensaje vacío se lee como si el asistente no hubiera tenido nada que contestar.
 
 ### Las dos vistas del chat
 
@@ -343,9 +401,9 @@ le dice explícitamente que esas herramientas **no existen** para él y que no e
 reglas numeradas se renumeran solas: saltar del 1 al 3 le marcaría al modelo que hay reglas que no
 está viendo. El prompt de un acceso de consulta queda en ~55% del otro.
 
-`escribe` lo decide `llm.chat_with_tools` mirando **las tools que efectivamente se mandaron**, no
-los permisos del usuario: así es imposible que el prompt hable de dar de alta mientras las tools de
-alta no viajaron. Con `escribe=True` el resultado es byte a byte el prompt de antes de partirlo.
+`escribe` lo decide `llm.chat_with_tools_stream` mirando **las tools que efectivamente se
+mandaron**, no los permisos del usuario: así es imposible que el prompt hable de dar de alta
+mientras las tools de alta no viajaron.
 
 `ve_personas` sale del mismo lugar y por la misma razón, con `esquemas.slug_visible(tools,
 'personas')`: si el slug no sobrevivió en ningún enum, el prompt no describe el área 6 ni ofrece dar
@@ -360,6 +418,29 @@ ofrecer algo imposible. Las reglas se renumeran solas también acá.
 Esto también apaga un problema conocido: `_escritura_no_ejecutada` (`filtros.py`) marca cualquier
 "✅" sin escritura exitosa. Para un acceso de consulta **ninguna** escritura corre nunca, así que
 cualquier ✅ decorativo dispararía el banner — por eso el bloque le prohíbe el símbolo de entrada.
+
+#### El orden de los bloques es el cache
+
+**Lo que cambia en cada turno va al final del prompt.** Los proveedores cachean el prefijo del
+pedido: reaprovechan todo lo que va antes del primer carácter distinto y reprocesan de cero lo
+que viene después. El bloque de fecha trae la hora **con minutos**, así que es lo único que
+cambia turno a turno — y estaba cuarto de doce, a unos 3.000 tokens del arranque. Los ~7.000
+tokens que le seguían se reprocesaban en frío cada vez.
+
+Movido al fondo, el prefijo estable de un acceso de escritura pasa de ~3.000 a **~10.000 tokens**
+(el prompt entero), más los ~10.000 de los esquemas de tools, que viajan antes. No cambia lo que
+el modelo lee: la hora que manda es el sello `[Hora de este mensaje: ...]` que lleva cada mensaje
+del usuario, y el propio bloque lo dice.
+
+`_prestamos()` interpola el padrón y quedó en el medio a propósito: sólo cambia cuando se
+regenera `escuela.db`, o sea casi nunca. **La regla para cualquier bloque nuevo que interpole
+algo del turno es la misma: al final**, o rompe el cache de todo lo que tenga debajo.
+
+La otra mitad del mismo problema es la **cantidad de vueltas**, y esa se ataca en el contenido:
+`_COMO_TRABAJAS` le pide explícitamente que mande juntas todas las tools que no dependan una de
+otra (tres horarios son tres `horario_profesor` en la misma vuelta, ocho fichas son ocho
+`crear_entidad` juntas) y que encadene sólo cuando el segundo llamado necesita el resultado del
+primero. Cada vuelta que se ahorra es todo el razonamiento de esa vuelta.
 
 ### Alta con ficha de confirmación (`crear_entidad`)
 

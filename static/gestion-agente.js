@@ -223,6 +223,56 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  // Cambia el texto del loader por lo que el server dice que está haciendo ("buscando el
+  // horario", "armando la ficha"). Si el loader ya no está —el turno terminó— no hace nada.
+  function actualizarPaso(texto) {
+    const etiqueta = messagesDiv.querySelector('.agente-message-loading .agente-loader-texto');
+    if (etiqueta) etiqueta.textContent = texto.charAt(0).toUpperCase() + texto.slice(1) + '...';
+  }
+
+  // Lee la respuesta de /agente/chat/stream y devuelve el payload del evento `fin`, que es
+  // el mismo objeto que /agente/chat contesta de una sola pieza. Los `paso` intermedios van
+  // al loader por `onPaso`.
+  //
+  // Se parsea a mano en vez de usar EventSource porque EventSource solo hace GET, y acá hay
+  // que mandar el mensaje (y hasta ocho fotos en base64) en el body de un POST.
+  async function leerStream(response, onPaso) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let payload = null;
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // Los eventos van separados por una línea en blanco. Lo que quede después del último
+      // separador es un evento a medio llegar: se guarda para la próxima vuelta.
+      const bloques = buffer.split('\n\n');
+      buffer = bloques.pop();
+
+      for (const bloque of bloques) {
+        const linea = bloque.split('\n').find(l => l.startsWith('data:'));
+        if (!linea) continue;
+        let evento;
+        try {
+          evento = JSON.parse(linea.slice(5));
+        } catch (e) {
+          continue;  // un evento cortado no puede tirar abajo el turno entero
+        }
+        if (evento.tipo === 'paso') onPaso(evento.texto);
+        else if (evento.tipo === 'error') throw new Error(evento.error);
+        else if (evento.tipo === 'fin') payload = evento;
+      }
+    }
+
+    // Sin `fin` el turno no terminó: se cortó la conexión en el medio. Decirlo es mejor que
+    // pintar un mensaje vacío, que se lee como si el asistente no hubiera tenido nada que decir.
+    if (!payload) throw new Error('Se cortó la conexión antes de que llegara la respuesta.');
+    return payload;
+  }
+
   // Enviar mensaje
   function enviarMensaje() {
     if (enviando) return;
@@ -258,7 +308,7 @@ document.addEventListener('DOMContentLoaded', function() {
     enviando = true;
     sendBtn.disabled = true;
 
-    fetch('/agente/chat', {
+    fetch('/agente/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -267,6 +317,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!response.ok) {
           // 401 = se venció la sesión; 403 = el acceso existe pero no alcanza. Sin este
           // caso el usuario vería un "Error HTTP: 403" pelado y no sabría qué hacer.
+          // Los errores llegan como JSON normal: el stream recién arranca si el turno arrancó.
           if (response.status === 401) {
             throw new Error('Se cerró la sesión. Recargá la página para volver a entrar.');
           }
@@ -275,7 +326,7 @@ document.addEventListener('DOMContentLoaded', function() {
           }
           throw new Error('Error HTTP: ' + response.status);
         }
-        return response.json();
+        return leerStream(response, actualizarPaso);
       })
       .then(data => {
         // Remover loader
@@ -335,7 +386,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (tipo === 'loading') {
       msgDiv.className = 'agente-message agente-message-loading';
-      msgDiv.innerHTML = '<div class="agente-loader"><span></span><span></span><span></span></div><span>Pensando...</span>';
+      msgDiv.innerHTML = '<div class="agente-loader"><span></span><span></span><span></span></div><span class="agente-loader-texto">Pensando...</span>';
     } else if (tipo === 'assistant') {
       msgDiv.className = 'agente-message agente-message-' + tipo;
       msgDiv.innerHTML = renderMarkdown(texto);

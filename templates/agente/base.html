@@ -59,6 +59,9 @@
         {% if puede('historia.leer') %}
         <a href="{{ url_for('historia.home') }}">HISTORIA INSTITUCIONAL</a>
         {% endif %}
+        {% if puede('salidas.leer') %}
+        <a href="{{ url_for('salidas.lista') }}">SALIDAS EDUCATIVAS</a>
+        {% endif %}
         {% if puede('accesos.admin') %}
         <a href="{{ url_for('accesos.panel') }}">🔑 ACCESOS</a>
         {% endif %}

@@ -40,6 +40,7 @@ import accesos
 import gestion
 import historia
 import agente
+import salidas
 import respaldos
 from config import ahora  # el reloj de la escuela; nunca datetime.now() (ver crud-motor.md)
 from agente import db as agente_db  # su SCHEMA vive dentro de gestion.db
@@ -90,7 +91,7 @@ def diagnostico():
     print("=" * 70)
     print(f"Python {sys.version.split()[0]}  ·  SQLite {sqlite3.sqlite_version}")
 
-    for ruta in (gestion.DB_PATH, historia.DB_PATH):
+    for ruta in (gestion.DB_PATH, historia.DB_PATH, salidas.DB_PATH):
         nombre = os.path.basename(ruta)
         if not os.path.exists(ruta):
             print(f"\n{nombre}: no existe todavía (se va a crear vacía)")
@@ -148,7 +149,7 @@ def copia_de_seguridad(dry):
     print("=" * 70)
 
     sello = ahora().strftime('%Y%m%d-%H%M%S')
-    for ruta in (gestion.DB_PATH, historia.DB_PATH, accesos.DB_PATH):
+    for ruta in (gestion.DB_PATH, historia.DB_PATH, accesos.DB_PATH, salidas.DB_PATH):
         if not os.path.exists(ruta):
             continue
         destino = f"{ruta}.pre-actualizacion-{sello}"
@@ -403,10 +404,11 @@ def migraciones_de_schema(dry):
     print("=" * 70)
 
     if dry:
-        print("  [dry-run] correría gestion.init_db(), historia.init_db(), agente.init_db()")
-        print("            y accesos.init_db()")
+        print("  [dry-run] correría gestion.init_db(), historia.init_db(), agente.init_db(),")
+        print("            salidas.init_db() y accesos.init_db()")
         print("            (ALTER aditivos, rename utilidad→valor, DROP de drive_url,")
-        print("             y las tablas agente_* dentro de gestion.db)")
+        print("             las tablas agente_* dentro de gestion.db, y la purga de")
+        print("             salidas.db vencidas hace más de 1 año)")
         if not os.path.exists(accesos.DB_PATH):
             print("            accesos.db no existe todavía: se va a crear VACÍA. Hasta que")
             print("            invites al primer dispositivo, el único acceso es el de")
@@ -416,6 +418,7 @@ def migraciones_de_schema(dry):
     for nombre, init in (('gestion', gestion.init_db),
                          ('historia', historia.init_db),
                          ('agente', agente.init_db),
+                         ('salidas', salidas.init_db),
                          ('accesos', accesos.init_db)):
         try:
             init()
@@ -437,6 +440,7 @@ DUENOS = (
     (lambda: gestion.DB_PATH, lambda: (gestion.SCHEMA, agente_db.SCHEMA)),
     (lambda: historia.DB_PATH, lambda: (historia.SCHEMA,)),
     (lambda: accesos.DB_PATH, lambda: (accesos.SCHEMA,)),
+    (lambda: salidas.DB_PATH, lambda: (salidas.SCHEMA,)),
 )
 
 

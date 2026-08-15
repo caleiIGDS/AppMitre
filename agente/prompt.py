@@ -11,8 +11,9 @@ las reglas de borrado sería describirle herramientas que no tiene — que es ju
 lo lleva a contestar "✅ listo, lo borré" sin haber ejecutado nada. Un acceso de consulta
 además se ahorra el padrón de ~1.600 tokens que sólo sirve para registrar préstamos.
 
-Con `escribe=True` el resultado es EXACTAMENTE el prompt que había antes de partirlo, en
-el mismo orden: no se reacomodó ni se reescribió ninguna sección.
+El orden de los bloques importa por el cache del proveedor: lo que cambia en cada turno va
+al FINAL, porque lo que esté antes del primer carácter distinto se reaprovecha. Ver
+`construir_system_prompt`.
 
 Las constantes del personaje (QUIEN_ES_EMILIO, COMO_CUENTA_EMILIO) salen de `lore.py`,
 que es donde está el resto de la voz. COMO_CUENTA_EMILIO va TAMBIÉN acá y no sólo en la
@@ -127,7 +128,14 @@ _COMO_TRABAJAS = """CÓMO TRABAJÁS
   de manual, sin repetir lo que te acaban de decir, sin listas de viñetas cuando alcanza una
   frase.
 - Los datos son reales y son de una escuela en funcionamiento: el inventario es el que está
-  hoy en los talleres y los préstamos son de gente que trabaja ahí. No hay entorno de prueba."""
+  hoy en los talleres y los préstamos son de gente que trabaja ahí. No hay entorno de prueba.
+- PEDÍ TODAS LAS TOOLS QUE PUEDAS DE UNA SOLA VEZ. Cada vuelta que das cuesta varios segundos
+  de espera para alguien que está parado en el pasillo, y podés pedir varias tools en la misma.
+  Si lo que necesitás no depende una cosa de la otra, va todo junto: el horario de tres
+  docentes son tres `horario_profesor` en la misma vuelta, no tres vueltas; ocho fichas de una
+  tanda de fotos son ocho `crear_entidad` juntas. Encadenás SOLO cuando el segundo llamado
+  necesita el resultado del primero (buscar algo para saber su id, leer una foto para armar
+  su ficha). En la duda, pedí de más en una vuelta antes que de a una en varias."""
 
 _NO_AFIRMES = """NUNCA AFIRMES ALGO QUE NO EJECUTASTE - REGLA INVIOLABLE:
 - Solo podés decir que algo se creó / se borró / se registró / se devolvió / se VINCULÓ /
@@ -461,23 +469,33 @@ def construir_system_prompt(nombres_conocidos, hoy, dia_semana, escribe=True,
                             ve_personas=True, ve_fotos=True):
     """El system prompt de un turno.
 
-    `escribe`, `ve_personas` y `ve_fotos` los decide `llm.chat_with_tools` mirando las tools
+    `escribe`, `ve_personas` y `ve_fotos` los decide `llm.chat_with_tools_stream` mirando las tools
     que EFECTIVAMENTE se le mandaron al modelo, y no los permisos del usuario: así es
     imposible que el prompt hable de dar de alta mientras las tools de alta no viajaron, de
     fichas de personas mientras el slug `personas` no está en ningún enum, ni de leer fotos
     mientras `leer_foto` no viajó — sin `agente.vision` el usuario ni siquiera tiene el
     botón para mandar una.
 
-    El orden de los bloques con `escribe=True` es exactamente el que tenía el prompt de
-    una sola pieza: no se reacomodó nada al partirlo.
+    LA FECHA VA ÚLTIMA, y eso no es estético: es lo único del prompt que cambia a cada
+    minuto. Los proveedores cachean el prefijo del pedido y cobran (y tardan) sólo por lo
+    que viene después del primer carácter distinto, así que con el bloque de fecha en el
+    medio —donde estaba— los ~7.000 tokens que le seguían se reprocesaban en frío en cada
+    turno. Al fondo, el prefijo cacheable pasa a ser el prompt entero. Por eso todo lo que
+    se interpole de acá en adelante va al final: lo de arriba tiene que ser byte por byte
+    igual entre turno y turno.
+
+    (`_prestamos` interpola el padrón y quedó en el medio a propósito: sólo cambia cuando
+    se regenera `escuela.db`, o sea casi nunca, y moverlo obligaría a separarlo de las
+    reglas de préstamos que le siguen.)
+
+    El resto del orden es el que tenía el prompt de una sola pieza.
     """
-    bloques = [_IDENTIDAD, _areas(escribe, ve_personas), _COMO_TRABAJAS,
-               _fecha(hoy, dia_semana), _NO_AFIRMES, _IDS]
+    bloques = [_IDENTIDAD, _areas(escribe, ve_personas), _COMO_TRABAJAS, _NO_AFIRMES, _IDS]
     if escribe:
         hitos = _HITOS + ('\n' + _HITOS_PERSONAS if ve_personas else '')
         fotos = [_FOTOS, _ETIQUETA] if ve_fotos else []
         bloques += [_ALTA, hitos] + fotos + [_CONTEXTO, _prestamos(nombres_conocidos)]
     else:
         bloques += [_SOLO_LECTURA] + ([_FOTOS_SOLO_LECTURA] if ve_fotos else []) + [_CONTEXTO]
-    bloques += [_reglas(escribe, ve_fotos), _CIERRE]
+    bloques += [_reglas(escribe, ve_fotos), _CIERRE, _fecha(hoy, dia_semana)]
     return '\n\n'.join(b for b in bloques if b)

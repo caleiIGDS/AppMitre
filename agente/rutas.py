@@ -4,9 +4,10 @@ El gate de acceso es el mismo motor que /gestion e /historia (`accesos.registrar
 pero acá el blueprint mezcla páginas HTML con endpoints JSON: sólo las páginas redirigen
 al login y el resto contesta 401, que es lo que el fetch del chat sabe leer.
 """
+import json
 import re
 
-from flask import jsonify, render_template, request
+from flask import Response, jsonify, render_template, request, stream_with_context
 
 import accesos
 import crud
@@ -16,11 +17,11 @@ from config import DIAS, ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION, ahora
 from . import PERMISO_ESCRITURA, PERMISO_LECTURA, PERMISO_VISION, bp
 from .db import (FICHAS_MAX, FOTOS_MAX, HISTORIAL_AL_MODELO, _conv_borrar, _conv_cargar,
                  _conv_guardar, _foto_lote_tomar, _fotos_lote_borrar, _fotos_lote_guardar,
-                 _sin_imagenes, conectar)
+                 _sid, _sin_imagenes, conectar)
 from .dominio import _modulo, ve_entidad
 from .filtros import (AVISO_NO_EJECUTADO, _es_pregunta_relativa, _escritura_no_ejecutada,
                       _extraer_entidad_mencionada, _ocultar_ids, _quitar_acotaciones)
-from .llm import chat_with_tools
+from .llm import chat_with_tools_stream
 from .padrones import _personas_nombradas_en
 from .proveedores import _get_config, _get_vision_config
 from .tools import ejecutar_tool
@@ -221,13 +222,28 @@ def _normalizar_imagenes(data):
 
 
 def _turno(mensaje_usuario, fotos=(), mandadas=0):
+    """El turno completo, de una. Devuelve el payload; los eventos de progreso se descartan."""
+    gen = _turno_stream(mensaje_usuario, fotos, mandadas)
+    while True:
+        try:
+            next(gen)
+        except StopIteration as fin:
+            return fin.value
+
+
+def _turno_stream(mensaje_usuario, fotos=(), mandadas=0):
     """Un turno completo del chat: historial → modelo → filtros → persistencia.
 
-    Lo usan `/chat` (con lo que escribió el usuario) y `/lote` (con el mensaje que arma el
-    servidor cuando quedaron fichas para corregir). Está afuera del endpoint porque son las
-    mismas quince decisiones —el sello de hora, el aviso de fotos, los filtros de salida, el
-    recorte del historial, qué fichas quedan pendientes— y tenerlas dos veces era garantía
-    de que se fueran separando.
+    Lo usan `/chat` y `/chat/stream` (con lo que escribió el usuario) y `/lote` (con el
+    mensaje que arma el servidor cuando quedaron fichas para corregir). Está afuera del
+    endpoint porque son las mismas quince decisiones —el sello de hora, el aviso de fotos,
+    los filtros de salida, el recorte del historial, qué fichas quedan pendientes— y
+    tenerlas dos veces era garantía de que se fueran separando.
+
+    Es un GENERADOR: larga los eventos de progreso de `chat_with_tools_stream` y devuelve
+    el payload del turno como valor de retorno. Todo lo de antes y lo de después del modelo
+    (guardar las fotos, persistir el historial) corre igual que siempre — lo único que se
+    intercala es quién pide la próxima vuelta. `_turno` es el envoltorio que lo drena.
 
     `fotos` es una lista de `(b64, tipo)`; ya viene recortada a FOTOS_MAX.
     """
@@ -305,8 +321,9 @@ def _turno(mensaje_usuario, fotos=(), mandadas=0):
     # Sólo `role`+`content` viajan al LLM: la API rechaza claves que no reconoce, y la
     # clave `imagenes` de arriba es puramente para la UI.
     mensajes_llm = [{'role': m['role'], 'content': m['content']} for m in mensajes]
-    respuesta = chat_with_tools(mensajes_llm, trazas=trazas, contexto_turno=contexto_turno,
-                                permisos=accesos.permisos())
+    respuesta = yield from chat_with_tools_stream(
+        mensajes_llm, trazas=trazas, contexto_turno=contexto_turno,
+        permisos=accesos.permisos())
     # Se filtra ANTES de guardar, así el historial repintado tampoco muestra ids — y, en el
     # caso de las acotaciones, el modelo no las tiene como ejemplo a imitar en el turno que viene.
     respuesta = _ocultar_ids(respuesta)
@@ -370,10 +387,13 @@ def _fusionar_fichas(previas, mostradas):
     return dict(list(fichas.items())[-FICHAS_MAX:])
 
 
-@bp.route('/chat', methods=['POST'])
-def chat():
-    """Endpoint para el widget de chat. JSON con 'mensaje' y opcionalmente 'imagenes'
-    (lista de base64). Mantiene historial + última entidad consultada para mejor contexto."""
+def _pedido_de_chat():
+    """Lo que mandó el navegador, validado. Devuelve `(mensaje, fotos, mandadas, error)`.
+
+    Lo comparten `/chat` y `/chat/stream`: los dos hacen el mismo turno y sólo se
+    diferencian en cómo lo devuelven. `error` es el `(json, status)` listo para retornar, o
+    None si está todo bien.
+    """
     data = request.get_json() or {}
     mensaje_usuario = data.get('mensaje', '').strip()
     fotos, mandadas = _normalizar_imagenes(data)
@@ -384,16 +404,126 @@ def chat():
     # traduce el 403 a "Este acceso no puede hacer eso") en vez de tragarse la imagen y
     # contestar como si el usuario no hubiera mandado nada.
     if fotos and not accesos.puede(PERMISO_VISION):
-        return jsonify({'error': 'Este acceso no puede mandar imágenes.'}), 403
+        return None, (), 0, (jsonify({'error': 'Este acceso no puede mandar imágenes.'}), 403)
 
     # Una foto sola es un mensaje válido: sacan la etiqueta y la mandan sin escribir nada.
     if not mensaje_usuario and fotos:
         mensaje_usuario = TEXTO_FOTO_SOLA
 
     if not mensaje_usuario:
-        return jsonify({'error': 'Mensaje vacío'}), 400
+        return None, (), 0, (jsonify({'error': 'Mensaje vacío'}), 400)
+
+    return mensaje_usuario, fotos, mandadas, None
+
+
+@bp.route('/chat', methods=['POST'])
+def chat():
+    """Endpoint para el widget de chat. JSON con 'mensaje' y opcionalmente 'imagenes'
+    (lista de base64). Mantiene historial + última entidad consultada para mejor contexto.
+
+    Contesta de una, con el turno ya terminado. Sigue existiendo porque es el contrato que
+    conocen las pestañas abiertas desde antes del deploy; el front nuevo usa `/chat/stream`.
+    """
+    mensaje_usuario, fotos, mandadas, error = _pedido_de_chat()
+    if error:
+        return error
 
     return jsonify(_turno(mensaje_usuario, fotos, mandadas))
+
+
+# Cómo se llama, en castellano y para el que espera, lo que el modelo pidió. Es copy de la
+# pantalla y no un atributo de la tool: el esquema de `tools/esquemas.py` es lo único que ve
+# el MODELO, y esto es lo único que ve el USUARIO. Una tool sin entrada acá cae en el default,
+# así que agregar una tool no rompe nada — sólo se ve más genérico.
+ETIQUETA_TOOL = {
+    'buscar_profesor': 'buscando a la persona',
+    'buscar_por_rol': 'buscando por cargo',
+    'preceptores': 'viendo preceptores',
+    'horario_profesor': 'buscando el horario',
+    'horario_curso': 'buscando el horario del curso',
+    'horario_aula': 'buscando el horario del aula',
+    'aulas_libres': 'viendo qué aulas hay libres',
+    'buscar_entidad': 'buscando en el inventario',
+    'listar_todos': 'revisando el inventario',
+    'detalle_entidad': 'leyendo la ficha',
+    'listar_prestamos': 'revisando los préstamos',
+    'detalle_prestamo': 'leyendo el préstamo',
+    'consultar_historia': 'buscando en la memoria de la casa',
+    'buscar_hitos': 'revisando la línea del tiempo',
+    'crear_entidad': 'armando la ficha',
+    'leer_foto': 'leyendo las fotos',
+    'adjuntar_foto': 'guardando la foto',
+    'editar_entidad': 'guardando los cambios',
+    'vincular_entidad': 'vinculando',
+    'desvincular_entidad': 'desvinculando',
+    'crear_prestamo': 'registrando el préstamo',
+    'finalizar_prestamo': 'registrando la devolución',
+    'reabrir_prestamo': 'reabriendo el préstamo',
+    'eliminar_entidad': 'eliminando',
+    'eliminar_prestamo': 'eliminando el préstamo',
+}
+
+ETIQUETA_PENSANDO = 'pensando'
+ETIQUETA_TOOL_DEFAULT = 'consultando'
+
+
+def _sse(tipo, **datos):
+    """Un evento en formato Server-Sent Events.
+
+    Un solo tipo de evento SSE con un campo `tipo` adentro, en vez de varios `event:`: del
+    lado del navegador es un `switch` sobre una línea de JSON y no hay que registrar un
+    listener por cada clase de evento.
+    """
+    return 'data: ' + json.dumps({'tipo': tipo, **datos}, ensure_ascii=False) + '\n\n'
+
+
+@bp.route('/chat/stream', methods=['POST'])
+def chat_stream():
+    """El mismo turno que `/chat`, pero contando en qué anda mientras lo hace.
+
+    Un turno con varias tools son varias llamadas al modelo, una atrás de la otra, y cada
+    una tarda lo suyo — el modelo razona antes de pedir la primera tool. Con la respuesta de
+    una sola pieza el usuario miraba tres puntitos quietos durante casi un minuto sin forma
+    de saber si estaba pasando algo. Acá va largando `paso` a medida que avanza y termina
+    con un `fin` que trae exactamente el mismo payload que devuelve `/chat`.
+
+    El otro motivo es la conexión: PythonAnywhere corta las requests que se quedan calladas,
+    y un turno largo se moría entero sin devolver nada. Un evento cada pocos segundos la
+    mantiene viva.
+    """
+    mensaje_usuario, fotos, mandadas, error = _pedido_de_chat()
+    if error:
+        return error
+
+    # El id de conversación se toca ACÁ y no adentro del generador. Vive en la cookie, y la
+    # cookie viaja en los headers — que Flask ya mandó cuando el cuerpo empieza a streamear.
+    # Un visitante nuevo que arranca mandando un mensaje se quedaba sin sid persistido y cada
+    # mensaje suyo abría una conversación nueva.
+    _sid()
+
+    def eventos():
+        gen = _turno_stream(mensaje_usuario, fotos, mandadas)
+        while True:
+            try:
+                paso = next(gen)
+            except StopIteration as fin:
+                yield _sse('fin', **fin.value)
+                return
+            except Exception as e:
+                # El turno ya arrancó, así que no hay forma de contestar un 500: los headers
+                # se mandaron con el primer evento. Va como evento de error y el chat lo pinta.
+                yield _sse('error', error=str(e))
+                return
+
+            if paso.get('paso') == 'tool':
+                yield _sse('paso', texto=ETIQUETA_TOOL.get(paso['tool'], ETIQUETA_TOOL_DEFAULT))
+            else:
+                yield _sse('paso', texto=ETIQUETA_PENSANDO)
+
+    return Response(stream_with_context(eventos()), mimetype='text/event-stream',
+                    # Sin esto Nginx bufferea el stream entero y lo entrega junto al final,
+                    # que es exactamente lo que este endpoint viene a evitar.
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 
 def _texto_visible(msg):
