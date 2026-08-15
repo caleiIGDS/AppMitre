@@ -25,8 +25,9 @@ import shutil
 import sys
 from datetime import timedelta
 
+from contextlib import contextmanager
 from flask import Blueprint, abort, jsonify, redirect, render_template, request, send_file, url_for
-from fpdf import FPDF
+from fpdf import FPDF, FontFace
 
 import accesos
 import crud
@@ -204,11 +205,26 @@ def _condicion_cumple(campo, valores):
     return not cond or valores.get(cond['campo']) == cond['valor']
 
 
+def _iso_a_dd_mm_yyyy(iso_fecha):
+    """Convierte fecha ISO (YYYY-MM-DD) a formato dd/mm/yyyy"""
+    if not iso_fecha or not isinstance(iso_fecha, str):
+        return ''
+    try:
+        partes = iso_fecha.split('-')
+        if len(partes) != 3:
+            return iso_fecha
+        a, m, d = partes
+        return f"{d.zfill(2)}/{m.zfill(2)}/{a}"
+    except:
+        return iso_fecha
+
 def _texto_valor(campo, valor):
     if valor is None or valor == '':
         return ''
     if campo['tipo'] == 'bool':
-        return 'Sí' if valor else 'No'
+        return 'X' if valor else ''
+    if campo['tipo'] == 'date':
+        return _iso_a_dd_mm_yyyy(str(valor))
     return str(valor)
 
 
@@ -365,6 +381,7 @@ LABELS_MAYUSCULA = {
 TAM_TEXTO = 11
 ALTO_LINEA = 7
 RENGLONES_TEXTAREA = 5  # renglones en blanco para completar a mano cuando el campo no vino con valor
+GROSOR_TRAZO_VALOR = 0.25  # mm — trazo fino sobre el relleno de valores destacados
 
 
 def _label_campo(campo, anexo):
@@ -372,11 +389,26 @@ def _label_campo(campo, anexo):
     return label.upper() if campo['id'] in LABELS_MAYUSCULA.get(anexo, ()) else label
 
 
+@contextmanager
+def _valor_destacado(pdf, tam_base=TAM_TEXTO):
+    """Contexto para dibujar un valor cargado por el usuario: 1pt más grande que `tam_base`
+    y con un trazo fino (fill+stroke) que da un efecto de semi-negrita, sin depender de una
+    fuente Bold real."""
+    pdf.set_font('helvetica', '', tam_base + 1)
+    pdf.set_line_width(GROSOR_TRAZO_VALOR)
+    pdf.text_mode = "FILL_STROKE"
+    try:
+        yield
+    finally:
+        pdf.text_mode = "FILL"
+        pdf.set_font('helvetica', '', tam_base)
+
+
 def _escribir_par(pdf, label, valor, negrita):
     pdf.set_font('helvetica', 'B' if negrita else '', TAM_TEXTO)
     pdf.write(ALTO_LINEA, f"{label}: ")
-    pdf.set_font('helvetica', '', TAM_TEXTO)
-    pdf.write(ALTO_LINEA, valor)
+    with _valor_destacado(pdf, TAM_TEXTO):
+        pdf.write(ALTO_LINEA, valor)
 
 
 def _dibujar_campo(pdf, campo, valores, anexo, extra=()):
@@ -412,9 +444,9 @@ def _dibujar_textarea(pdf, campo, valores, anexo):
         encabezado = f"{label}:" + (f" ({nota})" if nota else '')
     pdf.set_font('helvetica', 'B' if negrita else '', TAM_TEXTO)
     pdf.multi_cell(0, ALTO_LINEA, encabezado, align='L', new_x='LMARGIN', new_y='NEXT')
-    pdf.set_font('helvetica', '', TAM_TEXTO)
     if texto_valor:
-        pdf.multi_cell(0, ALTO_LINEA, texto_valor, align='L', new_x='LMARGIN', new_y='NEXT')
+        with _valor_destacado(pdf, TAM_TEXTO):
+            pdf.multi_cell(0, ALTO_LINEA, texto_valor, align='L', new_x='LMARGIN', new_y='NEXT')
     else:
         for _ in range(RENGLONES_TEXTAREA):
             pdf.cell(0, ALTO_LINEA, '', border='B', new_x='LMARGIN', new_y='NEXT')
@@ -444,24 +476,51 @@ def _dibujar_narrativa(pdf, bloque, valores, campos_por_id):
         # _escribir_par con label/valor.
         for texto, estilo in bloque['segmentos']:
             pdf.set_font('helvetica', estilo, TAM_TEXTO)
-            pdf.write(ALTO_LINEA, texto.format(**valores_texto))
+            # Partir el texto por placeholders {id} y destacar solo los valores interpolados
+            partes = re.split(r'\{(\w+)\}', texto)
+            for i, parte in enumerate(partes):
+                if i % 2 == 0:
+                    # Texto literal (no es placeholder)
+                    pdf.write(ALTO_LINEA, parte)
+                else:
+                    # Es un placeholder {id} — escribir el valor destacado, pero sin cambiar el estilo
+                    # (esto es, un {tipo_salida} en negrita se queda en negrita, con el trazo agregado)
+                    pdf.set_line_width(GROSOR_TRAZO_VALOR)
+                    pdf.text_mode = "FILL_STROKE"
+                    pdf.write(ALTO_LINEA, valores_texto.get(parte, ''))
+                    pdf.text_mode = "FILL"
+                    pdf.set_font('helvetica', estilo, TAM_TEXTO)
         pdf.ln(ALTO_LINEA)
     else:
+        # Rama sin segmentos (Anexos III, VI): un solo texto corrido, sin estilos internos
+        # Partir por placeholders y escribir en secuencia con pdf.write()
+        partes = re.split(r'\{(\w+)\}', bloque['texto'])
         pdf.set_font('helvetica', '', TAM_TEXTO)
-        pdf.multi_cell(0, ALTO_LINEA, bloque['texto'].format(**valores_texto), align='L',
-                       new_x='LMARGIN', new_y='NEXT')
+        for i, parte in enumerate(partes):
+            if i % 2 == 0:
+                # Texto literal (no es placeholder)
+                pdf.write(ALTO_LINEA, parte)
+            else:
+                # Es un placeholder {id} — escribir el valor destacado
+                with _valor_destacado(pdf, TAM_TEXTO):
+                    pdf.write(ALTO_LINEA, valores_texto.get(parte, ''))
+        pdf.ln(ALTO_LINEA)
     pdf.ln(2)
 
 
 def _dibujar_obra_social(pdf, valores):
-    filas = [
-        ['Tiene Obra Social / Prepaga', 'Sí' if valores.get('tiene_obra_social') else 'No'],
-        ['Nombre de la Obra Social/Prepaga', valores.get('nombre_obra_social') or '-'],
-        ['N° Socio', valores.get('numero_socio') or '-'],
+    tiene_obra = valores.get('tiene_obra_social')
+    valores_celda = [
+        'Sí' if tiene_obra else 'No',
+        valores.get('nombre_obra_social') or '-',
+        valores.get('numero_socio') or '-',
     ]
-    pdf.set_font('helvetica', '', TAM_TEXTO - 1)
-    with pdf.table(filas, first_row_as_headings=False, text_align='LEFT', col_widths=(70, 30)):
-        pass
+    labels_celda = ['Tiene Obra Social / Prepaga', 'Nombre de la Obra Social/Prepaga', 'N° Socio']
+    with pdf.table(first_row_as_headings=False, text_align='LEFT', col_widths=(70, 30)) as table:
+        for label, valor in zip(labels_celda, valores_celda):
+            row = table.row()
+            row.cell(label, style=FontFace(size_pt=TAM_TEXTO - 1))
+            row.cell(valor, style=FontFace(size_pt=TAM_TEXTO))
     pdf.ln(2)
 
 
@@ -470,8 +529,14 @@ def _dibujar_docentes(pdf, campo, valores):
     pdf.multi_cell(0, ALTO_LINEA, f"{campo['label']}:", align='L', new_x='LMARGIN', new_y='NEXT')
     filas = valores.get(campo['id']) or [{}]  # sin docentes, el original igual deja un renglón para completar
     for fila in filas:
-        pdf.multi_cell(0, ALTO_LINEA, f"Apellido y Nombre: {fila.get('apellido_nombre', '')}    "
-                              f"Cargo: {fila.get('cargo', '')}", align='L', new_x='LMARGIN', new_y='NEXT')
+        pdf.set_font('helvetica', '', TAM_TEXTO)
+        pdf.write(ALTO_LINEA, "Apellido y Nombre: ")
+        with _valor_destacado(pdf, TAM_TEXTO):
+            pdf.write(ALTO_LINEA, fila.get('apellido_nombre', ''))
+        pdf.write(ALTO_LINEA, "    Cargo: ")
+        with _valor_destacado(pdf, TAM_TEXTO):
+            pdf.write(ALTO_LINEA, fila.get('cargo', ''))
+        pdf.ln(ALTO_LINEA)
     pdf.ln(1)
 
 
@@ -501,14 +566,26 @@ def _dibujar_tabla(pdf, campo, valores):
     # directo después del último campo de identificación, sin un encabezado propio.
     columnas = campo['columnas']
     filas_datos = valores.get(campo['id']) or []
-    filas = [[c['label'] for c in columnas]]
-    if filas_datos:
-        filas += [[_texto_valor(c, fila.get(c['id'])) for c in columnas] for fila in filas_datos]
-    else:
-        filas.append(['-'] * len(columnas))
-    pdf.set_font('helvetica', '', TAM_TEXTO - 2)
-    with pdf.table(filas, text_align='LEFT', col_widths=COL_WIDTHS.get(campo['id'])):
-        pass
+    col_widths = COL_WIDTHS.get(campo['id'])
+
+    with pdf.table(text_align='LEFT', col_widths=col_widths) as table:
+        # Encabezado (labels de las columnas)
+        row = table.row()
+        for c in columnas:
+            row.cell(c['label'], style=FontFace(size_pt=TAM_TEXTO - 2))
+
+        # Filas de datos
+        if filas_datos:
+            for fila in filas_datos:
+                row = table.row()
+                for c in columnas:
+                    valor_celda = _texto_valor(c, fila.get(c['id']))
+                    row.cell(valor_celda, style=FontFace(size_pt=TAM_TEXTO - 1))
+        else:
+            # Sin datos: fila con dashes, pero con tamaño destacado
+            row = table.row()
+            for _ in columnas:
+                row.cell('-', style=FontFace(size_pt=TAM_TEXTO - 1))
     pdf.ln(3)
 
 
