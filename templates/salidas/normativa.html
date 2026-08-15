@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resolución RESOC-2024-3871-GDEBA-DGCYE</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        #toolbar {
+            background: white;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        #toolbar label {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-weight: 500;
+        }
+        #toolbar input[type="number"],
+        #toolbar input[type="text"] {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            min-width: 120px;
+        }
+        #toolbar button {
+            padding: 8px 16px;
+            background: #1A365D;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        #toolbar button:hover {
+            background: #0F2548;
+        }
+        #container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .page-wrapper {
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .page-number {
+            background: #f0f0f0;
+            padding: 8px;
+            font-size: 12px;
+            color: #666;
+            border-bottom: 1px solid #ddd;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .error {
+            background: #fef2f2;
+            color: #991b1b;
+            padding: 16px;
+            border-radius: 4px;
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <label>
+            Ir a página:
+            <input type="number" id="goToPage" min="1" value="1">
+        </label>
+        <button onclick="goToPage()">Ir</button>
+        <label>
+            Buscar:
+            <input type="text" id="searchInput" placeholder="frase a buscar...">
+        </label>
+        <button onclick="buscar()">Buscar</button>
+        <span id="pageInfo" style="margin-left: auto; color: #666; font-size: 14px;"></span>
+    </div>
+
+    <div id="container" class="loading">Cargando PDF...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        let pdfDoc = null;
+        let pageCanvases = [];
+        const PDF_URL = '{{ url_for("static", filename="salidas/resolucion-3871-24.pdf") }}';
+        const container = document.getElementById('container');
+        const pageInfo = document.getElementById('pageInfo');
+
+        // Extraer params de URL
+        const params = new URLSearchParams(window.location.search);
+        const initialPage = Math.max(1, parseInt(params.get('pagina')) || 1);
+        const initialSearch = params.get('buscar') || '';
+
+        async function renderAllPages() {
+            try {
+                pdfDoc = await pdfjsLib.getDocument(PDF_URL).promise;
+                container.innerHTML = '';
+                pageCanvases = [];
+
+                for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+                    const page = await pdfDoc.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: 1.5 });
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'page-wrapper';
+                    wrapper.id = `page-${pageNum}`;
+
+                    const pageLabel = document.createElement('div');
+                    pageLabel.className = 'page-number';
+                    pageLabel.textContent = `Página ${pageNum}`;
+                    wrapper.appendChild(pageLabel);
+
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+
+                    await page.render({
+                        canvasContext: ctx,
+                        viewport: viewport
+                    }).promise;
+
+                    wrapper.appendChild(canvas);
+                    container.appendChild(wrapper);
+                    pageCanvases.push({ pageNum, canvas, page, viewport });
+                }
+
+                pageInfo.textContent = `${pdfDoc.numPages} páginas`;
+
+                // Si hay búsqueda inicial, ejecutarla
+                if (initialSearch) {
+                    document.getElementById('searchInput').value = initialSearch;
+                    await buscar();
+                } else if (initialPage > 1) {
+                    scrollToPage(initialPage);
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="error">Error al cargar PDF: ${error.message}</div>`;
+                console.error('PDF error:', error);
+            }
+        }
+
+        async function buscar() {
+            const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
+            if (!searchTerm) return;
+
+            // Limpiar resaltados previos
+            document.querySelectorAll('canvas').forEach(c => {
+                c.style.filter = 'none';
+            });
+
+            let encontrado = false;
+            for (const { pageNum, page, canvas, viewport } of pageCanvases) {
+                try {
+                    const textContent = await page.getTextContent();
+                    const items = textContent.items;
+
+                    let pageText = '';
+                    const itemsByPage = [];
+                    for (const item of items) {
+                        pageText += item.str.toLowerCase();
+                        itemsByPage.push(item);
+                    }
+
+                    const searchIndex = pageText.indexOf(searchTerm);
+                    if (searchIndex !== -1) {
+                        if (!encontrado) {
+                            encontrado = true;
+                            scrollToPage(pageNum);
+                        }
+
+                        // Buscar los items que forman la frase
+                        let charCount = 0;
+                        const startIdx = searchIndex;
+                        const endIdx = searchIndex + searchTerm.length;
+                        let resaltarDesde = null;
+                        let resaltarHasta = null;
+
+                        for (let i = 0; i < itemsByPage.length; i++) {
+                            const item = itemsByPage[i];
+                            const itemStart = charCount;
+                            const itemEnd = charCount + (item.str || '').length;
+
+                            if (itemStart < endIdx && itemEnd > startIdx) {
+                                if (resaltarDesde === null) resaltarDesde = i;
+                                resaltarHasta = i;
+                            }
+
+                            charCount += (item.str || '').length;
+                        }
+
+                        // Dibujar resaltado en amarillo
+                        if (resaltarDesde !== null) {
+                            const ctx = canvas.getContext('2d');
+                            for (let i = resaltarDesde; i <= resaltarHasta; i++) {
+                                const item = itemsByPage[i];
+                                if (item.transform) {
+                                    const x = item.transform[4];
+                                    const y = viewport.height - item.transform[5];
+                                    const width = item.width || 50;
+                                    const height = item.height || 15;
+
+                                    ctx.fillStyle = 'rgba(255, 193, 7, 0.4)';
+                                    ctx.fillRect(x, y - height, width, height);
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error extrayendo texto de página ${pageNum}:`, error);
+                }
+            }
+
+            if (!encontrado) {
+                alert(`"${searchTerm}" no encontrado en el PDF.`);
+            }
+        }
+
+        function scrollToPage(pageNum) {
+            const element = document.getElementById(`page-${pageNum}`);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
+        function goToPage() {
+            const pageNum = parseInt(document.getElementById('goToPage').value);
+            if (pageNum >= 1 && pageNum <= pdfDoc.numPages) {
+                scrollToPage(pageNum);
+                document.getElementById('goToPage').value = pageNum;
+            } else {
+                alert(`Página inválida. Rango: 1-${pdfDoc.numPages}`);
+            }
+        }
+
+        document.getElementById('searchInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') buscar();
+        });
+
+        // Cargar el PDF al abrir
+        renderAllPages();
+    </script>
+</body>
+</html>

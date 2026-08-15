@@ -190,7 +190,7 @@ tbody tr:nth-child(even){background:#fafbfc}
     <p>Res. 3871/24 (DGCyE) · Anexos III a IX · Escuela Técnica Emilio Mitre</p>
   </div>
   <div class="acciones">
-    <a class="btn-fantasma" href="{{ url_for('static', filename='salidas/resolucion-3871-24.pdf') }}" target="_blank">📄 Ver Resolución</a>
+    <a class="btn-fantasma" href="{{ url_for('salidas.normativa') }}" target="_blank">📄 Ver Resolución</a>
     <a class="btn-fantasma" href="{{ url_for('salidas.lista') }}">‹ Salidas guardadas</a>
     <button class="btn-fantasma" id="btn-abrir-todo">Expandir todo</button>
     <button class="btn-fantasma" id="btn-cargar">Cargar borrador</button>
@@ -646,8 +646,8 @@ function agregarLinkNormativa(cajaAyuda, clave){
   const ref = NORMATIVA[clave];
   const pag = ref.pagina_pdf;
   const buscar = ref.frase_resaltar || "";
-  let href = "{{ url_for('static', filename='salidas/resolucion-3871-24.pdf') }}#page=" + pag;
-  if (buscar) href += "&search=" + encodeURIComponent(buscar);
+  let href = "{{ url_for('salidas.normativa') }}?pagina=" + pag;
+  if (buscar) href += "&buscar=" + encodeURIComponent(buscar);
   const link = el("a", {href:href, target:"_blank", rel:"noopener", class:"link-normativa", text:"📄 Ver en la Resolución"});
   link.style.display = "block";
   link.style.marginTop = "8px";

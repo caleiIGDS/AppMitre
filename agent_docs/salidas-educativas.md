@@ -112,7 +112,11 @@ imita esa estructura. `_generar_pdf_anexo(anexo, valores, destino)` recorre el
   después del último campo de identificación) — `_dibujar_tabla` no imprime `label`. Arma
   la tabla con `pdf.table()` (fpdf2 ≥ 2.7) a partir de `columnas` y de
   `valores[campo['id']]`; sin filas, muestra un placeholder (`-`, no `—`: el em dash no
-  está en el charset de `helvetica` core y tira `FPDFUnicodeEncodingException`).
+  está en el charset de `helvetica` core y tira `FPDFUnicodeEncodingException`). En el
+  formulario HTML, la tabla es más rica: las personas tienen campos adicionales (cargo para
+  docentes, fecha_nacimiento y edad calculada para estudiantes) que se guardan en el JSON
+  pero no se imprimen en el PDF del Anexo V — la tabla impresa mantiene solo las columnas
+  del esquema de `Salidas/Anexo5.json`.
 - **Campos que comparten renglón** (`CAMPOS_MISMA_LINEA`, por id): en el original varios
   grupos van en la misma línea — no siempre pares: Anexo V `"INSTITUCIÓN EDUCATIVA ___
   N°___"` son dos campos, Anexo IV `"Fecha de salida ___ Hora ___ Lugar ___"` son tres.
@@ -342,19 +346,32 @@ al menos `salidas.leer`. El motor entero de accesos está en `agent_docs/accesos
 ## PDF con referencias normativas
 
 La Resolución 3871/24 está en `static/salidas/resolucion-3871-24.pdf` — documento público,
-accesible sin login. Se integra al formulario vía links nativos al PDF:
+accesible sin login. Se integra al formulario vía un visor custom que renderiza todas las
+páginas con resaltado de frases:
 
+- **Ruta `/salidas/normativa`** (en `salidas.py`): visor con pdf.js que renderiza todas las
+  páginas del PDF en scroll vertical. Recibe `?pagina=N&buscar=<frase>` (ambos opcionales):
+  carga todas las páginas, busca la frase en el contenido de texto (usando
+  `page.getTextContent()`), dibuja un rectángulo amarillo semitransparente sobre cada
+  coincidencia, y scroll automático a la página donde aparece.
 - **Links en el formulario** (`formulario.html`): cada mensaje informativo (ayuda de campo,
   nota de anexo, etc.) que cita un punto normativo concreto tiene un link "📄 Ver en la
-  Resolución" que apunta al PDF con parámetros nativos:
-  `/static/salidas/resolucion-3871-24.pdf#page=N&search=<frase>`. El navegador abre su
-  visor PDF integrado y busca/resalta la frase (las limitaciones de resaltado dependen de
-  cada navegador, no hay visor custom). El mapeo está en `Salidas/advertencias_normativa.json`
-  (24 mensajes de formulario, 18 con referencia específica a página + frase).
-- **Botón en header**: "📄 Ver Resolución" abre el PDF completo en pestaña nueva (sin params).
+  Resolución" que apunta al visor: `/salidas/normativa?pagina=13&buscar=<frase>`. El mapeo
+  está en `Salidas/advertencias_normativa.json` (24 mensajes de formulario, 18 con
+  referencia específica a página + frase).
+- **Botón en header**: "📄 Ver Resolución" abre el visor en pestaña nueva (sin params de
+  búsqueda — muestra todas las páginas).
 - **Link en detalle** (`detalle.html`): la nota sobre firma original apunta a
-  `/static/salidas/resolucion-3871-24.pdf#page=16` (sección 10: "Instructivo para completar
-  los anexos").
+  `/salidas/normativa?pagina=16` (sección 10: "Instructivo para completar los anexos").
+
+**JavaScript en el visor** (template `templates/salidas/normativa.html`):
+- Usa `pdfjsLib` desde CDN para parsear y renderizar el PDF.
+- Renderiza todas las páginas a canvas una vez, en un contenedor scrolleable.
+- Si hay búsqueda, extrae texto con `page.getTextContent()` para cada página.
+- Busca case-insensitive substring match.
+- Dibuja resaltado amarillo (`rgba(255, 193, 7, 0.4)`) sobre los items de texto que coinciden
+  con la búsqueda (usa el `transform` de cada item para posicionar el rectángulo).
+- Scroll automático a la primera página con coincidencia.
 
 Las referencias están verificadas contra el texto real del PDF con `pypdf` (no de memoria):
 todas tienen sustento, ninguna es inventada.
