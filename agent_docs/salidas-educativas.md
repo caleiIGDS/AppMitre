@@ -50,7 +50,11 @@ vive en memoria del navegador (`estado = {comunes, personas, anexos}`) mientras 
 Precarga datos fijos de la escuela (`DATOS_FIJOS`), replica los datos comunes de la salida
 a los anexos que los piden (`COMUNES[].destino`), arma una tabla de Personas una sola vez
 (de ahí salen las cantidades del Anexo IV y el listado del Anexo V), y calcula derivados
-(`calculado()`) como fechas largas o el conteo de docentes/estudiantes.
+(`calculado()`) como fechas largas o el conteo de docentes/estudiantes. La tabla de personas
+es condicional: cuando se marca un rol como docente, aparece la columna "Cargo"; cuando es
+estudiante, aparecen "Fecha Nac." y "Edad" (calculada automáticamente a partir de la fecha
+de nacimiento). Todos los campos se guardan en `estado.personas[]` independientemente de si
+se muestran en la UI — esto permite guardar datos adicionales en el JSON sin cluterar el PDF.
 
 **Para editar una salida guardada:** entrar a `/salidas/<id>/editar` carga el formulario
 precargado con todos los datos originales (desde `datos_json` en la DB). El formulario se
@@ -337,21 +341,20 @@ al menos `salidas.leer`. El motor entero de accesos está en `agent_docs/accesos
 
 ## PDF con referencias normativas
 
-La Resolución 3871/24 (`static/salidas/resolucion-3871-24.pdf`) está integrada al módulo:
+La Resolución 3871/24 está en `static/salidas/resolucion-3871-24.pdf` — documento público,
+accesible sin login. Se integra al formulario vía links nativos al PDF:
 
-- **`GET /salidas/normativa`** (ruta nueva, sin gate): visor propio con pdf.js vendored
-  (`static/vendor/pdfjs/`) que renderiza el PDF en canvas y resalta texto de búsqueda.
-  Query params: `?pagina=N&buscar=<frase>`. El resaltado se dibuja en amarillo con borde oro
-  — funciona igual en todos los navegadores (no depende del visor integrado).
-- **Links en el formulario**: cada mensaje informativo (aviso general, notas de anexo, ayudas
-  de campo, etc.) que cita un punto normativo concreto tiene un link "📄 Ver en la
-  Resolución" que abre `/salidas/normativa?pagina=N&buscar=<frase>` en pestaña nueva. El
-  mapeo se mantiene en `Salidas/advertencias_normativa.json` (24 mensajes, 18 con página
-  específica).
-- **Botón en header**: "📄 Ver Resolución" abre `/salidas/normativa` en pestaña nueva (página
-  1).
-- **Link en detalle**: la nota sobre firma original (línea 27 de `detalle.html`) apunta a
-  `/salidas/normativa?pagina=16` (sección 10: "Instructivo para completar los anexos").
+- **Links en el formulario** (`formulario.html`): cada mensaje informativo (ayuda de campo,
+  nota de anexo, etc.) que cita un punto normativo concreto tiene un link "📄 Ver en la
+  Resolución" que apunta al PDF con parámetros nativos:
+  `/static/salidas/resolucion-3871-24.pdf#page=N&search=<frase>`. El navegador abre su
+  visor PDF integrado y busca/resalta la frase (las limitaciones de resaltado dependen de
+  cada navegador, no hay visor custom). El mapeo está en `Salidas/advertencias_normativa.json`
+  (24 mensajes de formulario, 18 con referencia específica a página + frase).
+- **Botón en header**: "📄 Ver Resolución" abre el PDF completo en pestaña nueva (sin params).
+- **Link en detalle** (`detalle.html`): la nota sobre firma original apunta a
+  `/static/salidas/resolucion-3871-24.pdf#page=16` (sección 10: "Instructivo para completar
+  los anexos").
 
-Todas las referencias están verificadas contra el texto real del PDF con `pypdf` (no de
-memoria).
+Las referencias están verificadas contra el texto real del PDF con `pypdf` (no de memoria):
+todas tienen sustento, ninguna es inventada.

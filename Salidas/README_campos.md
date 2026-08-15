@@ -71,7 +71,9 @@ tramitación oficial que se realice." en el Anexo V, entre `observaciones` y
 ## Archivo de advertencias y referencias normativas
 
 **`advertencias_normativa.json`** — mapeo de todos los mensajes informativos/advertencias del
-formulario con sus referencias normativas (Resolución 3871/24). Cada objeto del array tiene:
+formulario con sus referencias normativas (Resolución 3871/24). Se carga en `formulario.html`
+y se usa para generar links directos al PDF con parámetros nativos (`#page=N&search=...`).
+Cada objeto del array tiene:
 
 ```json
 {
@@ -93,7 +95,8 @@ formulario con sus referencias normativas (Resolución 3871/24). Cada objeto del
 - `razon`: explicación más desarrollada, redactada a partir del texto real de la Resolución
   cuando se cita normativa.
 - `referencia_normativa` / `pagina_pdf` / `frase_resaltar`: `null` para mensajes sin cita
-  normativa explícita.
+  normativa explícita. Cuando existen, se arma un link al PDF: `/static/salidas/resolucion-3871-24.pdf#page=13&search=8.5.1`
+  (el navegador usa su visor PDF nativo para buscar/resaltar).
 
 **Nota**: el `mensaje` es una copia manual del texto de `formulario.html`; si se edita una
 ayuda ahí, debe actualizarse también en este JSON para mantener sincronía.
