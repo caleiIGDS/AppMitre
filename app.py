@@ -705,6 +705,12 @@ def export_pdf_planilla_preceptores():
     output.seek(0)
     return send_file(output, mimetype='application/pdf', as_attachment=False, download_name='planilla_preceptores.pdf')
 
+@app.route('/salidas/normativa')
+def normativa_visor():
+	"""Visor público de la Resolución RESOC-2024-3871-GDEBA-DGCYE con todas las páginas
+	y resaltado de frases específicas. Query params: ?pagina=N&buscar=frase (ambos opcionales)."""
+	return render_template('salidas/normativa.html')
+
 if __name__ == '__main__':
     # El arranque corre SOLO en el proceso padre. Con el reloader activo, Werkzeug levanta un
     # hijo (marcado con WERKZEUG_RUN_MAIN) que es el que sirve, y lo relanza entero cada vez

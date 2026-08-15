@@ -769,13 +769,6 @@ def regenerar_pdfs(id):
 _RE_ANEXO_IX_EXTRA = re.compile(r'^IX_(\d+)$')
 
 
-@bp.route('/normativa')
-def normativa():
-	"""Visor de la Resolución RESOC-2024-3871-GDEBA-DGCYE con todas las páginas y resaltado
-	de frases específicas. Query params: ?pagina=N&buscar=frase (ambos opcionales)."""
-	return render_template('salidas/normativa.html')
-
-
 @bp.route('/<int:id>/pdf/<anexo>')
 def ver_pdf(id, anexo):
     if anexo in ANEXOS_NUMEROS:

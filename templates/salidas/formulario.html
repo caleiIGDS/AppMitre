@@ -190,7 +190,7 @@ tbody tr:nth-child(even){background:#fafbfc}
     <p>Res. 3871/24 (DGCyE) · Anexos III a IX · Escuela Técnica Emilio Mitre</p>
   </div>
   <div class="acciones">
-    <a class="btn-fantasma" href="{{ url_for('salidas.normativa') }}" target="_blank">📄 Ver Resolución</a>
+    <a class="btn-fantasma" href="{{ url_for('normativa_visor') }}" target="_blank">📄 Ver Resolución</a>
     <a class="btn-fantasma" href="{{ url_for('salidas.lista') }}">‹ Salidas guardadas</a>
     <button class="btn-fantasma" id="btn-abrir-todo">Expandir todo</button>
     <button class="btn-fantasma" id="btn-cargar">Cargar borrador</button>
@@ -646,7 +646,7 @@ function agregarLinkNormativa(cajaAyuda, clave){
   const ref = NORMATIVA[clave];
   const pag = ref.pagina_pdf;
   const buscar = ref.frase_resaltar || "";
-  let href = "{{ url_for('salidas.normativa') }}?pagina=" + pag;
+  let href = "{{ url_for('normativa_visor') }}?pagina=" + pag;
   if (buscar) href += "&buscar=" + encodeURIComponent(buscar);
   const link = el("a", {href:href, target:"_blank", rel:"noopener", class:"link-normativa", text:"📄 Ver en la Resolución"});
   link.style.display = "block";
@@ -820,8 +820,10 @@ function agregarPersona(sinPintar){
 
 function calcularEdad(fechaNac){
   if (!fechaNac) return "";
-  const hoy = new Date(estado.comunes.fecha_salida || new Date());
-  const nac = new Date(fechaNac);
+  const fechaSalida = estado.comunes.fecha_salida || new Date().toISOString().slice(0, 10);
+  const hoy = new Date(fechaSalida + "T00:00:00");
+  const nac = new Date(fechaNac + "T00:00:00");
+  if (isNaN(hoy) || isNaN(nac)) return "";
   let edad = hoy.getFullYear() - nac.getFullYear();
   const mesHoy = hoy.getMonth();
   const mesNac = nac.getMonth();
