@@ -3,7 +3,7 @@
     "clave": "AVISO_GENERAL",
     "anexo": null,
     "tipo": "aviso_general",
-    "mensaje": "Nada se guarda solo. Los datos viven únicamente en esta pestaña. Guardar borrador descarga un JSON a esta computadora para retomarlo después con Cargar borrador — no llega al servidor. Recién con Guardar salida la salida queda registrada en el servidor de la escuela (con DNI y datos de salud) durante 1 año, y se generan los PDF de cada anexo para poder verlos después. Si cerrás la pestaña sin usar ninguna de las dos, se pierde lo cargado.\n\nLos anexos marcados [firma en papel] se completan acá sólo para imprimirlos ya cargados: la Resolución exige firma original del adulto responsable o del/la estudiante, así que igual hay que imprimirlos y hacerlos firmar.",
+    "mensaje": "Nada se guarda solo. Los datos viven únicamente en esta pestaña hasta que se aprieta Guardar salida: recién ahí la salida queda registrada en el servidor de la escuela (con DNI y datos de salud) durante 1 año, y se generan los PDF de cada anexo para poder verlos después. Si cerrás la pestaña sin guardar, se pierde lo cargado.\n\nLos anexos marcados [firma en papel] se completan acá sólo para imprimirlos ya cargados: la Resolución exige firma original del adulto responsable o del/la estudiante, así que igual hay que imprimirlos y hacerlos firmar.",
     "razon": "Advierte sobre la persistencia de datos sensibles (DNI, salud) en el servidor durante 1 año, el almacenamiento local en el navegador mientras se completa, y la necesidad de firma original en papel para varios anexos según exige la Resolución.",
     "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE",
     "pagina_pdf": null,
@@ -238,5 +238,725 @@
     "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, sección 10 'Instructivo para completar los anexos'",
     "pagina_pdf": 16,
     "frase_resaltar": "10. INSTRUCTIVO PARA COMPLETAR LOS ANEXOS"
+  },
+  {
+    "clave": "COMUN.numero_institucion",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Número con el que se identifica la escuela ante la DGCyE. Va en los Anexos IV, V, VI y IX.",
+    "razon": "Identificador administrativo de la institución educativa en los registros de la Dirección General de Cultura y Educación.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "COMUN.cue",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Código Único de Establecimiento. Sólo lo pide el Anexo IX (Declaración Jurada de directivos).",
+    "razon": "Identificador único y nacional del establecimiento educativo asignado por el ministerio.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "COMUN.region",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Región educativa a la que pertenece el distrito. Sólo la pide el Anexo IV.",
+    "razon": "División administrativa de la provincia para fines de inspección y supervisión educativa.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "COMUN.distrito",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Distrito escolar del establecimiento. Se replica en los Anexos IV, V, VI y IX.",
+    "razon": "Identificador geográfico de la jurisdicción educativa donde se ubica la escuela.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "COMUN.domicilio",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Dirección del establecimiento (no la del lugar a visitar). Va en los Anexos IV y IX.",
+    "razon": "Domicilio legal de la institución educativa para contacto y documentación oficial.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "COMUN.telefono",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Teléfono de contacto del establecimiento. Sólo lo pide el Anexo IV.",
+    "razon": "Línea de contacto directo de la escuela para comunicaciones oficiales.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "COMUN.director",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Apellido y nombre de quien firma la Declaración Jurada del Anexo IX. Es el/la responsable de que todo el legajo esté completo antes de la partida.",
+    "razon": "Identificación del máximo responsable de la institución educativa ante la autoridad educativa en materia de salidas.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "COMUN.representante_legal",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Para escuelas de gestión privada. Datos del Representante Legal (DIEGEP).",
+    "razon": "En gestión privada, el Representante Legal es el responsable de la entidad ante la autoridad educativa.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "COMUN.entidad_propietaria",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Para escuelas de gestión privada. Entidad propietaria de la institución.",
+    "razon": "En gestión privada, la entidad propietaria es responsable solidario de la salida según la Resolución.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "COMUN.lugar_a_visitar",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Consignar dirección, localidad y distrito del destino. Se replica en los Anexos IV y V.",
+    "razon": "Identificación completa del lugar de destino para autorización y comunicación a familias.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "COMUN.localidad_salida",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Sólo la localidad del destino (sin dirección). Es lo que se lee en las autorizaciones que firman las familias (Anexo VI) y los/las estudiantes mayores de edad (Anexo VII).",
+    "razon": "Datos simplificados para el consentimiento informado de la familia.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "COMUN.lugar_salida",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Punto de encuentro desde donde parte el grupo (normalmente la puerta de la escuela).",
+    "razon": "Información operacional para que familias y estudiantes sepan dónde deben presentarse.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "COMUN.fecha_regreso",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Día de vuelta. Si es distinta de la fecha de salida, la salida supera las 24 horas: cambian los plazos de presentación y se habilitan los campos de hospedaje del Anexo IV.",
+    "razon": "Determina si la salida supera 24 horas, lo que implica cambios en plazos de presentación ante Inspección e habilita campos de hospedaje.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo II (tabla de plazos)",
+    "pagina_pdf": 19,
+    "frase_resaltar": "si es dentro del distrito con regreso en el día"
+  },
+  {
+    "clave": "COMUN.hora_regreso",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Horario estimado de llegada.",
+    "razon": "Información operacional para planificación de la jornada.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "COMUN.lugar_regreso",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Dónde se entrega el grupo al finalizar la salida.",
+    "razon": "Información operacional para familias sobre dónde retirar a sus hijos.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "COMUN.tipo_salida",
+    "anexo": null,
+    "tipo": "ayuda_campo",
+    "mensaje": "Educativa (propuesta didáctica de la escuela) o de representación institucional (la escuela participa en un acto, torneo, feria o convocatoria de otro organismo). En el Anexo VII original se tacha la que no corresponde.",
+    "razon": "Distinción entre salidas pedagógicas propias vs. participación en eventos externos; afecta la cobertura de seguros.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VII",
+    "pagina_pdf": 17,
+    "frase_resaltar": "educativa o de representación institucional"
+  },
+  {
+    "clave": "III.nombre_estudiante",
+    "anexo": "III",
+    "tipo": "ayuda_campo",
+    "mensaje": "Estudiante autorizado/a. Esta autorización general sólo cubre salidas a pie por el barrio: cualquier salida con transporte necesita el Anexo VI, específico para esa fecha.",
+    "razon": "Identificación del estudiante a nivel de documento. Esta autorización vale un año para salidas locales sin transporte.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "III.dni_estudiante",
+    "anexo": "III",
+    "tipo": "ayuda_campo",
+    "mensaje": "Documento del estudiante, sin puntos.",
+    "razon": "Identificación inequívoca del menor en la documentación legal.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "III.anio_curso",
+    "anexo": "III",
+    "tipo": "ayuda_campo",
+    "mensaje": "Año que cursa, por ejemplo 3°.",
+    "razon": "Información de identificación en el legajo de salidas del estudiante.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "III.seccion_curso",
+    "anexo": "III",
+    "tipo": "ayuda_campo",
+    "mensaje": "División o sección del curso.",
+    "razon": "Información de identificación en el legajo de salidas del estudiante.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "IV.observaciones_fechas",
+    "anexo": "IV",
+    "tipo": "ayuda_campo",
+    "mensaje": "Sólo en caso de corresponder: fechas alternativas por clima, reprogramaciones previstas, etc.",
+    "razon": "La Resolución contempla cambios en las condiciones de aprobación por causas climáticas u otras circunstancias, que deben comunicarse a la autoridad educativa.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I, Punto 9.4 + Anexo IV",
+    "pagina_pdf": 10,
+    "frase_resaltar": "la suspensión del viaje que disponga el/la Director/a por causas climáticas como por cualquier otra circunstancia"
+  },
+  {
+    "clave": "IV.objetivos_salida",
+    "anexo": "IV",
+    "tipo": "ayuda_campo",
+    "mensaje": "Para qué se hace, en términos pedagógicos. Debe poder enmarcarse en el Diseño Curricular y en el Proyecto Institucional: es lo que distingue una salida educativa de un paseo.",
+    "razon": "Toda propuesta pedagógica debe estar enmarcada en el proyecto institucional y la currícula escolar, no ser un paseo aislado. El formulario pide este campo en el Anexo IV como parte de los requisitos formales.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Considerandos + Anexo IV, Campo 'Objetivos de la salida'",
+    "pagina_pdf": 25,
+    "frase_resaltar": "propuesta didáctica enmarcada en el proyecto institucional"
+  },
+  {
+    "clave": "IV.cronograma_diario",
+    "anexo": "IV",
+    "tipo": "ayuda_campo",
+    "mensaje": "Distribución de la jornada hora por hora. En salidas de más de un día, un cronograma por cada día.",
+    "razon": "El Anexo IV exige una distribución horaria detallada de la jornada para que la autoridad educativa verifique el carácter pedagógico y la cobertura de supervisión del grupo.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo IV, Artículo 5º",
+    "pagina_pdf": 25,
+    "frase_resaltar": "Cronograma diario"
+  },
+  {
+    "clave": "IV.cantidad_alumnos",
+    "anexo": "IV",
+    "tipo": "ayuda_campo",
+    "mensaje": "Se calcula solo desde la tabla de Personas.",
+    "razon": "Campo derivado de la tabla de personas; no tiene descripción normativa propia.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "IV.cantidad_docentes_acompanantes",
+    "anexo": "IV",
+    "tipo": "ayuda_campo",
+    "mensaje": "Se calcula solo desde la tabla de Personas (titulares + reemplazantes).",
+    "razon": "Campo derivado; la base normativa es PERSONAS.RATIO (ya documentada).",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "IV.hospedaje_nombre",
+    "anexo": "IV",
+    "tipo": "ayuda_campo",
+    "mensaje": "Nombre del alojamiento. Sólo se completa si la salida supera las 24 horas.",
+    "razon": "Información operacional para salidas de pernocte.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "IV.hospedaje_telefono",
+    "anexo": "IV",
+    "tipo": "ayuda_campo",
+    "mensaje": "Teléfono directo del alojamiento, para que la escuela y las familias puedan ubicar al grupo.",
+    "razon": "Contacto de emergencia para salidas de pernocte.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "IV.hospedaje_domicilio",
+    "anexo": "IV",
+    "tipo": "ayuda_campo",
+    "mensaje": "Dirección del alojamiento.",
+    "razon": "Información operacional para salidas de pernocte.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "IV.hospedaje_localidad",
+    "anexo": "IV",
+    "tipo": "ayuda_campo",
+    "mensaje": "Localidad donde está el alojamiento.",
+    "razon": "Información operacional para salidas de pernocte.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "IV.gastos_estimativos",
+    "anexo": "IV",
+    "tipo": "ayuda_campo",
+    "mensaje": "Cuánto sale la actividad y de dónde sale la plata (cooperadora, familias, financiamiento del organismo convocante, etc.).",
+    "razon": "El Anexo IV exige consignar los gastos estimativos y el modo de solventarlos para que la propuesta sea completa ante la inspección.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo IV",
+    "pagina_pdf": 25,
+    "frase_resaltar": "Gastos estimativos de la actividad y modo de solventarlos"
+  },
+  {
+    "clave": "IV.autoridad_que_completo",
+    "anexo": "IV",
+    "tipo": "ayuda_campo",
+    "mensaje": "Apellido y nombre del integrante del Equipo Directivo que lo llenó.",
+    "razon": "Responsabilidad sobre la completitud del formulario.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VI.nombre_estudiante",
+    "anexo": "VI",
+    "tipo": "ayuda_campo",
+    "mensaje": "Nombre del hijo/a",
+    "razon": "Identificación del estudiante en la autorización familiar.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VI.dni_estudiante",
+    "anexo": "VI",
+    "tipo": "ayuda_campo",
+    "mensaje": "Documento del estudiante.",
+    "razon": "Identificación inequívoca en la autorización.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VI.lugares_estadia",
+    "anexo": "VI",
+    "tipo": "ayuda_campo",
+    "mensaje": "Sólo si hay pernocte. Es el dato que le permite a una familia ubicar a su hijo/a durante el viaje.",
+    "razon": "Información de hospedaje para familias en salidas que incluyen pernocte.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VI.nombres_telefonos_acompanantes",
+    "anexo": "VI",
+    "tipo": "ayuda_campo",
+    "mensaje": "Quiénes van a cargo del grupo y cómo ubicarlos durante la salida.",
+    "razon": "Información de contacto directo para familias.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VI.empresas_contratadas",
+    "anexo": "VI",
+    "tipo": "ayuda_campo",
+    "mensaje": "Sólo si se contrata transporte u otro servicio. Los datos completos de la empresa van en el Anexo VIII.",
+    "razon": "Referencia de empresas contratadas para información de familias.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VI.infraestructura_disponible",
+    "anexo": "VI",
+    "tipo": "ayuda_campo",
+    "mensaje": "Qué hay en el lugar de destino: baños, comedor, enfermería, espacios cubiertos ante lluvia.",
+    "razon": "Información de comodidades para autorización informada de familias.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VI.hospitales_cercanos",
+    "anexo": "VI",
+    "tipo": "ayuda_campo",
+    "mensaje": "Direcciones y teléfonos de los centros de salud más próximos al destino. Es información obligatoria: hay que averiguarla antes de viajar, no en el momento de la urgencia.",
+    "razon": "⚠️ FUERA DE ALCANCE: La búsqueda en la Resolución no encontró cita explícita de 'hospitales cercanos'. El campo existe en el Anexo VI pero no se verificó la fuente normativa de su obligatoriedad.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VI (campo presente, fuente de obligatoriedad NO VERIFICADA)",
+    "pagina_pdf": 37,
+    "frase_resaltar": "Hospitales y centros asistenciales cercanos"
+  },
+  {
+    "clave": "VI.otros_datos_interes",
+    "anexo": "VI",
+    "tipo": "ayuda_campo",
+    "mensaje": "Cualquier cosa que las familias deban saber: qué llevar, vianda, ropa, costo.",
+    "razon": "Campo abierto de información operacional para familias.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VI.indicaciones_salud",
+    "anexo": "VI",
+    "tipo": "ayuda_campo",
+    "mensaje": "Alergias, medicación, tratamientos, condiciones que el/la docente a cargo tenga que conocer ante una urgencia. Si no hay nada para informar, se deja en blanco.",
+    "razon": "El Anexo VI exige que la familia declare cualquier condición de salud relevante para que el docente responsable pueda actuar correctamente ante una urgencia médica.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VI, Sección 3 (Salud)",
+    "pagina_pdf": 37,
+    "frase_resaltar": "Dejo aquí constancia de cualquier indicación necesaria deba conocer el personal docente a cargo y personal médico"
+  },
+  {
+    "clave": "VI.tiene_obra_social",
+    "anexo": "VI",
+    "tipo": "ayuda_campo",
+    "mensaje": "Si se marca, se habilitan los datos de la cobertura. Este dato convive con el seguro escolar y con la póliza de responsabilidad civil de la escuela: no la reemplaza.",
+    "razon": "La familia declara si tiene cobertura de salud complementaria, que se suma a (pero no reemplaza) los seguros de la institución.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VI, Sección 3 (Salud)",
+    "pagina_pdf": 37,
+    "frase_resaltar": "Tiene Obra Social/Prepaga"
+  },
+  {
+    "clave": "VI.nombre_obra_social",
+    "anexo": "VI",
+    "tipo": "ayuda_campo",
+    "mensaje": "Se completa sólo si el/la estudiante tiene cobertura.",
+    "razon": "Identificación de la cobertura de salud complementaria de la familia.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VI, Sección 3 (Salud)",
+    "pagina_pdf": 37,
+    "frase_resaltar": "Nombre de la Obra Social/Prepaga"
+  },
+  {
+    "clave": "VI.numero_socio",
+    "anexo": "VI",
+    "tipo": "ayuda_campo",
+    "mensaje": "Número de afiliado/a, el que figura en la credencial.",
+    "razon": "Número de afiliación para facilitar consultas médicas durante la salida.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VI, Sección 3 (Salud)",
+    "pagina_pdf": 37,
+    "frase_resaltar": "N° Socio"
+  },
+  {
+    "clave": "VI.telefonos_urgencia",
+    "anexo": "VI",
+    "tipo": "ayuda_campo",
+    "mensaje": "Consignar varios, de personas distintas: el formulario original insiste en eso porque un solo teléfono que no atiende deja al docente sin nadie a quien avisar.",
+    "razon": "El Anexo VI exige múltiples teléfonos de contacto en caso de urgencia para garantizar que el docente pueda comunicarse con la familia.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VI, Sección 3 (Salud)",
+    "pagina_pdf": 37,
+    "frase_resaltar": "Teléfonos de contacto en caso de urgencia: (Consignar varios)"
+  },
+  {
+    "clave": "VII.nombre_estudiante",
+    "anexo": "VII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Estudiante que firma la declaración. Al ser mayor de edad, se autoriza a sí mismo/a: no interviene la familia.",
+    "razon": "Identificación del estudiante mayor en la declaración jurada.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VII.dni_estudiante",
+    "anexo": "VII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Documento del/la estudiante.",
+    "razon": "Identificación en la declaración.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VII.domicilio",
+    "anexo": "VII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Domicilio particular del/la estudiante, no el de la escuela.",
+    "razon": "Identificación de domicilio del estudiante mayor en la declaración.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VII.localidad",
+    "anexo": "VII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Localidad donde vive el/la estudiante.",
+    "razon": "Información de domicilio del estudiante.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VII.indicaciones_salud",
+    "anexo": "VII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Alergias, medicación o condiciones que el/la docente a cargo deba conocer ante una urgencia.",
+    "razon": "El Anexo VII (declaración de estudiante mayor de edad) exige las mismas indicaciones de salud que VI, así como autorización para intervención médica en urgencias.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VII",
+    "pagina_pdf": 43,
+    "frase_resaltar": "Dejo aquí constancia de cualquier indicación necesaria deba conocer el personal docente"
+  },
+  {
+    "clave": "VII.tiene_obra_social",
+    "anexo": "VII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Si se marca, se habilitan los datos de la cobertura.",
+    "razon": "El estudiante mayor declara si tiene cobertura de salud complementaria.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VII",
+    "pagina_pdf": 43,
+    "frase_resaltar": "Tiene Obra Social/Prepaga"
+  },
+  {
+    "clave": "VII.nombre_obra_social",
+    "anexo": "VII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Se completa sólo si tiene cobertura.",
+    "razon": "Identificación de la cobertura de salud complementaria del estudiante mayor.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VII",
+    "pagina_pdf": 43,
+    "frase_resaltar": "Nombre de la Obra Social/Prepaga"
+  },
+  {
+    "clave": "VII.numero_socio",
+    "anexo": "VII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Número de afiliado/a.",
+    "razon": "Número de afiliación del estudiante mayor para facilitar consultas médicas.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VII",
+    "pagina_pdf": 43,
+    "frase_resaltar": "N° Socio"
+  },
+  {
+    "clave": "VII.telefonos_urgencia",
+    "anexo": "VII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Consignar varios, de personas distintas que puedan responder durante la salida.",
+    "razon": "El Anexo VII exige múltiples teléfonos de contacto de personas distintas para garantizar comunicación en caso de urgencia.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VII",
+    "pagina_pdf": 43,
+    "frase_resaltar": "Teléfonos de contacto en caso de urgencia: (Consignar varios)"
+  },
+  {
+    "clave": "VIII.nombre_gerente_responsable",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Persona responsable de la empresa ante la escuela.",
+    "razon": "Contacto de responsabilidad de la empresa de transporte.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VIII.domicilio_propietario_empresa",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Dirección legal de la empresa.",
+    "razon": "Domicilio para contactos legales.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VIII.telefono_propietario_empresa",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Teléfono de la empresa.",
+    "razon": "Contacto de la empresa transportista.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VIII.domicilio_gerente_responsable",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Domicilio de la persona responsable.",
+    "razon": "Contacto del responsable de la empresa.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VIII.telefono",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Teléfono fijo de contacto.",
+    "razon": "Contacto administrativo de la empresa.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VIII.telefono_movil",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Celular de contacto. Conviene tenerlo a mano el día de la salida por si hay que reubicar al conductor.",
+    "razon": "Contacto directo para emergencias durante la salida.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VIII.titularidad_vehiculo",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Micro, ómnibus, combi, automóvil, camioneta, barco, lancha o avión, y a nombre de quién está.",
+    "razon": "El Anexo I especifica qué vehículos pueden usarse (DGCyE, Asociación Cooperadora, transporte escolar, empresas contratadas) y el Anexo VIII requiere declarar el tipo y la titularidad.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I Punto 8.5 + Anexo VIII",
+    "pagina_pdf": 41,
+    "frase_resaltar": "Titularidad del vehículo (Micro, ómnibus, combi, automóvil, camioneta, barco, lancha, avión, entre otros)"
+  },
+  {
+    "clave": "VIII.compania_aseguradora",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Aseguradora de la empresa de transporte. No confundir con el seguro escolar de la escuela, que va en el Anexo IX.",
+    "razon": "El Anexo VIII exige que la empresa de transporte contratada tenga cobertura de seguros, separada del seguro escolar de responsabilidad civil que requiere el Anexo IX.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I Punto 9.2c + Anexo VIII",
+    "pagina_pdf": 41,
+    "frase_resaltar": "Compañía Aseguradora y Número/s de póliza/s"
+  },
+  {
+    "clave": "VIII.numero_poliza",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Número de póliza del transporte.",
+    "razon": "La póliza de seguros de la empresa de transporte es un requisito normativo del Punto 9.2c del Anexo I.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I Punto 9.2c",
+    "pagina_pdf": 10,
+    "frase_resaltar": "Póliza de Seguros con la cobertura correspondiente a la salida"
+  },
+  {
+    "clave": "VIII.tipo_seguro",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Cobertura contratada por la empresa de transporte.",
+    "razon": "El tipo de seguro de transporte declara la cobertura específica de la empresa contratada.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo VIII",
+    "pagina_pdf": 41,
+    "frase_resaltar": "Tipo de seguro/s"
+  },
+  {
+    "clave": "VIII.dni_conductor",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Documento de cada conductor/a.",
+    "razon": "El Anexo I Punto 9.2b exige identificación inequívoca del conductor del vehículo.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I Punto 9.2b",
+    "pagina_pdf": 10,
+    "frase_resaltar": "Del conductor: Documento Nacional de Identidad"
+  },
+  {
+    "clave": "VIII.numero_carnet_conducir",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Registro con la categoría que habilite ese tipo de vehículo, y su fecha de vencimiento: tiene que estar vigente al momento del viaje.",
+    "razon": "El conductor debe poseer licencia de conducir vigente con la categoría que lo habilite para el tipo de vehículo a utilizar, según Anexo I Punto 9.2b.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I Punto 9.2b",
+    "pagina_pdf": 10,
+    "frase_resaltar": "Registro de Conducir con la Categoría que lo habilite para ese tipo de vehículo"
+  },
+  {
+    "clave": "VIII.adjunto_constancia_habilitaciones",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Marcar cuando la fotocopia ya esté adjuntada al legajo en papel.",
+    "razon": "Control administrativo de documentación adjunta.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VIII.adjunto_carnet_conductor",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Marcar cuando la fotocopia ya esté adjuntada.",
+    "razon": "Control administrativo de documentación adjunta.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "VIII.adjunto_dni_conductor",
+    "anexo": "VIII",
+    "tipo": "ayuda_campo",
+    "mensaje": "Marcar cuando la fotocopia ya esté adjuntada.",
+    "razon": "Control administrativo de documentación adjunta.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "IX.representante_legal",
+    "anexo": "IX",
+    "tipo": "ayuda_campo",
+    "mensaje": "Sólo para escuelas de gestión privada. En ese caso el/la Representante Legal también firma la declaración.",
+    "razon": "En gestión privada, el Representante Legal es responsable solidario ante la autoridad educativa.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "IX.entidad_propietaria",
+    "anexo": "IX",
+    "tipo": "ayuda_campo",
+    "mensaje": "Sólo para gestión privada: en esas escuelas la entidad propietaria es la responsable de la salida.",
+    "razon": "En gestión privada, la entidad propietaria asume responsabilidad de la salida.",
+    "referencia_normativa": null,
+    "pagina_pdf": null,
+    "frase_resaltar": null
+  },
+  {
+    "clave": "IX.observaciones",
+    "anexo": "IX",
+    "tipo": "ayuda_campo",
+    "mensaje": "Todo lo que pueda surgir y no esté previsto en el formulario. Si la salida es fuera de la provincia o del país, acá se deja constancia de la ampliación de la póliza.",
+    "razon": "El Anexo IX es la Declaración Jurada del director/a. El campo de observaciones permite dejar constancia de cualquier circunstancia especial, incluyendo ampliaciones de cobertura de seguro para salidas interprovinciales o internacionales.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo IX",
+    "pagina_pdf": 43,
+    "frase_resaltar": "Observaciones"
+  },
+  {
+    "clave": "PERSONAS.DOCENTE_OBLIGATORIO",
+    "anexo": null,
+    "tipo": "validacion",
+    "mensaje": "Debe haber al menos un docente acompañante responsable del grupo. La responsabilidad de vigilancia no puede recaer en acompañantes no docentes.",
+    "razon": "El Anexo I punto 3.3 establece que la responsabilidad del docente a cargo es indelegable. El punto 3.4 aclara que los acompañantes no docentes nunca pueden considerarse responsables de la vigilancia de estudiantes menores de 18 años.",
+    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I, puntos 3.3 y 3.4",
+    "pagina_pdf": 9,
+    "frase_resaltar": "responsabilidad es indelegable"
   }
 ]

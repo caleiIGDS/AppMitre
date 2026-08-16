@@ -32,13 +32,16 @@ campos escalares y no puede modelar eso. `salidas.py` sigue el molde de **prést
   (label, tipo, sección, condición, columnas de cada campo, **incluidos** los campos de
   firma y "lugar y fecha"). El renderer de PDF los lee en tiempo de request; no se
   duplican en Python.
-- **`templates/salidas/`** — `base.html` (layout + nav, mismo patrón que `gestion/base.html`),
-  `login.html` (extiende `crud/login.html`, igual que las otras áreas), `lista.html`
-  (previsualización con nombre de proyecto, fechas y vigencia), `detalle.html` (resumen +
-  links a los 7 PDF, cada uno `target="_blank"`) y **`formulario.html`**: el formulario
-  grande de carga (`/salidas/nueva`). Es casi todo JS/CSS propio con su propia identidad
-  visual (blueprint/industrial, no el tema `gestion.css`) — no extiende `salidas/base.html`,
-  igual que `index.html` (el SPA de horarios) tampoco extiende ninguna de las otras áreas.
+- **`templates/salidas/`** — `base.html` (layout + nav, mismo patrón que `gestion/base.html`;
+  el header — logo, título, ☰ — vive ahí una sola vez, con `{% block header_acciones %}`
+  para que cada página reemplace los botones sin duplicar el resto del header), `login.html`
+  (extiende `crud/login.html`, igual que las otras áreas), `lista.html` (previsualización con
+  nombre de proyecto, fechas y vigencia), `detalle.html` (resumen + links a los 7 PDF, cada
+  uno `target="_blank"`) y **`formulario.html`**: el formulario grande de carga
+  (`/salidas/nueva`). Extiende `salidas/base.html` como el resto — el `<head>`/`<body>`
+  propios (`{% block estilos %}`/`{% block scripts %}`) sólo llevan el JS/CSS del formulario
+  en sí (grillas, tabla de personas, anexos), con su propia identidad visual
+  blueprint/industrial dentro de ese contenido, no en el header ni el nav.
 - Integración: `app.py` hace `app.register_blueprint(salidas.bp)` + `salidas.init_db()` en
   import, y `salidas` entra a la lista de `accesos.registrar_app(...)` — el único lugar
   central que hay que tocar al sumar un área nueva (ver `agent_docs/accesos.md`).
@@ -62,13 +65,12 @@ renderiza con `idEditar` seteado y el botón dice "Guardar cambios" en lugar de 
 salida". Al guardar, `datosActuales()` incluye `_id_editar` en el JSON, que `api_guardar`
 detecta para hacer UPDATE en lugar de INSERT, regenerando también los 7 PDF.
 
-**Dos botones de guardado, dos destinos:**
-- **Guardar borrador** — arma el JSON y lo descarga (Blob) a la computadora. No toca el
-  servidor. Sirve para pausar y retomar después con **Cargar borrador** (`FileReader`).
-- **Guardar salida** (o **Guardar cambios** si se está editando) — `fetch POST /salidas/api/guardar`
-  con el mismo JSON. Es la única acción que persiste algo fuera de la pestaña: inserta o
-  actualiza la fila en `salidas.db`, genera/regenera los 7 PDF, y redirige a `/salidas/<id>` o
-  `/salidas/<id>/editar` según corresponda.
+**Un solo botón de guardado:** **Guardar salida** (o **Guardar cambios** si se está editando)
+— `fetch POST /salidas/api/guardar` con el JSON de `datosActuales()`. Es la única acción que
+persiste algo fuera de la pestaña: inserta o actualiza la fila en `salidas.db`, genera/regenera
+los 7 PDF, y redirige a `/salidas/<id>` o `/salidas/<id>/editar` según corresponda. (Hasta
+2026-08-16 existía además "Guardar/Cargar borrador" — descargaba y releía un JSON local sin
+tocar el servidor — pero se sacó de la UI por pedido explícito; no queda rastro en el código.)
 
 Los campos de **firma** y de **"lugar y fecha" de la firma** no están en el formulario
 digital (`ANEXOS` en `formulario.html`) a propósito: van a mano sobre el papel impreso,
@@ -379,8 +381,10 @@ que renderiza todas las 44 páginas con resaltado de frases de búsqueda:
   Resolución" que apunta al visor con parámetros: `/salidas/normativa?pagina=13&buscar=<frase>`.
   El mapeo está en `Salidas/advertencias_normativa.json` (24 mensajes de formulario, ~18 con
   referencia específica a página + frase de resaltado).
-- **Botón en header del formulario**: "📄 Ver Resolución 3871/24 completa" abre el visor en
-  pestaña nueva (sin params de búsqueda — muestra todas las páginas).
+- **Botones en el header del formulario** (`{% block header_acciones %}` en `formulario.html`):
+  "📄 RES." abre el visor en pestaña nueva (sin params de búsqueda — muestra todas las
+  páginas); "📖 INSTR." abre `/salidas/instructivo` (el PDF de instrucciones que vive en la
+  raíz del repo, servido por esa ruta en `salidas.py`).
 - **Link en detalle** (`detalle.html`, línea 27): la nota sobre firma original apunta a
   `/salidas/normativa?pagina=16` (sección 10: "Instructivo para completar los anexos").
 

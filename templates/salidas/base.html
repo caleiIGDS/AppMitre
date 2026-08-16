@@ -10,6 +10,7 @@
     {# El ☰ y su panel lateral: menú de áreas siempre, y en celular además el nav
        y las acciones del header. #}
     <script src="{{ url_for('static', filename='mobile-nav.js') }}?v=2" defer></script>
+    {% block estilos %}{% endblock %}
 </head>
 <body>
     <div class="g-bg">
@@ -22,12 +23,17 @@
                         <p>Salidas Educativas</p>
                     </div>
                 </div>
-                {# Saltar a otra área es el ☰ (bloque `.g-areas` al final del body). #}
+                {# Saltar a otra área es el ☰ (bloque `.g-areas` al final del body).
+                   Cada página puede reemplazar estas acciones por las suyas —
+                   así el header sigue siendo uno solo (`g-header`/`g-btn*`)
+                   aunque la lista de botones cambie según la pantalla. #}
                 <div class="g-header-actions">
+                    {% block header_acciones %}
                     <a class="g-btn-outline" href="/">‹ SISTEMA DE HORARIOS</a>
                     {% if puede('agente.leer') %}
                     <button id="agente-toggle-btn" class="g-btn-outline" title="Abrir asistente" style="cursor: pointer;">🤖 ASISTENTE</button>
                     {% endif %}
+                    {% endblock %}
                 </div>
             </div>
         </header>
@@ -71,5 +77,6 @@
     {% endif %}
 
     {% if puede('agente.leer') %}{% include 'agente/_agente_widget.html' %}{% endif %}
+    {% block scripts %}{% endblock %}
 </body>
 </html>

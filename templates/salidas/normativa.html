@@ -106,9 +106,11 @@
 
     <div id="container" class="loading">Cargando PDF...</div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    <script type="module">
+        // Importar pdf.js localmente (versión 4.6.82 de pdfjs-dist)
+        import * as pdfjsLib from '{{ url_for("static", filename="vendor/pdfjs/pdf.min.mjs") }}';
+
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '{{ url_for("static", filename="vendor/pdfjs/pdf.worker.min.mjs") }}';
 
         let pdfDoc = null;
         let pageCanvases = [];
@@ -170,7 +172,7 @@
             }
         }
 
-        async function buscar() {
+        window.buscar = async function() {
             const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
             if (!searchTerm) return;
 
@@ -183,13 +185,14 @@
             for (const { pageNum, page, canvas, viewport } of pageCanvases) {
                 try {
                     const textContent = await page.getTextContent();
-                    const items = textContent.items;
+                    const items = textContent.items.filter(item => item.str && item.str.trim());
 
+                    // Rastrear posición de cada item en el texto concatenado (con espacios)
                     let pageText = '';
-                    const itemsByPage = [];
+                    const itemOffsets = [];
                     for (const item of items) {
-                        pageText += item.str.toLowerCase();
-                        itemsByPage.push(item);
+                        itemOffsets.push({ start: pageText.length, item });
+                        pageText += item.str.toLowerCase() + ' '; // Agregar espacio entre items
                     }
 
                     const searchIndex = pageText.indexOf(searchTerm);
@@ -199,39 +202,53 @@
                             scrollToPage(pageNum);
                         }
 
-                        // Buscar los items que forman la frase
-                        let charCount = 0;
-                        const startIdx = searchIndex;
+                        // Mapear la coincidencia de vuelta a los items reales
                         const endIdx = searchIndex + searchTerm.length;
                         let resaltarDesde = null;
                         let resaltarHasta = null;
 
-                        for (let i = 0; i < itemsByPage.length; i++) {
-                            const item = itemsByPage[i];
-                            const itemStart = charCount;
-                            const itemEnd = charCount + (item.str || '').length;
+                        for (let i = 0; i < itemOffsets.length; i++) {
+                            const offset = itemOffsets[i];
+                            const itemStart = offset.start;
+                            const itemEnd = itemStart + offset.item.str.length;
 
-                            if (itemStart < endIdx && itemEnd > startIdx) {
+                            if (itemStart < endIdx && itemEnd > searchIndex) {
                                 if (resaltarDesde === null) resaltarDesde = i;
                                 resaltarHasta = i;
                             }
-
-                            charCount += (item.str || '').length;
                         }
 
                         // Dibujar resaltado en amarillo
                         if (resaltarDesde !== null) {
                             const ctx = canvas.getContext('2d');
+                            const scale = viewport.scale;
+                            const [x0, y0, x1, y1] = viewport.viewBox;
+
                             for (let i = resaltarDesde; i <= resaltarHasta; i++) {
-                                const item = itemsByPage[i];
-                                if (item.transform) {
-                                    const x = item.transform[4];
-                                    const y = viewport.height - item.transform[5];
-                                    const width = item.width || 50;
-                                    const height = item.height || 15;
+                                const item = itemOffsets[i].item;
+                                if (item.transform && item.transform.length >= 6) {
+                                    // item.transform = [a, b, c, d, e, f] — matriz de transformación
+                                    const pdfX = item.transform[4];
+                                    const pdfY = item.transform[5];
+                                    const scaleY = Math.abs(item.transform[3]);
+
+                                    // Transformar coordenadas PDF → canvas
+                                    const canvasX = (pdfX - x0) * scale;
+                                    const canvasY = (y1 - pdfY) * scale;
+
+                                    // Altura: usar scaleY (tamaño de fuente escalado)
+                                    const height = scaleY * scale;
+
+                                    // Ancho: estimar de caracteres
+                                    const charWidth = height * 0.5;
+                                    const width = Math.max(8, (item.str || '').length * charWidth);
 
                                     ctx.fillStyle = 'rgba(255, 193, 7, 0.4)';
-                                    ctx.fillRect(x, y - height, width, height);
+                                    ctx.strokeStyle = 'rgba(255, 193, 7, 0.7)';
+                                    ctx.lineWidth = 1;
+                                    // Posicionar el rectángulo: canvasY es la línea base, restar height para ir arriba
+                                    ctx.fillRect(canvasX, canvasY - height, width, height);
+                                    ctx.strokeRect(canvasX, canvasY - height, width, height);
                                 }
                             }
                         }
@@ -244,16 +261,17 @@
             if (!encontrado) {
                 alert(`"${searchTerm}" no encontrado en el PDF.`);
             }
-        }
+        };
 
-        function scrollToPage(pageNum) {
+        window.scrollToPage = function(pageNum) {
             const element = document.getElementById(`page-${pageNum}`);
             if (element) {
-                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                // Scroll a la página, centrada en pantalla para evitar que el toolbar sticky la tape
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
-        }
+        };
 
-        function goToPage() {
+        window.goToPage = function() {
             const pageNum = parseInt(document.getElementById('goToPage').value);
             if (pageNum >= 1 && pageNum <= pdfDoc.numPages) {
                 scrollToPage(pageNum);
@@ -261,7 +279,7 @@
             } else {
                 alert(`Página inválida. Rango: 1-${pdfDoc.numPages}`);
             }
-        }
+        };
 
         document.getElementById('searchInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') buscar();

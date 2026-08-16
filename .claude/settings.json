@@ -44,10 +44,19 @@
       "Bash(powershell -Command \"Invoke-WebRequest http://127.0.0.1:5000/salidas/nueva -ErrorAction Stop | Select-Object -ExpandProperty StatusCode\")",
       "Bash(netstat -ano)",
       "PowerShell(Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue)",
-      "PowerShell(Stop-Process -Force -ErrorAction SilentlyContinue)"
+      "PowerShell(Stop-Process -Force -ErrorAction SilentlyContinue)",
+      "Bash(rm -f c:/Users/calei/projects/AppMitre/salidas.db && rm -rf c:/Users/calei/projects/AppMitre/salidas_pdfs/* && echo \"✓ Eliminadas todas las salidas\")",
+      "Bash(GESTION_SEED=1 python app.py)",
+      "PowerShell(Start-Sleep -Seconds 3; \\(Invoke-RestMethod \"http://127.0.0.1:5000/api/dashboard\" -ErrorAction SilentlyContinue | Measure-Object\\).Count)",
+      "PowerShell(Start-Process -NoNewWindow \"C:\\\\Program Files \\(x86\\)\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe\" -ArgumentList \"http://127.0.0.1:5000\")",
+      "PowerShell(Start-Process \"msedge\" \"http://127.0.0.1:5000/salidas/nueva\")",
+      "Bash(curl -s http://127.0.0.1:5000/salidas/nueva)",
+      "Bash(curl -s http://localhost:5000)",
+      "Bash(powershell -Command \"Start-Process 'http://localhost:5000'\")"
     ],
     "additionalDirectories": [
-      "C:\\Users\\calei\\projects\\AppMitre\\static\\vendor\\pdfjs\\build"
+      "C:\\Users\\calei\\projects\\AppMitre\\static\\vendor\\pdfjs\\build",
+      "c:\\Users\\calei\\projects\\AppMitre\\salidas_pdfs"
     ]
   }
 }

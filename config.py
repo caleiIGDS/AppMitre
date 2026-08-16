@@ -166,3 +166,78 @@ TURNO_CURSOS = {
     ("7", "5"): "VESPERTINO",
     ("7", "6"): "VESPERTINO",
 }
+
+# Especialidad por curso/división — clave: (str(curso), str(division))
+# CICLO BÁSICO: 1ro–3ro
+# Luego especialidades específicas según la carrera
+ESPECIALIDAD_CURSOS = {
+    # 1° Año — CICLO BÁSICO
+    ("1", "A"): "CICLO BÁSICO",
+    ("1", "B"): "CICLO BÁSICO",
+    ("1", "C"): "CICLO BÁSICO",
+    ("1", "D"): "CICLO BÁSICO",
+    ("1", "E"): "CICLO BÁSICO",
+    ("1", "F"): "CICLO BÁSICO",
+    ("1", "G"): "CICLO BÁSICO",
+    ("1", "H"): "CICLO BÁSICO",
+    ("1", "I"): "CICLO BÁSICO",
+    ("1", "J"): "CICLO BÁSICO",
+    ("1", "K"): "CICLO BÁSICO",
+    # 2° Año — CICLO BÁSICO
+    ("2", "A"): "CICLO BÁSICO",
+    ("2", "B"): "CICLO BÁSICO",
+    ("2", "C"): "CICLO BÁSICO",
+    ("2", "D"): "CICLO BÁSICO",
+    ("2", "E"): "CICLO BÁSICO",
+    ("2", "F"): "CICLO BÁSICO",
+    ("2", "G"): "CICLO BÁSICO",
+    ("2", "H"): "CICLO BÁSICO",
+    ("2", "I"): "CICLO BÁSICO",
+    ("2", "J"): "CICLO BÁSICO",
+    # 3° Año — CICLO BÁSICO
+    ("3", "A"): "CICLO BÁSICO",
+    ("3", "B"): "CICLO BÁSICO",
+    ("3", "C"): "CICLO BÁSICO",
+    ("3", "D"): "CICLO BÁSICO",
+    ("3", "E"): "CICLO BÁSICO",
+    ("3", "F"): "CICLO BÁSICO",
+    ("3", "G"): "CICLO BÁSICO",
+    ("3", "H"): "CICLO BÁSICO",
+    ("3", "I"): "CICLO BÁSICO",
+    ("3", "K"): "CICLO BÁSICO",
+    # 4° Año — ENERGÍAS RENOVABLES (9na, 8va) / ELECTROMECÁNICA
+    ("4", "1"): "ELECTROMECÁNICA",
+    ("4", "2"): "ELECTROMECÁNICA",
+    ("4", "3"): "ELECTROMECÁNICA",
+    ("4", "4"): "ELECTROMECÁNICA",
+    ("4", "5"): "ELECTROMECÁNICA",
+    ("4", "6"): "ELECTROMECÁNICA",
+    ("4", "7"): "ELECTROMECÁNICA",
+    ("4", "8"): "ENERGÍAS RENOVABLES",
+    ("4", "9"): "ENERGÍAS RENOVABLES",
+    # 5° Año — ENERGÍAS RENOVABLES (5ta, 8va) / MAESTRO MAYOR DE OBRA
+    ("5", "1"): "MAESTRO MAYOR DE OBRA",
+    ("5", "2"): "MAESTRO MAYOR DE OBRA",
+    ("5", "3"): "MAESTRO MAYOR DE OBRA",
+    ("5", "4"): "MAESTRO MAYOR DE OBRA",
+    ("5", "5"): "ENERGÍAS RENOVABLES",
+    ("5", "6"): "MAESTRO MAYOR DE OBRA",
+    ("5", "7"): "MAESTRO MAYOR DE OBRA",
+    ("5", "8"): "ENERGÍAS RENOVABLES",
+    # 6° Año — ENERGÍAS RENOVABLES (5ta, 8va) / MAESTRO MAYOR DE OBRA
+    ("6", "1"): "MAESTRO MAYOR DE OBRA",
+    ("6", "2"): "MAESTRO MAYOR DE OBRA",
+    ("6", "3"): "MAESTRO MAYOR DE OBRA",
+    ("6", "4"): "MAESTRO MAYOR DE OBRA",
+    ("6", "5"): "ENERGÍAS RENOVABLES",
+    ("6", "6"): "MAESTRO MAYOR DE OBRA",
+    ("6", "7"): "MAESTRO MAYOR DE OBRA",
+    ("6", "8"): "ENERGÍAS RENOVABLES",
+    # 7° Año — ENERGÍAS RENOVABLES (4ta, 6ta) / MAESTRO MAYOR DE OBRA
+    ("7", "1"): "MAESTRO MAYOR DE OBRA",
+    ("7", "2"): "MAESTRO MAYOR DE OBRA",
+    ("7", "3"): "MAESTRO MAYOR DE OBRA",
+    ("7", "4"): "ENERGÍAS RENOVABLES",
+    ("7", "5"): "MAESTRO MAYOR DE OBRA",
+    ("7", "6"): "ENERGÍAS RENOVABLES",
+}

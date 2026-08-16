@@ -1,0 +1,125 @@
+CAMPOS OPERACIONALES (SIN REFERENCIA NORMATIVA EXPLÍCITA)
+========================================================
+
+COMUNES — Datos administrativos de institución (operacionales):
+- COMUN.numero_institucion
+- COMUN.cue
+- COMUN.region
+- COMUN.distrito
+- COMUN.domicilio
+- COMUN.telefono
+- COMUN.director
+- COMUN.representante_legal
+- COMUN.entidad_propietaria
+
+COMUNES — Datos de destino (operacionales):
+- COMUN.lugar_a_visitar
+- COMUN.localidad_salida
+- COMUN.lugar_salida
+- COMUN.fecha_regreso
+- COMUN.hora_regreso
+- COMUN.lugar_regreso
+- COMUN.tipo_salida (puede tener referencia en la Res sobre tipos de salida)
+
+ANEXO III — Datos personales del estudiante:
+- III.nombre_estudiante
+- III.dni_estudiante
+- III.anio_curso
+- III.seccion_curso
+
+ANEXO IV — Campos operacionales:
+- IV.observaciones_fechas (operacional)
+- IV.cantidad_alumnos (calculado, pero base puede estar en la Res — ESPERAR)
+- IV.cantidad_docentes_acompanantes (calculado, pero base puede estar en la Res — ESPERAR)
+- IV.hospedaje_nombre
+- IV.hospedaje_telefono
+- IV.hospedaje_domicilio
+- IV.hospedaje_localidad
+
+ANEXO VI — Datos personales del estudiante:
+- VI.nombre_estudiante
+- VI.dni_estudiante
+- VI.dias_salida (calculado)
+- VI.mes_salida (calculado)
+
+ANEXO VI — Datos informativos de la salida:
+- VI.lugares_estadia (hospedaje, operacional)
+- VI.nombres_telefonos_acompanantes (operacional)
+- VI.empresas_contratadas (operacional)
+- VI.infraestructura_disponible (operacional)
+- VI.otros_datos_interes (operacional)
+
+ANEXO VI — Contacto en urgencia (puede tener referencia — ESPERAR):
+- VI.indicaciones_salud
+- VI.tiene_obra_social
+- VI.nombre_obra_social
+- VI.numero_socio
+- VI.telefonos_urgencia
+
+ANEXO VII — Datos personales:
+- VII.nombre_estudiante
+- VII.dni_estudiante
+- VII.domicilio
+- VII.localidad
+- VII.dias_salida (calculado)
+- VII.mes_salida (calculado)
+- VII.anio_salida (calculado)
+
+ANEXO VII — Indicaciones (pueden tener referencia — ESPERAR):
+- VII.indicaciones_salud
+- VII.tiene_obra_social
+- VII.nombre_obra_social
+- VII.numero_socio
+- VII.telefonos_urgencia
+
+ANEXO VIII — Datos de contacto administrativo:
+- VIII.nombre_gerente_responsable
+- VIII.domicilio_propietario_empresa
+- VIII.telefono_propietario_empresa
+- VIII.domicilio_gerente_responsable
+- VIII.telefono
+- VIII.telefono_movil
+
+ANEXO VIII — Datos que PUEDEN tener referencia (ESPERAR):
+- VIII.titularidad_vehiculo
+- VIII.compania_aseguradora (del transporte, no del escolar)
+- VIII.numero_poliza (del transporte)
+- VIII.tipo_seguro (del transporte)
+- VIII.dni_conductor
+- VIII.numero_carnet_conducir
+- VIII.adjunto_constancia_habilitaciones
+- VIII.adjunto_carnet_conductor
+- VIII.adjunto_dni_conductor
+
+ANEXO IX — Datos administrativos:
+- IX.representante_legal
+- IX.entidad_propietaria
+- IX.compania_aseguradora (del escolar — YA CUBIERTO con IX.tipo_seguro)
+- IX.numero_poliza (del escolar — YA CUBIERTO)
+- IX.vigencia_poliza (del escolar — YA CUBIERTO)
+- IX.observaciones
+
+CAMPOS QUE PUEDEN TENER REFERENCIA — ESPERANDO AGENTE:
+- IV.objetivos_salida (Diseño Curricular)
+- IV.cronograma_diario (distribución jornada)
+- IV.gastos_estimativos (presupuesto)
+- IV.autoridad_que_completo
+- VI.hospitales_cercanos (información obligatoria)
+- VI.indicaciones_salud
+- VI.tiene_obra_social
+- VI.nombre_obra_social
+- VI.numero_socio
+- VI.telefonos_urgencia
+- VII.indicaciones_salud
+- VII.tiene_obra_social
+- VII.nombre_obra_social
+- VII.numero_socio
+- VII.telefonos_urgencia
+- VIII.titularidad_vehiculo
+- VIII.compania_aseguradora
+- VIII.numero_poliza
+- VIII.tipo_seguro
+- VIII.dni_conductor
+- VIII.numero_carnet_conducir
+- VIII.adjunto_*
+- IX.observaciones

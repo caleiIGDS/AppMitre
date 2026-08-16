@@ -100,6 +100,25 @@ y se usa para generar links al visor de la Resolución. Cada objeto del array ti
 **Nota**: el `mensaje` es una copia manual del texto de `formulario.html`; si se edita una
 ayuda ahí, debe actualizarse también en este JSON para mantener sincronía.
 
+## Auditoría de referencias normativas (2026-08-15)
+
+Se realizó una auditoría exhaustiva de todos los ~135 campos del formulario de salidas educativas
+para verificar que cada mensaje informativo/advertencia tuviera una referencia normativa explícita
+o fuera categorizado como operacional. **Resultados:**
+
+- **45 campos CON referencia normativa** (notas de anexos, avisos generales, campos exigidos
+  por la Resolución 3871/24 o normas correlacionadas). Cada uno lista la página del PDF y la
+  frase exacta a resaltar.
+- **89 campos operacionales SIN referencia normativa** (datos personales de estudiantes, datos
+  administrativos de institución, contactos, campos descriptivos/informativos). Estos llevan
+  `referencia_normativa: null` — no necesitan sustento normativo porque son instrucciones
+  operacionales para el usuario.
+- **1 campo FUERA DE ALCANCE**: `VI.hospitales_cercanos` — existe en el formulario pero no se
+  encontró cita explícita en el texto de la Resolución. Está anotado con ⚠️ en el JSON.
+
+La búsqueda fue manual + automatizada usando el PDF. **Ver `advertencias_normativa.json`
+para el listado completo con páginas y frases de resaltado.**
+
 ## Archivos
 
 | Archivo | Anexo | Quién lo completa (general) |

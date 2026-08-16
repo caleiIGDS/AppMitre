@@ -1,0 +1,128 @@
+ANÁLISIS: Campos del formulario vs. referencias normativas en JSON
+
+CAMPOS CON REFERENCIAS NORMATIVAS EN EL JSON (24 entradas): ✓
+=============================================================
+- AVISO_GENERAL
+- ANEXO_III.NOTA
+- ANEXO_IV.NOTA
+- ANEXO_V.NOTA
+- ANEXO_VI.NOTA
+- ANEXO_VII.NOTA
+- ANEXO_VIII.NOTA
+- ANEXO_IX.NOTA
+- COMUN.denominacion_proyecto (pág 6)
+- COMUN.fecha_salida (pág 19)
+- COMUN.hora_salida (pág 15)
+- COMUN.tipo_gestion (pág 17)
+- IV.itinerario (pág 13)
+- IV.actividades (pág 9)
+- IV.cantidad_no_docentes_acompanantes (pág 9)
+- IV.total_personas (pág 13)
+- V.observaciones (pág 11)
+- VIII.nombre_empresa (pág 4)
+- VIII.habilitacion_vehiculo (pág 12)
+- VIII.nombre_conductor (pág 16)
+- IX.tipo_seguro (pág 2 — art. 1767)
+- PERSONAS.RATIO (pág 7)
+- ANEXO_IV.ESPEJO_DOCENTES (pág 9)
+- DETALLE.FIRMA_ORIGINAL (pág 16)
+
+CAMPOS SIN REFERENCIAS NORMATIVAS EN EL JSON — NECESITAN ANÁLISIS:
+==================================================================
+
+COMUNES (Datos fijos de institución y salida):
+- COMUN.numero_institucion — "Número con el que se identifica la escuela ante la DGCyE"
+- COMUN.cue — "Código Único de Establecimiento"
+- COMUN.region — "Región educativa a la que pertenece el distrito"
+- COMUN.distrito — "Distrito escolar del establecimiento"
+- COMUN.domicilio — "Dirección del establecimiento"
+- COMUN.telefono — "Teléfono de contacto del establecimiento"
+- COMUN.director — "Apellido y nombre de quien firma la Declaración Jurada del Anexo IX"
+- COMUN.representante_legal — "Representante Legal (DIEGEP) — gestión privada"
+- COMUN.entidad_propietaria — "Entidad propietaria (DIEGEP) — gestión privada"
+- COMUN.lugar_a_visitar — "Consignar dirección, localidad y distrito del destino"
+- COMUN.localidad_salida — "Sólo la localidad del destino"
+- COMUN.lugar_salida — "Punto de encuentro desde donde parte el grupo"
+- COMUN.fecha_regreso — "Día de vuelta"
+- COMUN.hora_regreso — "Horario estimado de llegada"
+- COMUN.lugar_regreso — "Dónde se entrega el grupo"
+- COMUN.tipo_salida — "Educativa o de representación institucional"
+
+ANEXO III (Autorización general del ciclo lectivo):
+- III.nombre_estudiante — "Estudiante autorizado/a"
+- III.dni_estudiante — "Documento del estudiante"
+- III.anio_curso — "Año que cursa"
+- III.seccion_curso — "División o sección del curso"
+
+ANEXO IV (Presentación de la salida):
+- IV.observaciones_fechas — "Fechas alternativas, reprogramaciones, etc."
+- IV.objetivos_salida — "Para qué se hace, en términos pedagógicos"
+- IV.cronograma_diario — "Distribución de la jornada hora por hora"
+- IV.cantidad_alumnos — "Se calcula solo desde la tabla de Personas"
+- IV.cantidad_docentes_acompanantes — "Se calcula solo desde la tabla de Personas"
+- IV.hospedaje_nombre — "Nombre del alojamiento"
+- IV.hospedaje_telefono — "Teléfono del alojamiento"
+- IV.hospedaje_domicilio — "Dirección del alojamiento"
+- IV.hospedaje_localidad — "Localidad del alojamiento"
+- IV.gastos_estimativos — "Cuánto sale y de dónde sale la plata"
+- IV.autoridad_que_completo — "Autoridad que completó el formulario"
+
+ANEXO VI (Planilla informativa y autorización de la familia):
+- VI.lugares_estadia — "Datos de hospedaje para que familia ubique al estudiante"
+- VI.nombres_telefonos_acompanantes — "Quiénes van a cargo y cómo ubicarlos"
+- VI.empresas_contratadas — "Datos de empresas contratadas"
+- VI.infraestructura_disponible — "Baños, comedor, enfermería, etc."
+- VI.hospitales_cercanos — "Direcciones y teléfonos de centros de salud"
+- VI.otros_datos_interes — "Qué llevar, vianda, ropa, costo, etc."
+- VI.nombre_estudiante — "Nombre del hijo/a"
+- VI.dni_estudiante — "DNI del hijo/a"
+- VI.dias_salida — "Se calcula solo desde fecha de salida"
+- VI.mes_salida — "Se calcula solo desde fecha de salida"
+- VI.indicaciones_salud — "Alergias, medicación, condiciones"
+- VI.tiene_obra_social — "¿Tiene obra social o prepaga?"
+- VI.nombre_obra_social — "Nombre de la obra social"
+- VI.numero_socio — "Número de afiliado"
+- VI.telefonos_urgencia — "Teléfonos de contacto en caso de urgencia"
+
+ANEXO VII (Declaración jurada — estudiante mayor de 18 años):
+- VII.nombre_estudiante — "Nombre y apellido"
+- VII.dni_estudiante — "Documento"
+- VII.domicilio — "Domicilio particular del estudiante"
+- VII.localidad — "Localidad de domicilio"
+- VII.dias_salida — "Se calcula solo desde fecha de salida"
+- VII.mes_salida — "Se calcula solo desde fecha de salida"
+- VII.anio_salida — "Se calcula solo desde fecha de salida"
+- VII.indicaciones_salud — "Alergias, medicación, condiciones"
+- VII.tiene_obra_social — "¿Tiene obra social o prepaga?"
+- VII.nombre_obra_social — "Nombre de la obra social"
+- VII.numero_socio — "Número de afiliado"
+- VII.telefonos_urgencia — "Teléfonos de contacto"
+
+ANEXO VIII (Informe del transporte a contratar):
+- VIII.nombre_gerente_responsable — "Persona responsable de la empresa"
+- VIII.domicilio_propietario_empresa — "Dirección legal de la empresa"
+- VIII.telefono_propietario_empresa — "Teléfono de la empresa"
+- VIII.domicilio_gerente_responsable — "Domicilio de la persona responsable"
+- VIII.telefono — "Teléfono fijo de contacto"
+- VIII.telefono_movil — "Celular de contacto"
+- VIII.titularidad_vehiculo — "Tipo de vehículo y a nombre de quién está"
+- VIII.compania_aseguradora — "Aseguradora de la empresa de transporte"
+- VIII.numero_poliza — "Número de póliza del transporte"
+- VIII.tipo_seguro — "Cobertura contratada por la empresa"
+- VIII.dni_conductor — "Documento de cada conductor"
+- VIII.numero_carnet_conducir — "Número de carnet y vigencia"
+- VIII.adjunto_constancia_habilitaciones — "¿Fotocopia adjuntada?"
+- VIII.adjunto_carnet_conductor — "¿Fotocopia adjuntada?"
+- VIII.adjunto_dni_conductor — "¿Fotocopia adjuntada?"
+
+ANEXO IX (Declaración jurada de directivos):
+- IX.representante_legal — "RL (DIEGEP) — gestión privada"
+- IX.entidad_propietaria — "Entidad propietaria — gestión privada"
+- IX.compania_aseguradora — "Aseguradora del seguro escolar"
+- IX.numero_poliza — "Número de póliza del seguro escolar"
+- IX.vigencia_poliza — "Período de vigencia"
+- IX.observaciones — "Observaciones, ampliaciones, etc."
+
+TOTAL:
+- Con referencia normativa: 24 ✓
+- Sin referencia normativa: 88 ⚠️ (NECESITAN ANÁLISIS)

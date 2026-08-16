@@ -554,23 +554,41 @@ function filtrarOpciones(input, modo) {
     }
 
     let matches = [];
+    let items = rawData[modo] || [];
+
+    // Para cursos: convertir objetos {valor, display} a items normalizables
+    const isCursoMode = modo === 'curso' && items.length > 0 && typeof items[0] === 'object';
+
     if (query.length === 0) {
-        matches = rawData[modo];
+        matches = items;
     } else {
-        const allMatches = rawData[modo].filter(item => normalize(item).includes(normalizedQuery));
+        const allMatches = items.filter(item => {
+            const searchText = isCursoMode ? item.display : item;
+            return normalize(searchText).includes(normalizedQuery);
+        });
         matches = allMatches.sort((a, b) => {
-            const normA = normalize(a);
-            const normB = normalize(b);
+            const textA = isCursoMode ? a.display : a;
+            const textB = isCursoMode ? b.display : b;
+            const normA = normalize(textA);
+            const normB = normalize(textB);
             const startsA = normA.startsWith(normalizedQuery);
             const startsB = normB.startsWith(normalizedQuery);
             if (startsA && !startsB) return -1;
             if (!startsA && startsB) return 1;
-            return a.localeCompare(b);
+            return textA.localeCompare(textB);
         });
     }
 
     if (matches.length > 0) {
-        dropdown.innerHTML = matches.map(item => `<div class="dropdown-item" onclick="seleccionarOpcion('${item.replace(/'/g, "\\'")}', '${modo}')">${item}</div>`).join('');
+        if (isCursoMode) {
+            dropdown.innerHTML = matches.map(item =>
+                `<div class="dropdown-item" onclick="seleccionarOpcion('${item.valor.replace(/'/g, "\\'")}', '${modo}')">${item.display}</div>`
+            ).join('');
+        } else {
+            dropdown.innerHTML = matches.map(item =>
+                `<div class="dropdown-item" onclick="seleccionarOpcion('${item.replace(/'/g, "\\'")}', '${modo}')">${item}</div>`
+            ).join('');
+        }
         dropdown.style.display = 'block';
     } else {
         dropdown.style.display = 'none';
@@ -578,7 +596,8 @@ function filtrarOpciones(input, modo) {
 
     input.onkeydown = (e) => {
         if (e.key === 'Enter' && matches.length > 0) {
-            seleccionarOpcion(matches[0], modo);
+            const valor = isCursoMode ? matches[0].valor : matches[0];
+            seleccionarOpcion(valor, modo);
             input.blur();
         }
     };
@@ -1461,9 +1480,11 @@ function abrirModalImprimirCursos() {
     const cursos = rawData['curso'] || [];
     const porAnio = {};
     cursos.forEach(c => {
-        const anio = c.split('°')[0].trim();
+        const valor = typeof c === 'object' ? c.valor : c;
+        const display = typeof c === 'object' ? c.display : c;
+        const anio = valor.split('°')[0].trim();
         if (!porAnio[anio]) porAnio[anio] = [];
-        porAnio[anio].push(c);
+        porAnio[anio].push({ valor, display });
     });
 
     let html = `<div class="print-cursos-selector">
@@ -1473,7 +1494,7 @@ function abrirModalImprimirCursos() {
         html += `<div class="print-cursos-fila">
             <button class="print-anio-btn" data-anio="${anio}" onclick="togglePrintAnio('${anio}')">TODO ${anio}°</button>
             <div class="print-cursos-chips">
-                ${porAnio[anio].map(c => `<button class="print-curso-chip" data-curso="${c}" onclick="togglePrintCurso('${c}')">${c.replace('° ', '°')}</button>`).join('')}
+                ${porAnio[anio].map(c => `<button class="print-curso-chip" data-curso="${c.valor}" onclick="togglePrintCurso('${c.valor}')">${c.valor.replace('° ', '°')}</button>`).join('')}
             </div>
         </div>`;
     });
@@ -1494,21 +1515,22 @@ function togglePrintCurso(valor) {
 }
 
 function togglePrintAnio(anio) {
-    const cursosAnio = (rawData['curso'] || []).filter(c => c.split('°')[0].trim() === anio);
+    const cursos = (rawData['curso'] || []).map(c => typeof c === 'object' ? c.valor : c);
+    const cursosAnio = cursos.filter(c => c.split('°')[0].trim() === anio);
     const todosMarcados = cursosAnio.length > 0 && cursosAnio.every(c => cursosSeleccionadosPDF.has(c));
     cursosAnio.forEach(c => todosMarcados ? cursosSeleccionadosPDF.delete(c) : cursosSeleccionadosPDF.add(c));
     actualizarSeleccionImpresion();
 }
 
 function togglePrintTodos() {
-    const cursos = rawData['curso'] || [];
+    const cursos = (rawData['curso'] || []).map(c => typeof c === 'object' ? c.valor : c);
     if (cursosSeleccionadosPDF.size === cursos.length) cursosSeleccionadosPDF.clear();
     else cursos.forEach(c => cursosSeleccionadosPDF.add(c));
     actualizarSeleccionImpresion();
 }
 
 function actualizarSeleccionImpresion() {
-    const cursos = rawData['curso'] || [];
+    const cursos = (rawData['curso'] || []).map(c => typeof c === 'object' ? c.valor : c);
     document.querySelectorAll('.print-curso-chip').forEach(chip => {
         chip.classList.toggle('selected', cursosSeleccionadosPDF.has(chip.dataset.curso));
     });
@@ -1525,12 +1547,12 @@ function actualizarSeleccionImpresion() {
 }
 
 function generarPDFCursosSeleccionados() {
-    const cursos = rawData['curso'] || [];
+    const cursos = (rawData['curso'] || []).map(c => typeof c === 'object' ? c.valor : c);
     if (cursosSeleccionadosPDF.size === 0) return;
     if (cursosSeleccionadosPDF.size === cursos.length) {
         window.open('/export/pdf/cursos/todos', '_blank');
     } else {
-        const lista = cursos.filter(c => cursosSeleccionadosPDF.has(c));
+        const lista = Array.from(cursosSeleccionadosPDF);
         window.open('/export/pdf/cursos/' + encodeURIComponent(lista.join(',')), '_blank');
     }
     cerrarModal();

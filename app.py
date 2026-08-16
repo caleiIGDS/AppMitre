@@ -22,7 +22,7 @@ PERMISOS = [
     ('horarios.actualizar', 'Regenerar los horarios desde Google Sheets', 'admin'),
 ]
 GRUPO_PERMISOS = 'Horarios'
-from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS, TURNO_CURSOS, TURNO_DEFAULT, ahora, PRODUCCION, SESION_DIAS
+from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS, TURNO_CURSOS, TURNO_DEFAULT, ESPECIALIDAD_CURSOS, ahora, PRODUCCION, SESION_DIAS
 from fpdf import FPDF
 import io
 from database import obtener_filas
@@ -89,7 +89,14 @@ def index():
     cur.execute("SELECT DISTINCT aula FROM clases WHERE aula != '' ORDER BY aula")
     aulas = [r[0] for r in cur.fetchall()]
     cur.execute("SELECT DISTINCT curso, division FROM clases WHERE curso != '' ORDER BY curso, division")
-    cursos = [f"{r[0]}° {r[1]}" for r in cur.fetchall()]
+    cursos = []
+    for r in cur.fetchall():
+        curso_str = r[0]
+        div_str = r[1]
+        valor = f"{curso_str}° {div_str}"
+        especialidad = ESPECIALIDAD_CURSOS.get((curso_str, div_str), "ESPECIALIDAD")
+        display = f"{valor} ({especialidad})"
+        cursos.append({'valor': valor, 'display': display})
     
     preceptores_horario = database.obtener_lista_preceptores_horario()
     personal = database.obtener_lista_personal()

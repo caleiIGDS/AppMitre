@@ -225,7 +225,9 @@ def _texto_valor(campo, valor):
         return 'X' if valor else ''
     if campo['tipo'] == 'date':
         return _iso_a_dd_mm_yyyy(str(valor))
-    return str(valor)
+    text = str(valor)
+    text = text.replace('—', ' - ')  # em dash → hyphen (helvetica no soporta Unicode)
+    return text
 
 
 # Los AnexoN.json agrupan campos con una clave corta (`seccion`) para uso interno del
@@ -435,7 +437,20 @@ def _dibujar_textarea(pdf, campo, valores, anexo):
     # completar en ese lugar" a mano, no un campo que simplemente queda vacío como los de
     # firma/lugar-y-fecha (ahí no hace falta renglón porque son una sola línea corta).
     negrita = anexo in ANEXOS_LABEL_NEGRITA
-    texto_valor = _texto_valor(campo, valores.get(campo['id']))
+    # Caso especial: nombres_telefonos_acompanantes tiene versión "texto" generada en el frontend
+    valor_raw = valores.get(campo['id'])
+    if campo['id'] == 'nombres_telefonos_acompanantes':
+        if campo['id'] + '_texto' in valores:
+            # Versión "texto" generada en el frontend
+            texto_valor = valores.get(campo['id'] + '_texto', '')
+        elif isinstance(valor_raw, dict):
+            # Versión diccionario — convertir a formato texto (compatibilidad)
+            lineas = [f"{k} — {v}" if v else k for k, v in valor_raw.items()]
+            texto_valor = '\n'.join(lineas)
+        else:
+            texto_valor = _texto_valor(campo, valor_raw)
+    else:
+        texto_valor = _texto_valor(campo, valor_raw)
     nota = campo.get('notas') if campo['id'] in NOTAS_A_IMPRIMIR.get(anexo, ()) else None
     label = _label_campo(campo, anexo)
     if nota and anexo in NOTAS_ANTES_DE_DOSPUNTOS:
@@ -448,7 +463,8 @@ def _dibujar_textarea(pdf, campo, valores, anexo):
         with _valor_destacado(pdf, TAM_TEXTO):
             pdf.multi_cell(0, ALTO_LINEA, texto_valor, align='L', new_x='LMARGIN', new_y='NEXT')
     else:
-        for _ in range(RENGLONES_TEXTAREA):
+        renglones = 1 if anexo == 'VI' else RENGLONES_TEXTAREA
+        for _ in range(renglones):
             pdf.cell(0, ALTO_LINEA, '', border='B', new_x='LMARGIN', new_y='NEXT')
     pdf.ln(2)
 
@@ -838,7 +854,13 @@ def regenerar_pdfs(id):
     con.close()
     if fila is None:
         abort(404)
-    anexos = json.loads(fila['datos_json']).get('anexos') or {}
+    datos = json.loads(fila['datos_json'])
+    anexos = datos.get('anexos') or {}
+    datos_comunes = datos.get('datos_comunes') or {}
+    # Replicar datos_comunes en cada anexo, igual que en api_guardar
+    for anexo in anexos.values():
+        if isinstance(anexo, dict):
+            anexo.update(datos_comunes)
     _generar_pdfs(id, anexos)
     return redirect(url_for('salidas.detalle', id=id))
 
@@ -848,6 +870,13 @@ _RE_ANEXO_IX_EXTRA = re.compile(r'^IX_(\d+)$')
 
 @bp.route('/<int:id>/pdf/<anexo>')
 def ver_pdf(id, anexo):
+    con = conectar()
+    cur = con.cursor()
+    fila = cur.execute("SELECT nombre_proyecto FROM salidas WHERE id = ?", (id,)).fetchone()
+    con.close()
+    if fila is None:
+        abort(404)
+
     if anexo in ANEXOS_NUMEROS:
         ruta = _ruta_pdf(id, anexo)
     else:
@@ -860,5 +889,17 @@ def ver_pdf(id, anexo):
         ruta = _ruta_pdf_ix_extra(id, int(m.group(1)))
     if not os.path.exists(ruta):
         abort(404)
+
+    nombre_proyecto = fila['nombre_proyecto'] or 'Salida'
+    nombre_archivo = f'{nombre_proyecto} - Anexo {anexo}.pdf'
     return send_file(ruta, mimetype='application/pdf', as_attachment=False,
-                     download_name=f'Anexo{anexo}_salida{id}.pdf')
+                     download_name=nombre_archivo)
+
+@bp.route('/instructivo')
+def instructivo():
+	"""Sirve el instructivo de salidas educativas."""
+	ruta = os.path.join(_AQUI, 'INSTRUCTIVO SALIDAS EDUCATIVAS.pdf')
+	if not os.path.exists(ruta):
+		abort(404)
+	return send_file(ruta, mimetype='application/pdf', as_attachment=False,
+	                 download_name='Instructivo_Salidas_Educativas.pdf')

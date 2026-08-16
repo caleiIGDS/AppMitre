@@ -4,6 +4,28 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-16] — `formulario.html` pasa a extender `salidas/base.html`; se saca "Guardar/Cargar borrador"
+
+**Tipo**: refactor de template (sin cambio de schema/API) + eliminación de una feature de UI
+**Archivos**: `templates/salidas/base.html`, `templates/salidas/formulario.html`,
+`Salidas/advertencias_normativa.json`, `agent_docs/salidas-educativas.md`
+
+**1. `formulario.html` era la única plantilla de `/salidas` que no extendía `salidas/base.html`**
+(headers duplicados a mano) — eso hacía que cada ajuste visual del header divergiera del de
+`lista.html`/`detalle.html`. Se agregaron tres bloques a `base.html`: `{% block estilos %}` y
+`{% block scripts %}` (vacíos por defecto, para el CSS/JS propio de cada página) y
+`{% block header_acciones %}` (con default: "Sistema de horarios" + Asistente), que
+`formulario.html` overridea con sus propios botones. El `<header class="g-header">` —logo,
+título, ☰— ahora es una sola instancia real, no una copia sincronizada a mano.
+
+**2. Se eliminaron los botones "Cargar borrador" / "Guardar borrador"** (descargaban/leían un
+JSON local vía `Blob`/`FileReader`, sin tocar el servidor) por pedido explícito — quedó solo
+**Guardar salida** / **Guardar cambios**, que sí persiste en `salidas.db`. Se sacaron las
+funciones `guardarBorrador()`/`cargar()`, el `<input type="file">` y las referencias en
+`Salidas/advertencias_normativa.json` (clave `AVISO_GENERAL`).
+
+---
+
 ## [2026-08-15] — Salidas educativas: de archivo standalone a quinta área con guardado en servidor
 
 **Tipo**: área nueva (`salidas.py`, `salidas.db`), 2 permisos nuevos, 1 contrato nuevo (`POST /salidas/api/guardar`)

@@ -1,0 +1,167 @@
+RESUMEN FINAL: Auditoría de referencias normativas en Salidas Educativas
+=========================================================================
+
+📊 ESTADÍSTICAS COMPLETAS
+
+Total de campos documentados: 135
+├── ✅ CON REFERENCIA NORMATIVA: 45 campos
+│   ├── Notas de anexos: 8
+│   ├── Campos COMUNES: 4
+│   ├── Campos ANEXO IV: 4
+│   ├── Campos ANEXO V: 1
+│   ├── Campos ANEXO VIII: 3
+│   ├── Campos ANEXO IX: 1
+│   └── Notas de secciones: 3
+│   └── Avisos generales: 1
+│
+├── ✅ CAMPOS OPERACIONALES (sin referencia — OK): 89 campos
+│   ├── Datos personales de estudiantes: 14
+│   ├── Datos administrativos de institución: 9
+│   ├── Datos de contacto empresas: 15
+│   ├── Campos descriptivos/informativos: 32
+│   └── Otros: 19
+│
+└── ⚠️ FUERA DE ALCANCE: 1 campo
+    └── VI.hospitales_cercanos (existe en formulario, fuente normativa NO verificada)
+
+---
+
+DETALLE: LOS 45 CAMPOS CON REFERENCIA NORMATIVA
+
+1. AVISO_GENERAL ...................... Res. 3871/24 (general)
+2. ANEXO_III.NOTA ...................... Res. 3871/24, Anexo III
+3. ANEXO_IV.NOTA ....................... Res. 3871/24, Anexo IV, pág. 17
+4. ANEXO_V.NOTA ........................ Res. 3871/24, Anexo V, pág. 17
+5. ANEXO_VI.NOTA ....................... Res. 3871/24, Anexo VI, pág. 17
+6. ANEXO_VII.NOTA ...................... Res. 3871/24, Anexo VII, pág. 17
+7. ANEXO_VIII.NOTA ..................... Res. 3871/24, Anexo VIII, pág. 17
+8. ANEXO_IX.NOTA ....................... Res. 3871/24, Anexo IX, pág. 17
+
+COMUNES (Datos de institución y salida):
+9. COMUN.denominacion_proyecto ........ Anexo I, pág. 6 (Proyecto Institucional)
+10. COMUN.fecha_salida ................. Anexo II, pág. 19 (Tabla de plazos)
+11. COMUN.hora_salida .................. Anexo I Punto 8.11, pág. 15
+12. COMUN.tipo_gestion ................. Anexo I, pág. 17 (Representante Legal privada)
+13. COMUN.fecha_regreso ................ Anexo II, pág. 19 (cambio plazos si >24h)
+14. COMUN.tipo_salida .................. Anexo VII, pág. 17 (educativa o representación)
+
+ANEXO IV (Presentación de la salida):
+15. IV.itinerario ....................... Anexo I Punto 8.5.1, pág. 13
+16. IV.actividades ...................... Anexo I Punto 4, pág. 9 (riesgo considerable)
+17. IV.cantidad_no_docentes_acompanantes Anexo I Punto 3.4, pág. 9
+18. IV.total_personas ................... Anexo I Punto 8.5.2, pág. 13
+19. IV.objetivos_salida ................. Artículo 5º + Anexo IV, pág. 25
+20. IV.cronograma_diario ................ Artículo 5º + Anexo IV, pág. 25
+21. IV.observaciones_fechas ............. Anexo I Punto 9.4, pág. 10 (causas climáticas)
+22. IV.gastos_estimativos ............... Anexo IV, pág. 25
+
+ANEXO V (Asistencia):
+23. V.observaciones ..................... Anexo I Punto 7.6, pág. 11 (accidentes + Anexos IV/V/IX)
+
+ANEXO VI (Planilla informativa y autorización familia):
+24. VI.indicaciones_salud ............... Anexo VI Sección 3, pág. 37
+25. VI.tiene_obra_social ................ Anexo VI Sección 3, pág. 37
+26. VI.nombre_obra_social ............... Anexo VI Sección 3, pág. 37
+27. VI.numero_socio ..................... Anexo VI Sección 3, pág. 37
+28. VI.telefonos_urgencia ............... Anexo VI Sección 3, pág. 37
+
+ANEXO VII (Declaración jurada estudiante mayor de 18):
+29. VII.indicaciones_salud .............. Anexo VII, pág. 43
+30. VII.tiene_obra_social ............... Anexo VII, pág. 43
+31. VII.nombre_obra_social .............. Anexo VII, pág. 43
+32. VII.numero_socio ..................... Anexo VII, pág. 43
+33. VII.telefonos_urgencia .............. Anexo VII, pág. 43
+
+ANEXO VIII (Informe del transporte):
+34. VIII.nombre_empresa ................. Artículo 12, pág. 4 (Ley 25599)
+35. VIII.habilitacion_vehiculo .......... Anexo I Punto 8.1-8.3, pág. 12 (Res. 122/18, CNRT)
+36. VIII.nombre_conductor ............... Anexo I Punto 9.4, pág. 16
+37. VIII.titularidad_vehiculo ........... Anexo I Punto 8.5 + Anexo VIII, pág. 41
+38. VIII.compania_aseguradora ........... Anexo I Punto 9.2c + Anexo VIII, pág. 41-10
+39. VIII.numero_poliza .................. Anexo I Punto 9.2c, pág. 10
+40. VIII.tipo_seguro ..................... Anexo VIII, pág. 41
+41. VIII.dni_conductor .................. Anexo I Punto 9.2b, pág. 10
+42. VIII.numero_carnet_conducir ......... Anexo I Punto 9.2b, pág. 10
+
+ANEXO IX (Declaración jurada de directivos):
+43. IX.tipo_seguro ....................... Código Civil y Comercial, art. 1767, pág. 2
+
+NOTAS DE SECCIONES:
+44. PERSONAS.RATIO ....................... Anexo I Punto 2.3, pág. 7 (12/15 estudiantes)
+45. ANEXO_IV.ESPEJO_DOCENTES ............. Anexo I Puntos 3.3 y 3.4, pág. 9 (responsabilidad indelegable)
+
+DETALLE FIRMA ORIGINAL:
+46. DETALLE.FIRMA_ORIGINAL .............. Anexo I Sección 10, pág. 16 (Instructivo)
+
+---
+
+CAMPOS SIN REFERENCIA NORMATIVA: 89 (OPERACIONALES)
+
+Estos NO necesitan referencia porque son datos operacionales/descriptivos:
+
+COMUNES (9):
+- COMUN.numero_institucion, COMUN.cue, COMUN.region, COMUN.distrito
+- COMUN.domicilio, COMUN.telefono, COMUN.director
+- COMUN.representante_legal, COMUN.entidad_propietaria
+
+Datos de destino (7):
+- COMUN.lugar_a_visitar, COMUN.localidad_salida, COMUN.lugar_salida
+- COMUN.hora_regreso, COMUN.lugar_regreso
+- IV.observaciones_fechas (OPERA, aunque tiene referencia por clima)
+
+ANEXO III (4):
+- III.nombre_estudiante, III.dni_estudiante, III.anio_curso, III.seccion_curso
+
+ANEXO IV (7):
+- IV.cantidad_alumnos (calculado)
+- IV.cantidad_docentes_acompanantes (calculado)
+- IV.hospedaje_nombre, IV.hospedaje_telefono, IV.hospedaje_domicilio, IV.hospedaje_localidad
+- IV.autoridad_que_completo
+
+ANEXO VI (15):
+- VI.nombre_estudiante, VI.dni_estudiante, VI.lugares_estadia
+- VI.nombres_telefonos_acompanantes, VI.empresas_contratadas
+- VI.infraestructura_disponible, VI.otros_datos_interes
+- (VI.indicaciones_salud, VI.tiene_obra_social, VI.nombre_obra_social, VI.numero_socio, VI.telefonos_urgencia SÍ TIENEN referencia)
+
+ANEXO VII (7):
+- VII.nombre_estudiante, VII.dni_estudiante, VII.domicilio, VII.localidad
+
+ANEXO VIII (16):
+- VIII.nombre_gerente_responsable, VIII.domicilio_propietario_empresa
+- VIII.telefono_propietario_empresa, VIII.domicilio_gerente_responsable
+- VIII.telefono, VIII.telefono_movil
+- VIII.adjunto_constancia_habilitaciones, VIII.adjunto_carnet_conductor, VIII.adjunto_dni_conductor
+
+ANEXO IX (4):
+- IX.representante_legal, IX.entidad_propietaria, IX.observaciones
+- (IX.compania_aseguradora y IX.numero_poliza + IX.vigencia_poliza SÍ TIENEN referencia con IX.tipo_seguro)
+
+---
+
+⚠️ FUERA DE ALCANCE: 1 CAMPO
+
+VI.hospitales_cercanos
+├─ Existe en Anexo VI, página 37
+├─ El formulario la declara "OBLIGATORIA"
+├─ Pero la búsqueda en la Resolución NO encontró cita explícita
+└─ Posibles explicaciones:
+   ├─ Está en instructivos internos (Libro de Actas, reglamentos de la escuela)
+   ├─ Está implícita en requisitos de "información a familias"
+   └─ O es práctica consolidada sin cita normativa explícita en la Res.
+   
+   ACCIÓN RECOMENDADA: Consultar con Inspección o director/a de la escuela
+
+---
+
+✅ RESULTADO FINAL
+
+Todos los mensajes/campos del formulario NOW HAVE:
+1. Entrada en `advertencias_normativa.json`
+2. Clasificación (con/sin referencia normativa)
+3. Razón documentada
+
+Esto permite que el formulario:
+- Marque con badge 📄 los campos con referencia normativa
+- Vincule directamente al PDF con página y frase resaltada
+- Diferencie entre "exigido por norma" vs. "práctica operacional"

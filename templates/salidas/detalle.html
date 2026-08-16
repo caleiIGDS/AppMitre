@@ -15,22 +15,19 @@
     </div>
 </div>
 
-<dl class="g-props">
-    <div class="g-prop"><dt>LUGAR A VISITAR</dt><dd>{{ datos_comunes.get('lugar_a_visitar') or '—' }}</dd></div>
-    <div class="g-prop"><dt>FECHA DE SALIDA</dt><dd>{{ datos_comunes.get('fecha_salida') or '—' }}</dd></div>
-    <div class="g-prop"><dt>FECHA DE REGRESO</dt><dd>{{ datos_comunes.get('fecha_regreso') or '—' }}</dd></div>
-    <div class="g-prop"><dt>GUARDADA</dt><dd>{{ fila['fecha_creacion'][:10] }}</dd></div>
-    <div class="g-prop"><dt>VIGENTE HASTA</dt><dd>{{ fila['vigencia_hasta'][:10] }}</dd></div>
+<dl class="g-props" style="display: flex; gap: 40px; padding: 12px 20px;">
+    <div class="g-prop" style="margin-bottom: 0;"><dt>LUGAR A VISITAR</dt><dd>{{ datos_comunes.get('lugar_a_visitar') or '—' }}</dd></div>
+    <div class="g-prop" style="margin-bottom: 0;"><dt>FECHA DE SALIDA</dt><dd>{{ datos_comunes.get('fecha_salida') or '—' }}</dd></div>
 </dl>
 
-<h3 class="g-section-title">ANEXOS EN PDF</h3>
-<p class="g-help">Se abren en una pestaña nueva del navegador. La Resolución exige firma original en varios de ellos — hay que imprimirlos y hacerlos firmar igual. <a href="{{ url_for('normativa_visor') }}?pagina=16" target="_blank">Ver instructivo en la Resolución →</a></p>
 {% if anexos %}
+<h4 style="margin-top: 20px; margin-bottom: 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--primary);">Anexos firmados por la escuela</h4>
 <div class="g-table-wrap">
     <table class="g-table">
         <thead><tr><th>ANEXO</th><th>TÍTULO</th><th></th></tr></thead>
         <tbody>
             {% for n in anexos %}
+            {% if n not in ['VI', 'VII'] %}
             <tr>
                 <td data-label="ANEXO">Anexo {{ etiquetas[n] }}</td>
                 <td data-label="TÍTULO">{{ titulos[n] }}</td>
@@ -38,6 +35,27 @@
                     <a class="g-link" href="{{ url_for('salidas.ver_pdf', id=fila['id'], anexo=n) }}" target="_blank" rel="noopener">Ver PDF</a>
                 </td>
             </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<h4 style="margin-top: 24px; margin-bottom: 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--primary);">Anexos para que completen los alumnos</h4>
+<div class="g-table-wrap">
+    <table class="g-table">
+        <thead><tr><th>ANEXO</th><th>TÍTULO</th><th></th></tr></thead>
+        <tbody>
+            {% for n in anexos %}
+            {% if n in ['VI', 'VII'] %}
+            <tr>
+                <td data-label="ANEXO">Anexo {{ etiquetas[n] }}</td>
+                <td data-label="TÍTULO">{{ titulos[n] }}</td>
+                <td class="g-td-actions">
+                    <a class="g-link" href="{{ url_for('salidas.ver_pdf', id=fila['id'], anexo=n) }}" target="_blank" rel="noopener">Ver PDF</a>
+                </td>
+            </tr>
+            {% endif %}
             {% endfor %}
         </tbody>
     </table>
