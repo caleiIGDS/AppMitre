@@ -52,7 +52,13 @@
       "PowerShell(Start-Process \"msedge\" \"http://127.0.0.1:5000/salidas/nueva\")",
       "Bash(curl -s http://127.0.0.1:5000/salidas/nueva)",
       "Bash(curl -s http://localhost:5000)",
-      "Bash(powershell -Command \"Start-Process 'http://localhost:5000'\")"
+      "Bash(powershell -Command \"Start-Process 'http://localhost:5000'\")",
+      "PowerShell(Get-Process -Id 35216)",
+      "Bash(grep -n -i \"anexo6\\\\|Anexo 6\\\\|anexo_6\" /c/Users/calei/projects/AppMitre/salidas.py | head -50)",
+      "Read(//c/Users/calei/projects/AppMitre/**)",
+      "Bash(ls /c/Users/calei/projects/AppMitre/Salidas/)",
+      "Read(//c/Users/calei/projects/AppMitre/Salidas//**)",
+      "Bash(grep -n \"lugar_dia_hora_salida\\\\|lugar_dia_hora_regreso\" -r /c/Users/calei/projects/AppMitre --include=*.py --include=*.html --include=*.js --include=*.json --include=*.md)"
     ],
     "additionalDirectories": [
       "C:\\Users\\calei\\projects\\AppMitre\\static\\vendor\\pdfjs\\build",

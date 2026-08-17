@@ -1,0 +1,66 @@
+{% extends 'salidas/base_publico.html' %}
+{% block titulo %}{{ titulo_anexo }} — {{ nombre_proyecto or 'Salida' }}{% endblock %}
+{% block contenido %}
+
+<div class="g-toolbar">
+    <h2>{{ titulo_anexo }}</h2>
+</div>
+
+{% if error %}<div class="g-error">{{ error }}</div>{% endif %}
+
+{% if resumen %}
+<div class="g-card">
+    <h3 style="margin-top: 0;">Datos de la salida</h3>
+    <p class="g-help">Esto ya lo cargó la escuela — se completa solo en el PDF, no hace falta volver a escribirlo.</p>
+    <dl class="g-props">
+        {% for label, valor in resumen %}
+        <div class="g-prop"><dt>{{ label }}</dt><dd>{{ valor }}</dd></div>
+        {% endfor %}
+    </dl>
+</div>
+{% endif %}
+
+<form method="post" class="g-form" style="margin-top: 16px;">
+    {% for campo in campos %}
+    <div class="g-field{% if campo.cond %} g-field-cond{% endif %}"{% if campo.cond %} data-cond="{{ campo.cond }}"{% endif %}>
+        {% if campo.tipo == 'bool' %}
+        <label class="g-check-inline">
+            <input type="checkbox" name="{{ campo.id }}" value="true"
+                   {% if valores_form.get(campo.id) %}checked{% endif %} data-campo="{{ campo.id }}">
+            <span>{{ campo.label }}</span>
+        </label>
+        {% else %}
+        <label for="campo-{{ campo.id }}">{{ campo.label }}{% if campo.req %} *{% endif %}</label>
+        {% if campo.tipo == 'textarea' %}
+        <textarea id="campo-{{ campo.id }}" name="{{ campo.id }}" rows="3"
+                  {% if campo.req %}required{% endif %}>{{ valores_form.get(campo.id, '') }}</textarea>
+        {% else %}
+        <input id="campo-{{ campo.id }}" type="text" name="{{ campo.id }}"
+               value="{{ valores_form.get(campo.id, '') }}" {% if campo.req %}required{% endif %}>
+        {% endif %}
+        {% if campo.ayuda %}<span class="g-help">{{ campo.ayuda }}</span>{% endif %}
+        {% endif %}
+    </div>
+    {% endfor %}
+    <div class="g-form-actions">
+        <button type="submit" class="g-btn">GENERAR MI PDF</button>
+    </div>
+</form>
+
+<p class="g-help" style="margin-top: 16px;">Después de generarlo vas a poder imprimirlo. La firma va a mano, sobre la hoja impresa.</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Campos condicionales (ej: nombre/n° de socio, sólo si "Tiene obra social" está tildado).
+// Mismo criterio que formulario.html: se ocultan, no se sacan del DOM, así el form sigue
+// mandando el valor si ya estaba cargado y se destildó por error.
+document.querySelectorAll('.g-field-cond').forEach(function(campo){
+  var disparador = document.querySelector('[data-campo="' + campo.dataset.cond + '"]');
+  if (!disparador) return;
+  function actualizar(){ campo.style.display = disparador.checked ? '' : 'none'; }
+  disparador.addEventListener('change', actualizar);
+  actualizar();
+});
+</script>
+{% endblock %}

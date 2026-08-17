@@ -21,7 +21,35 @@
 </dl>
 
 {% if anexos %}
-<h4 style="margin-top: 20px; margin-bottom: 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--primary);">Anexos firmados por la escuela</h4>
+<h4 style="margin-top: 20px; margin-bottom: 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--primary);">Anexos para que completen los alumnos</h4>
+
+<div style="margin-bottom: 10px;">
+    <button class="g-btn" type="button" id="btn-link-familia"
+            data-link="{{ link_familia }}"
+            title="Copia el link para que familias y estudiantes completen su Anexo VI/VII solos."
+            onclick="copiarLinkFamilia(this)">🔗 LINK PARA ESTUDIANTES</button>
+</div>
+
+<div class="g-table-wrap">
+    <table class="g-table">
+        <thead><tr><th>ANEXO</th><th>TÍTULO</th><th></th></tr></thead>
+        <tbody>
+            {% for n in anexos %}
+            {% if n in ['VI', 'VII'] %}
+            <tr>
+                <td data-label="ANEXO">Anexo {{ etiquetas[n] }}</td>
+                <td data-label="TÍTULO">{{ titulos[n] }}</td>
+                <td class="g-td-actions">
+                    <a class="g-link" href="{{ url_for('salidas.ver_pdf', id=fila['id'], anexo=n) }}" target="_blank" rel="noopener">Ver PDF en blanco</a>
+                </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<h4 style="margin-top: 24px; margin-bottom: 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--primary);">Anexos firmados por la escuela</h4>
 <div class="g-table-wrap">
     <table class="g-table">
         <thead><tr><th>ANEXO</th><th>TÍTULO</th><th></th></tr></thead>
@@ -40,27 +68,38 @@
         </tbody>
     </table>
 </div>
-
-<h4 style="margin-top: 24px; margin-bottom: 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--primary);">Anexos para que completen los alumnos</h4>
-<div class="g-table-wrap">
-    <table class="g-table">
-        <thead><tr><th>ANEXO</th><th>TÍTULO</th><th></th></tr></thead>
-        <tbody>
-            {% for n in anexos %}
-            {% if n in ['VI', 'VII'] %}
-            <tr>
-                <td data-label="ANEXO">Anexo {{ etiquetas[n] }}</td>
-                <td data-label="TÍTULO">{{ titulos[n] }}</td>
-                <td class="g-td-actions">
-                    <a class="g-link" href="{{ url_for('salidas.ver_pdf', id=fila['id'], anexo=n) }}" target="_blank" rel="noopener">Ver PDF</a>
-                </td>
-            </tr>
-            {% endif %}
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
 {% else %}
 <p class="g-help g-section-empty">No se generó ningún PDF para esta salida.</p>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// navigator.clipboard sólo existe en contexto seguro (HTTPS o localhost) — si se prueba
+// desde otra máquina de la red por IP, o el navegador niega el permiso, hace falta un
+// respaldo que funcione igual (textarea oculto + execCommand, soportado en todos lados).
+function copiarLinkFamilia(btn){
+  var link = btn.dataset.link;
+  function marcarCopiado(){ btn.textContent = '🔗 LINK COPIADO ✓'; }
+  function conTextareaOculto(){
+    var tmp = document.createElement('textarea');
+    tmp.value = link;
+    tmp.style.position = 'fixed';
+    tmp.style.opacity = '0';
+    document.body.appendChild(tmp);
+    tmp.focus();
+    tmp.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(tmp);
+    if (ok) marcarCopiado();
+    else window.prompt('No se pudo copiar solo — copiá el link manualmente:', link);
+  }
+  if (navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(link).then(marcarCopiado, conTextareaOculto);
+  } else {
+    conTextareaOculto();
+  }
+}
+</script>
 {% endblock %}

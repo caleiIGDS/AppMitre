@@ -2,6 +2,85 @@
 
 Registra cambios que afectan contratos entre módulos (API, schema de DB, nombres de campos, estructura de `window.APP_DATA`). No registrar fixes menores de estilo o bugs internos.
 
+**Formato: máximo 4 líneas por entrada** — qué cambió, archivos tocados, qué se rompe si no te enterás. Sin secciones, sin narrar el código en prosa. Si el detalle técnico hace falta, va al `agent_docs/` del área y acá queda la referencia. Las entradas viejas y largas son el formato anterior: no imitarlas.
+
+---
+
+## [2026-08-16] — El escudo del header sale de las dos hojas y pasa a `static/marca.css`
+
+**Tipo**: cambio de contrato — toda pantalla con header depende de una hoja nueva
+**Archivos**: `static/marca.css` (nuevo), `static/gestion.css`, `static/style.css`, las 7 bases con header, `agent_docs/frontend-ui.md`
+
+`.g-logo`/`.g-brand` y `.tech-logo`/`.header-blueprint` ya no existen: el escudo es `.marca` +
+`.marca-escudo`, definido una sola vez. Una pantalla con header **tiene que** cargar `marca.css`
+antes de su hoja, o el escudo queda sin tamaño ni posición. El tamaño se cambia sólo con las
+variables `--escudo` y `--marca-alto` sobre `.marca` — cómo, en `agent_docs/frontend-ui.md`.
+
+---
+
+## [2026-08-16] — Lo que completa una familia por el link público ya no se guarda
+
+**Tipo**: cambio de contrato — se retira persistencia y dos rutas cambian de firma
+**Archivos**: `salidas.py`, `templates/salidas/detalle.html`, `templates/salidas/completar_listo.html`, `agent_docs/salidas-educativas.md`
+
+Se sacó la tabla `salidas_familias` y el cacheo en disco de `AnexoVI_familia<id>.pdf` /
+`AnexoVII_familia<id>.pdf`. Lo que completa una familia por `/salidas/completar/<token>/<anexo>`
+ahora vive sólo en la `session` de Flask de ese navegador (clave
+`_clave_sesion_familia(token, anexo)`) y el PDF se genera en memoria al pedirlo
+(`_generar_pdf_anexo(..., destino=None)` devuelve bytes en vez de escribir a disco). La
+lista "Completados por familias y estudiantes" y la ruta `salidas.ver_pdf_familia`
+desaparecen de `detalle.html` — la escuela ya no ve ni sabe qué completó cada familia.
+
+Rutas que cambiaron de firma: `GET /salidas/completar/<token>/<anexo>/listo/<token_familia>`
+→ `.../listo` (sin `token_familia`, ahora se valida contra `session`); mismo cambio en
+`.../pdf/<token_familia>` → `.../pdf`. La tabla `salidas_familias` no se dropea sola en una
+instalación existente — la detecta y ofrece borrarla el paso 5 de `actualizar.py`
+(`limpiar_sobras`), igual que cualquier tabla que el código ya no declara.
+
+---
+
+## [2026-08-16] — `api_guardar` replica `datos_comunes` en cada anexo antes de generar el PDF
+
+**Tipo**: fix de bug — campos vacíos en el primer PDF generado
+**Archivos**: `salidas.py`, `agent_docs/salidas-educativas.md`
+
+`api_guardar` generaba los 7 PDF directo desde `anexos` tal cual llegaba del JS, sin el
+merge `anexo.update(datos_comunes)` que sí hacía `regenerar_pdfs`. Resultado: cualquier
+campo que se completa una sola vez en "Datos Comunes" y se replica a un anexo por
+`COMUNES[].destino` (`tipo_salida`, `distrito`, `establecimiento_educativo`,
+`localidad_salida`, `nombre_proyecto`...) salía en blanco en el PDF generado al guardar por
+primera vez — sólo se corregía al tocar "Regenerar PDF" a mano. Ahora `api_guardar` hace el
+mismo merge, y como muta `anexos[n]` in place antes de `json.dumps(datos)`, el `datos_json`
+persistido ya queda con la réplica resuelta — beneficia también al link público de
+familias, que lee `datos_json['anexos'][anexo]` directo.
+
+---
+
+## [2026-08-16] — Link público para que familias/estudiantes completen el Anexo VI/VII
+
+**Tipo**: schema nuevo (`salidas.token`, tabla `salidas_familias`), blueprint nuevo sin gate
+(`salidas.bp_publico`), 4 rutas públicas nuevas
+**Archivos**: `salidas.py`, `templates/salidas/{detalle,base_publico,completar_landing,
+completar,completar_listo}.html`, `app.py`, `agent_docs/salidas-educativas.md`
+
+**1. `detalle.html` ahora muestra primero "Anexos para que completen los alumnos" (VI/VII)
+y después "Anexos firmados por la escuela"** — estaba al revés.
+
+**2. Nuevo link público `/salidas/completar/<token>`** para que cada familia (Anexo VI,
+estudiante menor de edad) o estudiante mayor de edad (Anexo VII) complete sus propios datos
+—precargado con lo que la escuela ya cargó en el formulario general— y se lleve su propio
+PDF para imprimir y hacer firmar. Vive en `bp_publico`, un blueprint aparte que **no** pasa
+por `accesos.registrar_acceso` (mismo criterio que `/acceso/<token>` en `accesos.py`): es la
+única forma de dejar una URL sin login sin tocar el gate de capa 1. Cada envío es una fila
+nueva en la tabla nueva `salidas_familias` (no pisa el `datos_json` de la salida ni el
+VI/VII "en blanco" que ya se generaba). Protegido por dos tokens: `salidas.token` (uno por
+salida, no se quema con el uso) y `salidas_familias.token` (uno por envío, para que no se
+pueda enumerar/adivinar el PDF —con DNI y datos de salud— de otra familia de la misma
+salida). `CAMPOS_FAMILIA` (`salidas.py`) — sincronizado a mano con el subconjunto
+family/estudiante de `formulario.html` — define qué campos completa el link; los de firma
+siguen sin estar en ningún formulario digital. Detalle completo en
+`agent_docs/salidas-educativas.md`.
+
 ---
 
 ## [2026-08-16] — `formulario.html` pasa a extender `salidas/base.html`; se saca "Guardar/Cargar borrador"

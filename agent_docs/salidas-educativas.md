@@ -19,15 +19,21 @@ campos escalares y no puede modelar eso. `salidas.py` sigue el molde de **prést
 - **`salidas.py`** — el área: blueprint Flask (`bp`, prefix `/salidas`), `SCHEMA`, `PERMISOS`,
   las rutas (`lista`, `nueva`, `api_guardar`, `detalle`, `ver_pdf`) y el **renderer de PDF
   genérico** (ver abajo). `ENTIDADES = {}` a propósito — no pasa por `crud.registrar_rutas`.
+  También define `bp_publico`, un **segundo blueprint sin gate** para el link de
+  familias/estudiantes — ver "Link público" más abajo.
 - **`salidas.db`** — SQLite propia. Igual que `gestion.db`/`historia.db`/`accesos.db`:
   **no** se regenera desde Sheets, **no** viaja por git (`.gitignore`) y persiste entre
   deploys — es fuente de verdad, con la diferencia de que sus filas **vencen solas**
-  (ver "Vigencia y purga" abajo).
+  (ver "Vigencia y purga" abajo). Una sola tabla: `salidas` (una fila por salida, con su
+  `token`). Lo que completa una familia por el link público **no** se guarda en esta DB
+  (ni en ninguna) — ver "Link público" más abajo.
 - **`salidas_pdfs/`** — carpeta junto al módulo (mismo patrón que `backups/` de
   `respaldos.py`: fuera de `static/`, no listable/adivinable por URL). Un PDF por anexo
   por salida: `salidas_pdfs/<id>/AnexoIII.pdf` … `AnexoIX.pdf`. En `.gitignore` porque
   contienen DNI y datos de salud. El Anexo IX puede tener copias extra
-  (`AnexoIX_2.pdf`, `AnexoIX_3.pdf`, ...) — ver "Más de un seguro escolar" más abajo.
+  (`AnexoIX_2.pdf`, `AnexoIX_3.pdf`, ...) — ver "Más de un seguro escolar" más abajo. El
+  PDF que completa una familia por el link público **no** se cachea acá — se genera en
+  memoria y se sirve directo (ver "Link público" más abajo).
 - **`Salidas/AnexoN.json`** (III a IX) — la referencia completa del formulario en papel
   (label, tipo, sección, condición, columnas de cada campo, **incluidos** los campos de
   firma y "lugar y fecha"). El renderer de PDF los lee en tiempo de request; no se
@@ -36,15 +42,26 @@ campos escalares y no puede modelar eso. `salidas.py` sigue el molde de **prést
   el header — logo, título, ☰ — vive ahí una sola vez, con `{% block header_acciones %}`
   para que cada página reemplace los botones sin duplicar el resto del header), `login.html`
   (extiende `crud/login.html`, igual que las otras áreas), `lista.html` (previsualización con
-  nombre de proyecto, fechas y vigencia), `detalle.html` (resumen + links a los 7 PDF, cada
-  uno `target="_blank"`) y **`formulario.html`**: el formulario grande de carga
-  (`/salidas/nueva`). Extiende `salidas/base.html` como el resto — el `<head>`/`<body>`
-  propios (`{% block estilos %}`/`{% block scripts %}`) sólo llevan el JS/CSS del formulario
-  en sí (grillas, tabla de personas, anexos), con su propia identidad visual
-  blueprint/industrial dentro de ese contenido, no en el header ni el nav.
-- Integración: `app.py` hace `app.register_blueprint(salidas.bp)` + `salidas.init_db()` en
-  import, y `salidas` entra a la lista de `accesos.registrar_app(...)` — el único lugar
-  central que hay que tocar al sumar un área nueva (ver `agent_docs/accesos.md`).
+  nombre de proyecto, fechas y vigencia; **la fila entera lleva al detalle** — `data-href` en
+  el `<tr>` y un listener delegado en su `{% block scripts %}`, porque un `<tr>` no se puede
+  envolver en un `<a>` y adentro ya hay links propios que no podrían anidarse. La única acción
+  explícita de la fila es "Editar", gateada por `salidas.editar`; sin ese permiso la celda
+  queda vacía a propósito para que `td:empty` no dibuje la barra de acciones en celular),
+  `detalle.html` (resumen + link para compartir +
+  links a los PDF, cada uno `target="_blank"`, con los anexos que completan los alumnos
+  primero y los que firma la escuela después) y **`formulario.html`**: el formulario grande
+  de carga (`/salidas/nueva`). Extiende `salidas/base.html` como el resto — el
+  `<head>`/`<body>` propios (`{% block estilos %}`/`{% block scripts %}`) sólo llevan el
+  JS/CSS del formulario en sí (grillas, tabla de personas, anexos), con su propia identidad
+  visual blueprint/industrial dentro de ese contenido, no en el header ni el nav.
+  `base_publico.html` es un layout mínimo aparte (sin nav interna, sin ☰ de áreas, sin
+  widget del asistente) para las tres páginas del link público
+  (`completar_landing.html`, `completar.html`, `completar_listo.html`) — ver "Link
+  público".
+- Integración: `app.py` hace `app.register_blueprint(salidas.bp)` +
+  `app.register_blueprint(salidas.bp_publico)` + `salidas.init_db()` en import, y `salidas`
+  entra a la lista de `accesos.registrar_app(...)` — el único lugar central que hay que
+  tocar al sumar un área nueva (ver `agent_docs/accesos.md`).
 
 ## El formulario (`/salidas/nueva` y `/salidas/<id>/editar`)
 
@@ -71,6 +88,17 @@ persiste algo fuera de la pestaña: inserta o actualiza la fila en `salidas.db`,
 los 7 PDF, y redirige a `/salidas/<id>` o `/salidas/<id>/editar` según corresponda. (Hasta
 2026-08-16 existía además "Guardar/Cargar borrador" — descargaba y releía un JSON local sin
 tocar el servidor — pero se sacó de la UI por pedido explícito; no queda rastro en el código.)
+
+La réplica `COMUNES[].destino` (ej. `tipo_salida` → `VI.tipo_salida`/`VII.tipo_salida`) es
+sólo una indirección de **lectura** en el JS (`getValorCampo`, `formulario.html`): el objeto
+`estado.anexos[n]` nunca llega a tener esas claves, se manda tal cual en `datos_comunes` +
+`anexos` por separado. Por eso `api_guardar` (y `regenerar_pdfs`, que ya lo hacía) hace
+`anexo.update(comunes)` sobre cada anexo del payload **antes** de guardar `datos_json` y
+generar los PDF — si no, el PDF de la primera vez que se guarda una salida sale con esos
+campos en blanco (sólo se corregían al tocar "Regenerar PDF" a mano). Al mutar `anexos[n]`
+in place, el `datos_json` que se persiste ya queda con la réplica resuelta, así que el link
+público de familias (`valores_base` en `completar()`/`pdf_publico()`, el `resumen` de
+`completar()`) también la ve sin depender de un regenerado posterior.
 
 Los campos de **firma** y de **"lugar y fecha" de la firma** no están en el formulario
 digital (`ANEXOS` en `formulario.html`) a propósito: van a mano sobre el papel impreso,
@@ -237,19 +265,37 @@ angosto (evitar em dash `—`, usar `-`; ver el punto de la tabla arriba). Tama�
 contra el papel real); las demás funciones escalan a partir de esas dos constantes en vez
 de tener números sueltos.
 
-**Destacado de valores cargados**: los valores que completa el usuario se imprimen **1pt
-más grandes** (12pt en lugar de 11) y con un **trazo visual de semi-negrita** para que se
-destaquen del texto fijo del formulario. fpdf2 no tiene un weight "semibold" real (sólo
-Regular/Bold), así que se usa el modo de texto `FILL_STROKE` de PDF (relleno + contorno
-fino con el mismo color), que engrosa visualmente sin llegar a negrita completa. Esto afecta
-a: `_escribir_par` (la mayoría de campos), `_dibujar_textarea` (observaciones, itinerarios,
-etc.), `_dibujar_narrativa` (párrafos con `{placeholders}` interpolados en Anexos III, VI,
-VII), y `_dibujar_docentes` (nombres/cargo). La excepción son las **tablas**
+**Destacado de valores cargados**: los valores que completa el usuario se imprimen con un
+**trazo visual de semi-negrita** para que se destaquen del texto fijo del formulario. fpdf2
+no tiene un weight "semibold" real (sólo Regular/Bold), así que se usa el modo de texto
+`FILL_STROKE` de PDF (relleno + contorno fino con el mismo color), que engrosa visualmente
+sin llegar a negrita completa. Además cambian 1pt de tamaño respecto de `TAM_TEXTO`
+(`_valor_destacado(pdf, tam_base, delta)`) — por default **más grandes** (`delta=1`, 12pt en
+vez de 11), pero el Anexo IX es casi enteramente pares "label: valor" sin párrafos
+narrativos que corten el texto, así que el mismo tratamiento satura la página entera; ahí
+`ANEXOS_VALOR_TAM_DELTA = {'IX': -1}` lo hace **más chico** (10pt) en cambio, para que siga
+leyéndose destacado (por el trazo) sin dominar la hoja. Esto afecta a: `_escribir_par` (la
+mayoría de campos), `_dibujar_textarea` (observaciones, itinerarios, etc.),
+`_dibujar_narrativa` (párrafos con `{placeholders}` interpolados en Anexos III, VI, VII —
+siempre con el delta default, no hay narrativa en IX), y `_dibujar_docentes`
+(nombres/cargo, sólo Anexo IV). La excepción son las **tablas**
 (`_dibujar_obra_social`, `_dibujar_tabla`): `FontFace` no soporta `text_mode` por celda, así
 que los valores en tablas sólo se agrandan (+1pt) sin el trazo — suficiente para diferenciar
 del header. El trazo se aplica **incluso a segmentos que ya están en negrita** (ej. el
 `{tipo_salida}` del Anexo VII, que es negrita del papel original): queda más pesado, pero
 sigue siendo principalmente negrita, no un efecto visual distinto.
+
+**Piloto: invertir label/valor (`ANEXOS_LABEL_DESTACADO`)** — 2026-08-16. La norma de arriba
+(valor destacado, label plano/`ANEXOS_LABEL_NEGRITA`) es la que rige en 6 de los 7 anexos.
+Para el Anexo VI se está probando lo opuesto: el **label** lleva el trazo de semi-negrita
+(`_valor_destacado`) y el **valor** va en texto plano — pedido explícito para evaluar cómo
+se lee antes de decidir si se extiende al resto. `ANEXOS_LABEL_DESTACADO = {'VI'}` controla
+qué anexos usan el criterio invertido; lo consultan `_escribir_par` y `_dibujar_textarea`
+(no `_dibujar_narrativa`: el párrafo corrido de "Autorización" no tiene labels sueltos que
+invertir, así que sus valores interpolados —`{tipo_salida}`, `{distrito}`, etc.— siguen
+destacados igual que antes, sin cambios). Si se confirma el look, lo natural es que
+`ANEXOS_LABEL_DESTACADO` reemplace a `ANEXOS_LABEL_NEGRITA` (que sólo tiene `V`) en vez de
+convivir los dos indefinidamente.
 
 Reusa la subclase `_PDFAnexo(FPDF)` propia (no la `PDF` de `app.py`, para no crear un
 acoplamiento entre módulos). `pdf.output(destino)` escribe a disco directamente (a
@@ -321,6 +367,102 @@ cambia el bloque "Datos del seguro escolar"), no una fila más en una lista.
   por algún motivo. Se muestran como "Anexo IX (seguro 2)", etc. (`etiquetas`, separado de
   `titulos` para no repetir el título completo en la columna del anexo).
 
+## Link público: familias y estudiantes completan el VI/VII solos
+
+El VI (autoriza el padre/madre/tutor de un estudiante **menor** de edad) y el VII
+(declaración jurada del propio estudiante **mayor** de edad) son, en el papel, uno por
+estudiante — no uno por salida. La única forma de completarlos era que la escuela cargue
+un solo estudiante en el formulario general y el resto de las familias complete a mano
+sobre una fotocopia en blanco del VI/VII (de ahí el mecanismo de líneas en blanco de
+`_escribir_par`/`_dibujar_narrativa`, que sigue existiendo y sigue sirviendo de vista
+previa para la escuela). El link público reemplaza esa fotocopia por un formulario digital:
+cada familia entra con el **mismo** link, ve un resumen de lo que la escuela ya cargó
+(destino, fechas, establecimiento), completa sólo lo suyo y se lleva su propio PDF ya
+completado para imprimir y hacer firmar. Nada de esto se guarda del lado de la escuela
+(ver "Nada se persiste" abajo) y nunca pisa el `datos_json` de la salida ni el VI/VII
+"en blanco" que ya se genera siempre.
+
+### Por qué otro blueprint (`bp_publico`)
+
+`bp` (el área completa) está gateado con `accesos.registrar_acceso(bp, PERMISO_LECTURA,
+...)`: el `before_request` que arma esa función exige `salidas.leer` en **cualquier**
+endpoint del blueprint (salvo `/login`). No hay forma de marcar una sola ruta como
+excepción sin tocar `accesos.py` (capa 1, que no puede nombrar nada de un área). La salida
+es la misma que usa `accesos.py` para `/acceso/<token>`: un blueprint **aparte**, sin pasar
+por `registrar_acceso`, así el gate de capa 1 nunca lo ve. `bp_publico = Blueprint(
+'salidas_familia', __name__, url_prefix='/salidas')` comparte prefijo con `bp` — Flask no
+tiene problema con dos blueprints en el mismo prefijo mientras las rutas no choquen — y
+`app.py` lo registra aparte: `app.register_blueprint(salidas.bp_publico)`.
+
+### `salidas.token`
+
+Columna generada al guardar con `secrets.token_urlsafe(16)`, identifica la salida en el
+link que se comparte (`/salidas/completar/<token>`). Lo conocen **todas** las familias de
+esa salida — no se quema con el uso, a diferencia de las invitaciones de `accesos.py`,
+porque lo abre gente distinta por cada estudiante. `migrar(cur)` agrega la columna
+(ALTER aditivo) y le genera un token a cada salida vieja que no lo tenía.
+
+### Nada se persiste (2026-08-16)
+
+Hasta acá, cada envío quedaba en una tabla `salidas_familias` y su PDF se cacheaba en
+`salidas_pdfs/<id>/AnexoVI_familia<id>.pdf`, visibles desde `detalle()` en una lista
+"Completados por familias y estudiantes". Se sacó por completo — ver
+`dev-log/DECISIONS.md` 2026-08-16. Motivo: el PDF que genera este formulario **no** es el
+documento legal — es un borrador para imprimir; la firma va a mano sobre el papel y ESE
+papel es lo que la escuela archiva (`completar_listo.html` se lo dice explícitamente a la
+familia). Guardar además una copia digital con DNI y datos de salud de cada estudiante no
+aportaba nada y era el peor lugar para tener datos sensibles dando vueltas sin necesidad.
+
+Lo que completa la familia ahora vive **sólo en la `session` de Flask de ese navegador**
+(cookie firmada con `SECRET_KEY`, sin `session.permanent` — se borra sola al cerrar el
+navegador): se llena al hacer `POST /completar/<token>/<anexo>`, se lee para armar el PDF
+en memoria en `pdf_publico`, y no queda rastro en ningún `.db` ni en `salidas_pdfs/`. La
+clave de sesión es `_clave_sesion_familia(token, anexo)` = `f'familia_{token}_{anexo}'` —
+namespaced por token y anexo para que completar VI y VII en la misma visita no se pisen
+entre sí. Si la misma familia completa el VI para un segundo hijo/a en la misma visita
+("¿Tenés más de un/a hijo/a?" en `completar_listo.html`), pisa la entrada anterior — no es
+problema porque el flujo es ver/imprimir el PDF apenas se completa, no volver a consultarlo
+después.
+
+### Campos editables: sincronizados a mano con `formulario.html`
+
+`CAMPOS_FAMILIA` (`salidas.py`) es el subconjunto de campos del VI/VII que la familia
+completa en el link público: el mismo subconjunto que en `formulario.html` (ANEXOS VI/VII)
+**no** tiene `auto`/`calc` (lo que la escuela ya sabe no se le vuelve a pedir a la familia —
+se muestra en el resumen de sólo lectura en cambio) y **no** es un campo de firma (esos
+siguen sin estar en ningún formulario digital — van a mano sobre el papel impreso, ver
+`dev-log/DECISIONS.md` 2026-08-14/15). Si se agrega o saca un campo family/estudiante en
+`formulario.html`, hay que replicarlo en `CAMPOS_FAMILIA` a mano — no hay un solo lugar del
+que ambos lean, porque uno vive en JS embebido en el template y el otro en Python.
+
+El resumen de sólo lectura (`completar()`, bloque `resumen`) recorre `Salidas/AnexoN.json`
+completo y muestra cualquier campo que **no** esté en `CAMPOS_FAMILIA` y que ya tenga
+valor — así, si mañana la escuela empieza a auto-completar un campo más, aparece solo en
+el resumen sin tocar la plantilla.
+
+### Flujo y generación de PDF
+
+1. `GET /salidas/completar/<token>` (`landing`): elegir VI (menor) o VII (mayor de edad).
+2. `GET/POST /salidas/completar/<token>/<anexo>` (`completar`): el formulario. `POST` valida
+   con `_procesar_form_familia` (respeta `cond`: `nombre_obra_social`/`numero_socio` sólo
+   son obligatorios si `tiene_obra_social` viene tildado; un `bool` nunca cuenta como
+   "vacío" para la validación de requerido — tildado/destildado son las dos respuestas
+   válidas) y, si no hay errores, guarda `datos_familia` en `session` (nada de DB) y
+   redirige a `listo`.
+3. `GET /salidas/completar/<token>/<anexo>/listo` (`listo`): confirmación + instrucciones
+   (imprimir, firmar a mano, devolver a la escuela) + link al PDF. Sólo chequea que la
+   `session` tenga la clave de este token/anexo — si no, 404 (falta completar antes).
+4. `GET /salidas/completar/<token>/<anexo>/pdf` (`pdf_publico`): arma `valores` mezclando
+   `anexos[anexo]` de la salida (lo que ya sabía la escuela) con lo que completó la familia
+   desde `session` (`dict(valores_base, **datos_familia)`), llama al mismo
+   `_generar_pdf_anexo` de siempre pasando `destino=None` (devuelve los bytes en vez de
+   escribir a disco) y los sirve con `send_file(BytesIO(...))`. Nada queda cacheado.
+5. **La escuela no ve lo que completó cada familia** — ni lista, ni PDF individual, sólo la
+   caja para copiar el link (`link_familia`) en `detalle()`, mismo patrón visual que el link
+   de invitación en `/accesos`. Lo único que la escuela puede volver a mirar es el VI/VII
+   "en blanco" que ya se genera siempre al guardar la salida (vista previa, sin datos de
+   ningún estudiante puntual).
+
 ## Vigencia y purga
 
 Al guardar (`api_guardar`), `vigencia_hasta = fecha_creacion + 365 días` (`config.ahora()`).
@@ -349,8 +491,13 @@ tocada — siempre tiene datos, así que nunca dispara el guard.
 | `/salidas/nueva` | GET | `salidas.editar` | El formulario grande de carga |
 | `/salidas/<id>/editar` | GET | `salidas.editar` | El formulario precargado con datos de una salida existente para reeditar |
 | `/salidas/api/guardar` | POST | `salidas.editar` | JSON del formulario → **inserta** la fila si es nueva, o **actualiza** si viene `_id_editar`; genera/regenera los 7 PDF, devuelve `{id}` |
-| `/salidas/<id>` | GET | `salidas.leer` | Detalle: datos comunes + links a los PDF disponibles |
+| `/salidas/<id>` | GET | `salidas.leer` | Detalle: datos comunes, link para compartir, links a los PDF que ya generó la escuela |
+| `/salidas/<id>/regenerar` | POST | `salidas.editar` | Rehace los 7 PDF a partir del `datos_json` guardado |
 | `/salidas/<id>/pdf/<anexo>` | GET | `salidas.leer` | `send_file` del PDF guardado, `as_attachment=False` (se abre en el navegador, no se descarga solo) |
+| `/salidas/completar/<token>` | GET | **sin gate** | Elegir Anexo VI (menor) o VII (mayor de edad) — `bp_publico` |
+| `/salidas/completar/<token>/<anexo>` | GET, POST | **sin gate** | El formulario que completa la familia/estudiante; `POST` guarda `datos_familia` en `session` (nada en DB) |
+| `/salidas/completar/<token>/<anexo>/listo` | GET | **sin gate** | Confirmación + link al PDF, sólo si la `session` tiene datos para este token/anexo |
+| `/salidas/completar/<token>/<anexo>/pdf` | GET | **sin gate** | Arma el PDF en memoria desde `session` y lo sirve (`send_file(BytesIO(...))`), sin cachear nada |
 
 ## Permisos
 
@@ -359,8 +506,14 @@ tocada — siempre tiene datos, así que nunca dispara el guard.
 | `salidas.leer` | leer | ver la lista de salidas guardadas y sus PDF. Permiso base del blueprint |
 | `salidas.editar` | escribir | cargar el formulario y guardar salidas nuevas |
 
-Dado que una salida guarda DNI y datos de salud, no hay ninguna ruta pública: todas piden
-al menos `salidas.leer`. El motor entero de accesos está en `agent_docs/accesos.md`.
+Dado que una salida guarda DNI y datos de salud, **casi** ninguna ruta es pública: todas las
+de `bp` piden al menos `salidas.leer`. La única excepción son las cuatro de
+`/salidas/completar/<token>` (`bp_publico`, ver "Link público" más arriba) — necesariamente
+sin login, porque las abre gente sin ningún dispositivo habilitado en `accesos.db`. Ahí la
+protección no es un permiso sino el `token` de la salida (sin él no se llega a nada) más el
+hecho de que lo que completa cada familia ni siquiera se guarda — no hay un PDF ajeno que
+alguien pueda llegar a ver, sólo el propio, mientras dure su `session`. El motor entero de
+accesos está en `agent_docs/accesos.md`.
 
 ## PDF con referencias normativas
 

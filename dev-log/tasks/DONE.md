@@ -2,6 +2,8 @@
 
 _Solo leer si se pide explícitamente._
 
+**Formato: una línea por tarea** — qué quedó hecho, y a lo sumo el puntero (`ver CHANGELOG 2026-08-16`). El detalle vive ahí, no acá. Las entradas viejas de un párrafo son el formato anterior: no imitarlas.
+
 ---
 
 ## [2026-08-11] — #20 Accesos por niveles: público / interno / admin (cierra #20)

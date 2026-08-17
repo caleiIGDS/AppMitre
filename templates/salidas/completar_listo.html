@@ -1,0 +1,24 @@
+{% extends 'salidas/base_publico.html' %}
+{% block titulo %}Listo{% endblock %}
+{% block contenido %}
+
+<div class="g-toolbar">
+    <h2>¡LISTO!</h2>
+</div>
+
+<div class="g-card">
+    <p>Tu Anexo {{ anexo }} quedó generado con los datos que completaste.</p>
+    <ol>
+        <li>Abrí el PDF y imprimilo.</li>
+        <li>La firma (y la fecha, si corresponde) van <strong>a mano</strong>, sobre la hoja impresa.</li>
+        <li>Devolvelo a la escuela — el/la docente responsable tiene que llevarlo el día de la salida.</li>
+    </ol>
+</div>
+
+<div class="g-form-actions" style="margin-top: 16px;">
+    <a class="g-btn" href="{{ url_for('salidas_familia.pdf_publico', token=token, anexo=anexo) }}" target="_blank" rel="noopener">VER E IMPRIMIR EL PDF</a>
+</div>
+
+<p class="g-help" style="margin-top: 20px;">¿Tenés más de un/a hijo/a en esta salida? Volvé a
+    <a href="{{ url_for('salidas_familia.landing', token=token) }}">completar el formulario</a> por cada uno/a.</p>
+{% endblock %}

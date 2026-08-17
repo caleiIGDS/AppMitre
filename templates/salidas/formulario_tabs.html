@@ -1,0 +1,131 @@
+{# ============================================================================
+   SANDBOX DE DISEÑO — pestañas de PDF en el header (ruta /salidas/nueva-tabs)
+
+   No es una copia del formulario: lo EXTIENDE. Hereda todo (estilos, campos,
+   JS, guardado) de `salidas/formulario.html` y sólo pisa dos bloques —
+   `estilos` (agrega CSS, con super() para conservar el original) y
+   `header_acciones` (los botones del header). Así se puede probar el diseño
+   sin tocar una línea de la página que está en uso: /salidas/nueva sigue
+   exactamente como estaba, y esto vive aparte hasta que se decida.
+
+   La idea: los dos PDF (Resolución e Instructivo) dejan de ser botones sueltos
+   y pasan a ser pestañas apoyadas sobre la línea naranja del header, al estilo
+   de las solapas de un navegador. La línea naranja hace de "barra" sobre la
+   que descansan; al pasar el mouse la pestaña se pinta de naranja y se funde
+   con ella, que es lo que da la sensación de solapa activa.
+   ============================================================================ #}
+{% extends 'salidas/formulario.html' %}
+
+{% block estilos %}{{ super() }}
+<style>
+/* ---------- Pestañas de PDF COLGANDO de la línea naranja ----------
+   Sólo cargan en esta página: el <style> vive en el template, no en
+   gestion.css, así que nada de esto se filtra al resto de las áreas.
+
+   Al revés que las solapas de arriba de un navegador: cuelgan del borde de
+   abajo del header, hacia la página. Salen del flujo (position: absolute
+   contra el header) para no empujar nada — ni el alto de la barra ni el
+   contenido de abajo, que les pasa por atrás. */
+@media (min-width: 901px) {
+  .g-header { position: relative; }
+
+  .tabs-pdf {
+    position: absolute;
+    /* 100% = el piso del header, +4 el grosor de la línea, +10 el aire que las
+       despega de ella: quedan flotando abajo, sin tocarla. */
+    top: calc(100% + 14px);
+    right: 20px;               /* alineado con el padding del .g-container */
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    z-index: 5;
+  }
+}
+
+/* Sueltas: cerradas arriba igual que abajo (radio en las cuatro esquinas) y sin
+   los faldones que las pegaban a la barra. Flotan sobre el fondo claro de la
+   página, así que el color de reposo sigue siendo el azul del header. */
+.tab-pdf {
+  --tab: var(--g-primary);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 15px 9px;
+  background: var(--tab);
+  color: #fff;
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border-radius: 11px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+
+.tab-pdf:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.22);
+}
+
+.tab-pdf .tab-ico { font-size: 13px; line-height: 1; }
+
+/* ---------- Las tres variantes (se eligen con ?v=1|2|3) ----------
+   Cambia sólo qué hace la línea naranja cuando la pestaña está activa. */
+
+/* v1 — LA PESTAÑA SE FUNDE CON LA LÍNEA: al pasar el mouse se pinta del mismo
+   naranja que la barra, así la línea parece derramarse hacia abajo en ella. */
+.tabs-pdf.v1 .tab-pdf:hover { --tab: var(--g-accent); }
+
+/* v2 — SOLAPA ACTIVA CLARA, la de Chrome dada vuelta: la pestaña toma el color
+   del papel y queda colgando de la línea naranja como una hoja asomando. */
+.tabs-pdf.v2 .tab-pdf:hover {
+  --tab: var(--g-surface);
+  color: var(--g-primary);
+}
+
+/* v3 — EL NARANJA COMO CONTORNO: la pastilla queda azul y la línea del header
+   se le enrosca alrededor, ahora cerrando también arriba. */
+.tabs-pdf.v3 .tab-pdf:hover {
+  background: var(--g-primary);
+  box-shadow:
+    inset 0 0 0 3px var(--g-accent),
+    0 4px 10px rgba(15, 23, 42, 0.22);
+}
+
+/* En celular mobile-nav.js se lleva .g-header-actions (y con él las pestañas)
+   al panel lateral, donde no hay nada de qué colgar: vuelven a ser botones
+   comunes, iguales a los demás del panel. */
+@media (max-width: 900px) {
+  .tabs-pdf {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .tab-pdf {
+    justify-content: center;
+    border-radius: 0;
+    background: transparent;
+    border: 2px solid var(--g-accent);
+    padding: 9px 16px;
+    box-shadow: none;
+  }
+
+  .tab-pdf:hover { transform: none; box-shadow: none; }
+}
+</style>
+{% endblock %}
+
+{% block header_acciones %}
+<a class="g-btn-outline" href="{{ url_for('salidas.lista') }}">‹ VOLVER</a>
+<button class="g-btn" id="btn-exportar" type="button">{% if id_editar %}GUARDAR CAMBIOS{% else %}GUARDAR SALIDA{% endif %}</button>
+<div class="tabs-pdf v{{ variante }}">
+  <a class="tab-pdf" href="{{ url_for('normativa_visor') }}" target="_blank"><span class="tab-ico">📄</span>RESOLUCIÓN</a>
+  <a class="tab-pdf" href="{{ url_for('salidas.instructivo') }}" target="_blank"><span class="tab-ico">📖</span>INSTRUCTIVO</a>
+</div>
+{% endblock %}

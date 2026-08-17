@@ -21,12 +21,14 @@
 import json
 import os
 import re
+import secrets
 import shutil
 import sys
 from datetime import timedelta
 
 from contextlib import contextmanager
-from flask import Blueprint, abort, jsonify, redirect, render_template, request, send_file, url_for
+from io import BytesIO
+from flask import Blueprint, abort, jsonify, redirect, render_template, request, send_file, session, url_for
 from fpdf import FPDF, FontFace
 
 import accesos
@@ -65,11 +67,24 @@ ENTIDADES = {}  # no es una entidad de crud.py — ver el comentario de arriba d
 
 ANEXOS_NUMEROS = {'III': 3, 'IV': 4, 'V': 5, 'VI': 6, 'VII': 7, 'VIII': 8, 'IX': 9}
 
+# El III (autorización general, sin transporte) y el VIII (informe del transporte) sólo
+# tienen sentido para un subconjunto de salidas — uno u otro, según haya transporte
+# contratado o no. Si la escuela no cargó ningún dato ahí, ni se genera el PDF: así no
+# aparece listado en el detalle (que filtra por archivo existente en disco).
+ANEXOS_OPCIONALES_SI_VACIOS = {'III', 'VIII'}
+
 bp = Blueprint('salidas', __name__, url_prefix='/salidas')
 
 
 def conectar():
     return crud.conectar(sys.modules[__name__])
+
+
+def _generar_token():
+    """Token del link público de una salida (`/salidas/completar/<token>`) — mismo
+    generador que las invitaciones de accesos.py, pero sin tabla de canje: no se quema
+    con el uso, porque lo abre una familia distinta por cada estudiante."""
+    return secrets.token_urlsafe(16)
 
 
 SCHEMA = """
@@ -83,7 +98,8 @@ CREATE TABLE IF NOT EXISTS salidas (
     fecha_salida TEXT DEFAULT '',
     fecha_creacion TEXT NOT NULL,
     vigencia_hasta TEXT NOT NULL,
-    datos_json TEXT NOT NULL
+    datos_json TEXT NOT NULL,
+    token TEXT DEFAULT ''
 );
 """
 
@@ -91,6 +107,21 @@ CREATE TABLE IF NOT EXISTS salidas (
 def seed(cur):
     """Sólo siembra el testigo — no hay datos de ejemplo con sentido para una salida real."""
     cur.execute("INSERT OR IGNORE INTO salidas_meta (id, creado) VALUES (1, ?)", (ahora().isoformat(),))
+
+
+def migrar(cur):
+    """Adapta una salidas.db creada antes del link público (ALTER aditivo + backfill)."""
+    existentes = {c[1] for c in cur.execute("PRAGMA table_info(salidas)").fetchall()}
+    if 'token' not in existentes:
+        cur.execute("ALTER TABLE salidas ADD COLUMN token TEXT DEFAULT ''")
+    # Las salidas guardadas antes de este cambio no tienen token — se les genera uno acá,
+    # una sola vez, para que el link público funcione también para ellas.
+    sin_token = cur.execute("SELECT id FROM salidas WHERE token IS NULL OR token = ''").fetchall()
+    for fila in sin_token:
+        cur.execute("UPDATE salidas SET token = ? WHERE id = ?", (_generar_token(), fila['id']))
+    # `salidas_familias` (lo que completaba cada familia por el link público) se retiró:
+    # ahora ese formulario no persiste nada del lado de la escuela (ver dev-log/DECISIONS.md
+    # 2026-08-16) — la tabla vieja, si existe, la limpia actualizar.py en el deploy.
 
 
 def init_db():
@@ -180,6 +211,11 @@ def _crear_pdf():
     # está tipeado en una sans-serif proporcional (Arial/Helvetica), no en la monoespaciada
     # RobotoMono que usa el resto de la app — para estos PDF, que imitan un formulario
     # oficial ajeno, se prioriza parecerse al papel por sobre la identidad visual de AppMitre.
+    # La única fuente embebida es Roboto Light, para los valores del Anexo VI (FUENTE_VALOR):
+    # helvetica core no tiene un peso liviano y es la forma de que el valor pese menos que su
+    # label. Apache 2.0, así que viaja en el repo — imprescindible, porque el server es Linux
+    # y no tiene fuentes de Windows. fpdf2 subsetea: sólo embebe los glifos usados.
+    pdf.add_font(FUENTE_VALOR, '', os.path.join(_AQUI, 'static', 'fonts', 'Roboto-Light.ttf'))
     return pdf
 
 
@@ -223,7 +259,11 @@ def _texto_valor(campo, valor):
         return ''
     if campo['tipo'] == 'bool':
         return 'X' if valor else ''
-    if campo['tipo'] == 'date':
+    # Los dos nombres del mismo tipo: 'fecha' es el de los AnexoN.json (el que llega acá) y
+    # 'date' el del formulario HTML. Se aceptan los dos porque las dos listas de campos se
+    # sincronizan a mano y ya se desfasaron una vez — con sólo 'date' esta rama era código
+    # muerto y las fechas auto del IV y del V salían en ISO.
+    if campo['tipo'] in ('fecha', 'date'):
         return _iso_a_dd_mm_yyyy(str(valor))
     text = str(valor)
     text = text.replace('—', ' - ')  # em dash → hyphen (helvetica no soporta Unicode)
@@ -322,29 +362,33 @@ PARRAFOS_NARRATIVA = {
                   "transporte, en el marco de la normativa vigente."),
     }],
     'VI': [{
-        'ids': ('nombre_estudiante', 'dni_estudiante', 'establecimiento_educativo', 'numero_establecimiento',
-                'distrito', 'localidad_salida', 'dias_salida', 'mes_salida'),
+        'ids': ('nombre_estudiante', 'dni_estudiante', 'tipo_salida', 'establecimiento_educativo',
+                'numero_establecimiento', 'distrito', 'localidad_salida', 'dias_salida', 'mes_salida'),
         'texto': ("Por la presente autorizo a mi hijo/a {nombre_estudiante}, DNI {dni_estudiante}, que "
                   "concurre al Establecimiento Educativo {establecimiento_educativo} N° {numero_establecimiento} "
-                  "del distrito {distrito}, a participar de la Salida Educativa / Salida de Representación "
-                  "Institucional a realizarse en la localidad de {localidad_salida} el/los día/días "
-                  "{dias_salida} del mes de {mes_salida} del presente ciclo lectivo."),
+                  "del distrito {distrito}, a participar de la {tipo_salida} a realizarse en la localidad de "
+                  "{localidad_salida} {dia_articulo} {dias_salida} del mes de {mes_salida} del presente ciclo "
+                  "lectivo."),
+        # tipo_salida se elige una sola vez en Datos Comunes y se replica acá y en el VII
+        # (destino en formulario.html) — en el original en papel se tacha lo que no
+        # corresponde, acá se resuelve solo con el valor elegido.
+        'mapeos': {'tipo_salida': {'educativa': 'Salida Educativa',
+                                    'representacion_institucional': 'Salida de Representación Institucional'}},
     }],
     'VII': [{
         'ids': ('nombre_estudiante', 'dni_estudiante', 'domicilio', 'localidad', 'institucion', 'tipo_salida',
                 'localidad_salida', 'dias_salida', 'mes_salida', 'anio_salida'),
         # `segmentos`: en el original "salida educativa / de representación institucional"
-        # va en NEGRITA y "(tachar lo que no corresponda)" en ITÁLICA, dentro del mismo
-        # párrafo — no es texto corrido de un solo estilo como III y VI. Cada tupla es
-        # (texto con placeholders `.format()`, estilo de fpdf2: '' | 'B' | 'I').
+        # va en NEGRITA dentro del mismo párrafo — no es texto corrido de un solo estilo
+        # como III. Cada tupla es (texto con placeholders `.format()`, estilo de fpdf2:
+        # '' | 'B' | 'I'). El original tiene además "(tachar lo que no corresponda)" en
+        # itálica, que acá se omite: como tipo_salida ya viene resuelto, no hay nada que tachar.
         'segmentos': [
             ("Quien suscribe, {nombre_estudiante}, DNI {dni_estudiante}, domiciliada/o en la calle "
              "{domicilio} de la localidad de {localidad}, que concurre a la institución {institucion}, "
              "participará de la ", ''),
             ("{tipo_salida}", 'B'),
-            (" ", ''),
-            ("(tachar lo que no corresponda)", 'I'),
-            (" a realizarse en la localidad de {localidad_salida} el día/los días {dias_salida} del mes de "
+            (" a realizarse en la localidad de {localidad_salida} {dia_articulo} {dias_salida} del mes de "
              "{mes_salida} del año {anio_salida}.", ''),
         ],
         # tipo_salida se guarda como slug de <select> — el papel espera el texto tachable.
@@ -366,6 +410,12 @@ COL_WIDTHS = {
 # que NOTAS_A_IMPRIMIR/SECCION_TITULOS, no como default global.
 ANEXOS_LABEL_NEGRITA = {'V'}
 
+# Piloto (2026-08-16): la norma general es que el VALOR cargado lleve el efecto semi-negrita
+# (_valor_destacado) y el label vaya en texto plano/Bold real (ANEXOS_LABEL_NEGRITA). Acá se
+# invierte para probar cómo queda: el LABEL lleva el efecto semi-negrita (y el cuerpo extra de
+# ANEXOS_VALOR_TAM_DELTA) y el valor va en Roboto Light (FUENTE_VALOR). Sólo VI mientras se evalúa.
+ANEXOS_LABEL_DESTACADO = {'VI'}
+
 # Ídem para mayúsculas: en el papel del Anexo V los campos de identificación y
 # "OBSERVACIONES" están en mayúscula, pero "Lugar y fecha"/"Firma de Autoridad..." no —
 # es la tipografía real del formulario, no un criterio parejo por anexo.
@@ -384,6 +434,19 @@ TAM_TEXTO = 11
 ALTO_LINEA = 7
 RENGLONES_TEXTAREA = 5  # renglones en blanco para completar a mano cuando el campo no vino con valor
 GROSOR_TRAZO_VALOR = 0.25  # mm — trazo fino sobre el relleno de valores destacados
+# Donde el destacado va en el label (ANEXOS_LABEL_DESTACADO), el valor se diferencia con una
+# fuente de peso liviano, no tocando el glifo de la helvetica. Descartados en el camino: afinarlo
+# con un trazo blanco (el inverso de _valor_destacado) queda demasiado débil para un papel que se
+# imprime y se firma — y encima no se apaga con 0, porque en PDF `0 w` es "la línea más fina del
+# dispositivo", no "sin línea"; y la itálica lo diferencia por forma pero no por peso.
+FUENTE_VALOR = 'roboto-light'  # embebida en _crear_pdf; helvetica core no tiene peso Light
+ANCHO_BLANCO_PAR = 70  # mm — línea en blanco para completar a mano, campo solo en su renglón
+ANCHO_BLANCO_PAR_EXTRA = 35  # mm — ídem, cuando comparte renglón con otro campo (CAMPOS_MISMA_LINEA)
+ANCHO_BLANCO_NARRATIVA = 45  # mm — ídem, para un placeholder {id} vacío dentro del párrafo corrido
+# Nombre completo y domicilio necesitan más lugar que un DNI o un distrito para escribir a mano.
+ANCHOS_BLANCO_NARRATIVA = {
+    'nombre_estudiante': 65, 'domicilio': 55, 'institucion': 55, 'establecimiento_educativo': 55,
+}
 
 
 def _label_campo(campo, anexo):
@@ -391,12 +454,26 @@ def _label_campo(campo, anexo):
     return label.upper() if campo['id'] in LABELS_MAYUSCULA.get(anexo, ()) else label
 
 
+# Delta de tamaño (pt) del valor destacado respecto de `tam_base` — el default (+1, más
+# grande) funciona en los anexos con párrafos narrativos, donde el trazo de semi-negrita
+# resalta unas pocas palabras sueltas. El IX es casi todo "label: valor" seguido, así que
+# el mismo tratamiento satura la página entera; ahí el valor va 1pt más CHICO que el label
+# en vez de más grande, para que siga leyéndose destacado (por el trazo) sin dominar la hoja.
+# El VI es el otro caso aparte: como el destacado lo lleva el LABEL (ANEXOS_LABEL_DESTACADO),
+# este delta agranda el label y toda la separación con el valor se hace por acá.
+ANEXOS_VALOR_TAM_DELTA = {'IX': -1, 'VI': 1}
+
+# Cuerpo extra (pt) del título de sección respecto de TAM_TEXTO, por anexo — default 0. En el
+# VI arma la escalera completa: título de sección > label > valor, cada escalón 1pt.
+ANEXOS_SECCION_TAM_DELTA = {'VI': 2}
+
+
 @contextmanager
-def _valor_destacado(pdf, tam_base=TAM_TEXTO):
-    """Contexto para dibujar un valor cargado por el usuario: 1pt más grande que `tam_base`
-    y con un trazo fino (fill+stroke) que da un efecto de semi-negrita, sin depender de una
-    fuente Bold real."""
-    pdf.set_font('helvetica', '', tam_base + 1)
+def _valor_destacado(pdf, tam_base=TAM_TEXTO, delta=1):
+    """Contexto para dibujar un valor cargado por el usuario: `delta` puntos de diferencia
+    respecto de `tam_base` y con un trazo fino (fill+stroke) que da un efecto de
+    semi-negrita, sin depender de una fuente Bold real."""
+    pdf.set_font('helvetica', '', tam_base + delta)
     pdf.set_line_width(GROSOR_TRAZO_VALOR)
     pdf.text_mode = "FILL_STROKE"
     try:
@@ -406,28 +483,54 @@ def _valor_destacado(pdf, tam_base=TAM_TEXTO):
         pdf.set_font('helvetica', '', tam_base)
 
 
-def _escribir_par(pdf, label, valor, negrita):
-    pdf.set_font('helvetica', 'B' if negrita else '', TAM_TEXTO)
-    pdf.write(ALTO_LINEA, f"{label}: ")
-    with _valor_destacado(pdf, TAM_TEXTO):
-        pdf.write(ALTO_LINEA, valor)
+@contextmanager
+def _valor_secundario(pdf):
+    """Contraparte de `_valor_destacado` para los anexos donde el destacado lo lleva el label:
+    el valor cargado va en Roboto Light, mismo cuerpo y mismo negro, un peso más abajo."""
+    pdf.set_font(FUENTE_VALOR, '', TAM_TEXTO)
+    try:
+        yield
+    finally:
+        pdf.set_font('helvetica', '', TAM_TEXTO)
+
+
+def _escribir_par(pdf, label, valor, negrita, anexo, ancho_blanco=ANCHO_BLANCO_PAR):
+    label_destacado = anexo in ANEXOS_LABEL_DESTACADO
+    delta = ANEXOS_VALOR_TAM_DELTA.get(anexo, 1)
+    if label_destacado:
+        with _valor_destacado(pdf, TAM_TEXTO, delta):
+            pdf.write(ALTO_LINEA, f"{label}: ")
+    else:
+        pdf.set_font('helvetica', 'B' if negrita else '', TAM_TEXTO)
+        pdf.write(ALTO_LINEA, f"{label}: ")
+    pdf.set_font('helvetica', '', TAM_TEXTO)
+    if valor:
+        if label_destacado:
+            with _valor_secundario(pdf):
+                pdf.write(ALTO_LINEA, valor)
+        else:
+            with _valor_destacado(pdf, TAM_TEXTO, delta):
+                pdf.write(ALTO_LINEA, valor)
+    else:
+        # Sin valor: línea en blanco para completar a mano después de imprimir — firma,
+        # "lugar y fecha", nombre del hijo/a en la autorización, etc.
+        pdf.cell(ancho_blanco, ALTO_LINEA, '', border='B')
 
 
 def _dibujar_campo(pdf, campo, valores, anexo, extra=()):
-    # En blanco a propósito cuando el campo no vino en lo guardado: son los de firma y
-    # "lugar y fecha", que se completan a mano después de imprimir — igual que en el
-    # papel, "Label: ________________" para completar. `extra`: los demás campos del mismo
-    # renglón (ver CAMPOS_MISMA_LINEA), en orden, después del primero.
+    # `extra`: los demás campos del mismo renglón (ver CAMPOS_MISMA_LINEA), en orden,
+    # después del primero — comparten el ancho de línea en blanco más angosto.
     negrita = anexo in ANEXOS_LABEL_NEGRITA
     texto_valor = _texto_valor(campo, valores.get(campo['id']))
     nota = campo.get('notas') if campo['id'] in NOTAS_A_IMPRIMIR.get(anexo, ()) else None
-    _escribir_par(pdf, _label_campo(campo, anexo), texto_valor, negrita)
+    ancho_blanco = ANCHO_BLANCO_PAR_EXTRA if extra else ANCHO_BLANCO_PAR
+    _escribir_par(pdf, _label_campo(campo, anexo), texto_valor, negrita, anexo, ancho_blanco)
     if nota:
         pdf.write(ALTO_LINEA, f" ({nota})")
     for campo_extra in extra:
         texto_extra = _texto_valor(campo_extra, valores.get(campo_extra['id']))
         pdf.write(ALTO_LINEA, '     ')
-        _escribir_par(pdf, _label_campo(campo_extra, anexo), texto_extra, negrita)
+        _escribir_par(pdf, _label_campo(campo_extra, anexo), texto_extra, negrita, anexo, ANCHO_BLANCO_PAR_EXTRA)
     pdf.ln(ALTO_LINEA)
     pdf.ln(2)
 
@@ -441,11 +544,12 @@ def _dibujar_textarea(pdf, campo, valores, anexo):
     valor_raw = valores.get(campo['id'])
     if campo['id'] == 'nombres_telefonos_acompanantes':
         if campo['id'] + '_texto' in valores:
-            # Versión "texto" generada en el frontend
-            texto_valor = valores.get(campo['id'] + '_texto', '')
+            # Versión "texto" generada en el frontend — no pasa por _texto_valor porque no
+            # es el valor de `campo`, así que el reemplazo de raya larga se hace acá aparte.
+            texto_valor = (valores.get(campo['id'] + '_texto', '') or '').replace('—', ' - ')
         elif isinstance(valor_raw, dict):
             # Versión diccionario — convertir a formato texto (compatibilidad)
-            lineas = [f"{k} — {v}" if v else k for k, v in valor_raw.items()]
+            lineas = [f"{k} - {v}" if v else k for k, v in valor_raw.items()]
             texto_valor = '\n'.join(lineas)
         else:
             texto_valor = _texto_valor(campo, valor_raw)
@@ -457,11 +561,22 @@ def _dibujar_textarea(pdf, campo, valores, anexo):
         encabezado = f"{label} ({nota}):"
     else:
         encabezado = f"{label}:" + (f" ({nota})" if nota else '')
-    pdf.set_font('helvetica', 'B' if negrita else '', TAM_TEXTO)
-    pdf.multi_cell(0, ALTO_LINEA, encabezado, align='L', new_x='LMARGIN', new_y='NEXT')
+    label_destacado = anexo in ANEXOS_LABEL_DESTACADO
+    delta = ANEXOS_VALOR_TAM_DELTA.get(anexo, 1)
+    if label_destacado:
+        with _valor_destacado(pdf, TAM_TEXTO, delta):
+            pdf.multi_cell(0, ALTO_LINEA, encabezado, align='L', new_x='LMARGIN', new_y='NEXT')
+    else:
+        pdf.set_font('helvetica', 'B' if negrita else '', TAM_TEXTO)
+        pdf.multi_cell(0, ALTO_LINEA, encabezado, align='L', new_x='LMARGIN', new_y='NEXT')
+    pdf.set_font('helvetica', '', TAM_TEXTO)
     if texto_valor:
-        with _valor_destacado(pdf, TAM_TEXTO):
-            pdf.multi_cell(0, ALTO_LINEA, texto_valor, align='L', new_x='LMARGIN', new_y='NEXT')
+        if label_destacado:
+            with _valor_secundario(pdf):
+                pdf.multi_cell(0, ALTO_LINEA, texto_valor, align='L', new_x='LMARGIN', new_y='NEXT')
+        else:
+            with _valor_destacado(pdf, TAM_TEXTO, delta):
+                pdf.multi_cell(0, ALTO_LINEA, texto_valor, align='L', new_x='LMARGIN', new_y='NEXT')
     else:
         renglones = 1 if anexo == 'VI' else RENGLONES_TEXTAREA
         for _ in range(renglones):
@@ -482,10 +597,20 @@ def _valor_narrativa(campo, valor, mapeo):
     return _texto_valor(campo, valor)
 
 
+def _articulo_dias(dias_texto):
+    """"el día"/"los días" según `dias_salida` tenga uno o varios días — reemplaza el
+    "el/los día/días" tachable del papel, ya que acá se resuelve solo con el dato cargado."""
+    if not dias_texto:
+        return ''
+    return 'los días' if re.search(r'[,\-]|\by\b', dias_texto) else 'el día'
+
+
 def _dibujar_narrativa(pdf, bloque, valores, campos_por_id):
     mapeos = bloque.get('mapeos', {})
     valores_texto = {id: _valor_narrativa(campos_por_id[id], valores.get(id), mapeos.get(id))
                       for id in bloque['ids']}
+    if 'dias_salida' in valores_texto:
+        valores_texto['dia_articulo'] = _articulo_dias(valores_texto['dias_salida'])
     if 'segmentos' in bloque:
         # Párrafo con partes en negrita/itálica (ver Anexo VII) — pdf.write() para poder
         # cambiar de estilo sin forzar un salto de línea entre segmentos, igual que
@@ -500,11 +625,16 @@ def _dibujar_narrativa(pdf, bloque, valores, campos_por_id):
                     pdf.write(ALTO_LINEA, parte)
                 else:
                     # Es un placeholder {id} — escribir el valor destacado, pero sin cambiar el estilo
-                    # (esto es, un {tipo_salida} en negrita se queda en negrita, con el trazo agregado)
-                    pdf.set_line_width(GROSOR_TRAZO_VALOR)
-                    pdf.text_mode = "FILL_STROKE"
-                    pdf.write(ALTO_LINEA, valores_texto.get(parte, ''))
-                    pdf.text_mode = "FILL"
+                    # (esto es, un {tipo_salida} en negrita se queda en negrita, con el trazo agregado).
+                    # Sin valor: línea en blanco para completar a mano, igual que _escribir_par.
+                    valor = valores_texto.get(parte, '')
+                    if valor:
+                        pdf.set_line_width(GROSOR_TRAZO_VALOR)
+                        pdf.text_mode = "FILL_STROKE"
+                        pdf.write(ALTO_LINEA, valor)
+                        pdf.text_mode = "FILL"
+                    else:
+                        pdf.cell(ANCHOS_BLANCO_NARRATIVA.get(parte, ANCHO_BLANCO_NARRATIVA), ALTO_LINEA, '', border='B')
                     pdf.set_font('helvetica', estilo, TAM_TEXTO)
         pdf.ln(ALTO_LINEA)
     else:
@@ -517,9 +647,14 @@ def _dibujar_narrativa(pdf, bloque, valores, campos_por_id):
                 # Texto literal (no es placeholder)
                 pdf.write(ALTO_LINEA, parte)
             else:
-                # Es un placeholder {id} — escribir el valor destacado
-                with _valor_destacado(pdf, TAM_TEXTO):
-                    pdf.write(ALTO_LINEA, valores_texto.get(parte, ''))
+                # Es un placeholder {id} — escribir el valor destacado, o una línea en
+                # blanco para completar a mano si no vino cargado.
+                valor = valores_texto.get(parte, '')
+                if valor:
+                    with _valor_destacado(pdf, TAM_TEXTO):
+                        pdf.write(ALTO_LINEA, valor)
+                else:
+                    pdf.cell(ANCHOS_BLANCO_NARRATIVA.get(parte, ANCHO_BLANCO_NARRATIVA), ALTO_LINEA, '', border='B')
         pdf.ln(ALTO_LINEA)
     pdf.ln(2)
 
@@ -651,10 +786,11 @@ def _generar_pdf_anexo(anexo, valores, destino):
             seccion_actual = campo.get('seccion')
             titulo = titulos_seccion.get(seccion_actual)
             if titulo:
-                pdf.set_font('helvetica', 'B', TAM_TEXTO)
+                pdf.set_font('helvetica', 'B', TAM_TEXTO + ANEXOS_SECCION_TAM_DELTA.get(anexo, 0))
                 pdf.ln(2)
                 pdf.multi_cell(0, ALTO_LINEA, titulo, align='L', new_x='LMARGIN', new_y='NEXT')
                 pdf.ln(1)
+                pdf.set_font('helvetica', '', TAM_TEXTO)
 
         if campo['id'] in narrativa_por_disparador:
             _dibujar_narrativa(pdf, narrativa_por_disparador[campo['id']], valores, campos_por_id)
@@ -683,6 +819,11 @@ def _generar_pdf_anexo(anexo, valores, destino):
         pdf.set_font('helvetica', '', TAM_TEXTO - 2)
         pdf.multi_cell(0, ALTO_LINEA - 2, schema['notas_generales'], align='L', new_x='LMARGIN', new_y='NEXT')
 
+    if destino is None:
+        # El PDF de una familia por el link público no se cachea en disco (ver
+        # completar()/pdf_publico) — se devuelve en memoria para mandarlo directo en la
+        # respuesta.
+        return bytes(pdf.output())
     os.makedirs(os.path.dirname(destino), exist_ok=True)
     pdf.output(destino)
 
@@ -701,6 +842,11 @@ def _limpiar_pdfs_ix_extra(id):
             os.remove(os.path.join(carpeta, nombre))
 
 
+def _anexo_vacio(valores):
+    """True si no hay ningún valor cargado (ignora claves internas como `_seguros_adicionales`)."""
+    return not any(v for clave, v in valores.items() if not clave.startswith('_'))
+
+
 def _generar_pdfs(id, anexos):
     """Un PDF por anexo (III a IX), guardado en disco — nunca se descargan solos.
 
@@ -714,12 +860,109 @@ def _generar_pdfs(id, anexos):
     """
     for n in ANEXOS_NUMEROS:
         valores = anexos.get(n) or {}
-        _generar_pdf_anexo(n, valores, _ruta_pdf(id, n))
+        ruta = _ruta_pdf(id, n)
+        if n in ANEXOS_OPCIONALES_SI_VACIOS and _anexo_vacio(valores):
+            # Sin datos cargados (III: no aplica autorización general; VIII: no hubo
+            # transporte contratado) — no generar, y borrar un PDF viejo si quedó de una
+            # edición anterior donde sí había datos.
+            if os.path.exists(ruta):
+                os.remove(ruta)
+            continue
+        _generar_pdf_anexo(n, valores, ruta)
         if n == 'IX':
             _limpiar_pdfs_ix_extra(id)
             for indice, seguro in enumerate(valores.get('_seguros_adicionales') or [], start=2):
                 valores_extra = dict(valores, **{campo: seguro.get(campo, '') for campo in CAMPOS_SEGURO_IX})
                 _generar_pdf_anexo('IX', valores_extra, _ruta_pdf_ix_extra(id, indice))
+
+
+# --- Link público: familias/estudiantes completan el VI/VII solos -------------
+#
+# El VI (autoriza el padre/madre/tutor de un estudiante menor de edad) y el VII
+# (declaración jurada del propio estudiante mayor de edad) son, en el papel, uno por
+# estudiante — no uno por salida. Hasta acá la única forma de completarlos era que la
+# escuela cargue UN estudiante en el formulario general y el resto de las familias
+# complete a mano sobre una fotocopia en blanco (de ahí el mecanismo de líneas en blanco
+# de `_escribir_par`/`_dibujar_narrativa`). El link público reemplaza esa fotocopia:
+# cada familia entra con el mismo link, ve los datos que la escuela ya cargó (destino,
+# fechas, establecimiento — los mismos campos `auto`/`calc` de formulario.html), completa
+# SOLO lo suyo (identidad del estudiante, salud, contacto de urgencia) y se lleva su propio
+# PDF ya completado para imprimir y hacer firmar. Nada de esto se guarda del lado de la
+# escuela: lo que completa la familia vive sólo en su sesión de navegador (session de Flask,
+# cookie firmada, se pierde al cerrar el navegador) el tiempo justo para generar y servir su
+# PDF — ver dev-log/DECISIONS.md 2026-08-16. El PDF real (firmado a mano) se devuelve en
+# papel a la escuela; no hace falta ni conviene guardar una copia digital con DNI y datos de
+# salud de cada estudiante. Nunca pisa el `datos_json` de la salida ni el VI/VII "en blanco"
+# que ya se genera siempre (ese sigue sirviendo de vista previa para la escuela).
+#
+# Campos editables por anexo: el mismo subconjunto de formulario.html (ANEXOS VI/VII) que
+# NO tiene `auto`/`calc` (lo que la escuela ya sabe no se vuelve a pedir) y que NO es de
+# firma (`firma_papel`: esos van a mano sobre el papel impreso, nunca se tipean — ver
+# dev-log/DECISIONS.md 2026-08-14/15). Sincronizado a mano con formulario.html: si se
+# agrega o saca un campo family/estudiante ahí, replicar acá.
+CAMPOS_FAMILIA = {
+    'VI': [
+        {'id': 'nombre_estudiante', 'label': 'Nombre del hijo/a', 'tipo': 'text', 'req': True},
+        {'id': 'dni_estudiante', 'label': 'DNI del hijo/a', 'tipo': 'text', 'req': True},
+        {'id': 'indicaciones_salud',
+         'label': 'Dejar aquí constancia de cualquier indicación necesaria que deba conocer el '
+                  'docente a cargo y personal médico',
+         'tipo': 'textarea', 'req': False,
+         'ayuda': 'Alergias, medicación, tratamientos o condiciones que el/la docente a cargo '
+                  'tenga que conocer ante una urgencia. Si no hay nada para informar, se deja en blanco.'},
+        {'id': 'tiene_obra_social', 'label': '¿Tiene obra social o prepaga?', 'tipo': 'bool', 'req': True},
+        {'id': 'nombre_obra_social', 'label': 'Nombre de la obra social/prepaga', 'tipo': 'text',
+         'req': False, 'cond': 'tiene_obra_social'},
+        {'id': 'numero_socio', 'label': 'N° de socio', 'tipo': 'text', 'req': False, 'cond': 'tiene_obra_social'},
+        {'id': 'telefonos_urgencia', 'label': 'Teléfonos de contacto en caso de urgencia', 'tipo': 'textarea',
+         'req': True, 'ayuda': 'Consignar varios, de personas distintas.'},
+    ],
+    'VII': [
+        {'id': 'nombre_estudiante', 'label': 'Nombre y apellido', 'tipo': 'text', 'req': True},
+        {'id': 'dni_estudiante', 'label': 'DNI', 'tipo': 'text', 'req': True},
+        {'id': 'domicilio', 'label': 'Domicilio', 'tipo': 'text', 'req': True,
+         'ayuda': 'Domicilio particular, no el de la escuela.'},
+        {'id': 'localidad', 'label': 'Localidad de domicilio', 'tipo': 'text', 'req': True},
+        {'id': 'indicaciones_salud',
+         'label': 'Dejar aquí constancia de cualquier indicación necesaria que deba conocer el '
+                  'docente a cargo y personal médico',
+         'tipo': 'textarea', 'req': False,
+         'ayuda': 'Alergias, medicación o condiciones que el/la docente a cargo deba conocer ante una urgencia.'},
+        {'id': 'tiene_obra_social', 'label': '¿Tiene obra social o prepaga?', 'tipo': 'bool', 'req': True},
+        {'id': 'nombre_obra_social', 'label': 'Nombre de la obra social/prepaga', 'tipo': 'text',
+         'req': False, 'cond': 'tiene_obra_social'},
+        {'id': 'numero_socio', 'label': 'N° de socio', 'tipo': 'text', 'req': False, 'cond': 'tiene_obra_social'},
+        {'id': 'telefonos_urgencia', 'label': 'Teléfonos de contacto en caso de urgencia', 'tipo': 'textarea',
+         'req': True, 'ayuda': 'Consignar varios, de personas distintas.'},
+    ],
+}
+
+TITULOS_ANEXO_FAMILIA = {
+    'VI': 'Autorización familiar — estudiante menor de edad',
+    'VII': 'Declaración jurada — estudiante mayor de edad o emancipado/a',
+}
+
+
+def _procesar_form_familia(anexo, form):
+    """Valida y arma el dict de campos que completó la familia/estudiante. Devuelve
+    (datos, errores) — `errores` es la lista de labels que faltaron."""
+    datos = {}
+    errores = []
+    for campo in CAMPOS_FAMILIA[anexo]:
+        if campo['tipo'] == 'bool':
+            valor = form.get(campo['id']) == 'true'
+        else:
+            valor = (form.get(campo['id']) or '').strip()
+        aplica = not campo.get('cond') or datos.get(campo['cond']) is True
+        if not aplica:
+            valor = '' if campo['tipo'] != 'bool' else False
+        # Un booleano nunca está "vacío" (tildado/destildado son las dos respuestas
+        # válidas) — `req` en un bool sólo tiene sentido para forzar el resto de la
+        # validación (los campos que dependen de él vía `cond`), no acá.
+        elif campo.get('req') and campo['tipo'] != 'bool' and not valor:
+            errores.append(campo['label'])
+        datos[campo['id']] = valor
+    return datos, errores
 
 
 # --- Acceso y contexto compartido ---------------------------------------------
@@ -756,6 +999,27 @@ def nueva():
     return render_template('salidas/formulario.html', activo='nueva', datos_precargar=None, id_editar=None, normativa=normativa)
 
 
+@bp.route('/nueva-tabs')
+@accesos.requiere(PERMISO_ESCRITURA)
+def nueva_tabs():
+    """SANDBOX de diseño: /nueva con los PDF como pestañas en el header.
+
+    Misma pantalla que `nueva()` — de hecho el template extiende el de ella y
+    sólo pisa el bloque de acciones del header. Existe para probar el diseño
+    sin tocar /salidas/nueva, que sigue igual. Cuando se decida, o se lleva el
+    diseño al formulario y se borra esta ruta, o se borra todo.
+
+    `?v=1|2|3` elige qué hace la línea naranja con la pestaña activa (ver el
+    comentario de las variantes en el template).
+    """
+    variante = request.args.get('v', '1')
+    if variante not in ('1', '2', '3'):
+        variante = '1'
+    normativa = _cargar_normativa()
+    return render_template('salidas/formulario_tabs.html', activo='nueva', datos_precargar=None,
+                           id_editar=None, normativa=normativa, variante=variante)
+
+
 @bp.route('/<int:id>/editar')
 @accesos.requiere(PERMISO_ESCRITURA)
 def editar(id):
@@ -781,6 +1045,15 @@ def api_guardar():
     anexos = datos.get('anexos') or {}
     id_editar = datos.get('_id_editar')
 
+    # Replicar datos_comunes en cada anexo ANTES de guardar y de generar el PDF — si no,
+    # los campos que sólo se cargan una vez en "Datos Comunes" (tipo_salida, distrito,
+    # establecimiento_educativo, localidad_salida...) quedan en blanco en el PDF hasta que
+    # alguien aprieta "Regenerar PDF" a mano (regenerar_pdfs sí hace este merge, pero desde
+    # datos_json ya guardado — acá hace falta antes de guardar por primera vez).
+    for anexo in anexos.values():
+        if isinstance(anexo, dict):
+            anexo.update(comunes)
+
     con = conectar()
     cur = con.cursor()
 
@@ -802,10 +1075,10 @@ def api_guardar():
         creado = ahora()
         vigencia = creado + timedelta(days=VIGENCIA_DIAS)
         cur.execute(
-            "INSERT INTO salidas (nombre_proyecto, fecha_salida, fecha_creacion, vigencia_hasta, datos_json) "
-            "VALUES (?,?,?,?,?)",
+            "INSERT INTO salidas (nombre_proyecto, fecha_salida, fecha_creacion, vigencia_hasta, "
+            "datos_json, token) VALUES (?,?,?,?,?,?)",
             (comunes.get('denominacion_proyecto', '') or '', comunes.get('fecha_salida', '') or '',
-             creado.isoformat(), vigencia.isoformat(), json.dumps(datos)))
+             creado.isoformat(), vigencia.isoformat(), json.dumps(datos), _generar_token()))
         id = cur.lastrowid
 
     con.commit()
@@ -836,9 +1109,16 @@ def detalle(id):
         titulos[clave] = titulos['IX']
         etiquetas[clave] = f'IX (seguro {indice})'
         indice += 1
+
+    # Token de respaldo por si la migración todavía no corrió en este arranque (no debería
+    # pasar: init_db migra antes de servir el primer request) — no deja el link roto.
+    token = fila['token'] or _generar_token()
+
     return render_template('salidas/detalle.html', fila=fila,
                            datos_comunes=json.loads(fila['datos_json']).get('datos_comunes') or {},
-                           anexos=disponibles, titulos=titulos, etiquetas=etiquetas, activo='lista')
+                           anexos=disponibles, titulos=titulos, etiquetas=etiquetas,
+                           link_familia=url_for('salidas_familia.landing', token=token, _external=True),
+                           activo='lista')
 
 
 @bp.route('/<int:id>/regenerar', methods=['POST'])
@@ -895,6 +1175,9 @@ def ver_pdf(id, anexo):
     return send_file(ruta, mimetype='application/pdf', as_attachment=False,
                      download_name=nombre_archivo)
 
+
+
+
 @bp.route('/instructivo')
 def instructivo():
 	"""Sirve el instructivo de salidas educativas."""
@@ -903,3 +1186,124 @@ def instructivo():
 		abort(404)
 	return send_file(ruta, mimetype='application/pdf', as_attachment=False,
 	                 download_name='Instructivo_Salidas_Educativas.pdf')
+
+
+# --- Blueprint público: /salidas/completar/<token> -----------------------------
+#
+# A propósito OTRO blueprint, sin pasar por accesos.registrar_acceso: `bp` gatea TODO lo
+# que registra (before_request exige salidas.leer en cualquier endpoint que no sea el
+# login), así que la única forma de dejar una URL abierta sin tocar el gate de capa 1 es
+# que no viva en ese blueprint. Mismo criterio que accesos.py usa para /acceso/<token>:
+# registrado aparte, no dentro de un blueprint gateado. Comparte url_prefix con `bp`
+# (/salidas) porque es la misma área — Flask no tiene problema con dos blueprints en el
+# mismo prefijo mientras las rutas no choquen.
+bp_publico = Blueprint('salidas_familia', __name__, url_prefix='/salidas')
+
+
+def _salida_por_token(token):
+    con = conectar()
+    fila = con.execute("SELECT * FROM salidas WHERE token = ?", (token,)).fetchone()
+    con.close()
+    return fila
+
+
+@bp_publico.context_processor
+def _contexto_publico():
+    return {
+        'escuela_nombre': ESCUELA_NOMBRE,
+        'escuela_logo': ESCUELA_LOGO,
+        'escuela_version': ESCUELA_VERSION,
+    }
+
+
+@bp_publico.route('/completar/<token>')
+def landing(token):
+    fila = _salida_por_token(token)
+    if fila is None:
+        abort(404)
+    datos_comunes = json.loads(fila['datos_json']).get('datos_comunes') or {}
+    return render_template('salidas/completar_landing.html', token=token,
+                           nombre_proyecto=fila['nombre_proyecto'], datos_comunes=datos_comunes)
+
+
+def _clave_sesion_familia(token, anexo):
+    # Namespaced por token+anexo: en la misma sesión de navegador puede haber más de un
+    # hijo/a completado (ver "¿Tenés más de un/a hijo/a?" en completar_listo.html), cada
+    # uno con su propia entrada, sin pisarse.
+    return f'familia_{token}_{anexo}'
+
+
+@bp_publico.route('/completar/<token>/<anexo>', methods=['GET', 'POST'])
+def completar(token, anexo):
+    if anexo not in CAMPOS_FAMILIA:
+        abort(404)
+    fila = _salida_por_token(token)
+    if fila is None:
+        abort(404)
+    datos = json.loads(fila['datos_json'])
+    valores_base = (datos.get('anexos') or {}).get(anexo) or {}
+    error = None
+    valores_form = {}
+
+    if request.method == 'POST':
+        datos_familia, errores = _procesar_form_familia(anexo, request.form)
+        if errores:
+            error = 'Faltó completar: ' + ', '.join(errores) + '.'
+            valores_form = datos_familia
+        else:
+            # No se guarda en ninguna DB ni se cachea el PDF en disco — vive sólo en la
+            # sesión de este navegador (cookie firmada, se borra sola al cerrarlo) el
+            # tiempo justo para que la familia vea/imprima su PDF. Ver dev-log/DECISIONS.md
+            # 2026-08-16.
+            session[_clave_sesion_familia(token, anexo)] = datos_familia
+            return redirect(url_for('salidas_familia.listo', token=token, anexo=anexo))
+
+    campos_familia = CAMPOS_FAMILIA[anexo]
+    ids_familia = {c['id'] for c in campos_familia}
+    schema = _cargar_schema(anexo)
+    # Resumen de sólo lectura: lo que la escuela ya cargó (destino, fechas,
+    # establecimiento...) para que la familia lo revise antes de completar lo suyo —
+    # cualquier campo del schema que no sea editable acá y que ya tenga valor.
+    campos_por_id = {c['id']: c for c in schema['campos']}
+
+    def _texto_resumen(cid):
+        # nombres_telefonos_acompanantes guarda un dict {nombre: teléfono} + una versión
+        # "_texto" ya armada para mostrar (mismo caso especial que _dibujar_textarea).
+        if cid + '_texto' in valores_base:
+            return valores_base.get(cid + '_texto', '')
+        return _texto_valor(campos_por_id[cid], valores_base.get(cid))
+
+    resumen = [(_label_campo(campos_por_id[cid], anexo), _texto_resumen(cid))
+              for cid in sorted((c['id'] for c in schema['campos']), key=lambda cid: campos_por_id[cid]['orden'])
+              if cid not in ids_familia and campos_por_id[cid]['tipo'] != 'nota' and valores_base.get(cid)]
+
+    return render_template('salidas/completar.html', token=token, anexo=anexo,
+                           titulo_anexo=TITULOS_ANEXO_FAMILIA[anexo], campos=campos_familia,
+                           resumen=resumen, valores_base=valores_base, valores_form=valores_form,
+                           error=error, nombre_proyecto=fila['nombre_proyecto'])
+
+
+@bp_publico.route('/completar/<token>/<anexo>/listo')
+def listo(token, anexo):
+    fila = _salida_por_token(token)
+    if fila is None:
+        abort(404)
+    if _clave_sesion_familia(token, anexo) not in session:
+        abort(404)
+    return render_template('salidas/completar_listo.html', token=token, anexo=anexo)
+
+
+@bp_publico.route('/completar/<token>/<anexo>/pdf')
+def pdf_publico(token, anexo):
+    fila = _salida_por_token(token)
+    if fila is None:
+        abort(404)
+    datos_familia = session.get(_clave_sesion_familia(token, anexo))
+    if datos_familia is None:
+        abort(404)
+    datos = json.loads(fila['datos_json'])
+    valores_base = (datos.get('anexos') or {}).get(anexo) or {}
+    valores = dict(valores_base, **datos_familia)
+    pdf_bytes = _generar_pdf_anexo(anexo, valores, None)
+    return send_file(BytesIO(pdf_bytes), mimetype='application/pdf', as_attachment=False,
+                     download_name=f'Anexo {anexo}.pdf')

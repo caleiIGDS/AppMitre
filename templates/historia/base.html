@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block titulo %}Historia Institucional{% endblock %} — {{ escuela_nombre }}</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=16">
+    <link rel="stylesheet" href="{{ url_for('static', filename='marca.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=23">
     <script src="{{ url_for('static', filename='gestion-agente.js') }}?v=5" defer></script>
     {# El ☰ y su panel lateral: menú de áreas siempre, y en celular además el nav
        y las acciones del header. #}
@@ -15,8 +16,8 @@
     <div class="g-bg">
         <header class="g-header">
             <div class="g-container g-header-flex">
-                <div class="g-brand">
-                    <img src="{{ url_for('static', filename=escuela_logo) }}" alt="Escudo" class="g-logo">
+                <div class="marca g-brand">
+                    <img src="{{ url_for('static', filename=escuela_logo) }}" alt="Escudo" class="marca-escudo">
                     <div class="g-titles">
                         <h1>{{ escuela_nombre }} <span class="g-serial">{{ escuela_version }}</span></h1>
                         <p>Historia Institucional</p>

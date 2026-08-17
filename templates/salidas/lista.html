@@ -16,13 +16,21 @@
         </thead>
         <tbody>
             {% for f in filas %}
-            <tr>
+            {# La fila entera lleva al detalle (data-href + el script de abajo). No se puede
+               envolver un <tr> en un <a>, y adentro ya hay links propios (el nombre, Editar)
+               que no podrían anidarse dentro de otro. Los links siguen siendo links: sin JS
+               la fila se navega igual desde el nombre del proyecto. #}
+            <tr data-href="{{ url_for('salidas.detalle', id=f['id']) }}">
                 <td data-label="PROYECTO"><a class="g-item-link" href="{{ url_for('salidas.detalle', id=f['id']) }}">{{ f['nombre_proyecto'] or '(sin nombre de proyecto)' }}</a></td>
                 <td data-label="FECHA DE SALIDA">{{ f['fecha_salida'] or '—' }}</td>
                 <td data-label="GUARDADA">{{ f['fecha_creacion'][:10] }}</td>
                 <td data-label="VIGENTE HASTA">{{ f['vigencia_hasta'][:10] }}</td>
+                {# Sin permiso de escritura la celda queda REALMENTE vacía (los {%- -%}),
+                   así en celular `td:empty` no dibuja una barra de acciones sin botones. #}
                 <td class="g-td-actions">
-                    <a class="g-link" href="{{ url_for('salidas.detalle', id=f['id']) }}">Ver</a>
+                    {%- if puede('salidas.editar') -%}
+                    <a class="g-link" href="{{ url_for('salidas.editar', id=f['id']) }}">Editar</a>
+                    {%- endif -%}
                 </td>
             </tr>
             {% endfor %}
@@ -35,4 +43,18 @@
 {% endif %}
 
 <p class="g-help">Cada salida guardada queda disponible durante 1 año; al vencer se borra sola del servidor, junto con sus PDF.</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Toda la fila lleva al detalle: un solo blanco grande en vez de un link chico.
+// Delegado en document porque las filas las arma Jinja y no cambian después.
+// Si el click cayó sobre un <a> (el nombre del proyecto, Editar), gana el link.
+document.addEventListener('click', function (e) {
+    if (!e.target.closest) return;
+    var fila = e.target.closest('tr[data-href]');
+    if (!fila || e.target.closest('a')) return;
+    window.location = fila.getAttribute('data-href');
+});
+</script>
 {% endblock %}

@@ -278,8 +278,8 @@ const COMUNES = [
     {id:"lugar_regreso", label:"Lugar de regreso", tipo:"text", destino:["IV.lugar_regreso"],
      a:"Dónde se entrega el grupo al finalizar la salida."},
     {id:"tipo_salida", label:"Tipo de salida", tipo:"select",
-     opciones:["educativa","representacion_institucional"], destino:["VII.tipo_salida"],
-     a:"Educativa (propuesta didáctica de la escuela) o de representación institucional (la escuela participa en un acto, torneo, feria o convocatoria de otro organismo). En el Anexo VII original se tacha la que no corresponde."}
+     opciones:["educativa","representacion_institucional"], destino:["VI.tipo_salida","VII.tipo_salida"],
+     a:"Educativa (propuesta didáctica de la escuela) o de representación institucional (la escuela participa en un acto, torneo, feria o convocatoria de otro organismo). En el papel original de los Anexos VI y VII se tacha la que no corresponde; acá se resuelve solo."}
   ]}
 ];
 
@@ -399,6 +399,7 @@ const ANEXOS = [
     {id:"nombre_estudiante", label:"Nombre del hijo/a", tipo:"text", req:true, seccion:"2 · Autorización (completa la familia)",
      a:"Estudiante que se autoriza a participar de esta salida en particular."},
     {id:"dni_estudiante", label:"DNI del hijo/a", tipo:"text", req:true, seccion:"2 · Autorización (completa la familia)", a:"Documento del estudiante."},
+    {id:"tipo_salida", label:"Tipo de salida", tipo:"select", opciones:["educativa","representacion_institucional"], req:true, auto:true, seccion:"2 · Autorización (completa la familia)"},
     {id:"establecimiento_educativo", label:"Establecimiento educativo", tipo:"text", req:true, auto:true, seccion:"2 · Autorización (completa la familia)"},
     {id:"numero_establecimiento", label:"N° del establecimiento", tipo:"text", req:true, auto:true, seccion:"2 · Autorización (completa la familia)"},
     {id:"distrito", label:"Distrito", tipo:"text", req:true, auto:true, seccion:"2 · Autorización (completa la familia)"},
@@ -1425,7 +1426,7 @@ function refrescarDerivados(){
     ];
     const textosAcompañantes = acompañantesLista.map(a => {
       const tel = datosAcompañantes[a.apellido_nombre];
-      return tel ? (a.apellido_nombre + " — " + tel) : a.apellido_nombre;
+      return tel ? (a.apellido_nombre + " - " + tel) : a.apellido_nombre;
     }).filter(x => x);
     estado.anexos["VI"].nombres_telefonos_acompanantes_texto = textosAcompañantes.join("\n");
   }

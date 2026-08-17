@@ -1,6 +1,109 @@
 # Decisiones de Arquitectura — AppMitre
 
-Leer este archivo antes de "corregir" algo que parece raro. Muchas decisiones tienen contexto específico de la escuela o del despliegue.
+Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parece raro — no leerlo entero. Muchas decisiones tienen contexto específico de la escuela o del despliegue.
+
+**Qué entra: sólo lo que alguien sin el contexto revertiría por parecer un error.** Si se deduce del código, no entra. **Formato: máximo 6 líneas** — la decisión, por qué, y la alternativa descartada si la hubo. Sin `**Contexto**` / `**Decisión 1**` / `**Consecuencia**`. Las entradas viejas y largas son el formato anterior: no imitarlas.
+
+---
+
+## [2026-08-16] — Lo que completa una familia por el link público no se guarda
+
+**Contexto**: el link público (`/salidas/completar/<token>`, ver
+`agent_docs/salidas-educativas.md`) dejaba una fila en `salidas_familias` por cada
+VI/VII completado, con su PDF cacheado en `salidas_pdfs/<id>/AnexoVI_familia<id>.pdf`, y
+`detalle.html` los listaba para que la escuela los revisara ("Completados por familias y
+estudiantes"). Se pidió sacar esa lista: "lo que hace el familiar muere en el momento que
+se va de la pestaña".
+
+**Por qué tiene sentido, no sólo "porque lo pidieron"**: `completar_listo.html` ya le decía
+a la familia que el PDF generado es un **borrador para imprimir** — la firma va a mano
+sobre el papel y ESE papel, físico, es lo que la escuela archiva y lleva el día de la
+salida. El PDF digital nunca fue el documento legal. Guardar además una copia digital con
+el DNI y los datos de salud de cada estudiante no respaldaba nada que el papel no
+respaldara ya, y sí sumaba una superficie más con datos sensibles para filtrar o perder.
+
+**Decisión**: se sacó la tabla `salidas_familias` y el cacheo en disco. Lo que completa la
+familia vive sólo en la `session` de Flask de ese navegador (cookie firmada, sin
+`session.permanent` — se pierde al cerrar el navegador) el tiempo justo para generar y
+servir el PDF en memoria. Ver detalle técnico y las rutas que cambiaron de firma en
+`dev-log/CHANGELOG.md` de la misma fecha.
+
+**Cabo suelto**: una instalación que ya tenía el link público en uso conserva su
+`salidas_familias` vieja (con datos reales) hasta que alguien corra
+`python actualizar.py --limpiar` a propósito — no se dropea sola, mismo criterio que
+cualquier tabla con filas que el código deja de declarar (ver "Paso 5" de `actualizar.py`).
+Los PDF ya cacheados en `salidas_pdfs/<id>/Anexo*_familia*.pdf` de instalaciones viejas
+tampoco se borran solos (ese paso no toca el filesystem) — quedan huérfanos hasta que esa
+salida entera venza y se purgue.
+
+---
+
+## [2026-08-16] — Piloto: label destacado / valor plano, sólo Anexo VI
+
+**Contexto**: la norma general del renderer de PDF (`_valor_destacado`, ver
+`agent_docs/salidas-educativas.md`) es que el VALOR cargado por el usuario lleve el trazo de
+semi-negrita y el label vaya en texto plano (salvo Anexo V, negrita real vía
+`ANEXOS_LABEL_NEGRITA`). Se pidió invertirlo: que el LABEL sea el que se destaque y el valor
+quede en texto plano.
+
+**Decisión — piloto acotado a un solo anexo, no cambio global**: en vez de invertir la norma
+en los 7 anexos de una, se agregó `ANEXOS_LABEL_DESTACADO = {'VI'}` (paralelo a
+`ANEXOS_LABEL_NEGRITA`) y sólo el Anexo VI usa el criterio invertido, a pedido explícito
+("aplicalo solo a anexo 6 para ver como queda"). Los otros 6 anexos no se tocaron.
+
+**Decisión 2 — la narrativa de "Autorización" (VI) no se invirtió**: el párrafo corrido
+("Por la presente autorizo a mi hijo/a ___, DNI ___...") no tiene labels sueltos — son
+placeholders interpolados dentro de una oración, no pares "label: valor". No hay nada
+simétrico para invertir ahí, así que `{tipo_salida}`, `{distrito}`, etc. dentro de ese
+párrafo siguen destacándose igual que antes; sólo cambiaron los campos que sí son "label:
+valor" (`_escribir_par`, `_dibujar_textarea`).
+
+**Consecuencia**: si el resultado convence, lo esperable es reemplazar
+`ANEXOS_LABEL_NEGRITA` por `ANEXOS_LABEL_DESTACADO` en el resto de los anexos en vez de
+mantener ambos mecanismos en paralelo — todavía no se pidió ese paso.
+
+---
+
+## [2026-08-16] — Link público de familias: blueprint aparte + token propio por envío
+
+**Contexto**: el VI (autoriza el padre/madre/tutor de un estudiante menor) y el VII
+(declaración jurada del propio estudiante mayor de edad) son, en el papel, uno por
+estudiante, pero el formulario digital sólo guardaba un VI y un VII por salida — el resto
+de las familias completaba a mano sobre una fotocopia en blanco. Se pidió un link
+compartible para que cada familia complete el suyo digitalmente y se lleve su PDF ya
+armado para imprimir y hacer firmar.
+
+**Decisión 1 — otro blueprint, no una excepción en el gate**: `bp` (el área) está gateado
+con `accesos.registrar_acceso`, que exige `salidas.leer` en cualquier endpoint salvo
+`/login` — no hay forma de marcar una sola ruta como pública ahí sin que `accesos.py`
+(capa 1) tenga que aprender sobre una excepción de un área concreta. Se creó `bp_publico`,
+un segundo `Blueprint` en `salidas.py` que **no** pasa por `registrar_acceso` y que
+`app.py` registra aparte — mismo patrón que ya usa `accesos.py` para `/acceso/<token>`
+(registrado sobre `app`, no dentro de un blueprint gateado).
+
+**Alternativa descartada**: agregar un parámetro `endpoints_publicos` a
+`accesos.registrar_acceso`. Se descartó porque le sumaría a capa 1 el concepto de "ruta sin
+ningún permiso", que hoy no existe (todo lo gateado pide al menos algo), por un caso de uso
+de una sola área.
+
+**Decisión 2 — dos tokens, no uno**: el link de la salida (`salidas.token`) lo comparten
+todas las familias de esa salida, así que no alcanza como única defensa — si el "ver tu PDF"
+después de completar usara el `id` autoincremental de la fila, cualquier familia con el
+link podría enumerar `id`s (1, 2, 3...) y abrir el PDF —con el DNI y los datos de salud— de
+otra familia de la misma salida. Se agregó `salidas_familias.token`, generado por envío, y
+`pdf_publico`/`listo` exigen los dos a la vez.
+
+**Decisión 3 — un envío es una fila nueva, nunca pisa la salida**: `salidas_familias` es una
+tabla aparte, no un UPDATE sobre `anexos.VI`/`anexos.VII` de la salida. Así el VI/VII "en
+blanco" que la escuela ya veía en el detalle sigue existiendo como vista previa, y ninguna
+familia puede pisar los datos de otra completando el formulario después.
+
+**Consecuencia**: `salidas.py` gana una segunda superficie de rutas sin login. La única
+protección ahí son los tokens (128 bits cada uno, sin rate limit ni CAPTCHA — mismo nivel de
+seguridad "alcanza para que no entre el curioso" que ya documenta `agent_docs/accesos.md`
+para las invitaciones). Cada familia que complete genera un PDF nuevo en disco
+(`AnexoVI_familia<id>.pdf`); `_purgar_vencidas` los limpia junto con el resto de la salida
+al año.
 
 ---
 

@@ -43,10 +43,12 @@ body {
 }
 
 /* ---------- Header ---------- */
+/* La barra va ajustada al escudo: sin padding propio, y el único aire son los
+   4px de arriba y abajo de .g-header-flex. Alto total = escudo (88px) + 8. */
 .g-header {
     background: var(--g-primary);
     color: white;
-    padding: 14px 0;
+    padding: 0;
     border-bottom: 4px solid var(--g-accent);
 }
 
@@ -56,8 +58,8 @@ body {
     align-items: center;
     gap: 20px;
     flex-wrap: wrap;
-    padding-top: 6px;
-    padding-bottom: 6px;
+    padding-top: 4px;
+    padding-bottom: 4px;
 }
 
 .g-header-actions {
@@ -66,17 +68,11 @@ body {
     gap: 10px;
 }
 
-.g-brand {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-}
-
-.g-logo {
-    height: 60px;
-    border: 2px solid white;
-    border-radius: 50%;
-}
+/* El escudo NO se define acá: es de `marca.css`, que lo comparte con el SPA de
+   horarios (ver el porqué en ese archivo). Desde acá sólo se le cambia el
+   tamaño en los breakpoints de abajo, redefiniendo `--escudo` sobre `.marca`.
+   El header queda ajustado al escudo: 88px + los 4px de padding de arriba y de
+   abajo = 96px de barra. */
 
 .g-titles h1 {
     margin: 0;
@@ -397,6 +393,10 @@ body {
 
 .g-table tbody tr:hover { background: #f8fafc; }
 
+/* Fila entera clickable (el listado de /salidas la marca con data-href y un script
+   propio la navega). El cursor avisa que se puede hacer click en cualquier lado. */
+.g-table tbody tr[data-href] { cursor: pointer; }
+
 /* Búsqueda en vivo (gestion.js): filas ocultas y mensaje de sin resultados. */
 .g-table tbody tr[hidden] { display: none; }
 .g-sin-resultados { margin-top: 14px; }
@@ -511,6 +511,27 @@ body {
 .g-field input:focus,
 .g-field textarea:focus,
 .g-field select:focus { border-color: var(--g-accent); }
+
+/* Checkbox suelto dentro de un .g-field (ej: "¿Tiene obra social?"): la regla de arriba
+   le mete padding/border/width:100% como si fuera un input de texto y lo desalinea del
+   texto según navegador/pantalla. Esta clase resetea la caja y alinea con flexbox, que
+   no depende del tamaño de fuente ni del ancho de pantalla. */
+.g-check-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.g-check-inline input[type="checkbox"] {
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    border: none;
+    flex-shrink: 0;
+    accent-color: var(--g-accent);
+}
 
 .g-help {
     font-size: 12px;
@@ -1839,7 +1860,8 @@ body.g-sin-scroll {
     body.g-chat-page .g-footer { display: none; }
     body.g-chat-page .g-header { padding: 8px 0; }
     body.g-chat-page .g-header .g-container { padding: 6px 10px; }
-    body.g-chat-page .g-logo { height: 34px; }
+    /* El header del chat es más bajo: la marca y el escudo bajan con él. */
+    body.g-chat-page .marca { --escudo: 56px; --marca-alto: 34px; }
     body.g-chat-page .g-titles p { display: none; }
     body.g-chat-page .g-titles h1 { font-size: 15px; }
 
@@ -1935,7 +1957,8 @@ body.g-sin-scroll {
 @media (max-width: 800px) {
     .g-detail { grid-template-columns: 1fr; }
     .g-titles h1 { font-size: 18px; }
-    .g-logo { height: 46px; }
+    /* El escudo acá no se toca: el bloque de celular (≤900px, más abajo) ya lo
+       redefine para todo este rango. */
 }
 
 /* ========== CELULAR: menú lateral ocultable + ajustes táctiles ========== */
@@ -2182,9 +2205,11 @@ body.g-sidebar-abierto { overflow: hidden; }
         gap: 12px;
         min-width: 0;
         flex: 1 1 auto;
+        /* La barra de celular es más baja que el escudo: por eso el alto de la
+           fila va aparte y no sale de --escudo. */
+        --escudo: 56px;
+        --marca-alto: 42px;
     }
-
-    .g-logo { height: 42px; }
 
     .g-titles { min-width: 0; }
 
@@ -2405,7 +2430,10 @@ body.g-sidebar-abierto { overflow: hidden; }
 
 /* Celulares angostos: el header entra en una sola línea (logo + nombre + ☰). */
 @media (max-width: 420px) {
-    .g-logo { height: 36px; }
+    .g-brand { --escudo: 64px; --marca-alto: 36px; }
+    /* Acá el escudo es más alto que la marca, así que el aire de la barra se
+       mide contra él: 10 (header) + 8 (container) por lado = 4px libres. */
+    .g-header .g-container { padding-top: 8px; padding-bottom: 8px; }
     .g-titles h1 { font-size: 14px; }
     .g-titles p { display: none; }
     .g-container { padding: 12px 10px; }

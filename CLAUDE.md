@@ -27,7 +27,7 @@ capa 0        config.py    texto.py    respaldos.py                    ← no no
 
 **La pregunta para ubicar cualquier función es una sola: ¿qué nombra?** Si nombra una tabla, un slug o una ruta, es del área y quien la necesite la importa de ahí. Si no nombra nada del dominio, sube. Lo específico de un área entra al motor por **hooks declarados** (`migrar`, `seed`, `derivados`, `secciones_detalle`, …), nunca por un `if slug == '...'` dentro de `crud.py`. Detalle completo en `agent_docs/crud-motor.md`.
 
-También se comparte lo que no es lógica de dominio: `static/gestion.css` (paleta), `static/gestion-agente.js`, `static/mobile-nav.js` (menú lateral de celular) y el widget del chat.
+También se comparte lo que no es lógica de dominio: `static/marca.css` (el escudo del header — **único dueño**, lo cargan las cinco áreas *y* el SPA de horarios), `static/gestion.css` (paleta), `static/gestion-agente.js`, `static/mobile-nav.js` (menú lateral de celular) y el widget del chat.
 
 **Usuarios principales:** alumnos, docentes, preceptores y administración.  
 **Stack:** Flask + SQLite + Vanilla JS (sin frameworks). Sin tests, sin linter, sin build step.
@@ -79,6 +79,7 @@ Google Sheets (CSV export por año: 1ro–7mo + preceptores + personal)
 | `agente/` | Asistente conversacional (`/agente`): paquete con blueprint, tools, prompt y loop + templates en `templates/agente/`. Expone `bp` e `init_db`; el mapa de los módulos está en `agente/__init__.py` |
 | `templates/crud/` | `lista/form/detalle/login.html` genéricos; cada área deja un stub que los extiende |
 | `static/mobile-nav.js` | Menú lateral ocultable de celular para `/gestion`, `/historia` y `/agente` (≤900px). No toca escritorio |
+| `static/marca.css` | El escudo del header (capa 0). Único lugar donde se define: lo cargan las 7 pantallas con header, antes de `gestion.css`/`style.css`. Cada área sólo le redefine `--escudo` y `--marca-alto` sobre `.marca` |
 
 ---
 
@@ -268,8 +269,8 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 
 ## Dev Log
 
-- `dev-log/DECISIONS.md` — decisiones de arquitectura. Leer antes de "corregir" algo que parece raro.
-- `dev-log/CHANGELOG.md` — cambios que afectan contratos entre módulos.
+- `dev-log/DECISIONS.md` — por qué algo está hecho así. Antes de "corregir" algo que parece raro, buscarlo acá **con Grep** por el archivo o el símbolo. Son 1600 líneas: nunca leerlo entero.
+- `dev-log/CHANGELOG.md` — cambios que afectan contratos entre módulos. Mismo criterio: Grep, no lectura completa.
 - `dev-log/tasks/IN-PROGRESS.md` — leer al iniciar cualquier sesión.
 - `dev-log/tasks/TODO.md` — backlog priorizado.
 - `dev-log/tasks/DONE.md` — solo leer si se pide explícitamente.
@@ -278,28 +279,30 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 
 ## Docs Maintenance
 
-Actualizar la doc **es parte de la tarea, no un paso opcional**: siempre que un cambio caiga en alguno de estos casos, reflejalo en el `.md` que corresponde **antes de terminar y antes de commitear** (no lo dejes para después). Si tocaste código de un módulo que tiene doc en `agent_docs/`, esa doc se actualiza sí o sí.
-- ¿Cambié el pipeline de datos, normalización o schema de `escuela.db`? → actualizar `agent_docs/data-pipeline.md`
-- ¿Cambié lógica del calendario o clustering? → actualizar `agent_docs/calendar-engine.md`
-- ¿Cambié rutas, búsqueda o parsing del SPA de horarios (`app.py` / `script.js`)? → actualizar `agent_docs/search-api.md`
-- ¿Cambié estilos o variables CSS del SPA? → actualizar `agent_docs/frontend-ui.md`
-- ¿Cambié algo de Gestión de recursos (`/gestion`, `gestion.py`, rutas/búsqueda/schema de `gestion.db`, templates de `gestion/`, `gestion.css`, o JS propio del módulo)? → actualizar `agent_docs/gestion-conocimiento.md`
-- ¿Cambié algo de Historia institucional (`/historia`, `historia.py`, schema de `historia.db`, templates de `historia/`)? → actualizar `agent_docs/historia-institucional.md`
-- ¿Cambié algo de Salidas educativas (`/salidas`, `salidas.py`, schema de `salidas.db`, el renderer de PDF, la vigencia/purga, templates de `salidas/`)? → actualizar `agent_docs/salidas-educativas.md`
-- ¿Cambié algo del Asistente (paquete `agente/`, tools, prompts, `templates/agente/`, `gestion-agente.js`)? → actualizar `agent_docs/agente-asistente.md`
-- ¿Cambié el motor compartido (`crud.py`, `texto.py`, `respaldos.py`, `templates/crud/`), el contrato de área o sus hooks? → actualizar `agent_docs/crud-motor.md`
-- ¿Cambié quién puede entrar a qué (`accesos.py`, permisos de un área, el panel `/accesos`, el canje de invitaciones)? → actualizar `agent_docs/accesos.md`
-- ¿Agregué código compartido entre áreas? → pasarlo antes por el filtro de capas de `agent_docs/crud-motor.md`: si nombra una tabla o un slug, no es compartido
-- ¿Cambió un contrato entre módulos? → agregar entrada en `dev-log/CHANGELOG.md`
-- ¿Tomaste una decisión no obvia? → agregar entrada en `dev-log/DECISIONS.md`
-- ¿Creaste, moviste o eliminaste un documento (`.md` de referencia)? → actualizar la referencia en `CLAUDE.md` (Context Rules o la sección que corresponda)
-- Fixes menores de estilo o bugs internos → no registrar nada
+Anotar **cuesta**: lo que se escribe acá se lee (y se paga) en todas las sesiones que vienen. Por eso el default es **no anotar nada**, y lo que se anota va a **un solo archivo**, corto, antes de terminar y antes de commitear.
+
+**Dónde va — una pregunta, un solo destino:**
+
+| Qué pasó | Dónde | Cuánto |
+|---|---|---|
+| El código quedó distinto de lo que **afirma** un `agent_docs/*.md` (el mapa de cuál es cuál está en **Context Rules**) | ese `.md` | corregir la línea que quedó falsa: Grep al párrafo → Edit. **Reemplazar, no agregar sección nueva** |
+| Cambió un contrato que otro módulo consume: ruta, schema, nombre de campo, hook, forma de `window.APP_DATA` | `dev-log/CHANGELOG.md` | **≤4 líneas**: qué cambió, archivos, qué se rompe si no te enterás |
+| Alguien sin el contexto lo revertiría porque parece un error | `dev-log/DECISIONS.md` | **≤6 líneas**: la decisión, por qué, y la alternativa descartada si la hubo |
+| Cualquier otra cosa | ningún lado | — |
+
+**Un cambio va a un archivo, no a los tres.** Si ya quedó explicado en `agent_docs/`, el CHANGELOG lo menciona en una línea o directamente no existe. Nunca repetir el mismo relato en dos lugares.
+
+**No se anota**: fixes de estilo, bugs internos, ajustes de UI, renombres, nada que se lea del código o del `git log`, ni cómo se llegó a la solución.
+
+**Cómo escribir**: prosa directa, sin plantilla de secciones (`**Contexto**` / `**Decisión 1**` / `**Consecuencia**`), sin narrar en palabras el código que está al lado. Si una decisión no entra en 6 líneas, va corta y el detalle técnico al `agent_docs/` del área. Los `agent_docs/` describen **cómo funciona hoy**, no cómo se fue haciendo.
+
+Dos reglas que no son de doc pero viven acá: **¿código compartido entre áreas?** → pasarlo por el filtro de capas de `agent_docs/crud-motor.md` (si nombra una tabla o un slug, no es compartido). **¿Creaste, moviste o borraste un `.md`?** → actualizar su referencia en `CLAUDE.md`.
 
 ## Fin de sesión
 
-Si el usuario pide "terminar/cerrar la sesión": repasar todo lo hecho en la sesión y guardar lo que falte en los `.md` antes de despedirse:
-1. Pasar el checklist de **Docs Maintenance** (arriba) sobre los cambios de la sesión.
-2. Mover el trabajo terminado a `dev-log/tasks/DONE.md` (newest-first, arriba).
-3. Registrar pendientes nuevos que hayan surgido como tareas en `TODO.md` (numeradas, actualizar `_Último número usado_`).
-4. Si quedó algo a medias, dejarlo asentado en `IN-PROGRESS.md` con estado y próximo paso; si no, verificar que quede vacío.
+Si el usuario pide "terminar/cerrar la sesión", con lo que ya está en contexto — sin re-leer archivos ni repasar el diff entero:
+1. Pasar la tabla de **Docs Maintenance** sobre lo hecho. Si nada cae en las tres primeras filas, no se escribe nada y se avisa.
+2. Mover lo terminado a `dev-log/tasks/DONE.md` (newest-first): **una línea por tarea**.
+3. Pendientes nuevos → `TODO.md` (numerados, actualizar `_Último número usado_`).
+4. Algo a medias → `IN-PROGRESS.md` con estado y próximo paso; si no, verificar que quede vacío.
 5. No commitear salvo pedido explícito.

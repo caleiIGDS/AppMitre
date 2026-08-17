@@ -11,8 +11,9 @@ inicio de trabajo planificado. NO activar para pedidos directos de código sin p
 Antes de escribir cualquier código, asegurate de entender bien qué hay que hacer.
 
 ## Antes de responder
-Leé `CLAUDE.md`, los `agent_docs/` relevantes según el tema, y `dev-log/tasks/`
-para conocer el estado actual del proyecto.
+`CLAUDE.md` ya está en contexto. Leé `dev-log/tasks/IN-PROGRESS.md` y `TODO.md`.
+De los `agent_docs/` leé **sólo la sección que toca la tarea** (Grep por el archivo o
+el símbolo): varios pasan las 40 KB y leerlos enteros se paga en cada mensaje que sigue.
 
 ## Flujo
 1. Si la descripción tiene ambigüedades que cambiarían la implementación,

@@ -1,6 +1,8 @@
 # Frontend y UI — AppMitre
 
 > Complementa `CLAUDE.md`. Estilos en `static/style.css`, estructura en `templates/index.html`.
+> La excepción es `static/marca.css` (el escudo del header), que es compartido con las áreas —
+> ver "La marca del header" más abajo.
 
 ---
 
@@ -144,6 +146,53 @@ Clase base: `.materia-bloque`
 - `suplente_activo=1` en vista de profesor: texto "LICENCIADA" en `var(--alert)` en lugar del nombre de la materia
 - `.bloque-superposicion` → `background-color: var(--alert)` — ocupa todo el ancho de la columna, muestra `⚠️ Superposición (N)`
 - `.aula-indicador.sin-numero` → para aulas sin número (ej: PATIO, GYM); mismo estilo pero texto más pequeño (font-size: 11px)
+
+---
+
+## La marca del header (`static/marca.css`) — una sola definición para los dos shells
+
+El escudo y su bloque de título son **de `marca.css`**, no de `style.css` ni de `gestion.css`.
+Es capa 0 (no nombra nada del dominio) y lo cargan las **siete** pantallas con header — las seis
+del shell de áreas y el SPA de horarios —, siempre **antes** de la hoja del área.
+
+```html
+<link rel="stylesheet" href="…marca.css">      <!-- primero -->
+<link rel="stylesheet" href="…gestion.css">    <!-- o style.css -->
+…
+<div class="marca g-brand">                     <!-- en index.html, sólo "marca" -->
+  <img class="marca-escudo" src="…" alt="Escudo">
+  <div class="g-titles">…</div>                 <!-- la tipografía sigue siendo de cada hoja -->
+</div>
+```
+
+`marca.css` define dos reglas y expone **dos variables**, que son lo único que un área toca:
+
+| variable | qué es |
+|---|---|
+| `--escudo` | alto del escudo (88px por defecto). De ahí salen el hueco que se le reserva a la izquierda (`padding-left: calc(var(--escudo) + 8px)`) y, por defecto, el alto de la fila |
+| `--marca-alto` | alto de la fila de marca, sólo donde la barra del área es **más baja** que el escudo (celular) y por eso no puede derivarse de `--escudo` |
+
+Un breakpoint de área queda así, sin tocar `marca.css`:
+
+```css
+@media (max-width: 420px) { .g-brand { --escudo: 64px; --marca-alto: 36px; } }
+```
+
+Se overridea **por variables y no por reglas que pisen a `marca.css`**, así que funciona sin
+importar el orden de las hojas: mover un `<link>` no puede romperlo.
+
+Dos cosas que parecen raras y son a propósito:
+
+- **El escudo está fuera del flujo** (`position: absolute` + centrado con `translateY(-50%)`), y su
+  hueco lo reserva el `padding-left` de `.marca`. Así crece o se achica sin empujar el alto de la
+  barra ni el ancho de la marca — que es lo que obliga a los botones del header a envolver en una
+  segunda línea y estira la barra.
+- **No lleva `border` ni `border-radius`.** Sobre un `<img>` el `border-radius` **recorta la
+  imagen**: un `50%` heredado le comía las puntas al escudo y lo hacía ver más chico de lo que
+  medía.
+
+Las dos barras van ajustadas al escudo: 88px + 4px de aire arriba y abajo = **96px**, tanto en
+horarios como en las áreas.
 
 ---
 

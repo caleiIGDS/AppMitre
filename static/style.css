@@ -53,23 +53,24 @@ body {
 }
 
 /* Header Tech */
+/* La barra va ajustada al escudo: sin padding propio, y el único aire son los
+   4px de arriba y abajo de .header-flex. Alto total = escudo (88px) + 8. */
 .tech-header {
     background: var(--primary);
     color: white;
-    padding: 20px 0;
+    padding: 0;
     border-bottom: 4px solid var(--secondary);
 }
 
-.header-blueprint {
-    display: flex;
-    align-items: center;
-    gap: 30px;
-}
+/* El escudo NO se define acá: es de `marca.css`, compartido con las áreas
+   (gestion.css). Esta hoja sólo pone la tipografía de los títulos. */
 
 .tech-container.header-flex {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    padding-top: 4px;
+    padding-bottom: 4px;
 }
 
 .tech-btn-update {
@@ -105,10 +106,6 @@ body {
     100% { opacity: 1; }
 }
 
-.tech-logo {
-    height: 80px;
-}
-
 .tech-titles h1 {
     margin: 0;
     font-size: 32px;
@@ -137,10 +134,12 @@ body {
 }
 
 /* Tags Navigation */
+/* Sin margen arriba: el aire contra el header ya lo pone el padding-top de
+   .tech-container. Sumar los dos dejaba el doble de espacio del necesario. */
 .tech-tags {
     display: flex;
     gap: 10px;
-    margin: 20px 0;
+    margin: 0 0 20px;
 }
 
 .tech-tag {

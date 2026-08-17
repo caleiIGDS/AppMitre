@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>{% block titulo %}Salidas Educativas{% endblock %} — {{ escuela_nombre }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='marca.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=23">
+    {% block estilos %}{% endblock %}
+</head>
+<body>
+    <div class="g-bg">
+        <header class="g-header">
+            <div class="g-container g-header-flex">
+                <div class="marca g-brand">
+                    <img src="{{ url_for('static', filename=escuela_logo) }}" alt="Escudo" class="marca-escudo">
+                    <div class="g-titles">
+                        <h1>{{ escuela_nombre }} <span class="g-serial">{{ escuela_version }}</span></h1>
+                        <p>Salidas Educativas</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="g-container g-shell">
+            <main class="g-main" style="width: 100%;">
+                {% block contenido %}{% endblock %}
+            </main>
+        </div>
+
+        <footer class="g-footer">
+            <p>{{ escuela_nombre }}</p>
+        </footer>
+    </div>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

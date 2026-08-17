@@ -69,6 +69,9 @@ agente.init_db()
 # Salidas educativas (/salidas) — módulo independiente con DB propia (salidas.db).
 # No pasa por el motor de crud.py (ver salidas.py); rutas y schema propios.
 app.register_blueprint(salidas.bp)
+# Blueprint aparte y SIN gate: el link público /salidas/completar/<token> para que
+# familias y estudiantes completen su Anexo VI/VII solos (ver salidas.py).
+app.register_blueprint(salidas.bp_publico)
 salidas.init_db()
 
 # Accesos y permisos (accesos.db) — junta el catálogo que declaró cada área, engancha los

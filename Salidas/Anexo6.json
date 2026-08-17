@@ -150,6 +150,19 @@
       "notas": null
     },
     {
+      "id": "tipo_salida",
+      "orden": 11.5,
+      "label": "Tipo de salida",
+      "tipo": "select",
+      "requerido": true,
+      "completa": "escuela",
+      "seccion": "autorizacion",
+      "opciones": ["educativa", "representacion_institucional"],
+      "columnas": null,
+      "condicion": null,
+      "notas": "Se elige una vez en Datos Comunes y se resuelve solo en el párrafo — en el original se tacha lo que no corresponda"
+    },
+    {
       "id": "establecimiento_educativo",
       "orden": 12,
       "label": "Establecimiento Educativo al que concurre",

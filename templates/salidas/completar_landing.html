@@ -1,0 +1,37 @@
+{% extends 'salidas/base_publico.html' %}
+{% block titulo %}Completar Anexo — {{ nombre_proyecto or 'Salida' }}{% endblock %}
+{% block contenido %}
+
+<div class="g-toolbar">
+    <h2>{{ nombre_proyecto or 'Salida educativa' }}</h2>
+</div>
+
+<div class="g-card">
+    <p>Para participar de esta salida hace falta completar uno de estos dos formularios,
+        según la edad de la o el estudiante. Al final vas a poder imprimir el PDF ya
+        completado — la firma del padre, madre, tutor/a o responsable (o la propia, si sos
+        mayor de edad) va <strong>a mano, sobre el papel impreso</strong>.</p>
+    {% if datos_comunes.get('lugar_a_visitar') or datos_comunes.get('fecha_salida') %}
+    <dl class="g-props" style="display: flex; gap: 40px; margin-top: 14px;">
+        {% if datos_comunes.get('lugar_a_visitar') %}
+        <div class="g-prop" style="margin-bottom: 0;"><dt>LUGAR</dt><dd>{{ datos_comunes.get('lugar_a_visitar') }}</dd></div>
+        {% endif %}
+        {% if datos_comunes.get('fecha_salida') %}
+        <div class="g-prop" style="margin-bottom: 0;"><dt>FECHA</dt><dd>{{ datos_comunes.get('fecha_salida') }}</dd></div>
+        {% endif %}
+    </dl>
+    {% endif %}
+</div>
+
+<div class="g-card-actions" style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px;">
+    <a class="g-btn" href="{{ url_for('salidas_familia.completar', token=token, anexo='VI') }}" style="text-align:center; flex:1; min-width: 240px;">
+        ESTUDIANTE MENOR DE EDAD<br><span style="font-weight:normal; font-size:12px;">lo completa el padre, madre, tutor/a o responsable</span>
+    </a>
+    <a class="g-btn-outline" href="{{ url_for('salidas_familia.completar', token=token, anexo='VII') }}" style="text-align:center; flex:1; min-width: 240px;">
+        ESTUDIANTE MAYOR DE EDAD<br><span style="font-weight:normal; font-size:12px;">lo completa la/el estudiante</span>
+    </a>
+</div>
+
+<p class="g-help" style="margin-top: 20px;">Si sos familia de más de un/a estudiante que participa de esta salida, completá el
+    formulario una vez por cada uno/a — este mismo link sirve para todos.</p>
+{% endblock %}
