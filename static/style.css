@@ -534,8 +534,9 @@ footer a:hover {
 .hora-label {
     position: absolute;
     right: 8px;
-    font-size: 10px;
-    color: #70757a;
+    font-size: 12px;
+    color: #3c4043;
+    font-weight: 500;
     transform: translateY(-50%);
 }
 
@@ -1486,8 +1487,8 @@ body[data-dark] .materia-bloque { background: var(--block-bg); }
 body[data-dark] .info-valor,
 body[data-dark] .clickable-valor { color: var(--text); }
 body[data-dark] .class-meta-light,
-body[data-dark] .hora-label,
 body[data-dark] .info-label { color: var(--muted); }
+body[data-dark] .hora-label { color: #c8d4e8; }
 body[data-dark] .planilla-tab-btn:hover,
 body[data-dark] .dropdown-item:hover {
     background: color-mix(in srgb, var(--primary) 22%, transparent);
