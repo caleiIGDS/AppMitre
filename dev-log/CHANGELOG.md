@@ -6,6 +6,19 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-21] — Se saca `conjuntos`, `actividades` y préstamos/carrito de `/gestion`
+
+**Tipo**: contrato roto — desaparecen rutas, tools del agente y una entidad del schema
+**Archivos**: `gestion.py`, `agente/tools/{esquemas,entidades,__init__,prestamos(borrado)}.py`,
+`agente/prompt.py`, `templates/gestion/*`, `static/gestion.{css,js}`
+
+`gestion.ENTIDADES` sólo declara `recursos`; se van las tablas `conjuntos`, `actividades` y
+las M2M/préstamos asociadas (las dropea `actualizar.py` paso 5 si están vacías). Las tools
+`*_prestamo`/`listar_prestamos` y los campos `uso_tipico`/`objetivo`/`duracion`/`curso` ya
+no existen para el agente. Ver DECISIONS 2026-08-21 y `agent_docs/gestion-conocimiento.md`.
+
+---
+
 ## [2026-08-21] — Padrón de estudiantes: módulo `estudiantes.py` + autocomplete en Salidas
 
 **Tipo**: módulo nuevo (capa 2, DB propia `estudiantes.db`) + ruta nueva

@@ -464,8 +464,6 @@ ETIQUETA_TOOL = {
     'buscar_entidad': 'buscando en el inventario',
     'listar_todos': 'revisando el inventario',
     'detalle_entidad': 'leyendo la ficha',
-    'listar_prestamos': 'revisando los préstamos',
-    'detalle_prestamo': 'leyendo el préstamo',
     'consultar_historia': 'buscando en la memoria de la casa',
     'buscar_hitos': 'revisando la línea del tiempo',
     'crear_entidad': 'armando la ficha',
@@ -474,12 +472,8 @@ ETIQUETA_TOOL = {
     'editar_entidad': 'guardando los cambios',
     'vincular_entidad': 'vinculando',
     'desvincular_entidad': 'desvinculando',
-    'crear_prestamo': 'registrando el préstamo',
-    'finalizar_prestamo': 'registrando la devolución',
-    'reabrir_prestamo': 'reabriendo el préstamo',
     'mover_ubicacion': 'moviendo el recurso',
     'eliminar_entidad': 'eliminando',
-    'eliminar_prestamo': 'eliminando el préstamo',
 }
 
 ETIQUETA_PENSANDO = 'pensando'

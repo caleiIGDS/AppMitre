@@ -18,8 +18,8 @@ import historia
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Módulos de dominio que el agente puede leer/escribir, por slug de entidad. Antes todo
-# vivía en gestion.db; ahora recursos/conjuntos/actividades siguen en gestion.py y
-# hitos/personas se separaron a historia.py (DB propia). SLUGS_ENTIDAD y _modulo()
+# vivía en gestion.db; ahora recursos sigue en gestion.py y hitos/personas se separaron
+# a historia.py (DB propia). SLUGS_ENTIDAD y _modulo()
 # abajo son lo que le permite al agente seguir tratando ambos grupos de forma uniforme.
 SLUGS_ENTIDAD = list(gestion.ENTIDADES) + list(historia.ENTIDADES)
 

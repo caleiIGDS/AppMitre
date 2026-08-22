@@ -7,7 +7,7 @@
 | Área | URL | Archivo | DB | Qué es |
 |---|---|---|---|---|
 | **Horarios** | `/` | `app.py` + `database.py` | `escuela.db` | Consulta de horarios por curso (1°–7°), profesor, aula y preceptor; dashboard "En Vivo" para kiosco; export a PDF. Se regenera desde Google Sheets. |
-| **Gestión de recursos** | `/gestion` | `gestion.py` | `gestion.db` | Inventario técnico: recursos, conjuntos, actividades y préstamos. |
+| **Gestión de recursos** | `/gestion` | `gestion.py` | `gestion.db` | Inventario técnico: recursos, con fotos y desglose por ubicación. |
 | **Historia institucional** | `/historia` | `historia.py` | `historia.db` | Línea del tiempo: hitos y las personas que hicieron la escuela. |
 | **Asistente** | `/agente` | `agente/` (paquete) | (usa las de arriba) | Chat con tool-calling. Único transversal: **lee las tres** y escribe en recursos e historia. |
 | **Salidas educativas** | `/salidas` | `salidas.py` | `salidas.db` | Legajo digital de una salida (Anexos III–IX, Res. 3871/24): formulario de carga, guardado con vigencia de 1 año y generación de PDF por anexo. |
@@ -74,7 +74,7 @@ Google Sheets (CSV export por año: 1ro–7mo + preceptores + personal)
 | `static/js/script.js` | Toda la lógica frontend (~1500 líneas) |
 | `static/style.css` | Tema blueprint/industrial con CSS variables |
 | `nombre_mapeos.json` | Correcciones manuales de nombres de docentes |
-| `gestion.py` | Gestión de recursos (`/gestion`): declara sus entidades y hooks + préstamos/carrito propio |
+| `gestion.py` | Gestión de recursos (`/gestion`): declara sus entidades y hooks + el desglose de recursos por ubicación |
 | `historia.py` | Historia institucional (`/historia`): declara sus entidades y hooks (`derivados`, `clave_persona`) |
 | `agente/` | Asistente conversacional (`/agente`): paquete con blueprint, tools, prompt y loop + templates en `templates/agente/`. Expone `bp` e `init_db`; el mapa de los módulos está en `agente/__init__.py` |
 | `templates/crud/` | `lista/form/detalle/login.html` genéricos; cada área deja un stub que los extiende |

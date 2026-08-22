@@ -25,9 +25,8 @@ Cada área declara los suyos como `(clave, etiqueta, verbo)`:
 ```python
 # gestion.py
 PERMISOS = [
-    ('gestion.leer',   'Ver el inventario, actividades y préstamos', 'leer'),
-    ('gestion.editar', 'Cargar, editar y eliminar recursos; registrar y cerrar préstamos',
-     'escribir'),
+    ('gestion.leer',   'Ver el inventario', 'leer'),
+    ('gestion.editar', 'Cargar, editar y eliminar recursos', 'escribir'),
 ]
 GRUPO_PERMISOS    = 'Gestión de recursos'   # título bajo el que se agrupan en el panel
 PERMISO_LECTURA   = 'gestion.leer'          # el piso del área

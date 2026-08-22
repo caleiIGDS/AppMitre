@@ -224,7 +224,7 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos, foto=No
 
 
 def _crear_entidad(slug, campos_dict, contexto_turno=None, permisos=frozenset(), foto=None):
-    """Alta de recurso/conjunto/actividad/hito/persona, en DOS PASOS.
+    """Alta de recurso/hito/persona, en DOS PASOS.
 
     Primera llamada con un juego de campos: no toca la base, devuelve la ficha para que el
     asistente se la muestre al usuario. Segunda llamada con LOS MISMOS campos (ya en otro

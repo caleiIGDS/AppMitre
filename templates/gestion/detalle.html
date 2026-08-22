@@ -1,30 +1,11 @@
-{# Ficha genérica (templates/crud/detalle.html) + lo propio de gestión: el botón de retiro
-   al carrito y la tabla de "quién lo tiene ahora", que son préstamos y no relaciones M2M. #}
+{# Ficha genérica (templates/crud/detalle.html) + lo propio de gestión: la tabla del
+   desglose de recursos por ubicación (recurso_ubicaciones), que no es relación M2M. #}
 {% extends 'crud/detalle.html' %}
-
-{% block acciones %}
-{% if slug == 'recursos' %}
-<span class="g-retiro-widget" data-recurso="{{ fila['id'] }}"
-      data-stock="{{ fila['cantidad'] or '' }}" data-cant="{{ carrito.get(fila['id'], 0) }}">
-    <form method="post" class="g-inline-form g-retiro-form" data-add-carrito
-          action="{{ url_for('gestion.carrito_agregar') }}">
-        <input type="hidden" name="recurso_id" value="{{ fila['id'] }}">
-        <input type="hidden" name="volver" value="{{ request.path }}">
-        <button type="submit" class="g-btn g-retiro-btn">RETIRAR</button>
-    </form>
-    <span class="g-stepper" hidden>
-        <button type="button" class="g-step g-step-menos" aria-label="Quitar uno">−</button>
-        <span class="g-step-cant">1</span>
-        <button type="button" class="g-step g-step-mas" aria-label="Agregar uno">+</button>
-    </span>
-</span>
-{% endif %}
-{% endblock %}
 
 {% block seccion scoped %}
 {% if s.get('tipo') == 'ubicaciones' %}
     {% if s['items'] %}
-    <table class="g-prestamo-tabla">
+    <table class="g-tabla-detalle">
         <thead>
             <tr>
                 <th>Lugar</th>
@@ -60,27 +41,6 @@
         <input type="number" name="cantidad" placeholder="Cantidad" min="1" required style="width:5em">
         <button type="submit" class="g-btn-mini">Agregar / actualizar</button>
     </form>
-    {% endif %}
-{% elif s.get('tipo') == 'prestamo_activo' %}
-    {% if s['items'] %}
-    <table class="g-prestamo-tabla">
-        <thead>
-            <tr>
-                <th>Quién lo tiene</th>
-                <th>Cantidad</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for it in s['items'] %}
-            <tr>
-                <td>{{ it['persona'] }}</td>
-                <td>{{ it['pendiente'] }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p class="g-help">Sin elementos vinculados.</p>
     {% endif %}
 {% else %}
     {{ super() }}

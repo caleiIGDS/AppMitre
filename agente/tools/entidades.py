@@ -48,7 +48,7 @@ def _clasificar_match(q_norm, nombre, descripcion):
 
 
 def _buscar_entidad_fmt(slug, query):
-    """Búsqueda de entidad (recursos, conjuntos, actividades, hitos, personas)."""
+    """Búsqueda de entidad (recursos, hitos, personas)."""
     if slug not in SLUGS_ENTIDAD:
         # Sin esto un slug mal escrito devolvía 0 resultados y el agente concluía
         # "no hay nada cargado" en vez de reintentar con el slug correcto.
@@ -212,13 +212,11 @@ def _detalle_entidad_fmt(slug, id, permisos=frozenset()):
     resultado = dict(fila)
     resultado['relaciones'] = {}
     for sec in secciones:
-        # No todas las secciones son (id, nombre): la de "En préstamo" trae
-        # (persona, pendiente) y sin este chequeo reventaba con KeyError 'id'
-        # justo cuando el recurso estaba prestado — el caso más útil.
+        # No todas las secciones son (id, nombre): la de "Por ubicación" trae
+        # (ubicacion, cantidad) y sin este chequeo reventaba con KeyError 'id'.
         # La clave es el slug sólo si es una entidad real (así el modelo puede pasarla a
-        # buscar_entidad/detalle_entidad). 'prestamos' no lo es: con la clave cruda, el
-        # "Historial de préstamos" llegaba como "prestamos" y se leía como lo que está
-        # afuera ahora. Para esas secciones manda el título, que dice qué son.
+        # buscar_entidad/detalle_entidad). El desglose por ubicación no lo es: para esas
+        # secciones manda el título, que dice qué son.
         clave = sec.get('slug') if sec.get('slug') in modulo.ENTIDADES else None
         clave = clave or sec.get('titulo') or 'otros'
         items = []
@@ -234,7 +232,7 @@ def _detalle_entidad_fmt(slug, id, permisos=frozenset()):
 
 
 def _editar_entidad(slug, id, campos_dict):
-    """Editar recurso/conjunto/actividad/hito/persona (edición PARCIAL).
+    """Editar recurso/hito/persona (edición PARCIAL).
 
     `crud.guardar_entidad` hace UPDATE de TODAS las columnas usando
     `campos_dict.get(n, '')`, porque nació del form de /gestion, que siempre postea el
@@ -332,7 +330,7 @@ def _desvincular_entidad(slug_origen, id_origen, slug_destino, id_destino):
         return {'ok': False, 'error': 'Error al desvincular'}
 
 def _eliminar_entidad(slug, id, nombre_confirmacion=None):
-    """Eliminar entidad (recurso/conjunto/actividad/hito/persona).
+    """Eliminar entidad (recurso/hito/persona).
 
     `nombre_confirmacion` es obligatorio y debe coincidir con el nombre real de la fila:
     es una traba de CÓDIGO, no de prompt. Sin esto el modelo podía alucinar un id

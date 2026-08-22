@@ -9,9 +9,10 @@ de verdad de lo guardado.
 **Qué NO es esta área**: no es una entidad de `crud.py`. Una salida es un blob con datos
 comunes + una tabla de personas de largo variable + 7 anexos, cada uno con sus propios
 campos (algunos con sub-tablas) — el motor genérico de `crud.py` asume filas planas de
-campos escalares y no puede modelar eso. `salidas.py` sigue el molde de **préstamos** en
-`gestion.py`: tabla y rutas propias, escritas a mano, reutilizando sólo lo compartido
-(`accesos`, `crud.conectar`/`crud.init_db`, `respaldos`, layout de templates). Ver
+campos escalares y no puede modelar eso. `salidas.py` va por el mismo camino que el
+**desglose de recursos por ubicación** en `gestion.py` (`recurso_ubicaciones`): tabla y
+rutas propias, escritas a mano, reutilizando sólo lo compartido (`accesos`,
+`crud.conectar`/`crud.init_db`, `respaldos`, layout de templates). Ver
 `agent_docs/crud-motor.md` para el criterio de cuándo algo entra al motor y cuándo no.
 
 ## Arquitectura

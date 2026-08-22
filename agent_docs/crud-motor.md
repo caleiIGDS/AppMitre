@@ -88,10 +88,10 @@ acá, nunca por un `if slug == '...'` dentro de `crud.py`.
 | `secciones_detalle(slug, id, cur)` | al armar la ficha de detalle | los dos |
 | `derivados(slug, valores)` | antes de cada INSERT/UPDATE; devuelve columnas calculadas | `historia` (`nombre_norm`, `fecha_actualizada`) |
 | `valores_iniciales(slug)` | defaults del form de alta | `gestion` (`fecha_revision` = hoy) |
-| `extras_template(vista, slug)` | kwargs extra para `render_template` | `gestion` (el carrito en recursos) |
-| `tarjetas_extra(cur)` | tarjetas del home que no salen de `ENTIDADES` | `gestion` (Préstamos) |
-| `contexto_extra()` | claves extra del context processor | `gestion` (`carrito_count`) |
-| `NAV_EXTRA` | `[(slug, label)]` extra para la nav | `gestion` (Préstamos) |
+| `extras_template(vista, slug)` | kwargs extra para `render_template` | ninguna hoy (lo usaba `gestion` para el carrito de préstamos, sacado 2026-08-21) |
+| `tarjetas_extra(cur)` | tarjetas del home que no salen de `ENTIDADES` | ninguna hoy (ídem, la tarjeta de Préstamos) |
+| `contexto_extra()` | claves extra del context processor | ninguna hoy (ídem, `carrito_count`) |
+| `NAV_EXTRA` | `[(slug, label)]` extra para la nav | ninguna hoy (ídem, el ítem "Préstamos") |
 | `ERROR_DUPLICADO` | `{slug: mensaje}` cuando un UNIQUE rechaza el guardado | `historia` (personas) |
 
 #### Lo que NO entra por `migrar(cur)`
@@ -255,9 +255,13 @@ compartido — es del área, y quien lo necesite lo importa de ahí (como el paq
 
 ## Qué NO está en el motor
 
-`gestion.py` conserva entero su bloque de **préstamos/carrito** (~380 líneas): tiene ítems con
-cantidad y un ciclo prestado→devuelto que no entra en la config declarativa. No está duplicado en
-ningún lado, así que no hay nada que extraer — es dominio puro de gestión, y vive con su área.
+`gestion.py` conserva entero su **desglose de recursos por ubicación** (`recurso_ubicaciones`):
+reparte las unidades de un mismo recurso en más de un lugar, algo que no entra en la config
+declarativa (no es una relación M2M entre dos entidades, es una tabla auxiliar de una sola).
+No está duplicado en ningún lado, así que no hay nada que extraer — es dominio puro de gestión,
+y vive con su área. (Hasta el 2026-08-21 acá también vivía el bloque de préstamos/carrito —
+retiro interno de recursos con ítems y un ciclo prestado→devuelto — que se sacó del todo; ver
+`dev-log/DECISIONS.md` 2026-08-21.)
 
 Ver también: `agent_docs/gestion-conocimiento.md`, `agent_docs/historia-institucional.md`,
 `agent_docs/agente-asistente.md`, y `dev-log/DECISIONS.md` 2026-08-10 (por qué capas y no

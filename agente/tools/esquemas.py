@@ -179,13 +179,11 @@ TOOLS_SCHEMA = [
         'description': ('Busca en el inventario o en la línea del tiempo institucional por nombre '
                         'aproximado y devuelve id + nombre + datos básicos. Es la forma correcta de '
                         'conseguir un id: NUNCA inventes uno ni lo recuerdes de otra conversación. Los '
-                        'tipos son distintos: "recursos" son cosas físicas sueltas (una herramienta, un '
-                        'instrumento, un material); "conjuntos" son kits de recursos que se usan '
-                        'juntos; "actividades" son prácticas de taller que consumen esos recursos; '
-                        '"hitos" son eventos de la línea del tiempo institucional (incluye lo que antes '
-                        'se llamaba "proyecto": hoy es un hito con "Proyecto" en sus etiquetas); '
-                        '"personas" son fichas de quién hizo la escuela. Un mismo nombre puede existir '
-                        'como hito Y como conjunto, así que elegí el slug según lo que pregunten. '
+                        'tipos son distintos: "recursos" son cosas físicas sueltas del inventario '
+                        '(una herramienta, un instrumento, un material); "hitos" son eventos de la '
+                        'línea del tiempo institucional (incluye lo que antes se llamaba "proyecto": '
+                        'hoy es un hito con "Proyecto" en sus etiquetas); "personas" son fichas de '
+                        'quién hizo la escuela. '
                         'CADA RESULTADO TRAE UN CAMPO "match" QUE DICE CUÁNTO CONFIAR: '
                         '"exacto" = el nombre contiene lo que buscaste; "descripcion" = no está en el '
                         'nombre pero sí en la descripción (que viene incluida, leela para ver si sirve); '
@@ -236,9 +234,8 @@ TOOLS_SCHEMA = [
     {
         'name': 'detalle_entidad',
         'description': ('Ficha completa de una entidad: todos sus campos más las relaciones (qué '
-                        'conjuntos/actividades la usan si es un recurso, qué personas aparecen si es '
-                        'un hito, y si es un recurso, quién lo tiene prestado ahora). Necesitás el id: '
-                        'sacalo de buscar_entidad. '
+                        'personas aparecen si es un hito, y si es un recurso, cómo está desglosado '
+                        'por ubicación). Necesitás el id: sacalo de buscar_entidad. '
                         'Un campo vacío significa que nadie lo cargó — decilo así, no lo completes con '
                         'un valor plausible.'),
         'input_schema': {
@@ -283,34 +280,6 @@ TOOLS_SCHEMA = [
                                         'es lo que querés. Usalo solo para releer una que ya '
                                         'leíste en otro modo.'}
             }
-        }
-    },
-    {
-        'name': 'listar_prestamos',
-        'description': ('Lista los préstamos EN CURSO (con algo todavía sin devolver), con su id, la '
-                        'persona y lo que queda pendiente. Solo devuelve activos: los ya cerrados no '
-                        'aparecen. Es de donde sacás el prestamo_id para devolver o consultar.'),
-        'input_schema': {
-            'type': 'object',
-            'properties': {
-                'persona': {'type': 'string', 'description': 'Opcional: filtra por nombre de quien retiró. Sin esto lista todos los activos'}
-            }
-        }
-    },
-    {
-        'name': 'detalle_prestamo',
-        'description': ('Detalle de UN préstamo: cada ítem con su recurso_id, cuánto se llevó y cuánto '
-                        'devolvió hasta ahora. Llamala SIEMPRE antes de finalizar_prestamo o '
-                        'reabrir_prestamo con ítems puntuales, porque los recurso_id que necesitan esas '
-                        'tools son los de ESTE préstamo y no los de una búsqueda general. También es la '
-                        'forma correcta de responder "¿quedó registrado?" o "¿cuánto le falta?" en vez '
-                        'de volver a crear el préstamo.'),
-        'input_schema': {
-            'type': 'object',
-            'properties': {
-                'prestamo_id': {'type': 'integer', 'description': 'ID del préstamo, obtenido de listar_prestamos o del alta'}
-            },
-            'required': ['prestamo_id']
         }
     },
     {
@@ -395,10 +364,6 @@ TOOLS_SCHEMA = [
                 'valor': {'type': 'string', 'enum': ['Básico', 'Secundario', 'Alto valor'],
                           'description': 'IMPORTANCIA del recurso dentro del inventario (qué tan crítico es), NO para qué sirve — eso va en descripcion. Solo recursos'},
                 'fecha_revision': {'type': 'string', 'description': 'Fecha del último control de inventario, en formato día/mes/año (ej: 08/08/2026). Solo recursos. NO hace falta que la mandes en un alta: si la omitís se completa sola con la de hoy y aparece en la ficha; mandala solo si el usuario dice otra fecha'},
-                'uso_tipico': {'type': 'string', 'description': 'En qué se suele usar el kit. Solo conjuntos'},
-                'objetivo': {'type': 'string', 'description': 'Objetivo pedagógico. Solo actividades'},
-                'duracion': {'type': 'string', 'description': 'Duración estimada, texto libre (ej: 2 módulos, 80 minutos). Solo actividades'},
-                'curso': {'type': 'string', 'description': 'Año al que apunta, texto libre (ej: 6° año). Solo actividades'},
                 'fecha': {'type': 'string', 'description': 'Fecha del hito en formato ISO AAAA-MM-DD (ej: 2025-11-20), que es como la guarda la base. Solo hitos, y ahí es OBLIGATORIA: si el usuario no la dijo, preguntásela — un hito sin fecha no entra en la línea del tiempo'},
                 'nivel': {'type': 'string', 'enum': historia.NIVELES_HITO,
                           'description': 'Importancia del hito en la línea del tiempo. Básico: evento o actividad común. Importante: logro, programa nuevo. Crítico: olimpiada, construcción significativa. Solo hitos'},
@@ -434,10 +399,6 @@ TOOLS_SCHEMA = [
                 'valor': {'type': 'string', 'enum': ['Básico', 'Secundario', 'Alto valor'],
                           'description': 'IMPORTANCIA del recurso dentro del inventario (qué tan crítico es), NO para qué sirve — eso va en descripcion. Solo recursos'},
                 'fecha_revision': {'type': 'string', 'description': 'Fecha del último control de inventario, en formato día/mes/año (ej: 08/08/2026). Solo recursos. Actualizala cuando el usuario diga que revisó o controló el recurso. Ojo: el inventario viejo importado del sheet tiene fechas cortas sin año (24/4, 8/5) — no las reformatees por tu cuenta'},
-                'uso_tipico': {'type': 'string', 'description': 'En qué se suele usar el kit. Solo conjuntos'},
-                'objetivo': {'type': 'string', 'description': 'Objetivo pedagógico. Solo actividades'},
-                'duracion': {'type': 'string', 'description': 'Duración estimada, texto libre (ej: 2 módulos, 80 minutos). Solo actividades'},
-                'curso': {'type': 'string', 'description': 'Año al que apunta, texto libre (ej: 6° año). Solo actividades'},
                 'fecha': {'type': 'string', 'description': 'Fecha del hito en formato ISO AAAA-MM-DD (ej: 2025-11-20), que es como la guarda la base. Solo hitos'},
                 'nivel': {'type': 'string', 'enum': historia.NIVELES_HITO,
                           'description': 'Importancia del hito en la línea del tiempo. Básico: evento o actividad común. Importante: logro, programa nuevo. Crítico: olimpiada, construcción significativa. Solo hitos'},
@@ -493,23 +454,21 @@ TOOLS_SCHEMA = [
     },
     {
         'name': 'vincular_entidad',
-        'description': ('Asocia dos entidades, por ejemplo agregar un recurso a un conjunto o a una '
-                        'actividad, o una persona a un hito. La DIRECCIÓN importa: el origen es el que '
-                        'contiene y el destino el contenido. Para "agregar el panel solar al conjunto '
-                        'Banco de ensayo" el origen es el conjunto y el destino el recurso. Si entre '
+        'description': ('Asocia dos entidades — hoy la única relación es persona ↔ hito, por ejemplo '
+                        'sumar a alguien que participó de un hito ya cargado. Anda en las dos '
+                        'direcciones (da lo mismo cuál sea el origen y cuál el destino). Si entre '
                         'esos dos tipos no existe relación, devuelve error: no reintentes dándolos '
-                        'vuelta sin pensarlo. Los dos ids salen de buscar_entidad. EXCEPCIÓN: '
-                        'personas ↔ hitos anda en las dos direcciones, dan lo mismo. Ojo: vincular '
+                        'vuelta sin pensarlo. Los dos ids salen de buscar_entidad. Ojo: vincular '
                         'a alguien a un hito NO le escribe el nombre en `protagonistas` — si el '
                         'usuario quiere que figure en la ficha, editá también ese campo.'),
         'input_schema': {
             'type': 'object',
             'properties': {
                 'slug_origen': {'type': 'string', 'enum': SLUGS_ENTIDAD,
-                                'description': 'Tipo de la entidad que CONTIENE (el conjunto, la actividad, el hito)'},
+                                'description': 'Tipo de la entidad de origen (el hito o la persona)'},
                 'id_origen': {'type': 'integer', 'description': 'ID de la entidad que contiene'},
                 'slug_destino': {'type': 'string', 'enum': SLUGS_ENTIDAD,
-                                 'description': 'Tipo de la entidad CONTENIDA (normalmente "recursos")'},
+                                 'description': 'Tipo de la entidad de destino'},
                 'id_destino': {'type': 'integer', 'description': 'ID de la entidad contenida'}
             },
             'required': ['slug_origen', 'id_origen', 'slug_destino', 'id_destino']
@@ -533,98 +492,6 @@ TOOLS_SCHEMA = [
                 'id_destino': {'type': 'integer', 'description': 'ID de la entidad contenida'}
             },
             'required': ['slug_origen', 'id_origen', 'slug_destino', 'id_destino']
-        }
-    },
-    {
-        'name': 'crear_prestamo',
-        'description': ('Registra que alguien se llevó uno o más recursos. Un solo préstamo puede tener '
-                        'varios ítems: cargalos todos juntos en `items`, no hagas una llamada por cosa. '
-                        'ATENCIÓN: no deduplica — llamarla dos veces con los mismos datos crea DOS '
-                        'préstamos. Para verificar uno que ya cargaste usá detalle_prestamo, nunca '
-                        'vuelvas a llamar acá. Si un nombre de recurso es ambiguo devuelve ok:false con '
-                        'una lista `opciones`: en ese caso mostrale las opciones al usuario y preguntá '
-                        'cuál es, no elijas vos ni reintentes adivinando. La cantidad se topea al stock '
-                        'del inventario. Si lo que se guardó salió distinto de lo pedido (se topeó al '
-                        'stock, se sumaron repetidos, o ya había unidades afuera en otros préstamos), '
-                        'la respuesta trae `ajustes`: decíselos al usuario, no des por hecho lo pedido.'),
-        'input_schema': {
-            'type': 'object',
-            'properties': {
-                'persona': {'type': 'string', 'description': 'Quién retira. Si es del personal de la escuela, el nombre tal cual figura en la lista de personas conocidas; si es alguien externo, como te lo dieron'},
-                'destino': {'type': 'string', 'description': 'Opcional: a dónde se lo lleva (aula, taller, domicilio)'},
-                'notas': {'type': 'string', 'description': 'Opcional: aclaraciones (estado en que salió, fecha estimada de devolución)'},
-                'items': {
-                    'type': 'array',
-                    'description': 'Todos los recursos de este préstamo, en una sola llamada',
-                    'items': {
-                        'type': 'object',
-                        'properties': {
-                            'recurso': {'type': 'string', 'description': 'Nombre del recurso (tolera aproximados y tildes) o su ID como string. El ID es preferible cuando el usuario ya eligió entre varias opciones'},
-                            'cantidad': {'type': 'integer', 'description': 'Unidades que se lleva. Default 1'}
-                        },
-                        'required': ['recurso']
-                    }
-                }
-            },
-            'required': ['persona', 'items']
-        }
-    },
-    {
-        'name': 'finalizar_prestamo',
-        'description': ('Registra una devolución. SIN `items` da por devuelto TODO el préstamo y lo '
-                        'cierra — usalo solo si el usuario dijo que devolvió todo. CON `items` registra '
-                        'una devolución parcial y el préstamo sigue abierto con lo que falta. Los '
-                        '`recurso_id` tienen que ser los de ESTE préstamo: llamá detalle_prestamo antes '
-                        'para conocerlos, no uses ids de buscar_entidad. Si alguno no pertenece al '
-                        'préstamo devuelve ok:false y no aplica NADA: en ese caso avisá del error, no '
-                        'lo des por devuelto. La respuesta trae `estado` y `pendiente_total` de cómo '
-                        'quedó el préstamo DESPUÉS de la devolución: contale eso al usuario, no lo que '
-                        'pediste. Nunca mandes `items` vacío: si devolvieron todo, omitilo.'),
-        'input_schema': {
-            'type': 'object',
-            'properties': {
-                'prestamo_id': {'type': 'integer', 'description': 'ID del préstamo, de listar_prestamos o detalle_prestamo'},
-                'items': {
-                    'type': 'array',
-                    'description': 'Omitir para devolver todo y cerrar. Incluir solo para devoluciones parciales',
-                    'items': {
-                        'type': 'object',
-                        'properties': {
-                            'recurso_id': {'type': 'integer', 'description': 'ID del recurso TAL COMO figura en detalle_prestamo de este préstamo'},
-                            'cantidad': {'type': 'integer', 'description': 'Unidades que devuelve ahora, no el total prestado'}
-                        },
-                        'required': ['recurso_id', 'cantidad']
-                    }
-                }
-            },
-            'required': ['prestamo_id']
-        }
-    },
-    {
-        'name': 'reabrir_prestamo',
-        'description': ('Deshace una devolución que se cargó por error: vuelve a marcar los ítems como '
-                        'pendientes y reabre el préstamo. Es lo contrario de finalizar_prestamo, no un '
-                        'borrado — el préstamo sigue existiendo. Sin `items` deshace la devolución '
-                        'completa. Deshacer NO es automático: aunque hayas registrado la devolución '
-                        'recién, hay que llamar esta tool y esperar ok:true antes de decir que se '
-                        'revirtió. Los recurso_id salen de detalle_prestamo.'),
-        'input_schema': {
-            'type': 'object',
-            'properties': {
-                'prestamo_id': {'type': 'integer', 'description': 'ID del préstamo a reabrir'},
-                'items': {
-                    'type': 'array',
-                    'description': 'Omitir para deshacer toda la devolución. Incluir para deshacer solo algunos ítems',
-                    'items': {
-                        'type': 'object',
-                        'properties': {
-                            'recurso_id': {'type': 'integer', 'description': 'ID del recurso tal como figura en detalle_prestamo de este préstamo'}
-                        },
-                        'required': ['recurso_id']
-                    }
-                }
-            },
-            'required': ['prestamo_id']
         }
     },
     {
@@ -660,7 +527,7 @@ TOOLS_SCHEMA = [
     },
     {
         'name': 'eliminar_entidad',
-        'description': ('Elimina un recurso, conjunto, actividad, hito o persona. Requiere confirmación del '
+        'description': ('Elimina un recurso, hito o persona. Requiere confirmación del '
                         'usuario en un turno previo Y el nombre exacto en nombre_confirmacion: el servidor '
                         'verifica que ese nombre coincida con el id, y rechaza el borrado si no coincide. '
                         'Nunca inventes un id: obtenelo con buscar_entidad.'),
@@ -676,23 +543,6 @@ TOOLS_SCHEMA = [
                 }
             },
             'required': ['slug', 'id', 'nombre_confirmacion']
-        }
-    },
-    {
-        'name': 'eliminar_prestamo',
-        'description': ('Elimina un préstamo (solo para registros mal cargados). Requiere confirmación del '
-                        'usuario en un turno previo Y persona_confirmacion: el servidor verifica que coincida '
-                        'con la persona del préstamo y rechaza el borrado si no.'),
-        'input_schema': {
-            'type': 'object',
-            'properties': {
-                'prestamo_id': {'type': 'integer', 'description': 'ID del préstamo a borrar, obtenido de listar_prestamos en ESTA conversación'},
-                'persona_confirmacion': {
-                    'type': 'string',
-                    'description': 'Nombre de la persona del préstamo, tal como figura en la base.'
-                }
-            },
-            'required': ['prestamo_id', 'persona_confirmacion']
         }
     }
 ]
@@ -724,8 +574,6 @@ PERMISO_POR_TOOL = {
     'buscar_entidad': 'agente.leer',
     'listar_todos': 'agente.leer',
     'detalle_entidad': 'agente.leer',
-    'listar_prestamos': 'agente.leer',
-    'detalle_prestamo': 'agente.leer',
     'consultar_historia': 'agente.leer',
     'buscar_hitos': 'agente.leer',
     # No toca la base: lo que gasta es la API de visión, no el inventario.
@@ -737,12 +585,8 @@ PERMISO_POR_TOOL = {
     'adjuntar_foto': 'agente.escribir',
     'vincular_entidad': 'agente.escribir',
     'desvincular_entidad': 'agente.escribir',
-    'crear_prestamo': 'agente.escribir',
-    'finalizar_prestamo': 'agente.escribir',
-    'reabrir_prestamo': 'agente.escribir',
     'mover_ubicacion': 'agente.escribir',
     'eliminar_entidad': 'agente.escribir',
-    'eliminar_prestamo': 'agente.escribir',
 }
 
 # Una tool sin permiso declarado sería una tool que nadie puede ejecutar (fail-closed) y

@@ -13,13 +13,13 @@ rompería justamente eso.
 Expone un chat conversacional contra el LLM configurado (DeepSeek por defecto,
 Anthropic/OpenAI/Groq/Ollama según `AGENTE_PROVIDER` — ver "Configuración"). El usuario puede
 hablar con la app en lenguaje natural en vez de hacer click en formularios: consultar
-horarios, crear recursos, fotografiar etiquetas y cargarlas, gestionar préstamos, cargar
-hitos y personas. Todo con auditoría de escrituras en `agente_log`.
+horarios, crear recursos, fotografiar etiquetas y cargarlas, cargar hitos y personas. Todo
+con auditoría de escrituras en `agente_log`.
 
 **Acceso**: dos vistas del mismo chat, ambas detrás del gate de `accesos.py`
 (`accesos.registrar_acceso(bp, 'agente.leer', ...)`). El asistente declara **cuatro permisos
 propios** —`agente.leer`, `agente.escribir`, `agente.vision`, `agente.auditar`— y **con cuáles tenga
-cambia lo que el agente es**: con solo `agente.leer` las once tools de escritura ni se le mandan al
+cambia lo que el agente es**: con solo `agente.leer` las siete tools de escritura ni se le mandan al
 modelo, y sin `agente.vision` no hay botón para adjuntar fotos ni tools que las miren. Ver
 "Permisos" más abajo y `agent_docs/accesos.md`.
 - Botón "🤖 ASISTENTE" en el header de `/gestion` y `/historia` → widget flotante, para
@@ -34,7 +34,7 @@ El agente cruza **dos DBs de dominio** más los horarios:
 | Fuente | Slugs / datos | Acceso |
 |---|---|---|
 | `escuela.db` (horarios) | profesores, cursos, aulas | solo lectura |
-| `gestion.db` (recursos) | `recursos`, `conjuntos`, `actividades` + préstamos | lectura y escritura |
+| `gestion.db` (recursos) | `recursos` | lectura y escritura |
 | `historia.db` (institucional) | `hitos`, `personas` | lectura y escritura |
 | `historias/*.json` (lore) | anécdotas de Emilio Mitre | solo lectura |
 
@@ -161,10 +161,10 @@ permitida — lo que no está permitido es un campo del body. Un acceso sin `age
 normalmente; sólo mandar una imagen le da `403`, que el front ya traduce a un mensaje legible.
 
 **Context processor propio**: `agente.bp` construye su `_contexto_base()` localmente
-(`escuela_nombre`/`escuela_logo`/`escuela_version` salen de `config.py`). Antes delegaba en
-`gestion._contexto_base()`; ya no, porque `nav_entidades`/`carrito_count` son del layout de
-recursos y no de este. Los context processors de un blueprint no corren para requests de otro,
-así que sin esto el header renderiza vacío.
+(`escuela_nombre`/`escuela_logo`/`escuela_version` salen de `config.py`). No usa el context
+processor genérico de `crud.registrar_rutas` porque `/agente` no es un área CRUD: no tiene
+`ENTIDADES` propias ni nav de entidades. Los context processors de un blueprint no corren
+para requests de otro, así que sin esto el header renderiza vacío.
 
 ### Contar en qué anda mientras tarda (`/chat/stream`)
 
@@ -303,13 +303,12 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
   — horarios agrupados por día. `horario_profesor` cubre también al personal no docente, y
   devuelve `padron_completo` cuando no encuentra a nadie
 - `aulas_libres()` — aulas desocupadas ahora, agrupadas por piso
-- `buscar_entidad(slug, query)` — búsqueda de recursos/conjuntos/actividades (gestion.db) y
+- `buscar_entidad(slug, query)` — búsqueda de recursos (gestion.db) y
   de hitos/personas (historia.db); el módulo lo resuelve `_modulo(slug)`
   (calidad del match explícita, ver abajo)
 - `listar_todos(slug)` — lista completa de nombres + id; **fallback** de `buscar_entidad`
   cuando no hay ningún match `exacto`, ver abajo
 - `detalle_entidad(slug, id)` — detalle completo + relaciones (ver "Claves de `relaciones`")
-- `listar_prestamos(persona?)` / `detalle_prestamo(id)` — estados de préstamos
 - `consultar_historia(tema)` — lore de la escuela y guiños internos, ver abajo
 - `leer_foto(modo?, foto?)` — mira las fotos adjuntadas en ESTE turno y las devuelve en texto,
   cada lectura con el número de su foto. **Sin `foto` lee todas de una sola llamada**, que es
@@ -328,24 +327,19 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
   que ya existe (sin `foto` van todas, con `foto` sólo esa). Sin ficha de confirmación (es
   aditivo); las imágenes salen de `contexto_turno`, no de un parámetro
 - `vincular_entidad` / `desvincular_entidad` — gestionar M2M
-- `crear_prestamo(persona, destino?, notas?, items)` — crear préstamo (cantidad topeada
-  a stock, recurso por nombre o id con resolución ambigua). Devuelve `ajustes` si lo guardado
-  salió distinto de lo pedido, ver "Las tools de préstamo cuentan cómo quedó" abajo
-- `finalizar_prestamo(id, items?)` — devolución total (sin `items`) o parcial (con `items`)
-- `reabrir_prestamo(id, items?)` — deshace una devolución
 - `mover_ubicacion(recurso, cantidad, origen?, destino)` — mueve unidades de un recurso entre
   lugares en `gestion.recurso_ubicaciones` (desglose OPCIONAL, sólo para recursos repartidos
   en más de un sitio; el campo `ubicacion` simple no se toca). **Nunca bloquea** por falta de
   desglose previo: si `origen` no tenía tanto registrado, igual mueve lo pedido y avisa
   (`avisos`) — ver `agent_docs/gestion-conocimiento.md`. `origen` es opcional (unidades sin
   lugar registrado antes)
-- `eliminar_entidad` / `eliminar_prestamo` — **requieren confirmación en turno separado** (el
-  system prompt instruye a Claude a no ejecutar en el mismo turno en que se solicita, sino
-  responder primero qué va a borrar y esperar confirmación)
+- `eliminar_entidad` — **requiere confirmación en turno separado** (el system prompt instruye
+  a Claude a no ejecutar en el mismo turno en que se solicita, sino responder primero qué va
+  a borrar y esperar confirmación)
 
 ### Permisos: no tener la tool, no tenerla prohibida
 
-Un acceso de consulta **no recibe** los esquemas de las once tools de escritura. La diferencia con
+Un acceso de consulta **no recibe** los esquemas de las siete tools de escritura. La diferencia con
 prohibírselas no es cosmética: una tool que no está en la lista el modelo no la anuncia, no la
 promete y no alucina haberla usado. Prohibida, en cambio, la intenta, se come el error y a veces
 igual contesta "✅ listo".
@@ -360,7 +354,7 @@ desarrollo**.
 
 Tres capas, de afuera hacia adentro:
 
-1. **Filtrado del esquema** — `tools_permitidas()`. El modelo ve 15 tools o 25.
+1. **Filtrado del esquema** — `tools_permitidas()`. El modelo ve 12 tools o 20.
 2. **`ejecutar_tool(..., permisos=None)`** — chequea igual. Cubre `/agente/confirmar`, que escribe
    sin pasar por el LLM, y el caso de que el modelo invente un nombre de tool. El default `None` es
    **fail-closed**: un call site nuevo que se olvide de pasar permisos falla cerrado y ruidoso, no
@@ -390,7 +384,7 @@ tampoco se nombra ninguna clave. Se aplica en las mismas tres capas:
 |---|---|
 | `tools_permitidas()` | recorta el slug de **los enum** de cada esquema (`_sin_slugs`, que copia — `TOOLS_SCHEMA` es global) |
 | `ejecutar_tool` | rechaza `slug` / `slug_origen` / `slug_destino` prohibidos, antes del `try` |
-| `construir_system_prompt(ve_personas=)` | saca el área 6 (PERSONAS) y los dos bullets de `_HITOS` que hablan de fichas |
+| `construir_system_prompt(ve_personas=)` | saca el área 5 (PERSONAS) y los dos bullets de `_HITOS` que hablan de fichas |
 
 Además hay cuatro lugares que devuelven nombres de personas **sin recibir el slug**, y por eso toman
 `permisos` explícito: `_buscar_profesor` (el cruce `personas_con_ficha`), `_detalle_entidad_fmt` (las
@@ -401,19 +395,18 @@ los cuatro se comportan como antes de que existiera el cruce con `personas`.
 ### El system prompt se recorta con las tools (`prompt.py`)
 
 `prompt.py` está partido en bloques y `construir_system_prompt(..., escribe=)` arma la lista.
-Con `escribe=False` no van el circuito de alta, el bloque de hitos, el de carga desde etiqueta, el
-de préstamos (con su padrón de ~1.600 tokens) ni las reglas de borrado; sí va `_SOLO_LECTURA`, que
-le dice explícitamente que esas herramientas **no existen** para él y que no escriba "✅". Las
-reglas numeradas se renumeran solas: saltar del 1 al 3 le marcaría al modelo que hay reglas que no
-está viendo. El prompt de un acceso de consulta queda en ~55% del otro.
+Con `escribe=False` no van el circuito de alta, el bloque de hitos, el de carga desde etiqueta ni
+las reglas de borrado; sí va `_SOLO_LECTURA`, que le dice explícitamente que esas herramientas
+**no existen** para él y que no escriba "✅". Las reglas numeradas se renumeran solas: saltar del 1
+al 3 le marcaría al modelo que hay reglas que no está viendo.
 
 `escribe` lo decide `llm.chat_with_tools_stream` mirando **las tools que efectivamente se
 mandaron**, no los permisos del usuario: así es imposible que el prompt hable de dar de alta
 mientras las tools de alta no viajaron.
 
 `ve_personas` sale del mismo lugar y por la misma razón, con `esquemas.slug_visible(tools,
-'personas')`: si el slug no sobrevivió en ningún enum, el prompt no describe el área 6 ni ofrece dar
-de alta una persona. El encabezado pasa a decir "Tenés cinco áreas a cargo" — el número también es
+'personas')`: si el slug no sobrevivió en ningún enum, el prompt no describe el área 5 ni ofrece dar
+de alta una persona. El encabezado pasa a decir "Tenés cuatro áreas a cargo" — el número también es
 parte de lo que el modelo lee.
 
 `ve_fotos` es el tercero, y sale de `TOOLS_FOTO & {las tools que se mandaron}`: sin `agente.vision`
@@ -438,9 +431,11 @@ Movido al fondo, el prefijo estable de un acceso de escritura pasa de ~3.000 a *
 el modelo lee: la hora que manda es el sello `[Hora de este mensaje: ...]` que lleva cada mensaje
 del usuario, y el propio bloque lo dice.
 
-`_prestamos()` interpola el padrón y quedó en el medio a propósito: sólo cambia cuando se
-regenera `escuela.db`, o sea casi nunca. **La regla para cualquier bloque nuevo que interpole
-algo del turno es la misma: al final**, o rompe el cache de todo lo que tenga debajo.
+Hoy no queda ningún bloque intermedio que interpole datos del turno — `_fecha()` es el único, y
+va al fondo. Para una misma combinación de `escribe`/`ve_personas`/`ve_fotos`, el prompt entero
+salvo ese bloque final es idéntico byte a byte entre turnos. **La regla para cualquier bloque
+nuevo que interpole algo del turno es la misma: al final**, o rompe el cache de todo lo que
+tenga debajo.
 
 La otra mitad del mismo problema es la **cantidad de vueltas**, y esa se ataca en el contenido:
 `_COMO_TRABAJAS` le pide explícitamente que mande juntas todas las tools que no dependan una de
@@ -779,11 +774,10 @@ esta tool. Los preceptores siguen sin tener horario de clases: eso no se respond
 Los docentes salen de **`escuela.db`** (los horarios) y las fichas de personas de
 **`gestion.db`**. Son padrones que **no se superponen**: un alumno que ganó una olimpiada, un
 egresado o un ex director tienen ficha y no dan clases; una profesora que nadie cargó todavía
-da clases y no tiene ficha. El modelo los mezclaba, y el prompt empujaba para el lado de los
-horarios — la sección de préstamos le **inyecta** la lista de PERSONAS CONOCIDAS
-(`_personas_conocidas()`, docentes + no docentes) y nunca le mostraba las fichas. Ante "nati
-fue quien lo logró" llamaba a `buscar_profesor`, veía tres docentes llamadas Natalia y
-ofrecía esas tres, mientras "Natalia Boo Fiad" estaba cargada con ficha.
+da clases y no tiene ficha. El modelo los mezclaba, priorizando los horarios y sin mostrar
+nunca las fichas de personas. Ante "nati fue quien lo logró" llamaba a `buscar_profesor`, veía
+tres docentes llamadas Natalia y ofrecía esas tres, mientras "Natalia Boo Fiad" estaba cargada
+con ficha.
 
 **Buscar una persona mira siempre los dos padrones**, entre por donde entre:
 
@@ -852,7 +846,7 @@ la hora venía 3 horas adelantada. Ver "El reloj" en `agent_docs/crud-motor.md`.
 Los id son plumbing: enganchan filas entre tablas y le sirven al modelo para llamar a las
 tools, pero al usuario no le dicen nada — ni la web de `/gestion` los muestra, solo los usa
 en las URLs. Aun así el modelo los repetía en casi toda respuesta de lectura (medido: 6 de
-9 respuestas — "Multímetro (ID 4)", "préstamo #2", una columna `ID` en la tabla de préstamos).
+9 respuestas — "Multímetro (ID 4)", una columna `ID` en la tabla de resultados).
 
 Se ataca por dos lados:
 - **Regla en el system prompt** ("LOS ID NO SE MUESTRAN"), con ejemplos de mal/bien y la
@@ -873,7 +867,7 @@ después del cambio: **0 de 9**. Los mensajes que arma el servidor tampoco los i
 
 Las tools de lectura retornan datos ya procesados, no filas SQL crudas: horarios agrupados
 por día, aulas libres agrupadas por piso, búsquedas con solo campos relevantes (omitiendo
-vacíos), pendientes de préstamos ya calculados. Reduce tokens de API y errores de interpretación.
+vacíos). Reduce tokens de API y errores de interpretación.
 
 ### Calidad del match en `buscar_entidad`
 
@@ -920,9 +914,9 @@ afirmación "estos son todos"). Tope `LIMITE_LISTADO_COMPLETO` (400): arriba de 
 `error` pidiendo afinar la búsqueda, en vez de reventar el contexto en silencio.
 
 **Costo medido** (91 recursos): el listado completo son ~1.190 tokens. El piso que se
-re-procesa en **cada** round-trip de tool es ~8.050 (esquemas de las 20 tools ~6.420 + lista
-de personas ~1.625, sin contar system prompt ni historial), así que un intento extra de
-búsqueda cuesta ~6,7x lo que cuesta mandar el inventario entero. Por eso se eligió esto sobre
+re-procesa en **cada** round-trip de tool es ~6.420 (los esquemas de las 20 tools, sin contar
+system prompt ni historial), así que un intento extra de búsqueda cuesta ~5,4x lo que cuesta
+mandar el inventario entero. Por eso se eligió esto sobre
 un diccionario de sinónimos o un tier intermedio de reintentos — ver `dev-log/DECISIONS.md`
 2026-08-08, que además documenta cuándo esta decisión se da vuelta (si el inventario supera
 el tope).
@@ -1029,7 +1023,7 @@ system prompt además de acá:
   para inventar: la respuesta tiene que seguir dejando clarísimo que esa historia no existe. Sin
   esta línea, la excusa absurda es exactamente el borde por el que se cuela la fabricación de
   anécdotas que el resto del prompt trabaja para evitar.
-- Y vale **solo para historias y lore**. Un horario, un stock, un préstamo o una persona que no
+- Y vale **solo para historias y lore**. Un horario, un stock, un recurso o una persona que no
   están cargados se contestan derecho: "no hay datos de eso". Al que busca una herramienta o va
   corriendo a dar clase, un chiste le cuesta una vuelta al pañol al vacío. Ahí sigue valiendo el
   agente bifásico de siempre (DECISIONS 2026-08-08): fantasma orgulloso en las historias,
@@ -1084,7 +1078,7 @@ También se sacó el vocabulario de teatro de la doc de historias: el `estilo` s
 guion. Ver `HISTORIAS_PROCEDIMIENTO.md`.
 
 **Gatillo de personalidad**: Emilio solo cobra vida cuando se consultan historias. Para tareas
-prácticas (horarios, inventario, préstamos), sigue siendo una herramienta eficiente sin personaje.
+prácticas (horarios, inventario), sigue siendo una herramienta eficiente sin personaje.
 Así alguien que consulta un horario en medio de la jornada obtiene info rápida, sin interrupciones
 de lore.
 
@@ -1365,7 +1359,7 @@ agente_log (
 ```
 Se inserta una fila **por cada tool de escritura ejecutada** (no por lecturas, para no llenar
 la tabla de ruido). El snapshot "antes" permite restaurar a mano si el agente se equivocó en
-una devolución de préstamo o un borrado.
+una edición o un borrado.
 
 ### Otras tablas del agente en `gestion.db`
 
@@ -1394,38 +1388,18 @@ que las usa — no en `init_db()`, porque el server puede estar meses sin reinic
 ### Guardias de seguridad / guardrails de prompt
 
 - **Confirmación en dos turnos para eliminar**: el *system prompt* instruye a Claude a nunca
-  ejecutar `eliminar_entidad` / `eliminar_prestamo` en el mismo turno en que se pide el borrado.
-  Primero debe responder qué va a borrar y esperar una confirmación explícita del usuario en el
-  turno siguiente. Es una guardrail de prompt (coherente con "/gestion" siendo "traba de
-  desarrollo, no seguridad completa"), reforzada por la auditoría.
+  ejecutar `eliminar_entidad` en el mismo turno en que se pide el borrado. Primero debe
+  responder qué va a borrar y esperar una confirmación explícita del usuario en el turno
+  siguiente. Es una guardrail de prompt (coherente con "/gestion" siendo "traba de desarrollo,
+  no seguridad completa"), reforzada por la auditoría.
 - **Confirmación de alta con ficha**: a diferencia del borrado, el alta **no** depende del
   prompt — `crear_entidad` no escribe hasta que el hash de la ficha coincida con uno mostrado
   en un turno anterior (ver "Alta con ficha de confirmación"). Vale también para las altas
   desde foto: la foto llena la ficha, no la base.
-- **Resolución de ambigüedad en recursos**: si `crear_prestamo` busca un nombre de recurso
+- **Resolución de ambigüedad en recursos**: si `mover_ubicacion` busca un nombre de recurso
   que matchea más de una fila, la tool devuelve `ok:false` con `opciones` (id + nombre de cada
   candidato) en vez de adivinar. El system prompt instruye a mostrarle esas opciones al usuario
   y preguntar, nunca elegir por su cuenta ni reintentar adivinando.
-- **Resolución de persona por lista conocida**: `chat_with_tools()` arma en cada turno la lista
-  de "personas conocidas" (`_personas_conocidas()`: profesores de `clases` + personal no docente,
-  ~340 nombres) y la inyecta completa en el system prompt. Regla: si el nombre que dio el usuario
-  no es un match exacto/obvio contra la lista (apodo, nombre incompleto, typo — ej. "Dami"),
-  el agente debe preguntar antes de crear el préstamo en vez de guardar el nombre tal cual; si no
-  se parece a nadie de la lista, se asume persona externa (alumno/visita) y se usa tal cual sin
-  preguntar. Se evaluó dar la lista completa en el prompt vs. una tool de "comparar nombre"
-  dedicada — se descartó la tool porque ya existe `buscar_profesor` con la misma lógica de
-  scoring y agregar una segunda ruta hubiera sido redundante; la lista en el prompt evita además
-  que el agente decida "no hace falta buscar" y se salte la verificación. El costo en tokens es
-  chico (~1500 tokens por turno) y no justificó una tabla de "personas" nueva en `gestion.db`
-  (los préstamos son a veces gente que no está en ninguna lista — alumnos, visitas — así que
-  seguir aceptando texto libre es correcto).
-- **Devoluciones parciales no fallan en silencio**: `finalizar_prestamo`/`reabrir_prestamo` con
-  `items` verifican que cada `recurso_id` pertenezca al préstamo antes de tocarlo; si no
-  pertenece, la tool devuelve `ok:false` con el detalle en vez de reportar éxito sin haber
-  cambiado nada (bug real: antes un `recurso_id` inválido se ignoraba silenciosamente y la tool
-  igual respondía `ok:true`). El system prompt le pide al agente llamar primero a
-  `detalle_prestamo(id)` para obtener los `recurso_id` reales de ese préstamo antes de devolver
-  ítems puntuales, en vez de adivinarlos.
 
 ### Configuración
 
@@ -1457,11 +1431,11 @@ que las usa — no en `init_db()`, porque el server puede estar meses sin reinic
 - **Env var** `AGENTE_API_BASE` — para APIs custom (Ollama, self-hosted).
 - **Costo**: cada mensaje del chat arrastra el system prompt + los esquemas de las tools, ~15.000
   tokens de entrada, tenga foto o no — eso domina la factura, no las respuestas. **Un acceso de
-  solo consulta paga bastante menos**: 15 esquemas en vez de 25, y un prompt de ~55% (sin el
-  circuito de alta ni el padrón de ~1.600 tokens). Por eso el lector de
+  solo consulta paga bastante menos**: 12 esquemas en vez de 20, y un prompt más corto (sin el
+  circuito de alta, el bloque de hitos ni el de fotos). Por eso el lector de
   fotos va aparte (~2.000 tokens por foto) en vez de mandarle la imagen al agente. Las
   lecturas (búsquedas, horarios) agregan poco (~100–500 tokens); las escrituras
-  (create/edit/préstamos) más, porque la salida de la tool vuelve a entrar al modelo. El
+  (create/edit) más, porque la salida de la tool vuelve a entrar al modelo. El
   lector en su default (Gemini Flash-Lite) entra en el tier gratuito de 1.000 requests/día.
 
 ### La columna de nombre no siempre se llama `nombre`
@@ -1488,34 +1462,11 @@ que el agente trate a todas las entidades igual:
 hasta_fecha)`**, que ordena por nivel y fecha — el CRUD genérico cubre la escritura, ésa cubre
 la consulta de la línea del tiempo. Lee de `historia.db`.
 
-El system prompt describe **seis áreas** (horarios, inventario, préstamos, historia/lore, línea
+El system prompt describe **cinco áreas** (horarios, inventario, historia/lore, línea
 del tiempo, personas). La sección de PERSONAS le marca dos cosas que el código no puede forzar:
 que la semblanza institucional **no** se mezcla con las anécdotas literales de
 `consultar_historia`, y que antes de crear una persona hay que buscarla, porque una segunda
 ficha del mismo docente le parte la historia en dos.
-
-### Las tools de préstamo cuentan cómo quedó, no lo que se pidió
-
-Un préstamo puede terminar distinto de lo que se pidió (se devolvió parte, se topeó al stock, el
-id no existía), y el modelo sólo tiene el JSON de la tool para saberlo. Contrato, desde 2026-08-11
-(salió de romper a mano el circuito completo, ver `dev-log/DECISIONS.md`):
-
-- **`finalizar_prestamo` y `reabrir_prestamo` devuelven `estado` y `pendiente_total` releídos
-  después del commit**, más un `mensaje` que dice si el préstamo quedó abierto y qué falta. El
-  mensaje viejo era `Devuelto préstamo id=N` para todos los casos: después de devolver 1 de 4, el
-  modelo lo leía como que había vuelto todo.
-- **Un id que no existe es un error.** Los `UPDATE … WHERE id = ?` no fallan cuando no matchean
-  nada, así que `finalizar_prestamo(99999)` contestaba `ok: true` y el asistente daba por
-  registrada una devolución que nunca ocurrió. Ahora se chequea la existencia primero
-  (`_existe_prestamo`).
-- **`items: []` es un error, no "devolvé todo".** `None` (la tool llamada sin `items`) significa
-  todo; una lista vacía es un armado fallido, y tratarla como `None` cerraba el préstamo entero.
-- **Lo que no se pudo aplicar se enumera**: ítems que no pertenecen al préstamo, cantidades ≤ 0 y
-  ítems que ya estaban devueltos enteros vuelven en el `error`, separados de los que sí se
-  aplicaron (`aplicados`).
-- **`crear_prestamo` devuelve `ajustes`** cuando topeó al stock, sumó un recurso repetido (el
-  `UNIQUE(prestamo_id, recurso_id)` antes reventaba con el error crudo de SQLite) o detectó que
-  ya hay unidades afuera en otros préstamos. Una cantidad negativa se rechaza de plano.
 
 ### Claves de `relaciones` en `detalle_entidad`
 
@@ -1523,16 +1474,15 @@ id no existía), y el modelo sólo tiene el JSON de la tool para saberlo. Contra
 `modulo.secciones_detalle()`, y **la clave que elige cambia lo que el modelo entiende**:
 
 - Si el `slug` de la sección es una entidad real (está en `modulo.ENTIDADES`), la clave **es
-  el slug** (`conjuntos`, `actividades`, `hitos`): así el modelo puede pasarla tal cual a
-  `buscar_entidad` / `detalle_entidad`.
-- Si no lo es, manda el **título** (`"En préstamo"`, `"Historial de préstamos"`).
+  el slug** (`hitos`, `personas`): así el modelo puede pasarla tal cual a `buscar_entidad` /
+  `detalle_entidad`.
+- Si no lo es, manda el **título** (hoy, sólo `"Por ubicación"` en recursos: el desglose por
+  lugar no es una entidad y no tiene id que pasarle a ninguna tool).
 
-El motivo es un bug real (2026-08-11): `prestamos` **no** es una entidad de `ENTIDADES`, pero
-la sección "Historial de préstamos" la declara como `slug` para que el template genérico arme
-el link a `/gestion/prestamos/<id>`. Con la clave cruda, el historial completo le llegaba al
-modelo como `"prestamos": [...]` — o sea, indistinguible de "lo que está afuera ahora" — y
-Emilio informaba como préstamo abierto uno cerrado hacía semanas. Regla general: **una clave
-que el modelo lee como prosa no puede depender de un detalle de routing.**
+Regla general, con un bug real de origen (2026-08-11: una sección de préstamos usaba un slug
+que no era una entidad de verdad, y el historial completo le llegaba al modelo indistinguible
+de "lo que está afuera ahora" — ver `dev-log/DECISIONS.md`): **una clave que el modelo lee
+como prosa no puede depender de un detalle de routing.**
 
 ### Integración con los módulos de dominio
 
@@ -1543,9 +1493,9 @@ que el modelo lee como prosa no puede depender de un detalle de routing.**
   `crud.agregar_foto`, `crud.select`, `crud.campo_nombre`. Del módulo de área sólo se leen
   `ENTIDADES`, `LIMPIEZA_M2M` y el hook `secciones_detalle`. **Un área nueva tiene que cumplir el
   contrato de `agent_docs/crud-motor.md`** para que el agente la vea.
-- De `gestion.py` (y solo de ahí) salen además los helpers de préstamos y carrito:
-  `_resumen_items`, `_recalcular_estado`, `_stock`, `_int`, `_ahora`, `FORMATO_FECHA_REVISION`.
-  Los préstamos son exclusivos del área de recursos y no pasan por el motor.
+- De `gestion.py` (y solo de ahí) salen además `_stock`, `_int` y `FORMATO_FECHA_REVISION`. El
+  desglose de recursos por ubicación (`mover_ubicacion`, `ubicaciones_recurso`) es exclusivo
+  del área de recursos y no pasa por el motor.
 - **`texto.norm` / `texto.puntaje_busqueda` / `texto.UMBRAL_SIMILITUD`** son la única fuente de
   normalización y búsqueda difusa del archivo, para las tres fuentes de datos. Antes esto se le
   pedía a `gestion._norm` o a `historia._norm` según el call site, sin criterio — funcionaba sólo

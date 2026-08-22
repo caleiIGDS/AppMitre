@@ -41,9 +41,6 @@
   - **Google Sign-In** como segunda puerta: las columnas `email` / `google_sub` de `dispositivos` ya están reservadas y el gate lee "identidad" en abstracto, así que se suma sin migrar nada ni tocar los permisos.
   - **Corte fino por área en el agente**: hoy `agente.escribir` habilita escribir en gestión **y** en historia, porque las tools genéricas por slug cruzan las dos. Si hiciera falta separarlas, el lugar es `ejecutar_tool` mirando `_modulo(slug)`, no el esquema.
 
-- [ ] #22 — `listar_prestamos(persona)` filtra con `LIKE` crudo: no perdona acentos ni typos — `agente/tools/prestamos.py`  
-  `persona LIKE '%x%'` es sensible a acentos, así que buscar "Damian Planes" no encuentra el préstamo de "Damián Planes" y el agente contesta "no hay préstamos a esa persona" — indistinguible de que no exista. La búsqueda de recursos ya resolvió esto en el mismo archivo (`_resolver_recurso`: exacto → substring normalizado → difuso con `texto.norm` y `_puntaje_nombre`); falta aplicar el mismo criterio a la persona. Ojo con el caso "no hay match": tiene que decir explícitamente que buscó y no encontró, no devolver `[]` a secas. Salió al investigar el reporte del 2026-08-11 (ver `dev-log/DECISIONS.md`), aunque no fue la causa de ese bug. Lo mismo aplica al `?q=` de `/gestion/prestamos`, que busca con `LIKE` en persona/destino/notas.
-
 - [ ] #23 — `config.TURNO_CURSOS` desfasado contra la planilla de preceptores — `config.py` (+ confirmar con la escuela)  
   Hay **7 cursos** donde el turno que dice `config.TURNO_CURSOS` no tiene **ninguna fila** en `horarios_preceptores`. Consecuencia: el agente devuelve `titular` vacío (hay una rama en `NOTA_TURNOS` que lo explica, pero es un parche sobre datos mal) y el SPA no marca ningún "PRECEPTOR PRINCIPAL" en la vista de curso.
 

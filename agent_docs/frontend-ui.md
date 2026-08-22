@@ -209,8 +209,8 @@ El criterio, después de mover los links cruzados al ☰:
 
 | | contenido |
 |---|---|
-| `.g-nav` | las **entidades de esta área** (RECURSOS, CONJUNTOS, HITOS…). El 🤖 ASISTENTE salió de acá: no era una entidad |
-| `.g-header-actions` | acciones **de esta página**: el toggle del widget del asistente, el carrito de préstamo, y `‹ SISTEMA DE HORARIOS` como salida |
+| `.g-nav` | las **entidades de esta área** (RECURSOS, HITOS…). El 🤖 ASISTENTE salió de acá: no era una entidad |
+| `.g-header-actions` | acciones **de esta página**: el toggle del widget del asistente y `‹ SISTEMA DE HORARIOS` como salida |
 | el ☰ | **saltar a otra área** + SALIR |
 
 `SALIR` apunta a `url_for('salir_general')` — el logout de la app, que vuelve a `/`, y no al
@@ -223,10 +223,10 @@ El criterio, después de mover los links cruzados al ☰:
 | Panel | `.g-sidebar`, entra desde la **izquierda** | `.areas-panel`, entra desde la **derecha** |
 | Menú de áreas | `.g-areas`, server-rendered al final del `<body>`; el JS lo **mueve** al panel, a cualquier ancho | `.areas-panel-body`, ya renderizado adentro del panel |
 | Además, ≤900px | **mueve** también `.g-nav` y `.g-header-actions`, y los devuelve al header al agrandar | nada: ese header no se desborda |
-| Por qué mueve | preservar los listeners de `gestion.js` (carrito) y `gestion-agente.js` (widget) | no hay nada que preservar, son links puros |
+| Por qué mueve | preservar los listeners de `gestion-agente.js` (widget) | no hay nada que preservar, son links puros |
 
 En ninguno de los dos se optó por dejar los links en el header: el de horarios ya tiene logo,
-versión, tema y ACTUALIZAR, y el de gestión tiene el widget y el carrito.
+versión, tema y ACTUALIZAR, y el de gestión tiene el widget del asistente.
 
 **El ☰ aparece sólo si el panel tiene algo adentro.** Lo decide `mobile-nav.js` con la clase
 `.g-visible`: en escritorio sin sesión (la pantalla de login) no hay áreas que ofrecer y el botón

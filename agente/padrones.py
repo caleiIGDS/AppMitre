@@ -12,8 +12,7 @@ distinto: sus nombres están cargados sin normalizar ("ANGELINA", "KARINA (M RIO
 `buscar_profesor`— y se consultan por su propia tool, que los devuelve ya digeridos
 (una fila por curso, con titular y contraturno separados).
 
-Vive fuera de `tools/` porque lo usan tanto las tools (horarios, entidades, fichas,
-préstamos) como el system prompt, que inyecta la lista de personas conocidas.
+Vive fuera de `tools/` porque lo usan varias tools (horarios, entidades, fichas).
 """
 import difflib
 
@@ -91,9 +90,9 @@ def _buscar_profesor_scored(query):
     return puntuados[:5]
 
 def _personas_conocidas():
-    """Nombres conocidos (profesores + personal no docente), para que el modelo pueda
-    detectar nombres incompletos/mal escritos al registrar préstamos sin tener que
-    buscarlos uno por uno con buscar_profesor."""
+    """Nombres conocidos (profesores + personal no docente), ordenados. Es el padrón
+    completo que usa `_padron_completo_horarios` como segundo nivel de `buscar_profesor`
+    cuando la búsqueda difusa no encuentra a nadie."""
     return sorted(_padron_horarios())
 
 

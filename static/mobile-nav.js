@@ -7,13 +7,13 @@
 //                 Va al panel SIEMPRE, a cualquier ancho: es lo que hace que el ☰
 //                 exista también en escritorio. Sin sesión el server no lo renderiza.
 //   .g-nav      — las pestañas de las entidades del área.
-//   .g-header-actions — las acciones de la página (widget del asistente, carrito).
+//   .g-header-actions — las acciones de la página (widget del asistente).
 //                 Estos dos van al panel SÓLO en celular (≤900px), porque ahí no
 //                 entran en una fila; al agrandar la pantalla vuelven al header, a su
 //                 lugar exacto.
 //
-// MUEVE los nodos, no los clona: así los listeners ya enganchados por gestion.js
-// (carrito) y gestion-agente.js (botón del asistente) siguen funcionando, y no se
+// MUEVE los nodos, no los clona: así los listeners ya enganchados por
+// gestion-agente.js (botón del asistente) siguen funcionando, y no se
 // duplican los IDs del markup original.
 //
 // El botón ☰ sólo se muestra si el panel tiene algo adentro: en escritorio sin sesión

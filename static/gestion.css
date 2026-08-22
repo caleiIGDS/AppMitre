@@ -665,13 +665,13 @@ body {
 
 .g-relation-box li { font-size: 14px; }
 
-.g-prestamo-tabla {
+.g-tabla-detalle {
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
 }
 
-.g-prestamo-tabla th {
+.g-tabla-detalle th {
     background: var(--g-primary);
     color: white;
     text-align: left;
@@ -681,137 +681,13 @@ body {
     font-weight: bold;
 }
 
-.g-prestamo-tabla td {
+.g-tabla-detalle td {
     padding: 8px 10px;
     border-bottom: 1px solid var(--g-border);
 }
 
-.g-prestamo-tabla tbody tr:hover { background: #f8fafc; }
-.g-prestamo-tabla tbody tr:last-child td { border-bottom: none; }
-
-/* ---------- Ítems de préstamo con devolución por ítem ---------- */
-.g-items-devol { gap: 12px; }
-
-.g-item-devol {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px 14px;
-    padding-bottom: 12px;
-    border-bottom: 1px dashed var(--g-border);
-}
-
-.g-item-devol:last-child { padding-bottom: 0; border-bottom: none; }
-
-.g-item-devol-info {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px 10px;
-}
-
-.g-item-devol-nombre { font-weight: 600; }
-
-.g-item-devol-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.g-devol-form {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.g-devol-cant {
-    width: 64px;
-    font-family: var(--g-font);
-    font-size: 13px;
-    padding: 4px 6px;
-    border: 2px solid var(--g-border);
-    background: var(--g-surface);
-    outline: none;
-}
-
-.g-devol-cant:focus { border-color: var(--g-accent); }
-
-/* ---------- Carrito (alta de préstamo tipo e-commerce) ---------- */
-/* Badge con la cantidad de ítems en el carrito, sobre el botón 🛒 del nav. */
-.g-cart-link { position: relative; }
-
-/* El link vive oculto hasta que el carrito tiene algo: hace falta la regla porque
-   .g-btn-outline fuerza display:inline-block y pisaría el [hidden] del navegador. */
-.g-cart-link[hidden] { display: none; }
-
-.g-cart-count {
-    display: inline-block;
-    background: var(--g-accent);
-    color: white;
-    font-size: 11px;
-    font-weight: bold;
-    line-height: 1;
-    padding: 2px 6px;
-    margin-left: 2px;
-}
-
-/* Botón RETIRO de cada recurso (listado y ficha): al agregarlo, gestion.js esconde el
-   botón y muestra el stepper verde de al lado. Sin JS, el botón hace POST + redirect. */
-.g-retiro-widget {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    vertical-align: middle;
-}
-
-.g-retiro-form { display: inline; margin: 0; }
-.g-retiro-form[hidden] { display: none; }
-
-/* Stepper "−  N  +" en verde: indica que el recurso está en el carrito y ajusta la cantidad. */
-.g-stepper {
-    display: inline-flex;
-    align-items: center;
-    border: 2px solid #16a34a;
-    background: rgba(22, 163, 74, 0.10);
-}
-.g-stepper[hidden] { display: none; }
-
-.g-step {
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    font-family: var(--g-font);
-    font-weight: bold;
-    font-size: 16px;
-    line-height: 1;
-    color: #16a34a;
-    width: 28px;
-    height: 26px;
-    padding: 0;
-}
-
-.g-step:hover:not(:disabled) { background: rgba(22, 163, 74, 0.18); }
-.g-step:disabled { opacity: 0.35; cursor: default; }
-
-.g-step-cant {
-    min-width: 26px;
-    text-align: center;
-    font-weight: bold;
-    font-size: 13px;
-    color: #15803d;
-    padding: 0 2px;
-}
-
-.g-carrito-actions {
-    flex-wrap: wrap;
-    align-items: center;
-    margin-top: 16px;
-}
-
-.g-carrito-resumen { margin-bottom: 20px; max-width: 760px; }
-.g-carrito-resumen ul { margin: 0 0 12px; padding-left: 20px; }
-.g-carrito-resumen li { font-size: 14px; line-height: 1.7; }
+.g-tabla-detalle tbody tr:hover { background: #f8fafc; }
+.g-tabla-detalle tbody tr:last-child td { border-bottom: none; }
 
 /* ---------- Footer ---------- */
 .g-footer {
@@ -2262,8 +2138,7 @@ body.g-sidebar-abierto { overflow: hidden; }
     .g-field input,
     .g-field textarea,
     .g-field select,
-    .g-item-row input,
-    .g-devol-cant {
+    .g-item-row input {
         font-size: 16px;
     }
 
@@ -2271,8 +2146,6 @@ body.g-sidebar-abierto { overflow: hidden; }
     .g-search button,
     .g-field input,
     .g-field select { min-height: 44px; }
-
-    .g-devol-cant { width: 72px; }
 
     /* ---------- Toolbar: título, búsqueda y acción, apilados ---------- */
     .g-toolbar {
@@ -2328,15 +2201,7 @@ body.g-sidebar-abierto { overflow: hidden; }
 
     .g-foto { height: 96px; }
 
-    /* Ítems de un préstamo: info arriba, botones abajo a lo ancho. */
-    .g-item-devol {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .g-item-devol-actions { flex-wrap: wrap; }
-
-    .g-prestamo-tabla { font-size: 12px; }
+    .g-tabla-detalle { font-size: 12px; }
 
     /* ---------- Formularios ---------- */
     .g-form {

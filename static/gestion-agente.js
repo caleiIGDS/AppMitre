@@ -111,7 +111,7 @@ document.addEventListener('DOMContentLoaded', function() {
               <div class="agente-welcome-icon">🤖</div>
               <div class="agente-welcome-text">
                 <strong>¡Hola!</strong><br>
-                Preguntá sobre horarios, recursos, préstamos o cualquier otra cosa.
+                Preguntá sobre horarios, recursos, historia de la escuela o cualquier otra cosa.
               </div>
             </div>`;
           enfocarInput();

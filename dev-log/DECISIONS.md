@@ -6,6 +6,28 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-08-21] — Se elimina `conjuntos`/`actividades`/préstamos de `/gestion`, no se archiva
+
+Decisión de producto: la escuela no iba a seguir cargando kits ni prácticas de taller, y el
+retiro interno (préstamos/carrito) tampoco se estaba usando. Se sacó el código entero en vez
+de dejarlo apagado (permiso sin uso, rutas muertas) porque una feature sin usuarios cuesta
+mantenimiento igual (migraciones, docs, tools del agente) sin dar nada a cambio. Si se
+retoma, el diseño anterior está en el historial de git (commit previo a este) y en esta
+misma entrada de CHANGELOG.
+
+---
+
+## [2026-08-21] — `salidas.leer`/`salidas.editar` con verbo `'admin'` mientras el área está en desarrollo
+
+No es un typo: `PERFILES` en `accesos.py` arma `interno-lectura`/`interno-gestion` filtrando
+por verbo `'leer'`/`'escribir'`, así que un permiso con verbo `'admin'` no entra en ningún
+preset de invitación — sólo lo tiene quien entra con comodín `'*'` (mismo mecanismo que ya
+usa `accesos.admin`). Efecto: nadie salvo admin ve ni puede abrir Salidas Educativas (el
+link de nav ya está atrás de `puede('salidas.leer')`, se oculta solo). Volver a
+`'leer'`/`'escribir'` cuando el área esté lista para el resto de los dispositivos internos.
+
+---
+
 ## [2026-08-21] — Se retoma la columna `alias` por recurso, descartada el 2026-08-08 — cierra tarea #21
 
 La decisión 2026-08-08 (ver abajo) rechazó una columna de sinónimos por recurso: la

@@ -97,7 +97,7 @@ COMO_CUENTA_EMILIO = (
 )
 
 # La voz del personaje, aparte de la forma. Va solo en el circuito de historias: para horarios
-# y préstamos Emilio sigue siendo una herramienta neutra (ver DECISIONS 2026-08-08, "agente
+# e inventario Emilio sigue siendo una herramienta neutra (ver DECISIONS 2026-08-08, "agente
 # bifásico"). Sin esto las historias salían correctas pero anónimas — leídas seguidas parecían
 # el conserje contando una anécdota, no el fantasma que se cree dueño del edificio.
 QUIEN_ES_EMILIO = (
@@ -125,7 +125,7 @@ QUIEN_ES_EMILIO = (
 # Lo que hace cuando NO tiene la historia. Es un chiste de personaje, no un permiso para
 # inventar: la excusa reemplaza el "no sé", nunca los hechos. Y está acotada a las historias
 # —el otro lado de esa línea lo fija la regla del system prompt— porque un horario o un
-# préstamo sin datos se contestan derecho: al que busca una herramienta el chiste le cuesta
+# recurso sin datos se contestan derecho: al que busca una herramienta el chiste le cuesta
 # una vuelta al pañol al vacío.
 EXCUSA_SIN_HISTORIA = (
     'Vos no admitís un agujero en tu memoria de un siglo: zafás con una excusa obvia y absurda, '

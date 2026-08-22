@@ -4,9 +4,8 @@
 <section class="g-intro">
     <h2>Memoria técnica de la escuela</h2>
     <p>
-        Registrá recursos, conjuntos y actividades, y conectalos entre sí.
-        Acá vive <strong>qué existe, cómo se usa y cómo se relaciona</strong>: es la
-        fuente de verdad del inventario, con sus fotos incluidas.
+        Registrá recursos y sus fotos: qué hay, cuánto, dónde y en qué estado.
+        Acá vive la fuente de verdad del inventario técnico.
     </p>
 </section>
 
@@ -19,24 +18,10 @@
         </div>
         <p class="g-card-desc">{{ t.descripcion }}</p>
         <div class="g-card-actions">
-            {% if t.slug == 'prestamos' %}
-            <a class="g-btn" href="{{ url_for('gestion.prestamos_lista') }}">VER {{ t.plural | upper }}</a>
-            <a class="g-btn-outline-dark" href="{{ url_for('gestion.lista', slug='recursos') }}">+ NUEVO RETIRO</a>
-            {% else %}
             <a class="g-btn" href="{{ url_for('gestion.lista', slug=t.slug) }}">VER {{ t.plural | upper }}</a>
             <a class="g-btn-outline-dark" href="{{ url_for('gestion.nuevo', slug=t.slug) }}">+ CREAR {{ t.singular | upper }}</a>
-            {% endif %}
         </div>
     </div>
     {% endfor %}
 </div>
-
-<section class="g-hint">
-    <h4>¿Cómo se conecta todo?</h4>
-    <ul>
-        <li>Un <strong>conjunto</strong> incluye <strong>recursos</strong> (ej: el banco de ensayo solar incluye el panel, la estructura y el inclinómetro).</li>
-        <li>Una <strong>actividad</strong> usa <strong>conjuntos</strong> y <strong>recursos</strong> (ej: la medición de rendimiento usa el banco + multímetro).</li>
-        <li>Desde cualquier ficha podés navegar a todo lo relacionado.</li>
-    </ul>
-</section>
 {% endblock %}

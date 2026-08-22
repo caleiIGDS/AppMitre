@@ -8,7 +8,6 @@ import json
 
 from config import DIAS, ahora
 
-from .padrones import _personas_conocidas
 from .prompt import construir_system_prompt
 from .proveedores import _get_config
 from .tools import (TOOLS_ESCRITURA, TOOLS_FOTO, ejecutar_tool, slug_visible,
@@ -279,7 +278,7 @@ def chat_with_tools_stream(mensajes_usuario, trazas=None, contexto_turno=None,
     # Y para las fotos: sin `agente.vision` no viajan `leer_foto` ni `adjuntar_foto`, así que
     # el prompt tampoco explica qué hacer con una foto — que además el usuario no puede mandar.
     ve_fotos = bool(TOOLS_FOTO & nombres)
-    system_prompt = construir_system_prompt(_personas_conocidas(), hoy, dia_semana,
+    system_prompt = construir_system_prompt(hoy, dia_semana,
                                             escribe=escribe, ve_personas=ve_personas,
                                             ve_fotos=ve_fotos)
 

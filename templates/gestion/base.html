@@ -8,9 +8,9 @@
     <title>{% block titulo %}Sistema de Gestión{% endblock %} — {{ escuela_nombre }}</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='marca.css') }}?v=1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=23">
-    <script src="{{ url_for('static', filename='gestion.js') }}?v=4" defer></script>
-    <script src="{{ url_for('static', filename='gestion-agente.js') }}?v=5" defer></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=24">
+    <script src="{{ url_for('static', filename='gestion.js') }}?v=5" defer></script>
+    <script src="{{ url_for('static', filename='gestion-agente.js') }}?v=6" defer></script>
     {# El ☰ y su panel lateral: menú de áreas siempre, y en celular además el nav
        y las acciones del header. #}
     <script src="{{ url_for('static', filename='mobile-nav.js') }}?v=2" defer></script>
@@ -36,14 +36,6 @@
                     {% if puede('agente.leer') %}
                     <button id="agente-toggle-btn" class="g-btn-outline" title="Abrir asistente" style="cursor: pointer;">🤖 ASISTENTE</button>
                     {% endif %}
-                    {% if puede('gestion.editar') %}
-                    {# El link al carrito sólo existe mientras haya algo adentro: aparece
-                       cuando se aprieta RETIRAR en el catálogo (gestion.js lo muestra) y
-                       se va cuando el carrito vuelve a 0. #}
-                    <a class="g-btn-outline g-cart-link" href="{{ url_for('gestion.carrito_finalizar') }}"
-                       data-set-url="{{ url_for('gestion.carrito_set') }}"
-                       {% if not carrito_count %}hidden{% endif %}>📋 PRÉSTAMO <span class="g-cart-count" data-cart-count {% if not carrito_count %}hidden{% endif %}>{{ carrito_count }}</span></a>
-                    {% endif %}
                 </div>
             </div>
         </header>
@@ -52,11 +44,7 @@
             <nav class="g-nav">
                 <a href="{{ url_for('gestion.home') }}" class="g-nav-tag {{ 'active' if activo == 'home' }}">INICIO</a>
                 {% for slug, plural in nav_entidades %}
-                {% if slug == 'prestamos' %}
-                <a href="{{ url_for('gestion.prestamos_lista') }}" class="g-nav-tag {{ 'active' if activo == slug }}">{{ plural | upper }}</a>
-                {% else %}
                 <a href="{{ url_for('gestion.lista', slug=slug) }}" class="g-nav-tag {{ 'active' if activo == slug }}">{{ plural | upper }}</a>
-                {% endif %}
                 {% endfor %}
                 {# El asistente salió del nav: el nav es para las entidades de ESTA área.
                    La pestaña completa se abre desde el ☰ y el widget desde el header. #}

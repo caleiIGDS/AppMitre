@@ -113,7 +113,7 @@ def diagnostico():
     # que sepa DROP COLUMN. Avisar acá y no en medio de un traceback del servidor web.
     if sqlite3.sqlite_version_info < SQLITE_MINIMO_DROP_COLUMN:
         pendiente = False
-        for ruta, tablas in ((gestion.DB_PATH, ('recursos', 'conjuntos', 'actividades')),
+        for ruta, tablas in ((gestion.DB_PATH, ('recursos',)),
                              (historia.DB_PATH, ('hitos', 'personas'))):
             if not os.path.exists(ruta):
                 continue

@@ -27,8 +27,6 @@ from .hitos import _buscar_hitos_fmt
 from .horarios import (_aulas_libres_fmt, _buscar_por_rol_fmt, _buscar_profesor,
                        _horario_aula_fmt, _horario_curso_fmt, _horario_profesor_fmt,
                        _preceptores_fmt)
-from .prestamos import (_crear_prestamo, _detalle_prestamo_fmt, _eliminar_prestamo,
-                        _finalizar_prestamo, _listar_prestamos_fmt, _reabrir_prestamo)
 from .ubicaciones import _mover_ubicacion_fmt
 
 # ============================================================================
@@ -120,10 +118,6 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
         elif tool_name == 'detalle_entidad':
             resultado = _detalle_entidad_fmt(tool_input.get('slug', ''),
                                              tool_input.get('id', 0), permisos)
-        elif tool_name == 'listar_prestamos':
-            resultado = _listar_prestamos_fmt(tool_input.get('persona'))
-        elif tool_name == 'detalle_prestamo':
-            resultado = _detalle_prestamo_fmt(tool_input.get('prestamo_id', 0))
         elif tool_name == 'consultar_historia':
             # Si pasan ID directamente, carga esa historia (de historias/*.json — lore, no
             # confundir con el módulo `historia` de hitos/personas, ver dev-log/DECISIONS.md)
@@ -173,21 +167,12 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
             resultado = _vincular_entidad(tool_input.get('slug_origen'), tool_input.get('id_origen'), tool_input.get('slug_destino'), tool_input.get('id_destino'))
         elif tool_name == 'desvincular_entidad':
             resultado = _desvincular_entidad(tool_input.get('slug_origen'), tool_input.get('id_origen'), tool_input.get('slug_destino'), tool_input.get('id_destino'))
-        elif tool_name == 'crear_prestamo':
-            resultado = _crear_prestamo(tool_input.get('persona', ''), tool_input.get('destino'), tool_input.get('notas'), tool_input.get('items', []))
-        elif tool_name == 'finalizar_prestamo':
-            resultado = _finalizar_prestamo(tool_input.get('prestamo_id', 0), tool_input.get('items'))
-        elif tool_name == 'reabrir_prestamo':
-            resultado = _reabrir_prestamo(tool_input.get('prestamo_id', 0), tool_input.get('items'))
         elif tool_name == 'mover_ubicacion':
             resultado = _mover_ubicacion_fmt(tool_input.get('recurso', ''), tool_input.get('cantidad'),
                                              tool_input.get('origen'), tool_input.get('destino'))
         elif tool_name == 'eliminar_entidad':
             resultado = _eliminar_entidad(tool_input.get('slug', ''), tool_input.get('id', 0),
                                           tool_input.get('nombre_confirmacion'))
-        elif tool_name == 'eliminar_prestamo':
-            resultado = _eliminar_prestamo(tool_input.get('prestamo_id', 0),
-                                           tool_input.get('persona_confirmacion'))
         else:
             resultado = {'ok': False, 'error': f'Tool desconocida: {tool_name}'}
 

@@ -626,7 +626,7 @@ def registrar_rutas(bp, area):
         secciones = secciones_hook(slug, id, cur) if secciones_hook else []
         # Una sección que apunta a una entidad con permiso propio no se muestra: la ficha
         # de un hito lista sus personas, y esos nombres son justamente lo que el permiso
-        # esconde. Las que no apuntan a una entidad (gestion: "En préstamo") pasan.
+        # esconde. Las que no apuntan a una entidad (gestion: "Por ubicación") pasan.
         secciones = [s for s in secciones if ve_entidad(area, s.get('slug'))]
         con.close()
         fila_dict = dict(fila)
