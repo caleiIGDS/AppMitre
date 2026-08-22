@@ -371,19 +371,37 @@ def _turno_stream(mensaje_usuario, fotos=(), mandadas=0):
             'confirmaciones': _confirmaciones(fichas)}
 
 
+def _identidad_ficha(pendiente):
+    """Qué hace que dos fichas sean la MISMA alta y no dos.
+
+    El token es el hash del CONTENIDO, así que rearmar una ficha con un campo corregido da
+    otro token: sin una identidad aparte, la vieja y la nueva quedan las dos vivas. La foto
+    de la que salió es la identidad confiable cuando la hay; para las altas de texto queda
+    el nombre, que es lo único que las distingue.
+    """
+    if pendiente.get('foto'):
+        return ('foto', pendiente['foto'])
+    slug = pendiente['slug']
+    return (slug, texto.norm(_nombre_de(slug, pendiente['campos'])))
+
+
 def _fusionar_fichas(previas, mostradas):
     """Las fichas pendientes después de un turno: las que ya estaban + las nuevas.
 
-    Una ficha nueva REEMPLAZA a la que tenga su mismo número de foto. Es el caso de "esa
-    está mal, la marca es Makita": el modelo rearma la ficha, el token cambia (es el hash
-    del contenido) y sin esto quedarían las dos vivas — la vieja con datos que el usuario ya
-    rechazó, y sin forma de distinguirlas más que leyéndolas. Para las altas que no salieron
-    de una foto el criterio sigue siendo el nombre, en `_confirmaciones`.
+    Una ficha nueva REEMPLAZA a la anterior de su misma identidad. Es el caso de "esa está
+    mal, la marca es Makita": el modelo rearma la ficha, el token cambia y sin esto quedan
+    las dos vivas. Y no alcanza con esconder la vieja al mostrar los botones: al guardar la
+    nueva, la vieja —con los datos que el usuario ya rechazó— volvía a aparecer sola en el
+    turno siguiente, y un segundo click daba de alta el mismo recurso dos veces.
+
+    Se colapsa el dict entero y no solo lo que pisan las nuevas, para que una sesión que ya
+    venía con la ficha repetida se limpie en el próximo turno.
     """
-    fotos_nuevas = {f['foto'] for f in mostradas.values() if f.get('foto')}
-    fichas = {t: f for t, f in previas.items()
-              if not (f.get('foto') and f['foto'] in fotos_nuevas)}
+    fichas = dict(previas)
     fichas.update(mostradas)
+    ultimo = {_identidad_ficha(f): t for t, f in fichas.items()}
+    vivos = set(ultimo.values())
+    fichas = {t: f for t, f in fichas.items() if t in vivos}
     return dict(list(fichas.items())[-FICHAS_MAX:])
 
 
@@ -459,6 +477,7 @@ ETIQUETA_TOOL = {
     'crear_prestamo': 'registrando el préstamo',
     'finalizar_prestamo': 'registrando la devolución',
     'reabrir_prestamo': 'reabriendo el préstamo',
+    'mover_ubicacion': 'moviendo el recurso',
     'eliminar_entidad': 'eliminando',
     'eliminar_prestamo': 'eliminando el préstamo',
 }
@@ -580,11 +599,11 @@ def _confirmaciones(fichas):
     `nota`. Sin eso, cambiar de página o mandar otro mensaje borraba la revisión hecha hasta
     ahí y había que empezar de nuevo con las ocho.
 
-    Cuando dos fichas pendientes son de la misma entidad — el usuario pidió un cambio y el
-    modelo rearmó la ficha — se muestra solo la última: son la misma alta, no dos, y dos
-    botones con el mismo nombre y distinto contenido no hay forma de distinguirlos. Las que
-    salieron de una foto se desduplican antes, por número de foto (ver `_fusionar_fichas`);
-    esto cubre las de texto, donde no hay otra identidad que el nombre.
+    Cuando dos fichas pendientes son la misma alta — el usuario pidió un cambio y el modelo
+    rearmó la ficha — se muestra solo la última: dos botones con el mismo nombre y distinto
+    contenido no hay forma de distinguirlos. `_fusionar_fichas` ya las colapsa en la sesión;
+    esto es la red por si la sesión venía con una repetida de antes. La identidad es la
+    misma en los dos lados (`_identidad_ficha`).
     """
     por_entidad = {}
     for token, pendiente in (fichas or {}).items():
@@ -597,7 +616,7 @@ def _confirmaciones(fichas):
             fila['nota'] = pendiente['nota']
         if pendiente.get('foto'):
             fila['foto'] = pendiente['foto']
-        por_entidad[(slug, texto.norm(nombre))] = fila
+        por_entidad[_identidad_ficha(pendiente)] = fila
     # Ordenadas por número de foto: el usuario las mandó en ese orden y las revisa mirando
     # el chat, donde las miniaturas están en esa misma secuencia.
     return sorted(por_entidad.values(), key=lambda f: f.get('foto') or 0)

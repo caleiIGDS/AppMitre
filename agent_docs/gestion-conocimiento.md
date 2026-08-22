@@ -88,11 +88,26 @@ lo único que cambia es CSS, más un script que reubica bloques. Es común a las
 
 | Tabla | Campos |
 |-------|--------|
-| `recursos` | id, nombre, tipo, descripcion, ubicacion, estado, cantidad, valor, fecha_revision, **fotos** |
+| `recursos` | id, nombre, tipo, descripcion, ubicacion, estado, cantidad, valor, fecha_revision, **fotos**, **alias** |
 | `conjuntos` | id, nombre, descripcion, uso_tipico, **fotos** |
 | `actividades` | id, nombre, objetivo, descripcion, duracion, curso, **fotos** |
 | `prestamos` | id, persona, destino, notas, fecha_salida, fecha_devolucion |
 | `prestamo_items` | prestamo_id, recurso_id, cantidad, cantidad_devuelta (M2M con cantidad, `UNIQUE(prestamo_id, recurso_id)`) |
+| `recurso_ubicaciones` | recurso_id, ubicacion, cantidad (`UNIQUE(recurso_id, ubicacion)`) — desglose OPCIONAL de dónde están las unidades de un recurso, ver abajo |
+
+**Desglose por lugar** (`recurso_ubicaciones`): el campo `ubicacion` de `recursos` sigue siendo
+el lugar único/principal de siempre — la mayoría de los recursos no toca esta tabla. Sólo entra
+en juego cuando las unidades de un mismo recurso están repartidas en más de un sitio (10
+destornilladores, 5 en el taller y 5 en el laboratorio). **Nunca es obligatorio ni tiene que
+sumar el total de `recursos.cantidad`**: no hay concepto de "sin ubicar" que validar, cada fila
+es independiente — a propósito, para no bloquear un movimiento por no tener el desglose previo
+cargado (mismo criterio de avisar-no-bloquear que `crear_prestamo` con el stock, ver
+`dev-log/DECISIONS.md` 2026-08-11). Helpers en `gestion.py`: `ubicaciones_recurso()` (el
+desglose de un recurso), `mover_ubicacion()` (mueve cantidad de un lugar a otro, vaciando y
+avisando si el origen no tenía tanto registrado). Se edita desde la ficha web (rutas
+`/gestion/recursos/<id>/ubicaciones[/eliminar]`, sección "Por ubicación" del detalle, sólo
+visible si el recurso tiene más de una unidad o ya tiene desglose) y desde el chat (tool
+`mover_ubicacion`, ver `agent_docs/agente-asistente.md`).
 
 **Galería de fotos** (`fotos` en cada tabla): array JSON con objetos `{b64, tipo, fecha}`.
 - `b64`: imagen codificada en base64 (embedded, sin servicios externos)
@@ -176,6 +191,7 @@ crea la columna nueva vacía al lado de la vieja y se pierde el dato). Ver `util
 | `/gestion/<slug>/<id>/eliminar` | POST | Borra fila + sus filas M2M (confirm en el browser) |
 | `/gestion/<slug>/<id>/foto` | POST | Sube una imagen a la galería (multipart → base64). Devuelve JSON |
 | `/gestion/<slug>/<id>/foto/<indice>/eliminar` | POST | Borra la foto de esa posición y vuelve a la ficha |
+| `/gestion/alias` | GET | Solo lectura, solo admin (`gestion.alias`): tabla NOMBRE / ALIAS de todos los recursos. Único lugar de la web donde se ve el alias oculto — no hay edición acá |
 
 `slug` ∈ {recursos, conjuntos, actividades}; otro valor → 404. (`hitos` y `personas` viven en
 `/historia`, con las mismas rutas bajo su propio prefijo.)
@@ -193,15 +209,29 @@ entidad el filtrado en Python es despreciable; si alguna tabla creciera a miles 
 reconsiderar (índice, FTS). Aplica a las 4 entidades genéricas; los préstamos usan su propio
 `LIKE` en SQL. Decisión 2026-07-21 (ver `dev-log/DECISIONS.md`).
 
+**Segunda pasada por alias** (solo `recursos`): si una fila no matchea por
+nombre/descripción, `crud.py` prueba además contra `recursos.alias` — una columna oculta
+que **completa el agente, nunca el humano** (no está en `campos`, así que no aparece en el
+form web ni en la ficha de confirmación del chat — ver `agent_docs/agente-asistente.md`). No
+son sinónimos estrictos: "zapatilla" y "alargue" son cosas distintas que se confunden, y
+también entran acá. Los que matchean solo por alias se muestran **al final** de la lista,
+con la etiqueta "· por alias" (`templates/crud/lista.html`), y nunca se mezclan con los
+matches normales. El mecanismo genérico (`crud.campo_alias(cfg_ent)`, análogo a
+`campo_nombre`) vive en `agent_docs/crud-motor.md`; acá solo se declara `'campo_alias':
+'alias'` en `ENTIDADES['recursos']`. Retoma la columna que la decisión 2026-08-08 había
+descartado para la búsqueda del chat — el override y por qué esta vez aplica distinto están
+en `dev-log/DECISIONS.md` 2026-08-21 (cierra tarea #21 de `dev-log/tasks/DONE.md`).
+
 **Búsqueda en vivo (client-side, `static/gestion.js`)**: además del filtrado server-side,
 el listado filtra en el navegador mientras se escribe, sin recargar ni ir al servidor. La
 ruta emite por fila un atributo `data-buscar` con el texto ya normalizado por Python
-(`texto.norm(nombre + descripcion)`), y el JS filtra por substring normalizado (repite la misma
-normalización de acentos/mayúsculas). Es progressive enhancement: sin JS, el form sigue
-haciendo la búsqueda difusa server-side. Con JS, el botón BUSCAR se oculta y Enter no recarga.
-La capa en vivo **no** tiene la tolerancia difusa a typos (solo substring) — a propósito: al
-ver los resultados achicarse letra por letra uno corrige el typo solo; el fuzzy server-side
-queda como respaldo. Decisión 2026-07-21 (ver `dev-log/DECISIONS.md`).
+(`texto.norm(nombre + descripcion)`, más el alias si la entidad lo declara), y el JS
+filtra por substring normalizado (repite la misma normalización de acentos/mayúsculas). Es
+progressive enhancement: sin JS, el form sigue haciendo la búsqueda difusa server-side. Con
+JS, el botón BUSCAR se oculta y Enter no recarga. La capa en vivo **no** tiene la tolerancia
+difusa a typos (solo substring) — a propósito: al ver los resultados achicarse letra por
+letra uno corrige el typo solo; el fuzzy server-side queda como respaldo. Decisión
+2026-07-21 (ver `dev-log/DECISIONS.md`).
 
 Relaciones mostradas en detalle (`_secciones_detalle`): recurso → conjuntos que lo
 incluyen / actividades que lo usan / **quién lo tiene ahora** / **historial de préstamos**;
@@ -360,12 +390,13 @@ PythonAnywhere) no hay respaldos, así que el primer arranque siembra normalment
 
 ## Permisos
 
-El área declara dos, y el verbo es lo que los hace entrar solos en los perfiles:
+El área declara tres, y el verbo es lo que los hace entrar solos en los perfiles:
 
 | clave | verbo | qué habilita |
 |---|---|---|
 | `gestion.leer` | leer | ver inventario, actividades y préstamos. Es el permiso base del blueprint |
 | `gestion.editar` | escribir | `nuevo`/`editar`/`eliminar`/fotos, **todo el carrito** y las mutaciones de préstamos |
+| `gestion.alias` | admin | `/gestion/alias`, la tabla de solo lectura con el alias oculto de cada recurso. Verbo `admin`: no entra en ningún preset de interno, solo lo tiene el comodín `'*'` (mismo criterio que `historia.personas`) |
 
 `PERMISO_ESCRITURA` lo aplica solo `crud.registrar_rutas` a sus cinco rutas. **El bloque de
 préstamos/carrito no pasa por el motor**, así que sus rutas llevan `@accesos.requiere(...)` a mano,

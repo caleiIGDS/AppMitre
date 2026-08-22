@@ -6,6 +6,43 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-21] — Padrón de estudiantes: módulo `estudiantes.py` + autocomplete en Salidas
+
+**Tipo**: módulo nuevo (capa 2, DB propia `estudiantes.db`) + ruta nueva
+**Archivos**: `estudiantes.py`, `salidas.py`, `templates/salidas/lista.html`, `templates/salidas/formulario.html`, `agent_docs/salidas-educativas.md`
+
+Nueva ruta `POST /salidas/api/estudiantes/csv` (gate `salidas.editar`) reemplaza todo el
+padrón de estudiantes desde un CSV subido. `salidas.nueva()`/`editar()` pasan el padrón al
+formulario como `ESTUDIANTES`, que alimenta el autocompletado de "Apellido y Nombre" en la
+tabla de Personas. `estudiantes.db` es sensible (DNI) y sólo vive localmente — no se toca
+desde ningún otro módulo.
+
+---
+
+## [2026-08-21] — `/gestion/alias`: consulta admin-only del alias oculto de recursos
+
+**Tipo**: ruta nueva + permiso nuevo
+**Archivos**: `gestion.py`, `templates/gestion/alias_lista.html`, `templates/gestion/base.html`
+
+Permiso `gestion.alias` (verbo `admin`, solo el comodín `'*'`). Tabla de solo lectura
+NOMBRE/ALIAS; no hay edición ahí ni en ningún otro lado de la web — sigue completándose
+solo por el asistente (ver la entrada de abajo y `agent_docs/gestion-conocimiento.md`).
+
+---
+
+## [2026-08-21] — `campo_alias`: nueva clave opcional de `ENTIDADES[slug]`, cierra tarea #21
+
+**Tipo**: hook nuevo de capa 1 — cualquier entidad puede declararlo
+**Archivos**: `crud.py`, `gestion.py`, `agente/tools/esquemas.py`, `agente/tools/entidades.py`, `agent_docs/crud-motor.md`, `agent_docs/gestion-conocimiento.md`
+
+`crud.guardar_entidad()` ahora acepta escribir una columna extra fuera de `campos` si la
+entidad declara `campo_alias`; `buscar_entidad()`/`lista()` la usan como segunda pasada de
+búsqueda. `gestion.recursos.alias` es la primera (y hoy única) que lo declara — ver
+`agent_docs/crud-motor.md` y `agent_docs/gestion-conocimiento.md`. Reemplaza el diseño de
+la tarea #21 (columna visible + script offline); ver DECISIONS 2026-08-21 para el porqué.
+
+---
+
 ## [2026-08-16] — El escudo del header sale de las dos hojas y pasa a `static/marca.css`
 
 **Tipo**: cambio de contrato — toda pantalla con header depende de una hoja nueva

@@ -4,9 +4,14 @@
 <div class="g-toolbar">
     <h2>SALIDAS GUARDADAS <span class="g-count">{{ filas | length }}</span></h2>
     {% if puede('salidas.editar') %}
+    <input type="file" id="input-csv-estudiantes" accept=".csv" style="display:none">
+    <button class="g-btn" id="btn-cargar-estudiantes" type="button">ACTUALIZAR PADRÓN DE ESTUDIANTES</button>
     <a class="g-btn" href="{{ url_for('salidas.nueva') }}">+ NUEVA SALIDA</a>
     {% endif %}
 </div>
+{% if puede('salidas.editar') %}
+<p class="g-help" id="estado-carga-estudiantes"></p>
+{% endif %}
 
 {% if filas %}
 <div class="g-table-wrap">
@@ -56,5 +61,44 @@ document.addEventListener('click', function (e) {
     if (!fila || e.target.closest('a')) return;
     window.location = fila.getAttribute('data-href');
 });
+
+// Carga/actualización del padrón de estudiantes (estudiantes.db): reemplaza TODO el
+// padrón por el CSV elegido, así que confirma antes de mandarlo.
+(function () {
+    var btn = document.getElementById('btn-cargar-estudiantes');
+    var input = document.getElementById('input-csv-estudiantes');
+    var estado = document.getElementById('estado-carga-estudiantes');
+    if (!btn || !input) return;
+
+    btn.addEventListener('click', function () { input.click(); });
+
+    input.addEventListener('change', function () {
+        var archivo = input.files[0];
+        input.value = '';
+        if (!archivo) return;
+        if (!confirm('Esto reemplaza todo el padrón de estudiantes cargado por el contenido de "' + archivo.name + '". ¿Continuar?')) return;
+
+        estado.textContent = 'Cargando...';
+        estado.classList.remove('g-error');
+
+        var datos = new FormData();
+        datos.append('file', archivo);
+        fetch('{{ url_for("salidas.api_cargar_estudiantes") }}', { method: 'POST', body: datos })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, cuerpo: j }; }); })
+            .then(function (res) {
+                if (res.ok && res.cuerpo.ok) {
+                    estado.textContent = 'Padrón actualizado: ' + res.cuerpo.cantidad + ' estudiantes cargados.';
+                    estado.classList.remove('g-error');
+                } else {
+                    estado.textContent = 'Error: ' + (res.cuerpo.error || 'no se pudo cargar el archivo.');
+                    estado.classList.add('g-error');
+                }
+            })
+            .catch(function () {
+                estado.textContent = 'Error de conexión al servidor.';
+                estado.classList.add('g-error');
+            });
+    });
+})();
 </script>
 {% endblock %}

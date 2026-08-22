@@ -442,7 +442,21 @@ TOOLS_SCHEMA = [
                 'nivel': {'type': 'string', 'enum': historia.NIVELES_HITO,
                           'description': 'Importancia del hito en la línea del tiempo. Básico: evento o actividad común. Importante: logro, programa nuevo. Crítico: olimpiada, construcción significativa. Solo hitos'},
                 'etiquetas': {'type': 'string', 'description': 'Temas del hito separados por coma (ej: "Olimpiada, Matemática, Nacional"). Solo hitos'},
-                'protagonistas': {'type': 'string', 'description': 'Personas o cursos involucrados, en texto. Solo hitos'}
+                'protagonistas': {'type': 'string', 'description': 'Personas o cursos involucrados, en texto. Solo hitos'},
+                'alias': {'type': 'string',
+                          'description': ('Términos alternativos que alguien podría usar para buscar este '
+                                          'recurso y que no aparecen en el nombre ni la descripción — no hace '
+                                          'falta que sean sinónimos estrictos, alcanza con que la gente los '
+                                          'confunda (ej: nombre="Regulador de carga", alias="controlador de '
+                                          'carga, control de carga"). Separados por coma. Es un campo INTERNO '
+                                          'para mejorar la búsqueda: NUNCA se lo muestres al usuario, nunca se lo '
+                                          'preguntes, no aparece en ninguna ficha ni en el form web. Solo '
+                                          'recursos. Completalo SIEMPRE que des de alta un recurso: apenas '
+                                          'crear_entidad te devuelva el id, llamá a editar_entidad con 2 a 5 '
+                                          'términos alternativos razonables (jerga de taller, nombres comunes, '
+                                          'abreviaturas, marcas). Si en cualquier momento el usuario nombra un '
+                                          'recurso ya cargado con un término distinto al que tiene guardado, '
+                                          'sumalo acá también.')}
             },
             'required': ['slug', 'id']
         }
@@ -614,6 +628,37 @@ TOOLS_SCHEMA = [
         }
     },
     {
+        'name': 'mover_ubicacion',
+        'description': ('Mueve unidades de un recurso de un lugar a otro dentro del pañol '
+                        '("moví 3 destornilladores de laboratorio a taller"). Es para cuando '
+                        'un recurso con varias unidades está repartido en más de un lugar: '
+                        'el campo `ubicacion` de la ficha sigue siendo el lugar principal o '
+                        'único cuando no hace falta desglosar, y no lo toca esta tool. '
+                        'NO HACE FALTA que el desglose por lugar esté cargado de antes ni que '
+                        'sume el total de la cantidad del recurso: si el lugar de origen no '
+                        'tiene registrada tanta cantidad como se pide mover (o no tiene '
+                        'ninguna fila todavía), IGUAL se mueve lo pedido — nunca se bloquea '
+                        'por eso. Si hubo una diferencia entre lo pedido y lo que había '
+                        'registrado, la respuesta trae `avisos`: contáselos al usuario. '
+                        '`origen` es opcional: si no se sabía de dónde salían (nunca se había '
+                        'registrado un desglose para este recurso), omitilo y sólo se suma la '
+                        'cantidad a `destino`. `destino` es obligatorio. Si el nombre del '
+                        'recurso es ambiguo devuelve ok:false con `opciones`: mostráselas al '
+                        'usuario y preguntá cuál es, no elijas vos. Después de mover, contale '
+                        'al usuario cómo quedó el desglose ENTERO (`ubicaciones` en la '
+                        'respuesta), no sólo lo que acaba de pedir.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'recurso': {'type': 'string', 'description': 'Nombre del recurso (tolera aproximados y tildes) o su ID como string'},
+                'cantidad': {'type': 'integer', 'description': 'Unidades a mover'},
+                'origen': {'type': 'string', 'description': 'Lugar de donde salen. Opcional: si no se sabía dónde estaban, se omite'},
+                'destino': {'type': 'string', 'description': 'Lugar al que llegan. Obligatorio'}
+            },
+            'required': ['recurso', 'cantidad', 'destino']
+        }
+    },
+    {
         'name': 'eliminar_entidad',
         'description': ('Elimina un recurso, conjunto, actividad, hito o persona. Requiere confirmación del '
                         'usuario en un turno previo Y el nombre exacto en nombre_confirmacion: el servidor '
@@ -695,6 +740,7 @@ PERMISO_POR_TOOL = {
     'crear_prestamo': 'agente.escribir',
     'finalizar_prestamo': 'agente.escribir',
     'reabrir_prestamo': 'agente.escribir',
+    'mover_ubicacion': 'agente.escribir',
     'eliminar_entidad': 'agente.escribir',
     'eliminar_prestamo': 'agente.escribir',
 }

@@ -123,6 +123,14 @@ td{border-bottom:1px solid var(--linea); padding:4px 5px; vertical-align:middle}
 td input,td select{padding:6px 7px; font-size:12px; border-color:#e2e8f0}
 tbody tr:nth-child(even){background:#fafbfc}
 .tabla-scroll{overflow-x:auto; border:1px solid var(--linea); border-radius:var(--radio)}
+.autocomplete-lista{
+  z-index:1000; background:var(--papel); border:1px solid var(--linea); border-top:none;
+  max-height:220px; overflow-y:auto; box-shadow:0 4px 14px rgba(0,0,0,.15);
+  border-radius:0 0 var(--radio) var(--radio);
+}
+.autocomplete-item{padding:7px 10px; font-size:12px; cursor:pointer; border-bottom:1px solid var(--linea)}
+.autocomplete-item:hover{background:var(--auto)}
+.autocomplete-item:last-child{border-bottom:none}
 .vacio{text-align:center; color:var(--tinta-suave); padding:22px; font-size:12px; font-style:italic}
 
 .totales{
@@ -527,6 +535,18 @@ Object.assign(AYUDA_COMUN, AYUDA_SEGURO);
 /* Normativa — referencias a la Resolución 3871/24 para cada campo/aviso */
 const NORMATIVA = {{ normativa | tojson }};
 
+/* Padrón de estudiantes (estudiantes.db, vía estudiantes.py) — alimenta el autocompletado
+   de "Apellido y Nombre" en la tabla de Personas. Sólo vive en esta computadora: nunca
+   sale de acá ni se guarda con la salida (ver agent_docs/salidas-educativas.md). */
+const ESTUDIANTES = {{ estudiantes | tojson }};
+
+// Mismo criterio que normalize() de static/js/script.js (sin acentos, minúsculas,
+// espacios colapsados) — duplicado a propósito porque este formulario es autocontenido
+// y no carga ese script.
+function normTexto(s){
+  return (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
+}
+
 /* Datos fijos que alimentan campos del Anexo IX que no son del bloque de seguro (ese
    bloque ya no es "auto": tiene su propio selector de preset, ver SEGUROS_PRESET y
    selectorPresetSeguro — necesita quedar editable a mano sin que refrescarDerivados() lo
@@ -896,6 +916,47 @@ function obtenerEdad(fechaNac){
   return edad >= 0 ? edad : null;
 }
 
+// Autocompletado de estudiantes en la tabla de Personas: mismo criterio de tolerancia
+// (sin acentos, minúsculas, substring) que la búsqueda de profesores del SPA de horarios.
+// El dropdown se ancla con `position:fixed` sobre el input (no anidado en `.tabla-scroll`,
+// que tiene overflow-x:auto — un hijo absoluto ahí quedaría recortado en vez de flotar).
+let dropdownEstudiante = null;
+
+function cerrarSugerenciasEstudiante(){
+  if (dropdownEstudiante){ dropdownEstudiante.remove(); dropdownEstudiante = null; }
+}
+
+function mostrarSugerenciasEstudiante(inpNombre, p, inpDoc){
+  cerrarSugerenciasEstudiante();
+  const q = normTexto(inpNombre.value);
+  if (p.rol !== "estudiante" || q.length < 2) return;
+  const coincidencias = ESTUDIANTES.filter(al => normTexto(al.apellido_nombre).includes(q)).slice(0, 8);
+  if (!coincidencias.length) return;
+
+  const rect = inpNombre.getBoundingClientRect();
+  const lista = el("div", {class:"autocomplete-lista"});
+  lista.style.position = "fixed";
+  lista.style.top = rect.bottom + "px";
+  lista.style.left = rect.left + "px";
+  lista.style.width = rect.width + "px";
+  coincidencias.forEach(al => {
+    const item = el("div", {class:"autocomplete-item"},
+      `${al.apellido_nombre} — ${al.curso}° ${al.division} — DNI ${al.dni}`);
+    item.addEventListener("mousedown", (e) => {
+      e.preventDefault(); // gana al blur del input, que si no cierra la lista antes del click
+      p.apellido_nombre = al.apellido_nombre;
+      p.documento = al.dni;
+      inpNombre.value = al.apellido_nombre;
+      inpDoc.value = al.dni;
+      marcarCambio();
+      cerrarSugerenciasEstudiante();
+    });
+    lista.appendChild(item);
+  });
+  document.body.appendChild(lista);
+  dropdownEstudiante = lista;
+}
+
 function pintarPersonas(){
   const tb = document.getElementById("cuerpo-personas");
   tb.textContent = "";
@@ -924,9 +985,14 @@ function pintarPersonas(){
   personasOrdenadas.forEach((p) => {
     const i = estado.personas.indexOf(p);
     const inpNombre = el("input", {type:"text", value:p.apellido_nombre, placeholder:"Apellido y Nombre"});
-    inpNombre.addEventListener("input", () => { p.apellido_nombre = inpNombre.value; marcarCambio(); });
-
     const inpDoc = el("input", {type:"text", value:p.documento, placeholder:"DNI"});
+    inpNombre.addEventListener("input", () => {
+      p.apellido_nombre = inpNombre.value;
+      marcarCambio();
+      mostrarSugerenciasEstudiante(inpNombre, p, inpDoc);
+    });
+    inpNombre.addEventListener("blur", () => setTimeout(cerrarSugerenciasEstudiante, 150));
+
     inpDoc.addEventListener("input", () => { p.documento = inpDoc.value; marcarCambio(); });
 
     const inpCargo = el("input", {type:"text", value:p.cargo, placeholder:"Ej: Profesor de Matemática"});

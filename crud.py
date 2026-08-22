@@ -77,6 +77,20 @@ def campo_nombre(cfg_ent):
     return cfg_ent.get('campo_nombre', 'nombre')
 
 
+def campo_alias(cfg_ent):
+    """Columna de términos alternativos para la búsqueda, si la entidad la declaró.
+
+    No necesariamente sinónimos estrictos ("zapatilla" y "alargue" son cosas distintas
+    que se confunden) — de ahí el nombre `alias` y no `sinonimos`. `None` por defecto: hoy
+    solo la declara `gestion.recursos`. Mismo criterio que `campo_nombre` — capa 1 no sabe
+    qué es un alias, solo que hay una columna extra que entra en la segunda pasada de
+    `buscar_entidad`/`lista()` y en el whitelist de `guardar_entidad`, sin pasar por
+    `cfg.campos` (que es lo que la mantiene fuera del form web y de la ficha de
+    confirmación del agente).
+    """
+    return cfg_ent.get('campo_alias')
+
+
 def permiso_entidad(area, slug):
     """Permiso EXTRA que pide UNA entidad, si su área lo declaró en su cfg (`permiso`).
 
@@ -193,13 +207,27 @@ def buscar_entidad(area, slug, query, con=None):
         return [dict(f) for f in filas]
 
     q_norm = texto.norm(query)
-    puntuadas = []
+    campo_al = campo_alias(cfg_ent)
+    puntuadas, por_alias = [], []
     for fila in filas:
         puntaje = texto.puntaje_busqueda(q_norm, fila['nombre'], fila['descripcion'])
         if puntaje is not None:
             puntuadas.append((puntaje, fila))
+        elif campo_al:
+            # Segunda pasada: solo si NO matcheó por nombre/descripcion. Va a una lista
+            # aparte que se concatena al final, nunca mezclada con los matches normales
+            # (ver agent_docs/gestion-conocimiento.md).
+            puntaje_al = texto.puntaje_busqueda(q_norm, fila[campo_al])
+            if puntaje_al is not None:
+                por_alias.append((puntaje_al, fila))
     puntuadas.sort(key=lambda par: (-par[0], texto.norm(par[1]['nombre'])))
-    return [dict(fila) for _, fila in puntuadas]
+    por_alias.sort(key=lambda par: (-par[0], texto.norm(par[1]['nombre'])))
+    resultado = [dict(fila) for _, fila in puntuadas]
+    for _, fila in por_alias:
+        d = dict(fila)
+        d['_via_alias'] = True
+        resultado.append(d)
+    return resultado
 
 
 def guardar_entidad(area, slug, campos_dict, id=None, con=None):
@@ -216,6 +244,12 @@ def guardar_entidad(area, slug, campos_dict, id=None, con=None):
 
     try:
         nombres = [c['nombre'] for c in cfg_ent['campos']]
+        # El campo de alias (si la entidad lo declaró) se escribe sin estar en 'campos':
+        # es lo que lo mantiene fuera del form web y de la ficha del agente (ver
+        # campo_alias()). Solo entra si vino explícito en campos_dict.
+        campo_al = campo_alias(cfg_ent)
+        if campo_al and campo_al not in nombres and campo_al in campos_dict:
+            nombres = nombres + [campo_al]
         valores = {n: str(campos_dict.get(n, '')).strip() for n in nombres}
 
         derivados = _hook(area, 'derivados')
@@ -509,24 +543,41 @@ def registrar_rutas(bp, area):
         cur = con.cursor()
         filas = cur.execute(f"{select(cfg_ent)} ORDER BY nombre COLLATE NOCASE").fetchall()
         con.close()
+        campo_al = campo_alias(cfg_ent)
+        via_alias = set()
         if q:
             # Búsqueda tolerante (ver texto.puntaje_busqueda): acentos/mayúsculas no
             # importan y se perdonan typos. Se filtra y ordena en Python — con esta
             # cantidad de filas el costo es despreciable frente a que "perdone".
             q_norm = texto.norm(q)
-            puntuadas = []
+            puntuadas, por_alias = [], []
             for fila in filas:
                 puntaje = texto.puntaje_busqueda(q_norm, fila['nombre'], fila['descripcion'])
                 if puntaje is not None:
                     puntuadas.append((puntaje, fila))
+                elif campo_al:
+                    # Segunda pasada, solo si no matcheó por nombre/descripcion: los que
+                    # entran acá se muestran al final, marcados aparte (ver
+                    # agent_docs/gestion-conocimiento.md).
+                    puntaje_al = texto.puntaje_busqueda(q_norm, fila[campo_al])
+                    if puntaje_al is not None:
+                        por_alias.append((puntaje_al, fila))
             puntuadas.sort(key=lambda par: (-par[0], texto.norm(par[1]['nombre'])))
-            filas = [fila for _, fila in puntuadas]
+            por_alias.sort(key=lambda par: (-par[0], texto.norm(par[1]['nombre'])))
+            via_alias = {fila['id'] for _, fila in por_alias}
+            filas = [fila for _, fila in puntuadas] + [fila for _, fila in por_alias]
         # Texto ya normalizado por fila, para el filtrado en vivo del navegador
-        # (data-buscar). Mismo alcance que la búsqueda del server: nombre + descripcion.
-        buscar = {fila['id']: texto.norm(f"{fila['nombre']} {fila['descripcion'] or ''}")
-                  for fila in filas}
+        # (data-buscar). Incluye el alias cuando la entidad lo declara, para que el
+        # filtrado en vivo (solo substring, sin fuzzy) también lo encuentre.
+        def _texto_buscar(fila):
+            base = f"{fila['nombre']} {fila['descripcion'] or ''}"
+            if campo_al and fila[campo_al]:
+                base += f" {fila[campo_al]}"
+            return texto.norm(base)
+        buscar = {fila['id']: _texto_buscar(fila) for fila in filas}
         return render_template(f'{nombre}/lista.html', cfg=cfg_ent, slug=slug, filas=filas,
-                               q=q, activo=slug, buscar=buscar, **_extras('lista', slug))
+                               q=q, activo=slug, buscar=buscar, via_alias=via_alias,
+                               **_extras('lista', slug))
 
     @bp.route('/<slug>/nuevo', methods=['GET', 'POST'])
     @accesos.requiere(escritura)

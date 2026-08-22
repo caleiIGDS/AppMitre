@@ -29,6 +29,7 @@ from .horarios import (_aulas_libres_fmt, _buscar_por_rol_fmt, _buscar_profesor,
                        _preceptores_fmt)
 from .prestamos import (_crear_prestamo, _detalle_prestamo_fmt, _eliminar_prestamo,
                         _finalizar_prestamo, _listar_prestamos_fmt, _reabrir_prestamo)
+from .ubicaciones import _mover_ubicacion_fmt
 
 # ============================================================================
 # Ejecutor de tools
@@ -178,6 +179,9 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
             resultado = _finalizar_prestamo(tool_input.get('prestamo_id', 0), tool_input.get('items'))
         elif tool_name == 'reabrir_prestamo':
             resultado = _reabrir_prestamo(tool_input.get('prestamo_id', 0), tool_input.get('items'))
+        elif tool_name == 'mover_ubicacion':
+            resultado = _mover_ubicacion_fmt(tool_input.get('recurso', ''), tool_input.get('cantidad'),
+                                             tool_input.get('origen'), tool_input.get('destino'))
         elif tool_name == 'eliminar_entidad':
             resultado = _eliminar_entidad(tool_input.get('slug', ''), tool_input.get('id', 0),
                                           tool_input.get('nombre_confirmacion'))

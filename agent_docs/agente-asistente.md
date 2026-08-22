@@ -19,7 +19,7 @@ hitos y personas. Todo con auditoría de escrituras en `agente_log`.
 **Acceso**: dos vistas del mismo chat, ambas detrás del gate de `accesos.py`
 (`accesos.registrar_acceso(bp, 'agente.leer', ...)`). El asistente declara **cuatro permisos
 propios** —`agente.leer`, `agente.escribir`, `agente.vision`, `agente.auditar`— y **con cuáles tenga
-cambia lo que el agente es**: con solo `agente.leer` las diez tools de escritura ni se le mandan al
+cambia lo que el agente es**: con solo `agente.leer` las once tools de escritura ni se le mandan al
 modelo, y sin `agente.vision` no hay botón para adjuntar fotos ni tools que las miren. Ver
 "Permisos" más abajo y `agent_docs/accesos.md`.
 - Botón "🤖 ASISTENTE" en el header de `/gestion` y `/historia` → widget flotante, para
@@ -333,13 +333,19 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
   salió distinto de lo pedido, ver "Las tools de préstamo cuentan cómo quedó" abajo
 - `finalizar_prestamo(id, items?)` — devolución total (sin `items`) o parcial (con `items`)
 - `reabrir_prestamo(id, items?)` — deshace una devolución
+- `mover_ubicacion(recurso, cantidad, origen?, destino)` — mueve unidades de un recurso entre
+  lugares en `gestion.recurso_ubicaciones` (desglose OPCIONAL, sólo para recursos repartidos
+  en más de un sitio; el campo `ubicacion` simple no se toca). **Nunca bloquea** por falta de
+  desglose previo: si `origen` no tenía tanto registrado, igual mueve lo pedido y avisa
+  (`avisos`) — ver `agent_docs/gestion-conocimiento.md`. `origen` es opcional (unidades sin
+  lugar registrado antes)
 - `eliminar_entidad` / `eliminar_prestamo` — **requieren confirmación en turno separado** (el
   system prompt instruye a Claude a no ejecutar en el mismo turno en que se solicita, sino
   responder primero qué va a borrar y esperar confirmación)
 
 ### Permisos: no tener la tool, no tenerla prohibida
 
-Un acceso de consulta **no recibe** los esquemas de las diez tools de escritura. La diferencia con
+Un acceso de consulta **no recibe** los esquemas de las once tools de escritura. La diferencia con
 prohibírselas no es cosmética: una tool que no está en la lista el modelo no la anuncia, no la
 promete y no alucina haberla usado. Prohibida, en cambio, la intenta, se come el error y a veces
 igual contesta "✅ listo".
@@ -479,11 +485,12 @@ daba de alta una sola sin que nada avisara. Tres reglas sostienen el caso:
 - Se devuelven **todas las pendientes, no solo las de este turno**: una ficha sin guardar
   tiene que reaparecer debajo de la respuesta siguiente o se pierde igual. Reaparecer no
   escribe nada: guardar es siempre un click explícito.
-- Si dos fichas pendientes son de la **misma entidad** (el usuario pidió un cambio y el
-  modelo la rearmó), se muestra solo la última: son la misma alta, y dos botones con el
-  mismo nombre y distinto contenido no hay forma de distinguirlos. Cuando salieron de una
-  foto la desduplicación es más temprana y más confiable — por número de foto, en
-  `_fusionar_fichas()`; el nombre queda para las altas de texto, que no tienen otra identidad.
+- Si dos fichas pendientes son la **misma alta** (el usuario pidió un cambio y el modelo la
+  rearmó), la nueva **reemplaza** a la vieja en la sesión, en `_fusionar_fichas()`. La
+  identidad es el número de foto cuando salió de una, y si no el nombre (`_identidad_ficha()`,
+  que usan también los botones). No alcanza con esconder la vieja al mostrar: si sigue viva en
+  la sesión, al guardar la nueva reaparece sola en el turno siguiente y un segundo click da de
+  alta el mismo recurso dos veces.
 
 El nombre va **dentro** del botón ("✅ Guardar persona: Pablo Errio"): con dos o tres
 seguidos, "Guardar persona" repetido no dice cuál es cuál.

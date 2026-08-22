@@ -41,13 +41,6 @@
   - **Google Sign-In** como segunda puerta: las columnas `email` / `google_sub` de `dispositivos` ya están reservadas y el gate lee "identidad" en abstracto, así que se suma sin migrar nada ni tocar los permisos.
   - **Corte fino por área en el agente**: hoy `agente.escribir` habilita escribir en gestión **y** en historia, porque las tools genéricas por slug cruzan las dos. Si hiciera falta separarlas, el lugar es `ejecutar_tool` mirando `_modulo(slug)`, no el esquema.
 
-- [ ] #21 — Búsqueda de recursos por sinónimos: columna `otros_nombres` + generación con IA — `gestion.py` / `static/gestion.css` / script nuevo  
-  Muchas herramientas se conocen por varios nombres (Multímetro = tester = polímetro). Falta:
-  1. Columna nueva `otros_nombres` (TEXT) en `recursos` — se edita en el form del recurso (no tabla aparte), migración vía `_migrar()`. Sumarla también a `_puntaje_busqueda()`.
-  2. Script offline `generar_alias.py` que llena `otros_nombres` con IA (Claude) una sola vez, corriendo en la PC del dev — producción **no** necesita API key. Salida editable a mano. Costo: centavos, una vez.
-  3. Opcional a futuro: botón "sugerir otros nombres" por recurso (eso sí requeriría la key en el hosting).
-  **Ya hecho (2026-07-21)**: búsqueda tolerante sin IA — `_puntaje_busqueda()` normaliza acentos/mayúsculas y perdona typos por similitud (`difflib`). Resuelve acentos y typos; falta solo la parte de sinónimos que no se parecen ("tester"), que es lo que aporta `otros_nombres`.
-
 - [ ] #22 — `listar_prestamos(persona)` filtra con `LIKE` crudo: no perdona acentos ni typos — `agente/tools/prestamos.py`  
   `persona LIKE '%x%'` es sensible a acentos, así que buscar "Damian Planes" no encuentra el préstamo de "Damián Planes" y el agente contesta "no hay préstamos a esa persona" — indistinguible de que no exista. La búsqueda de recursos ya resolvió esto en el mismo archivo (`_resolver_recurso`: exacto → substring normalizado → difuso con `texto.norm` y `_puntaje_nombre`); falta aplicar el mismo criterio a la persona. Ojo con el caso "no hay match": tiene que decir explícitamente que buscó y no encontró, no devolver `[]` a secas. Salió al investigar el reporte del 2026-08-11 (ver `dev-log/DECISIONS.md`), aunque no fue la causa de ese bug. Lo mismo aplica al `?q=` de `/gestion/prestamos`, que busca con `LIKE` en persona/destino/notas.
 

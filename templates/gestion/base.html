@@ -30,6 +30,9 @@
                    ☰ (bloque `.g-areas` al final del body). #}
                 <div class="g-header-actions">
                     <a class="g-btn-outline" href="/">‹ SISTEMA DE HORARIOS</a>
+                    {% if puede('gestion.alias') %}
+                    <a class="g-btn-outline" href="{{ url_for('gestion.alias_lista') }}">ALIAS</a>
+                    {% endif %}
                     {% if puede('agente.leer') %}
                     <button id="agente-toggle-btn" class="g-btn-outline" title="Abrir asistente" style="cursor: pointer;">🤖 ASISTENTE</button>
                     {% endif %}

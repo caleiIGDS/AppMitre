@@ -5,6 +5,9 @@ escuela.db
 # PDFs generados por Salidas educativas (contienen DNI y datos de salud)
 salidas_pdfs/
 
+# Padrón de estudiantes (DNI) — fuente para cargar estudiantes.db, nunca se commitea
+*.xlsx
+
 # Python
 __pycache__/
 *.pyc

@@ -538,6 +538,16 @@ body {
     color: var(--g-muted);
 }
 
+/* Fila que matcheó por el alias oculto de un recurso, no por nombre/descripción
+   (ver crud.py::lista / agent_docs/gestion-conocimiento.md). Solo la etiqueta cambia; la
+   fila y sus columnas quedan iguales. */
+.g-tag-alias {
+    font-size: 11px;
+    color: var(--g-muted);
+    margin-left: 6px;
+    white-space: nowrap;
+}
+
 .g-rel {
     border: 1px dashed var(--g-border);
     padding: 14px 16px;

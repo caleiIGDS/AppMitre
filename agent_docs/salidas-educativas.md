@@ -483,6 +483,34 @@ activas tumbaría el arranque de la app entera. Por eso el testigo es `salidas_m
 tabla de un solo renglón (`id=1`) sembrada una vez en el primer `init_db()` y nunca más
 tocada — siempre tiene datos, así que nunca dispara el guard.
 
+## Padrón de estudiantes (`estudiantes.py`)
+
+Módulo aparte, capa 2, con su propia DB (`estudiantes.db`) — información sensible (DNI de
+menores) que sólo vive en la computadora de la escuela, nunca en git (`*.db` en
+`.gitignore`, y también `*.xlsx` por si vuelve a aparecer un Excel fuente en la raíz antes
+de importarlo). No es un área registrada en `accesos.py` (sin blueprint ni permiso
+propio): es una dependencia privada de esta feature, así que `salidas.init_db()` también
+llama a `estudiantes.init_db()`, y las rutas que lo tocan viven en `bp` de `salidas.py`,
+gateadas con `salidas.editar`.
+
+- **Carga/actualización**: botón "Actualizar padrón de estudiantes" en `/salidas/`
+  (`lista.html`) sube un CSV a `POST /salidas/api/estudiantes/csv`. `estudiantes.cargar_csv`
+  detecta las columnas de curso/apellido y nombre/DNI por nombre (tolera variantes vía
+  `texto.norm`) y **reemplaza todo el padrón** dentro de una transacción — es una carga
+  anual completa, no un alta incremental. El curso viene codificado en un solo campo de 2
+  caracteres (`"1A"`, `"41"`): el primer carácter es el año (1-7) y el resto la división
+  tal cual — mismo criterio que ya usa `escuela.db` (1°-3° con letra, 4°-7° con número).
+- **Autocompletado**: `salidas.nueva()`/`editar()` pasan
+  `estudiantes.listar_para_autocomplete()` al template, que lo embebe como `ESTUDIANTES` (
+  `formulario.html`, junto a `NORMATIVA`). En la tabla de Personas, tipear en "Apellido y
+  Nombre" con rol Estudiante filtra ese array client-side (`normTexto`, mismo criterio que
+  `normalize()` de `static/js/script.js` — sin acentos, minúsculas, substring) y muestra
+  hasta 8 sugerencias con curso/división de referencia; elegir una completa nombre bien
+  escrito + DNI. El dropdown se ancla con `position:fixed` sobre el input en vez de vivir
+  anidado en `.tabla-scroll` (que tiene `overflow-x:auto` y recortaría un hijo absoluto).
+  No hay columna de curso/división en la tabla de Personas — el dato sólo se muestra en la
+  sugerencia, no se guarda con la salida.
+
 ## Rutas
 
 | Ruta | Método | Gate | Qué hace |
@@ -491,6 +519,7 @@ tocada — siempre tiene datos, así que nunca dispara el guard.
 | `/salidas/nueva` | GET | `salidas.editar` | El formulario grande de carga |
 | `/salidas/<id>/editar` | GET | `salidas.editar` | El formulario precargado con datos de una salida existente para reeditar |
 | `/salidas/api/guardar` | POST | `salidas.editar` | JSON del formulario → **inserta** la fila si es nueva, o **actualiza** si viene `_id_editar`; genera/regenera los 7 PDF, devuelve `{id}` |
+| `/salidas/api/estudiantes/csv` | POST | `salidas.editar` | Sube un CSV que **reemplaza todo** el padrón de `estudiantes.db` (ver "Padrón de estudiantes" arriba) |
 | `/salidas/<id>` | GET | `salidas.leer` | Detalle: datos comunes, link para compartir, links a los PDF que ya generó la escuela |
 | `/salidas/<id>/regenerar` | POST | `salidas.editar` | Rehace los 7 PDF a partir del `datos_json` guardado |
 | `/salidas/<id>/pdf/<anexo>` | GET | `salidas.leer` | `send_file` del PDF guardado, `as_attachment=False` (se abre en el navegador, no se descarga solo) |

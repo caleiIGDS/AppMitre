@@ -6,6 +6,34 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-08-21] — Se retoma la columna `alias` por recurso, descartada el 2026-08-08 — cierra tarea #21
+
+La decisión 2026-08-08 (ver abajo) rechazó una columna de sinónimos por recurso: la
+evaluó **para la búsqueda del chat**, donde `listar_todos` ya resuelve lo mismo sin
+diccionario, más barato. Lo que cambia ahora es el caso de uso: el buscador **web** de
+`/gestion/recursos?q=` no tiene ningún modelo del otro lado — es texto plano — así que
+`listar_todos` no le sirve a un preceptor tipeando en el navegador. El argumento de
+cardinalidad de esa decisión (47% de filas comparten concepto, hay que acordarse en cada
+alta) sigue siendo válido y se acepta a propósito: se resuelve dejando que **el asistente**
+mantenga la columna, no una persona a mano — ver la entrada siguiente. Se llama `alias` y
+no `sinonimos` (ni `otros_nombres`, como decía la tarea #21 original): "zapatilla" y
+"alargue" no son sinónimos estrictos, son términos que la gente confunde.
+
+---
+
+## [2026-08-21] — `alias` de un recurso solo se escribe por `editar_entidad`, nunca por `crear_entidad`
+
+El campo vive fuera de `ENTIDADES['recursos']['campos']` a propósito: esa lista es la
+única fuente que usan el form web y la ficha de confirmación del chat (`fichas.py`), así
+que agregar `alias` ahí lo mostraría en las dos, justo lo que se quiere evitar (es un
+campo que completa el asistente y el usuario nunca debe ver ni editar). Por eso tampoco
+está en el `input_schema` de `crear_entidad` (`esquemas.py`): si alguien lo agrega ahí para
+"que se cargue de una vez" en el alta, hay que sumarlo también a `_normalizar_borrador` y
+`_ficha_confirmacion`, y el campo terminaría visible en la ficha — el camino correcto es
+que el asistente llame a `editar_entidad` (sin ficha, sin confirmación) después del alta.
+
+---
+
 ## [2026-08-16] — Lo que completa una familia por el link público no se guarda
 
 **Contexto**: el link público (`/salidas/completar/<token>`, ver
@@ -1263,7 +1291,7 @@ primero.
 - **No escala para siempre**: `LIMITE_LISTADO_COMPLETO = 400`. Arriba de eso la tool se niega y pide afinar la búsqueda. **Si el inventario supera ese tope, el tier de sinónimos descartado arriba vuelve a ser la respuesta correcta** — la aritmética se da vuelta cuando el listado deja de caber.
 - El guardrail es de prompt, en tres lugares que se refuerzan: el `aviso` de `buscar_entidad` nombra la tool, la `instruccion` del resultado dice "si ninguno es, decilo — no ofrezcas el más parecido", y la regla 3 del system prompt fija el orden. Al ser de prompt y no de código, es más frágil con modelos que siguen instrucciones peor; si alguna vez sobre-matchea, la salida es endurecer el guardrail, no volver al diccionario.
 - **Verificado end-to-end contra `deepseek-v4-pro`** (2026-08-08), 6/6 casos. Sinónimos: "tester" → *Multímetro* y "taladro" → *Agujereadora de banco*, ambos vía `buscar_entidad` → `listar_todos`. Eficiencia: "osciloscopio" (match exacto) se resolvió con `buscar_entidad` sola, **sin** gastar el fallback — los dos niveles funcionan como se diseñaron. Negativos: "torno" y "soldadora inverter" se reportaron como no cargados. **El caso trampa**: preguntando por un "microscopio" la búsqueda difusa devuelve *Osciloscopio*, y el modelo respondió "no tenemos microscopio; lo más parecido es el Osciloscopio, pero es otra cosa — mide señales eléctricas, no amplía imágenes". Es exactamente el comportamiento que el guardrail busca: menciona el parecido marcándolo como distinto, en vez de ofrecerlo como el pedido.
-- **No agregar una columna `sinonimos` "para mejorar la búsqueda"** sin releer esto: se evaluó y se descartó con datos.
+- **No agregar una columna de sinónimos "para mejorar la búsqueda del chat"** sin releer esto: para ESE caso se evaluó y se descartó con datos. La búsqueda **web** (sin modelo del otro lado) es un caso distinto — ver el override en 2026-08-21, columna `recursos.alias`.
 
 ---
 

@@ -33,6 +33,7 @@ from fpdf import FPDF, FontFace
 
 import accesos
 import crud
+import estudiantes
 from config import ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION, ahora
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -130,6 +131,10 @@ def init_db():
     un año sin salidas activas nunca se confunda con un archivo perdido."""
     crud.init_db(sys.modules[__name__])
     _purgar_vencidas()
+    # estudiantes.py no es un área registrada en accesos (sin blueprint ni permiso
+    # propio) — es el padrón que alimenta el autocompletado de la tabla de Personas, así
+    # que su ciclo de vida lo maneja esta área en vez de app.py.
+    estudiantes.init_db()
 
 
 def _purgar_vencidas():
@@ -996,7 +1001,8 @@ def lista():
 @accesos.requiere(PERMISO_ESCRITURA)
 def nueva():
     normativa = _cargar_normativa()
-    return render_template('salidas/formulario.html', activo='nueva', datos_precargar=None, id_editar=None, normativa=normativa)
+    return render_template('salidas/formulario.html', activo='nueva', datos_precargar=None, id_editar=None,
+                           normativa=normativa, estudiantes=estudiantes.listar_para_autocomplete())
 
 
 @bp.route('/nueva-tabs')
@@ -1017,7 +1023,8 @@ def nueva_tabs():
         variante = '1'
     normativa = _cargar_normativa()
     return render_template('salidas/formulario_tabs.html', activo='nueva', datos_precargar=None,
-                           id_editar=None, normativa=normativa, variante=variante)
+                           id_editar=None, normativa=normativa, variante=variante,
+                           estudiantes=estudiantes.listar_para_autocomplete())
 
 
 @bp.route('/<int:id>/editar')
@@ -1031,7 +1038,8 @@ def editar(id):
         abort(404)
     datos_precargar = json.loads(fila['datos_json'])
     normativa = _cargar_normativa()
-    return render_template('salidas/formulario.html', activo='nueva', id_editar=id, datos_precargar=datos_precargar, normativa=normativa)
+    return render_template('salidas/formulario.html', activo='nueva', id_editar=id, datos_precargar=datos_precargar,
+                           normativa=normativa, estudiantes=estudiantes.listar_para_autocomplete())
 
 
 @bp.route('/api/guardar', methods=['POST'])
@@ -1086,6 +1094,23 @@ def api_guardar():
 
     _generar_pdfs(id, anexos)
     return jsonify({'id': id})
+
+
+@bp.route('/api/estudiantes/csv', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
+def api_cargar_estudiantes():
+    """Reemplaza todo el padrón de estudiantes (estudiantes.db) por el CSV subido —
+    ver estudiantes.cargar_csv. Es carga anual completa, no alta incremental."""
+    if 'file' not in request.files:
+        return jsonify({'ok': False, 'error': 'No se envió ningún archivo.'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'ok': False, 'error': 'Archivo vacío.'}), 400
+    try:
+        cantidad = estudiantes.cargar_csv(file.stream)
+        return jsonify({'ok': True, 'cantidad': cantidad})
+    except ValueError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
 
 
 @bp.route('/<int:id>')

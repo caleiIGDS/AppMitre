@@ -22,7 +22,46 @@
 {% endblock %}
 
 {% block seccion scoped %}
-{% if s.get('tipo') == 'prestamo_activo' %}
+{% if s.get('tipo') == 'ubicaciones' %}
+    {% if s['items'] %}
+    <table class="g-prestamo-tabla">
+        <thead>
+            <tr>
+                <th>Lugar</th>
+                <th>Cantidad</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for it in s['items'] %}
+            <tr>
+                <td>{{ it['ubicacion'] }}</td>
+                <td>{{ it['cantidad'] }}</td>
+                <td>
+                    {% if puede(permiso_escritura) %}
+                    <form method="post" class="g-inline-form"
+                          action="{{ url_for('gestion.ubicacion_eliminar', id=fila['id']) }}"
+                          onsubmit="return confirm('¿Quitar este lugar del desglose?');">
+                        <input type="hidden" name="ubicacion" value="{{ it['ubicacion'] }}">
+                        <button type="submit" class="g-btn-danger g-btn-mini">Quitar</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="g-help">Sin desglosar todavía: todo bajo el campo "Ubicación" de la ficha.</p>
+    {% endif %}
+    {% if puede(permiso_escritura) %}
+    <form method="post" class="g-inline-form" action="{{ url_for('gestion.ubicacion_set', id=fila['id']) }}">
+        <input type="text" name="ubicacion" placeholder="Lugar" required>
+        <input type="number" name="cantidad" placeholder="Cantidad" min="1" required style="width:5em">
+        <button type="submit" class="g-btn-mini">Agregar / actualizar</button>
+    </form>
+    {% endif %}
+{% elif s.get('tipo') == 'prestamo_activo' %}
     {% if s['items'] %}
     <table class="g-prestamo-tabla">
         <thead>

@@ -1,0 +1,33 @@
+{# Consulta de solo lectura, admin-only: qué alias le completó el asistente a cada
+   recurso. No hay edición acá ni en ningún otro lado de la web — ver
+   agent_docs/gestion-conocimiento.md. #}
+{% extends 'gestion/base.html' %}
+{% block titulo %}Alias de recursos{% endblock %}
+{% block contenido %}
+<div class="g-toolbar">
+    <h2>ALIAS DE RECURSOS <span class="g-count">{{ filas | length }}</span></h2>
+    <p class="g-help">Términos que el asistente completó para que la búsqueda encuentre un
+        recurso aunque lo pidan con otro nombre. Solo lectura: se edita únicamente por
+        chat.</p>
+</div>
+
+{% if filas %}
+<div class="g-table-wrap">
+    <table class="g-table">
+        <thead>
+            <tr><th>NOMBRE</th><th>ALIAS</th></tr>
+        </thead>
+        <tbody>
+            {% for fila in filas %}
+            <tr>
+                <td data-label="NOMBRE">{{ fila['nombre'] }}</td>
+                <td data-label="ALIAS">{{ fila['alias'] or '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="g-empty"><p>Todavía no hay recursos cargados.</p></div>
+{% endif %}
+{% endblock %}

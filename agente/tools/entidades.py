@@ -65,7 +65,13 @@ def _buscar_entidad_fmt(slug, query):
             limpio['ubicacion'] = r['ubicacion']
         if r.get('tipo'):
             limpio['tipo'] = r['tipo']
-        match, similitud = _clasificar_match(q_norm, r.get('nombre'), r.get('descripcion'))
+        if r.get('_via_alias'):
+            # Puesto por crud.buscar_entidad: no matcheó nombre ni descripción, solo el
+            # campo oculto de alias (recursos). Se marca aparte para que el asistente sepa
+            # que no es un match "aproximado" (typo) sino uno curado a propósito.
+            match, similitud = 'alias', None
+        else:
+            match, similitud = _clasificar_match(q_norm, r.get('nombre'), r.get('descripcion'))
         if match:
             limpio['match'] = match
             if similitud is not None:

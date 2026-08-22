@@ -58,7 +58,8 @@
       "Read(//c/Users/calei/projects/AppMitre/**)",
       "Bash(ls /c/Users/calei/projects/AppMitre/Salidas/)",
       "Read(//c/Users/calei/projects/AppMitre/Salidas//**)",
-      "Bash(grep -n \"lugar_dia_hora_salida\\\\|lugar_dia_hora_regreso\" -r /c/Users/calei/projects/AppMitre --include=*.py --include=*.html --include=*.js --include=*.json --include=*.md)"
+      "Bash(grep -n \"lugar_dia_hora_salida\\\\|lugar_dia_hora_regreso\" -r /c/Users/calei/projects/AppMitre --include=*.py --include=*.html --include=*.js --include=*.json --include=*.md)",
+      "Bash(python -c \"import gestion, crud, agente.tools.esquemas, agente.tools.entidades\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\calei\\projects\\AppMitre\\static\\vendor\\pdfjs\\build",

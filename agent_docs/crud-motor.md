@@ -108,13 +108,25 @@ columnas que el código ya no declara: `migrar` no puede saber qué sobra en la 
 ### Config de cada entidad (`ENTIDADES[slug]`)
 
 `tabla`, `singular`, `plural`, `descripcion` (card del home), `campos` (form), `columnas` (listado),
-`relaciones` (M2M editables desde el form, con prefijo `rel_`) y, opcionales, **`campo_nombre`** y
-**`permiso`**.
+`relaciones` (M2M editables desde el form, con prefijo `rel_`) y, opcionales, **`campo_nombre`**,
+**`campo_alias`** y **`permiso`**.
 
 `campo_nombre` (default `'nombre'`) existe porque `historia.hitos` llama `titulo` a su columna de
 nombre. **Todas las lecturas van por `crud.select(cfg)`**, que agrega `titulo AS nombre`, así que
 templates, búsqueda y el agente leen siempre `fila['nombre']` sin enterarse. Las escrituras y la
 validación de obligatorio usan `crud.campo_nombre(cfg)`.
+
+`campo_alias` (default `None`, mismo criterio que `campo_nombre`) declara una columna extra de
+texto libre — no necesariamente sinónimos estrictos, alcanza con que la gente confunda dos cosas
+("zapatilla"/"alargue") — que `crud.buscar_entidad()`/`lista()` prueban en una segunda pasada
+cuando nombre/descripcion no matchean; los que entran solo por ahí se muestran al final, marcados
+aparte, nunca mezclados con los matches normales. `crud.guardar_entidad()` la agrega a su
+whitelist de escritura **sin** que esté en `campos`, que es justo lo que la mantiene fuera del
+form web y de la ficha de confirmación del agente (los dos leen `cfg.campos`, nunca esta clave).
+Hoy solo la declara `gestion.ENTIDADES['recursos']` (`'campo_alias': 'alias'`): un campo que
+completa el asistente y el humano nunca ve ni edita — ver `agent_docs/gestion-conocimiento.md`,
+`agent_docs/agente-asistente.md` y `dev-log/DECISIONS.md` 2026-08-08/2026-08-21 (por qué se
+había descartado y por qué el override).
 
 ### `permiso`: una entidad que pide más que el área
 

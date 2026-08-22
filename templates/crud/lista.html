@@ -38,6 +38,7 @@
                 <td data-label="{{ label }}">
                     {%- if loop.first -%}
                     <a class="g-item-link" href="{{ url_for(area_nombre ~ '.detalle', slug=slug, id=fila['id']) }}">{{ fila[campo] }}</a>
+                    {%- if fila['id'] in via_alias %}<span class="g-tag-alias">· por alias</span>{% endif -%}
                     {%- elif campo == 'estado' -%}
                     <span class="g-badge">{{ fila[campo] }}</span>
                     {%- else -%}

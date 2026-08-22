@@ -30,10 +30,16 @@ PERMISOS = [
     ('gestion.leer', 'Ver el inventario, actividades y préstamos', 'leer'),
     ('gestion.editar',
      'Cargar, editar y eliminar recursos; registrar y cerrar préstamos', 'escribir'),
+    # Verbo 'admin' = no entra en ningún preset de interno (ver accesos.PERFILES, que los
+    # arma por verbo): sólo lo tiene el admin, por el comodín '*'. El alias de un recurso
+    # es un campo que ni el interno de lectura ni el de escritura deben poder ver/editar
+    # desde ningún lado — lo completa el asistente solo (ver agent_docs/gestion-conocimiento.md).
+    ('gestion.alias', 'Ver los alias ocultos de los recursos (solo consulta)', 'admin'),
 ]
 GRUPO_PERMISOS = 'Gestión de recursos'
 PERMISO_LECTURA = 'gestion.leer'
 PERMISO_ESCRITURA = 'gestion.editar'
+PERMISO_ALIAS = 'gestion.alias'
 
 # Respaldos rotativos: la maquinaria vive en respaldos.py (capa 0). Acá sólo se declara
 # con qué prefijo se guardan y qué tabla mirar para saber si la DB tiene datos de verdad
@@ -74,6 +80,15 @@ ENTIDADES = {
         ],
         'columnas': [('nombre', 'NOMBRE'), ('cantidad', 'CANT.'), ('ubicacion', 'UBICACIÓN'), ('estado', 'ESTADO'), ('valor', 'VALOR')],
         'relaciones': [],
+        # Términos alternativos (no necesariamente sinónimos estrictos: "zapatilla" y
+        # "alargue" son cosas distintas pero se confunden) que completa el asistente
+        # (agente/tools/esquemas.py), nunca el humano: a propósito NO está en 'campos', así
+        # que ni el form web (templates/crud/form.html) ni la ficha de detalle ni la ficha
+        # de confirmación del chat (agente/tools/fichas.py::_campos_validos) la ven. crud.py
+        # la usa para la segunda pasada de búsqueda y para el whitelist de escritura de
+        # guardar_entidad(). Ver dev-log/DECISIONS.md 2026-08-08 y 2026-08-21: el
+        # override consciente de por qué esta vez sí conviene una columna por fila.
+        'campo_alias': 'alias',
     },
     'conjuntos': {
         'tabla': 'conjuntos',
@@ -113,9 +128,12 @@ ENTIDADES = {
     },
 }
 
-# Tablas M2M a limpiar cuando se elimina una entidad de cada tipo.
+# Tablas M2M a limpiar cuando se elimina una entidad de cada tipo. `recurso_ubicaciones` no
+# es una relación M2M de verdad (es el desglose por lugar, ver más abajo) pero el mecanismo
+# de limpieza es idéntico: borrar filas por `recurso_id`.
 LIMPIEZA_M2M = {
-    'recursos': [('conjunto_recursos', 'recurso_id'), ('actividad_recursos', 'recurso_id')],
+    'recursos': [('conjunto_recursos', 'recurso_id'), ('actividad_recursos', 'recurso_id'),
+                 ('recurso_ubicaciones', 'recurso_id')],
     'conjuntos': [('conjunto_recursos', 'conjunto_id'), ('actividad_conjuntos', 'conjunto_id')],
     'actividades': [('actividad_recursos', 'actividad_id'), ('actividad_conjuntos', 'actividad_id')],
 }
@@ -131,7 +149,8 @@ CREATE TABLE IF NOT EXISTS recursos (
     cantidad TEXT DEFAULT '',
     valor TEXT DEFAULT '',
     fecha_revision TEXT DEFAULT '',
-    fotos TEXT DEFAULT '[]'
+    fotos TEXT DEFAULT '[]',
+    alias TEXT DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS conjuntos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -179,6 +198,12 @@ CREATE TABLE IF NOT EXISTS prestamo_items (
     cantidad_devuelta TEXT DEFAULT '0',
     UNIQUE(prestamo_id, recurso_id)
 );
+CREATE TABLE IF NOT EXISTS recurso_ubicaciones (
+    recurso_id INTEGER NOT NULL,
+    ubicacion TEXT NOT NULL,
+    cantidad TEXT DEFAULT '0',
+    UNIQUE(recurso_id, ubicacion)
+);
 """
 
 
@@ -194,7 +219,7 @@ def migrar(cur):
     if 'utilidad' in existentes and 'valor' not in existentes:
         cur.execute("ALTER TABLE recursos RENAME COLUMN utilidad TO valor")
         existentes = {c[1] for c in cur.execute("PRAGMA table_info(recursos)").fetchall()}
-    for columna in ('cantidad', 'valor', 'fecha_revision', 'fotos'):
+    for columna in ('cantidad', 'valor', 'fecha_revision', 'fotos', 'alias'):
         if columna not in existentes:
             default = '[]' if columna == 'fotos' else ''
             cur.execute(f"ALTER TABLE recursos ADD COLUMN {columna} TEXT DEFAULT '{default}'")
@@ -296,6 +321,13 @@ def secciones_detalle(slug, id, cur):
         secciones.append({'titulo': titulo, 'slug': slug_destino, 'items': cur.execute(sql, (id,)).fetchall()})
 
     if slug == 'recursos':
+        # Desglose por lugar: sólo si el recurso tiene más de una unidad (si no, no hay
+        # nada que repartir) o si ya se lo desglosó alguna vez. La mayoría de los recursos
+        # (una sola unidad) no la ven — ver agent_docs/gestion-conocimiento.md.
+        fila_cant = cur.execute("SELECT cantidad FROM recursos WHERE id = ?", (id,)).fetchone()
+        ubicaciones = ubicaciones_recurso(cur, id)
+        if (fila_cant and _int(fila_cant['cantidad']) > 1) or ubicaciones:
+            secciones.append({'titulo': 'Por ubicación', 'slug': None, 'items': ubicaciones, 'tipo': 'ubicaciones'})
         agregar('Conjuntos que lo incluyen', 'conjuntos',
                 "SELECT c.id, c.nombre FROM conjuntos c JOIN conjunto_recursos r ON r.conjunto_id = c.id WHERE r.recurso_id = ? ORDER BY c.nombre COLLATE NOCASE")
         agregar('Actividades que lo usan', 'actividades',
@@ -502,6 +534,21 @@ def _carrito_filas(cur, items):
     return filas
 
 
+@bp.route('/alias')
+@accesos.requiere(PERMISO_ALIAS)
+def alias_lista():
+    """Consulta de solo lectura: qué alias le completó el asistente a cada recurso.
+
+    Es la única ventana al campo oculto (`recursos.alias`) — no hay edición acá ni en
+    ningún otro lado de la web a propósito, ver `agent_docs/gestion-conocimiento.md`.
+    """
+    con = conectar()
+    filas = con.execute(
+        "SELECT nombre, alias FROM recursos ORDER BY nombre COLLATE NOCASE").fetchall()
+    con.close()
+    return render_template('gestion/alias_lista.html', filas=filas, activo='alias')
+
+
 @bp.route('/prestamos')
 def prestamos_lista():
     q = request.args.get('q', '').strip()
@@ -551,6 +598,115 @@ def pendiente_afuera(cur, rid):
         "JOIN prestamos p ON p.id = i.prestamo_id "
         "WHERE i.recurso_id = ? AND p.fecha_devolucion = ''", (rid,)).fetchall()
     return sum(max(0, _int(f['cantidad']) - _int(f['cantidad_devuelta'])) for f in filas)
+
+
+# --- Desglose de recursos por lugar ------------------------------------------
+# `recurso_ubicaciones` es OPCIONAL a propósito: la mayoría de los recursos tiene un solo
+# lugar (el campo `ubicacion` de siempre) y nunca toca esta tabla. Sólo entra en juego
+# cuando alguien reparte las unidades de un mismo recurso en más de un sitio. El desglose
+# NUNCA tiene que estar completo ni sumar el total de `recursos.cantidad`: no hay concepto
+# de "sin ubicar" que validar — cada fila es independiente. El pedido explícito fue que
+# mover algo entre lugares no se bloquee por no tener el desglose previo cargado, mismo
+# criterio de "avisar, no bloquear" que ya usa `crear_prestamo` con el stock (ver
+# dev-log/DECISIONS.md 2026-08-11).
+
+def _resolver_ubicacion_existente(cur, rid, nombre):
+    """Si ya hay una fila de ESTE recurso cuyo lugar coincide sin importar mayúsculas ni
+    acentos, devuelve el string tal como está guardado (para no fragmentar "Taller" y
+    "taller " en dos filas distintas). Si no hay ninguna, devuelve `nombre` recortado."""
+    nombre = (nombre or '').strip()
+    if not nombre:
+        return nombre
+    objetivo = texto.norm(nombre)
+    for fila in cur.execute("SELECT ubicacion FROM recurso_ubicaciones WHERE recurso_id = ?", (rid,)).fetchall():
+        if texto.norm(fila['ubicacion']) == objetivo:
+            return fila['ubicacion']
+    return nombre
+
+
+def ubicaciones_recurso(cur, rid):
+    """Desglose por lugar de un recurso: [{'ubicacion':, 'cantidad':}], ordenado por lugar.
+    Lista vacía = no se desglosó (el recurso sigue con el campo `ubicacion` simple)."""
+    filas = cur.execute(
+        "SELECT ubicacion, cantidad FROM recurso_ubicaciones WHERE recurso_id = ? "
+        "ORDER BY ubicacion COLLATE NOCASE", (rid,)).fetchall()
+    return [{'ubicacion': f['ubicacion'], 'cantidad': _int(f['cantidad'])} for f in filas
+           if _int(f['cantidad']) > 0]
+
+
+def _cantidad_en(cur, rid, ubicacion):
+    fila = cur.execute("SELECT cantidad FROM recurso_ubicaciones WHERE recurso_id = ? AND ubicacion = ?",
+                       (rid, ubicacion)).fetchone()
+    return _int(fila['cantidad']) if fila else 0
+
+
+def _set_ubicacion(cur, rid, ubicacion, cantidad):
+    """Fija la cantidad de un recurso en un lugar. `cantidad` <= 0 saca la fila en vez de
+    dejarla en 0: una fila en 0 no le dice nada a nadie y ensucia el desglose."""
+    if cantidad <= 0:
+        cur.execute("DELETE FROM recurso_ubicaciones WHERE recurso_id = ? AND ubicacion = ?", (rid, ubicacion))
+    else:
+        cur.execute(
+            "INSERT INTO recurso_ubicaciones (recurso_id, ubicacion, cantidad) VALUES (?,?,?) "
+            "ON CONFLICT(recurso_id, ubicacion) DO UPDATE SET cantidad = excluded.cantidad",
+            (rid, ubicacion, str(cantidad)))
+
+
+def mover_ubicacion(cur, rid, cantidad, origen, destino):
+    """Mueve `cantidad` unidades de `origen` a `destino` en el desglose por lugar.
+
+    NO exige que el desglose esté completo: si `origen` no tiene registradas tantas unidades
+    como se pide mover (o directamente no tiene fila todavía), IGUAL se mueven las `cantidad`
+    unidades a destino — se vacía lo que hubiera en origen y se avisa del faltante, en vez de
+    rechazar el movimiento. `origen` vacío/None = no se resta de ningún lado (unidades que
+    nunca tuvieron un lugar registrado), sólo se suman a destino.
+    """
+    destino = _resolver_ubicacion_existente(cur, rid, destino)
+    if not destino:
+        return {'ok': False, 'error': 'Falta el lugar de destino.', 'avisos': []}
+
+    avisos = []
+    origen = _resolver_ubicacion_existente(cur, rid, origen) if origen else ''
+    if origen:
+        registrado = _cantidad_en(cur, rid, origen)
+        if registrado < cantidad:
+            avisos.append(f'en "{origen}" había {registrado} registradas, no {cantidad}: '
+                          f'se vació igual esa cantidad y se movieron las {cantidad} a "{destino}"')
+        _set_ubicacion(cur, rid, origen, registrado - cantidad)
+
+    _set_ubicacion(cur, rid, destino, _cantidad_en(cur, rid, destino) + cantidad)
+    return {'ok': True, 'avisos': avisos}
+
+
+# Rutas propias (no son una entidad de ENTIDADES): agregar/corregir o sacar un lugar del
+# desglose desde la ficha del recurso. Sin tope contra `recursos.cantidad` a propósito,
+# mismo criterio de no bloquear.
+@bp.route('/recursos/<int:id>/ubicaciones', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
+def ubicacion_set(id):
+    ubicacion = request.form.get('ubicacion', '').strip()
+    if ubicacion:
+        con = conectar()
+        cur = con.cursor()
+        cur.execute("SELECT 1 FROM recursos WHERE id = ?", (id,))
+        if cur.fetchone():
+            ubicacion = _resolver_ubicacion_existente(cur, id, ubicacion)
+            _set_ubicacion(cur, id, ubicacion, _int(request.form.get('cantidad', '')))
+            con.commit()
+        con.close()
+    return redirect(url_for('gestion.detalle', slug='recursos', id=id))
+
+
+@bp.route('/recursos/<int:id>/ubicaciones/eliminar', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
+def ubicacion_eliminar(id):
+    con = conectar()
+    cur = con.cursor()
+    cur.execute("DELETE FROM recurso_ubicaciones WHERE recurso_id = ? AND ubicacion = ?",
+                (id, request.form.get('ubicacion', '')))
+    con.commit()
+    con.close()
+    return redirect(url_for('gestion.detalle', slug='recursos', id=id))
 
 
 # Todo el bloque de carrito y préstamos escribe, y NO pasa por `crud.registrar_rutas`:
