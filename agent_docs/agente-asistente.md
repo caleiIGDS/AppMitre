@@ -344,8 +344,13 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
   la excepción a "update parcial de columnas": es ADITIVO, suma sub-recursos al kit que YA existe
   sin tocar los que ya tiene ni pisar el `recurso_asignado` que se haya cargado a mano — es lo que
   permite mandar el contenido de un kit en varias tandas (dos fotos en turnos distintos) sin tener
-  que repetir la primera. No hay forma de editar o borrar un sub-recurso puntual desde el chat: eso
-  es solo desde `/gestion` (`gestion.kit_item_editar` / `kit_item_eliminar`)
+  que repetir la primera
+- `editar_sub_recurso(id, item_id, titulo?, cantidad?, recurso_asignado?)` / `eliminar_sub_recurso
+  (id, item_id)` — corrigen o borran UN renglón puntual de `kit_items`. `item_id` es la fila del
+  sub-recurso (no el id del kit): el modelo lo saca de `detalle_entidad`, nunca lo inventa. Sin
+  ficha de confirmación (mismo criterio que `mover_ubicacion`: corrección puntual, fácil de
+  rehacer). Ejecutan `gestion.editar_kit_item` / `gestion.eliminar_kit_item`, los mismos helpers
+  que usan las rutas web `kit_item_editar` / `kit_item_eliminar`
 - `adjuntar_foto(slug, id, foto?)` — guarda las fotos de ESTE turno en la galería de un registro
   que ya existe (sin `foto` van todas, con `foto` sólo esa). Sin ficha de confirmación (es
   aditivo); las imágenes salen de `contexto_turno`, no de un parámetro

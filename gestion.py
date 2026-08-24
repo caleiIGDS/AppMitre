@@ -516,11 +516,47 @@ def kit_items_recurso(cur, rid):
 
 def agregar_kit_items(cur, recurso_id, items):
     """Inserta sub-recursos en lote: los usa el alta desde el chat (ver
-    `agente/tools/fichas.py::_crear_entidad`), que sólo junta título + cantidad — el `recurso_asignado`
-    de cada uno queda vacío, es un campo que sólo se completa a mano desde la web."""
+    `agente/tools/fichas.py::_crear_entidad`) y la suma a un kit ya existente (ver
+    `agente/tools/entidades.py::_editar_entidad`), que sólo juntan título + cantidad — el
+    `recurso_asignado` de cada uno queda vacío, es un campo que sólo se completa a mano
+    desde la web."""
     cur.executemany(
         "INSERT INTO kit_items (recurso_id, titulo, cantidad, recurso_asignado) VALUES (?,?,?,'')",
         [(recurso_id, item['titulo'], item.get('cantidad', '')) for item in items if item.get('titulo')])
+
+
+def obtener_kit_item(cur, recurso_id, item_id):
+    """Un sub-recurso puntual, o None si no existe (o no es de ese kit). Para el snapshot
+    "antes" de editar/borrar desde el chat (ver `agente/tools/fichas.py`)."""
+    fila = cur.execute(
+        "SELECT id, titulo, cantidad, recurso_asignado FROM kit_items WHERE id = ? AND recurso_id = ?",
+        (item_id, recurso_id)).fetchone()
+    return dict(fila) if fila else None
+
+
+def editar_kit_item(cur, recurso_id, item_id, titulo=None, cantidad=None, recurso_asignado=None):
+    """Actualiza SOLO los campos que vienen (no None) de un sub-recurso puntual — edición
+    parcial, igual criterio que `agente/tools/entidades.py::_editar_entidad` con el resto de
+    una entidad. La ruta web (`kit_item_editar`) manda los tres siempre; el chat puede mandar
+    sólo el que cambió. Devuelve True si el ítem existía (y en ese caso, en ese kit) y se
+    actualizó, False si no.
+    """
+    actual = obtener_kit_item(cur, recurso_id, item_id)
+    if not actual:
+        return False
+    cur.execute(
+        "UPDATE kit_items SET titulo = ?, cantidad = ?, recurso_asignado = ? WHERE id = ? AND recurso_id = ?",
+        (titulo if titulo is not None else actual['titulo'],
+         cantidad if cantidad is not None else actual['cantidad'],
+         recurso_asignado if recurso_asignado is not None else actual['recurso_asignado'],
+         item_id, recurso_id))
+    return True
+
+
+def eliminar_kit_item(cur, recurso_id, item_id):
+    """Borra un sub-recurso puntual. Devuelve True si existía (y en ese kit) y se borró."""
+    cur.execute("DELETE FROM kit_items WHERE id = ? AND recurso_id = ?", (item_id, recurso_id))
+    return cur.rowcount > 0
 
 
 def buscar_kit_items(cur, q):
@@ -564,15 +600,11 @@ def kit_item_agregar(id):
 @accesos.requiere(PERMISO_ESCRITURA)
 def kit_item_editar(id, item_id):
     titulo = request.form.get('titulo', '').strip()
-    cantidad = request.form.get('cantidad', '').strip()
-    recurso_asignado = request.form.get('recurso_asignado', '').strip()
     if titulo:
         con = conectar()
-        cur = con.cursor()
-        cur.execute(
-            "UPDATE kit_items SET titulo = ?, cantidad = ?, recurso_asignado = ? "
-            "WHERE id = ? AND recurso_id = ?",
-            (titulo, cantidad, recurso_asignado, item_id, id))
+        editar_kit_item(con.cursor(), id, item_id, titulo,
+                         request.form.get('cantidad', '').strip(),
+                         request.form.get('recurso_asignado', '').strip())
         con.commit()
         con.close()
     return redirect(url_for('gestion.detalle', slug='recursos', id=id))
@@ -582,8 +614,7 @@ def kit_item_editar(id, item_id):
 @accesos.requiere(PERMISO_ESCRITURA)
 def kit_item_eliminar(id, item_id):
     con = conectar()
-    cur = con.cursor()
-    cur.execute("DELETE FROM kit_items WHERE id = ? AND recurso_id = ?", (item_id, id))
+    eliminar_kit_item(con.cursor(), id, item_id)
     con.commit()
     con.close()
     return redirect(url_for('gestion.detalle', slug='recursos', id=id))

@@ -21,7 +21,7 @@ from .entidades import (_buscar_entidad_fmt, _desvincular_entidad, _detalle_enti
                         _vincular_entidad)
 from .esquemas import (PERMISO_POR_TOOL, TOOLS_ESCRITURA, TOOLS_FOTO, TOOLS_SCHEMA,
                        slug_visible, tools_permitidas)
-from .fichas import _crear_entidad
+from .fichas import _crear_entidad, _editar_sub_recurso, _eliminar_sub_recurso
 from .fotos import _adjuntar_foto_entidad, _leer_foto_fmt
 from .hitos import _buscar_hitos_fmt
 from .horarios import (_aulas_libres_fmt, _buscar_por_rol_fmt, _buscar_profesor,
@@ -169,6 +169,13 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
                 tool_input.get('slug', ''), tool_input.get('id', 0),
                 {k: v for k, v in tool_input.items() if k not in ('slug', 'id', 'sub_recursos')},
                 tool_input.get('sub_recursos'))
+        elif tool_name == 'editar_sub_recurso':
+            resultado = _editar_sub_recurso(
+                tool_input.get('id', 0), tool_input.get('item_id', 0),
+                tool_input.get('titulo'), tool_input.get('cantidad'),
+                tool_input.get('recurso_asignado'))
+        elif tool_name == 'eliminar_sub_recurso':
+            resultado = _eliminar_sub_recurso(tool_input.get('id', 0), tool_input.get('item_id', 0))
         elif tool_name == 'vincular_entidad':
             resultado = _vincular_entidad(tool_input.get('slug_origen'), tool_input.get('id_origen'), tool_input.get('slug_destino'), tool_input.get('id_destino'))
         elif tool_name == 'desvincular_entidad':

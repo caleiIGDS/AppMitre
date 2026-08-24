@@ -471,6 +471,50 @@ TOOLS_SCHEMA = [
         }
     },
     {
+        'name': 'editar_sub_recurso',
+        'description': ('Corrige título, cantidad y/o recurso asignado de UN sub-recurso puntual '
+                        'de un kit que ya existe (ej: el usuario dice "el joystick en realidad son '
+                        '2, no 1" o "ese ítem se llama distinto"). Edición PARCIAL: mandá solo lo '
+                        'que cambia. El `item_id` es el id de ESE renglón dentro de `kit_items`, '
+                        'NUNCA el id del recurso/kit — sacalo de detalle_entidad(slug="recursos", '
+                        'id=<el kit>), sección "Sub-recursos (kit)" de `relaciones`, y nunca lo '
+                        'inventes ni lo confundas con el id del kit. Si hay varios sub-recursos '
+                        'parecidos, confirmá con el usuario cuál es antes de llamar. Escribe '
+                        'directo, sin ficha de confirmación — avisale al usuario qué corregiste. '
+                        'Para agregar un sub-recurso nuevo NO es esta tool: es editar_entidad con '
+                        '`sub_recursos`. Solo recursos.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'id': {'type': 'integer', 'description': 'ID del recurso/kit dueño del sub-recurso, obtenido de buscar_entidad o detalle_entidad'},
+                'item_id': {'type': 'integer', 'description': 'ID del RENGLÓN puntual dentro de ese kit (columna `id` de `kit_items`), obtenido de detalle_entidad. No es el id del recurso'},
+                'titulo': {'type': 'string', 'description': 'Nuevo título del sub-recurso. Omitilo si no cambia'},
+                'cantidad': {'type': 'string', 'description': 'Nueva cantidad, como texto. Omitilo si no cambia'},
+                'recurso_asignado': {'type': 'string', 'description': 'Texto libre (no es un link a otro recurso). Omitilo si no cambia'}
+            },
+            'required': ['id', 'item_id']
+        }
+    },
+    {
+        'name': 'eliminar_sub_recurso',
+        'description': ('Borra UN sub-recurso puntual de un kit que ya existe (ej: "sacá el '
+                        'joystick del kit, no venía"). El `item_id` es el id de ESE renglón '
+                        'dentro de `kit_items`, sacalo de detalle_entidad igual que en '
+                        'editar_sub_recurso — nunca lo inventes. Esto NO borra el recurso/kit '
+                        'entero (para eso es eliminar_entidad), solo ese renglón. Si el usuario '
+                        'no fue específico sobre cuál sub-recurso o hay varios parecidos, '
+                        'preguntale cuál antes de llamar: no se puede deshacer desde el chat. '
+                        'Escribe directo, sin ficha de confirmación. Solo recursos.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'id': {'type': 'integer', 'description': 'ID del recurso/kit dueño del sub-recurso'},
+                'item_id': {'type': 'integer', 'description': 'ID del RENGLÓN puntual a borrar (columna `id` de `kit_items`), obtenido de detalle_entidad'}
+            },
+            'required': ['id', 'item_id']
+        }
+    },
+    {
         'name': 'adjuntar_foto',
         'description': ('Guarda las fotos que el usuario adjuntó EN ESTE TURNO en la galería de un '
                         'registro que YA existe. Es lo que hay que usar cuando mandan una foto para '
@@ -642,6 +686,8 @@ PERMISO_POR_TOOL = {
     # --- ESCRITURA: modifican gestion.db o historia.db ---
     'crear_entidad': 'agente.escribir',
     'editar_entidad': 'agente.escribir',
+    'editar_sub_recurso': 'agente.escribir',
+    'eliminar_sub_recurso': 'agente.escribir',
     'adjuntar_foto': 'agente.escribir',
     'vincular_entidad': 'agente.escribir',
     'desvincular_entidad': 'agente.escribir',

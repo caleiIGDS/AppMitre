@@ -125,8 +125,9 @@ cantidad}, ...])` (ver "Alta con ficha de confirmación" en `agent_docs/agente-a
 sólo título y cantidad, sin `recurso_asignado`. También puede sumar sub-recursos a un kit **ya
 existente** con `editar_entidad(id, sub_recursos=[...])`: a diferencia del resto de esa tool, acá
 es ADITIVO (agrega sin reemplazar ni pisar lo que ya tenía), pensado para cargar un kit en varias
-tandas. El chat no tiene forma de editar ni borrar un sub-recurso puntual — eso sigue siendo
-solo desde la web.
+tandas. Y puede corregir o sacar UN sub-recurso puntual con `editar_sub_recurso(id, item_id, ...)`
+/ `eliminar_sub_recurso(id, item_id)` — el `item_id` (la fila de `kit_items`, no el id del kit)
+sale de `detalle_entidad`. Las tres escriben directo, sin ficha de confirmación.
 
 **Galería de fotos** (`fotos`): array JSON con objetos `{b64, tipo, fecha}`.
 - `b64`: imagen codificada en base64 (embedded, sin servicios externos)

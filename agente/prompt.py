@@ -364,7 +364,17 @@ dicta el resto más tarde): antes de armar nada, buscá con buscar_entidad si el
   ítems para ese mismo kit, NO uses crear_entidad de nuevo — usás editar_entidad(id, sub_recursos=
   [...]) con SOLO los ítems nuevos: a diferencia de crear_entidad, acá `sub_recursos` SUMA sin
   pisar lo que el kit ya tenía, así que no hace falta (ni conviene) repetir los de antes. Esto
-  escribe directo, sin ficha de confirmación — avisale al usuario qué sumaste."""
+  escribe directo, sin ficha de confirmación — avisale al usuario qué sumaste.
+
+CORREGIR O SACAR un sub-recurso PUNTUAL que ya está cargado (el usuario dice "ese ítem en
+realidad son 2", "se llama distinto" o "sacá ese, no venía en el kit") — NO es sub_recursos de
+crear_entidad ni de editar_entidad, esas dos sólo agregan. Usás `editar_sub_recurso` o
+`eliminar_sub_recurso`, que apuntan a UN renglón. El `item_id` que piden esas dos tools NO es el
+id del kit: es el id de ESE renglón dentro de `kit_items`, y lo conseguís con
+detalle_entidad(slug="recursos", id=<el kit>) mirando la sección "Sub-recursos (kit)" de
+`relaciones` — nunca lo inventes ni supongas que es el mismo id del kit. Si hay más de un
+sub-recurso parecido, preguntale al usuario cuál antes de tocar nada. Las dos escriben directo,
+sin ficha de confirmación."""
 
 # ---------------------------------------------------------------------------
 # Bloques que sólo van si el acceso es de consulta

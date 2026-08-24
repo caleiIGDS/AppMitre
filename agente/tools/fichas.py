@@ -102,6 +102,48 @@ def _normalizar_sub_recursos(sub_recursos):
     return normalizados
 
 
+# ---------------------------------------------------------------------------
+# Sub-recursos de un kit YA existente: editar/borrar UN renglón puntual
+# ---------------------------------------------------------------------------
+# A diferencia del alta y de la suma vía `editar_entidad(sub_recursos=...)`, estas dos
+# operan sobre UN `item_id` de `kit_items` — el modelo lo saca de `detalle_entidad`, nunca
+# lo inventa. Escriben directo, sin ficha de confirmación: es el mismo criterio que
+# `mover_ubicacion` y `adjuntar_foto` (una corrección puntual, fácil de rehacer si el
+# modelo se equivocó de renglón) y no el de `eliminar_entidad` (que borra el recurso
+# entero con todo lo que tiene adentro).
+
+def _editar_sub_recurso(id, item_id, titulo=None, cantidad=None, recurso_asignado=None):
+    """Edita título/cantidad/recurso_asignado de UN sub-recurso de un kit ya existente."""
+    con = gestion.conectar()
+    cur = con.cursor()
+    antes = gestion.obtener_kit_item(cur, id, item_id)
+    if not antes:
+        con.close()
+        return {'ok': False, 'error': f'No hay ningún sub-recurso con id={item_id} en el '
+                                       f'recurso id={id}. Sacá el id correcto de detalle_entidad '
+                                       '(sección "Sub-recursos (kit)"), no lo inventes.'}
+    gestion.editar_kit_item(cur, id, item_id, titulo, cantidad, recurso_asignado)
+    con.commit()
+    con.close()
+    return {'ok': True, 'antes': antes, 'mensaje': f'Sub-recurso id={item_id} actualizado.'}
+
+
+def _eliminar_sub_recurso(id, item_id):
+    """Borra UN sub-recurso puntual de un kit ya existente."""
+    con = gestion.conectar()
+    cur = con.cursor()
+    antes = gestion.obtener_kit_item(cur, id, item_id)
+    if not antes:
+        con.close()
+        return {'ok': False, 'error': f'No hay ningún sub-recurso con id={item_id} en el '
+                                       f'recurso id={id}. Sacá el id correcto de detalle_entidad '
+                                       '(sección "Sub-recursos (kit)"), no lo inventes.'}
+    gestion.eliminar_kit_item(cur, id, item_id)
+    con.commit()
+    con.close()
+    return {'ok': True, 'antes': antes, 'mensaje': f'Sub-recurso id={item_id} borrado.'}
+
+
 def _token_ficha(slug, borrador):
     """Huella del contenido exacto de la ficha.
 
