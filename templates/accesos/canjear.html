@@ -31,5 +31,6 @@
 </form>
 
 <p class="g-help">Se habilita <strong>este</strong> dispositivo, no una cuenta: si después
-    querés entrar desde otro, pedí un link nuevo. El link sirve una sola vez.</p>
+    querés entrar desde otro,
+    {% if inv.multiuso %}abrí este mismo link ahí también.{% else %}pedí un link nuevo. El link sirve una sola vez.{% endif %}</p>
 {% endblock %}

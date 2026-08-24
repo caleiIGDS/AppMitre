@@ -77,7 +77,29 @@ def _normalizar_borrador(slug, campos_dict):
 
     if slug == 'recursos' and not borrador.get('fecha_revision'):
         borrador['fecha_revision'] = ahora().strftime(gestion.FORMATO_FECHA_REVISION)
+
+    # `_sub_recursos` no es un campo de `ENTIDADES['recursos']['campos']` (por eso el loop
+    # de arriba no lo trae solo) pero tiene que sobrevivir acá para que el token lo incluya
+    # y para que /agente/editar_ficha (que arranca de `pendiente['campos']` y vuelve a pasar
+    # por esta función) no lo pierda al corregir cualquier otro campo de la tarjeta.
+    if slug == 'recursos' and campos_dict.get('_sub_recursos'):
+        borrador['_sub_recursos'] = campos_dict['_sub_recursos']
     return borrador
+
+
+def _normalizar_sub_recursos(sub_recursos):
+    """Sub-recursos de un kit, tal como los manda el modelo: [{'titulo','cantidad'}], sin
+    vacíos. Solo título + cantidad — nada de descripción, estado ni ubicación propios (eso
+    sólo se carga desde la web, ver `agent_docs/gestion-conocimiento.md`)."""
+    normalizados = []
+    for item in sub_recursos or []:
+        if not isinstance(item, dict):
+            continue
+        titulo = str(item.get('titulo', '')).strip()
+        if not titulo:
+            continue
+        normalizados.append({'titulo': titulo, 'cantidad': str(item.get('cantidad', '')).strip()})
+    return normalizados
 
 
 def _token_ficha(slug, borrador):
@@ -162,6 +184,28 @@ def _recordatorio_hito(borrador, permisos):
     return avisos
 
 
+def _campos_para_editar(slug, borrador):
+    """Los campos de una ficha en la forma que necesita la tarjeta editable del chat.
+
+    Sólo para el front (`rutas._confirmaciones`): reusa el mismo `tipo`/`opciones` por campo
+    que ya declara `ENTIDADES` y que hoy pinta `templates/crud/form.html`, para no mantener
+    una segunda configuración de qué input le corresponde a cada campo. No se le agrega esto
+    al dict `ficha` que recibe el modelo — no lo necesita y son tokens de más en cada vuelta.
+    """
+    cfg = _modulo(slug).ENTIDADES.get(slug) or {}
+    salida = []
+    for c in cfg.get('campos', []):
+        nombre = c['nombre']
+        item = {'nombre': nombre, 'label': c.get('label', nombre),
+                'tipo': c.get('tipo', 'text'), 'valor': borrador.get(nombre, '')}
+        if c.get('opciones'):
+            item['opciones'] = list(c['opciones'])
+        if nombre in CAMPOS_REDACTADOS:
+            item['redactado'] = True
+        salida.append(item)
+    return salida
+
+
 def _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos, foto=None):
     """Paso 1 del alta: la ficha para mostrarle al usuario. No escribe nada."""
     cfg = _modulo(slug).ENTIDADES.get(slug) or {}
@@ -198,17 +242,19 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos, foto=No
         'campos_vacios': vacios,
         'redactados_por_vos': [etiquetas.get(n, n) for n in CAMPOS_REDACTADOS if n in nombres],
         'instruccion': (
-            'NO se creó nada todavía. Mostrale al usuario la ficha campo por campo, tal cual '
-            'va a quedar guardada. Abajo, si hay campos vacíos o datos que valdría la pena '
-            'sumar, hacele 1 a 3 preguntas cortas y concretas (medida, marca y modelo, dónde '
-            'se guarda, cuántos hay). Aclarale que son opcionales: si no las contesta se '
-            'guarda igual. NO le pidas que escriba "sí" ni "confirmo": debajo de tu mensaje '
-            'le aparecen los botones para revisarla. Cerrá diciéndole que la revise ahí. '
-            'Si pide cambios, volvé a llamar a crear_entidad con los campos '
-            'corregidos y te devuelve la ficha nueva (con sus botones). '
+            'NO se creó nada todavía. Debajo de tu mensaje le aparece la ficha como una '
+            'tarjeta editable, campo por campo: NO se la repitas vos en el texto, alcanza '
+            'con una frase corta de qué armaste. Si hay campos vacíos o datos que valdría la '
+            'pena sumar, hacele 1 a 3 preguntas cortas y concretas (medida, marca y modelo, '
+            'dónde se guarda, cuántos hay). Aclarale que son opcionales: si no las contesta '
+            'se guarda igual. NO le pidas que escriba "sí" ni "confirmo", y si algo no le '
+            'gusta (por ejemplo la descripción) decile que lo puede editar ahí mismo, en la '
+            'tarjeta, sin escribirte — no hace falta que te pida el cambio por acá. Si te '
+            'pide igual un cambio por chat, volvé a llamar a crear_entidad con los campos '
+            'corregidos y te devuelve la ficha nueva (con su tarjeta). '
             'Si te pidió dar de alta VARIAS cosas, llamá a crear_entidad una vez por cada una '
-            'en este mismo turno y mostrá las fichas una abajo de la otra: cada una lleva sus '
-            'propios botones, así que el usuario las revisa por separado. Nunca dejes una sin '
+            'en este mismo turno y mostrá las fichas una abajo de la otra: cada una lleva su '
+            'propia tarjeta, así que el usuario las revisa por separado. Nunca dejes una sin '
             'armar "para el próximo turno".'
         ),
     }
@@ -216,6 +262,8 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos, foto=No
         resultado['foto'] = foto
     if slug == 'recursos':
         resultado['tipos_en_uso'] = _tipos_en_uso()
+        if borrador.get('_sub_recursos'):
+            resultado['sub_recursos'] = borrador['_sub_recursos']
     if slug == 'hitos':
         avisos = _recordatorio_hito(borrador, permisos)
         if avisos:
@@ -223,7 +271,8 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos, foto=No
     return resultado
 
 
-def _crear_entidad(slug, campos_dict, contexto_turno=None, permisos=frozenset(), foto=None):
+def _crear_entidad(slug, campos_dict, contexto_turno=None, permisos=frozenset(), foto=None,
+                   sub_recursos=None):
     """Alta de recurso/hito/persona, en DOS PASOS.
 
     Primera llamada con un juego de campos: no toca la base, devuelve la ficha para que el
@@ -255,6 +304,14 @@ def _crear_entidad(slug, campos_dict, contexto_turno=None, permisos=frozenset(),
     if not campos_dict.get(campo_nombre):
         return {'ok': False, 'error': f'El campo "{campo_nombre}" es obligatorio.'}
 
+    # `sub_recursos` llega aparte (ver __init__.ejecutar_tool) en la PRIMERA llamada del
+    # modelo; en la reconfirmación (botón o segunda llamada con los mismos campos) ya viene
+    # adentro de `campos_dict['_sub_recursos']`, puesto ahí por _normalizar_borrador la vez
+    # anterior — por eso sólo se inyecta cuando viene explícito.
+    if slug == 'recursos' and sub_recursos:
+        campos_dict = dict(campos_dict)
+        campos_dict['_sub_recursos'] = _normalizar_sub_recursos(sub_recursos)
+
     borrador = _normalizar_borrador(slug, campos_dict)
     token = _token_ficha(slug, borrador)
     previas = contexto_turno.setdefault('fichas_previas', {})
@@ -271,8 +328,15 @@ def _crear_entidad(slug, campos_dict, contexto_turno=None, permisos=frozenset(),
 
     con = crud.conectar(modulo)
     id_nuevo = crud.guardar_entidad(modulo, slug, borrador, con=con)
+    sub = borrador.get('_sub_recursos') if slug == 'recursos' else None
+    if id_nuevo and sub:
+        gestion.agregar_kit_items(con.cursor(), id_nuevo, sub)
+        con.commit()
     con.close()
 
     if id_nuevo:
-        return {'ok': True, 'id': id_nuevo, 'mensaje': f'Creado {slug} id={id_nuevo}'}
+        mensaje = f'Creado {slug} id={id_nuevo}'
+        if sub:
+            mensaje += f' con {len(sub)} sub-recurso(s)'
+        return {'ok': True, 'id': id_nuevo, 'mensaje': mensaje}
     return {'ok': False, 'error': f'Error al crear {slug}'}

@@ -87,22 +87,42 @@ lo único que cambia es CSS, más un script que reubica bloques. Es común a las
 
 | Tabla | Campos |
 |-------|--------|
-| `recursos` | id, nombre, tipo, descripcion, ubicacion, estado, cantidad, valor, fecha_revision, **fotos**, **alias** |
-| `recurso_ubicaciones` | recurso_id, ubicacion, cantidad (`UNIQUE(recurso_id, ubicacion)`) — desglose OPCIONAL de dónde están las unidades de un recurso, ver abajo |
+| `recursos` | id, nombre, tipo, descripcion, estado, cantidad, valor, fecha_revision, **fotos**, **alias** |
+| `recurso_unidades` | recurso_id, numero, ubicacion (`UNIQUE(recurso_id, numero)`) — la ubicación de CADA unidad, ver abajo |
+| `kit_items` | id, recurso_id, titulo, cantidad, recurso_asignado — los sub-recursos de un kit, ver abajo |
 
-**Desglose por lugar** (`recurso_ubicaciones`): el campo `ubicacion` de `recursos` sigue siendo
-el lugar único/principal de siempre — la mayoría de los recursos no toca esta tabla. Sólo entra
-en juego cuando las unidades de un mismo recurso están repartidas en más de un sitio (10
-destornilladores, 5 en el taller y 5 en el laboratorio). **Nunca es obligatorio ni tiene que
-sumar el total de `recursos.cantidad`**: no hay concepto de "sin ubicar" que validar, cada fila
-es independiente — a propósito, para no bloquear un movimiento por no tener el desglose previo
-cargado. Helpers en `gestion.py`: `ubicaciones_recurso()` (el desglose de un recurso),
-`mover_ubicacion()` (mueve cantidad de un lugar a otro, vaciando y avisando si el origen no
-tenía tanto registrado), `_stock()` (cantidad total del recurso, la usa además `agente/tools/
-ubicaciones.py` para chequear que el id exista). Se edita desde la ficha web (rutas
-`/gestion/recursos/<id>/ubicaciones[/eliminar]`, sección "Por ubicación" del detalle, sólo
-visible si el recurso tiene más de una unidad o ya tiene desglose) y desde el chat (tool
-`mover_ubicacion`, ver `agent_docs/agente-asistente.md`).
+**Ubicación** (`recurso_unidades`): `recursos` no tiene columna `ubicacion` — nunca hay "un lugar
+principal" separado del desglose, la ubicación de un recurso ES la lista de sus unidades, aunque
+tenga una sola. Cada unidad tiene su propio número (1..cantidad, auto-completado al leer — no hace
+falta "generarlas" a mano, mínimo 1 aunque `cantidad` esté vacía) y su propia `ubicacion` (`''` =
+sin ubicar). **Nunca es obligatorio que esté completo**: una unidad sin ubicación no es un error —
+a propósito, para no bloquear un movimiento por no tener el desglose previo cargado. Helpers en
+`gestion.py`: `unidades_recurso()` (unidades de un recurso, por número), `lugares_recurso_agrupado()`
+(las mismas agrupadas por lugar, para la ficha y para el chat), `lugares_por_recurso()` (la misma
+agrupación para TODOS los recursos de una, para el listado), `mover_unidades()` (mueve por número
+puntual o por cantidad genérica, avisando si algo no coincidía con lo registrado), `_stock()`
+(cantidad total del recurso, la usa además `agente/tools/ubicaciones.py` para chequear que el id
+exista). Se edita desde la ficha web (rutas `/gestion/recursos/<id>/unidades/mover` y `/quitar`,
+sección "Ubicación" del detalle, siempre visible) y desde el chat (tool `mover_ubicacion`, la ÚNICA
+forma de fijar dónde está un recurso — no hay `ubicacion` en `crear_entidad`/`editar_entidad` — ver
+`agent_docs/agente-asistente.md`). Hasta el 2026-08-22 existió un campo `ubicacion` simple en
+`recursos`, con este desglose como algo opcional aparte; se unificó porque un valor y su desglose
+podían quedar desincronizados. La migración de `gestion.migrar()` reparte el valor viejo entre las
+unidades la primera vez que corre — ver `dev-log/DECISIONS.md`.
+
+**Kits** (`kit_items`): un recurso es un "kit" (ej: Kit Arduino) en cuanto tiene sub-recursos
+cargados acá — no hay tipo/flag aparte, mismo criterio orgánico que `recurso_unidades`. Cada
+sub-recurso es sólo `titulo` + `cantidad` + `recurso_asignado` (texto libre e independiente,
+**no** un link a otro recurso de `recursos`). Helpers en `gestion.py`: `kit_items_recurso()`
+(sub-recursos de un kit, para la ficha) y `buscar_kit_items()` (los que matchean una búsqueda,
+en cualquier kit, para el listado — ver "Búsqueda tolerante" abajo). Se edita sólo desde la
+ficha web (rutas `/gestion/recursos/<id>/kit/agregar` y `/kit/<item_id>/eliminar`, sección
+"Sub-recursos (kit)" del detalle, siempre visible); sin ruta de editar — se corrige quitando y
+volviendo a cargar, igual que las unidades. El chat también puede armar un kit **al dar de alta**
+el recurso: `crear_entidad(..., sub_recursos=[{titulo, cantidad}, ...])` (ver "Alta con ficha de
+confirmación" en `agent_docs/agente-asistente.md`) — sólo título y cantidad, sin
+`recurso_asignado` (ese campo queda para completar a mano desde la web). El chat NO tiene forma de
+agregar sub-recursos a un kit ya existente, sólo en el alta.
 
 **Galería de fotos** (`fotos`): array JSON con objetos `{b64, tipo, fecha}`.
 - `b64`: imagen codificada en base64 (embedded, sin servicios externos)
@@ -168,8 +188,8 @@ guardado por `PRAGMA table_info` en `migrar()`, **antes** del loop aditivo (si n
 crea la columna nueva vacía al lado de la vieja y se pierde el dato). Ver `utilidad`→`valor`.
 
 `LIMPIEZA_M2M` mapea qué tablas de relación limpiar al eliminar cada tipo de entidad — hoy
-sólo `recursos` → `recurso_ubicaciones` (no es M2M de verdad, es el desglose por lugar, pero
-el mecanismo de limpieza es idéntico).
+`recursos` → `recurso_unidades` + `kit_items` (ninguna es M2M de verdad: son el desglose por
+unidad y los sub-recursos de un kit, pero el mecanismo de limpieza es idéntico).
 
 ## Rutas (todas server-rendered)
 
@@ -180,14 +200,16 @@ el mecanismo de limpieza es idéntico).
 | `/gestion/` | GET | Home: cards con contadores |
 | `/gestion/<slug>` | GET | Listado (`?q=` búsqueda tolerante en nombre + descripcion — ver abajo) |
 | `/gestion/<slug>/nuevo` | GET/POST | Alta (valida nombre no vacío server-side) |
-| `/gestion/<slug>/<id>` | GET | Detalle: campos + secciones (hoy sólo "Por ubicación" en recursos) |
+| `/gestion/<slug>/<id>` | GET | Detalle: campos + secciones ("Ubicación" y "Sub-recursos (kit)" en recursos) |
 | `/gestion/<slug>/<id>/editar` | GET/POST | Edición |
 | `/gestion/<slug>/<id>/eliminar` | POST | Borra fila + sus filas de `LIMPIEZA_M2M` (confirm en el browser) |
 | `/gestion/<slug>/<id>/foto` | POST | Sube una imagen a la galería (multipart → base64). Devuelve JSON |
 | `/gestion/<slug>/<id>/foto/<indice>/eliminar` | POST | Borra la foto de esa posición y vuelve a la ficha |
 | `/gestion/alias` | GET | Solo lectura, solo admin (`gestion.alias`): tabla NOMBRE / ALIAS de todos los recursos. Único lugar de la web donde se ve el alias oculto — no hay edición acá |
-| `/gestion/recursos/<id>/ubicaciones` | POST | Agrega/actualiza una fila del desglose por lugar |
-| `/gestion/recursos/<id>/ubicaciones/eliminar` | POST | Saca una fila del desglose |
+| `/gestion/recursos/<id>/unidades/mover` | POST | Fija un lugar para unidades puntuales (`numeros`) o una cantidad de ellas |
+| `/gestion/recursos/<id>/unidades/quitar` | POST | Marca una unidad puntual como "sin ubicar" |
+| `/gestion/recursos/<id>/kit/agregar` | POST | Agrega un sub-recurso (`titulo`, `cantidad`, `recurso_asignado`) |
+| `/gestion/recursos/<id>/kit/<item_id>/eliminar` | POST | Borra un sub-recurso puntual |
 
 `slug` sólo puede ser `recursos`; otro valor → 404. (`hitos` y `personas` viven en
 `/historia`, con las mismas rutas bajo su propio prefijo.)
@@ -219,16 +241,25 @@ matches normales. El mecanismo genérico (`crud.campo_alias(cfg_ent)`, análogo 
 **Búsqueda en vivo (client-side, `static/gestion.js`)**: además del filtrado server-side,
 el listado filtra en el navegador mientras se escribe, sin recargar ni ir al servidor. La
 ruta emite por fila un atributo `data-buscar` con el texto ya normalizado por Python
-(`texto.norm(nombre + descripcion)`, más el alias si la entidad lo declara), y el JS
-filtra por substring normalizado (repite la misma normalización de acentos/mayúsculas). Es
-progressive enhancement: sin JS, el form sigue haciendo la búsqueda difusa server-side. Con
-JS, el botón BUSCAR se oculta y Enter no recarga. La capa en vivo **no** tiene la tolerancia
-difusa a typos (solo substring) — a propósito: al ver los resultados achicarse letra por
-letra uno corrige el typo solo; el fuzzy server-side queda como respaldo. Decisión
-2026-07-21 (ver `dev-log/DECISIONS.md`).
+(`texto.norm(nombre + descripcion)`, más el alias si la entidad lo declara), y el JS filtra
+con un puerto de `texto.puntaje_busqueda` (mismo umbral `UMBRAL_SIMILITUD = 0.68`): substring
+normalizado siempre gana, y perdona typos por similitud a partir de 3 caracteres, igual que
+el backend. Es progressive enhancement: sin JS, el form sigue haciendo la búsqueda difusa
+server-side. Con JS, el botón BUSCAR se oculta y Enter no recarga — por eso la capa en vivo
+tiene que tolerar typos ella misma: con JS activo (la inmensa mayoría de los casos) nunca se
+llega al camino server-side, así que ya no hay "respaldo" fuzzy real detrás. Mismo puerto que
+usa `templates/salidas/formulario.html` para el autocompletado de estudiantes. Decisión
+2026-08-24, revierte la parte "solo substring" de 2026-07-21 (ver `dev-log/DECISIONS.md`).
 
-Sección mostrada en detalle (`secciones_detalle`): recurso → **Por ubicación** (desglose,
-solo si tiene más de una unidad o ya se desglosó alguna vez).
+**Sub-recursos de kits en la búsqueda**: el listado principal nunca mezcla sub-recursos con
+recursos — sólo con `?q=` no vacío, `crud.py::lista()` llama al hook opcional
+`resultados_extra_busqueda(slug, q, cur)` (`gestion.buscar_kit_items`) y muestra los que
+matchean en una tabla aparte debajo ("Sub-recursos de kits"), cada uno linkeando al kit que
+lo contiene. El motor no sabe qué son esas filas — sólo las reenvía a la plantilla.
+
+Secciones mostradas en detalle (`secciones_detalle`): recurso → **Ubicación** (la lista de
+unidades, siempre presente) y **Sub-recursos (kit)** (los `kit_items` del recurso, siempre
+presente aunque esté vacía).
 
 ## Respaldos (`backups/`)
 

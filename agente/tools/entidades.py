@@ -8,6 +8,7 @@ El alta NO está acá: vive en `fichas.py`, porque es el único camino de escrit
 hace en dos pasos.
 """
 import crud
+import gestion
 import texto
 
 from ..dominio import SLUGS_ENTIDAD, _modulo, ve_entidad
@@ -55,14 +56,20 @@ def _buscar_entidad_fmt(slug, query):
         return {'error': f'Slug inválido: {slug}. Válidos: {", ".join(SLUGS_ENTIDAD)}'}
     resultados = crud.buscar_entidad(_modulo(slug), slug, query)
     q_norm = texto.norm(query or '')
+    # `recursos` no tiene columna `ubicacion`: es siempre la lista de sus unidades
+    # (recurso_unidades), así que para estos resultados hace falta una conexión aparte.
+    con_ubi = gestion.conectar() if slug == 'recursos' else None
+    cur_ubi = con_ubi.cursor() if con_ubi else None
     # Omitir campos vacíos para reducir ruido
     limpios = []
     for r in resultados[:LIMITE_BUSQUEDA]:
         limpio = {'id': r.get('id'), 'nombre': r.get('nombre')}
         if r.get('estado'):
             limpio['estado'] = r['estado']
-        if r.get('ubicacion'):
-            limpio['ubicacion'] = r['ubicacion']
+        if cur_ubi is not None:
+            lugares = [g['ubicacion'] for g in gestion.lugares_recurso_agrupado(cur_ubi, r['id'])]
+            if lugares:
+                limpio['ubicacion'] = ', '.join(lugares)
         if r.get('tipo'):
             limpio['tipo'] = r['tipo']
         if r.get('_via_alias'):
@@ -83,6 +90,10 @@ def _buscar_entidad_fmt(slug, query):
                 limpio['descripcion'] = (desc[:MAX_DESC_BUSQUEDA] + '…'
                                          if len(desc) > MAX_DESC_BUSQUEDA else desc)
         limpios.append(limpio)
+
+    if con_ubi is not None:
+        con_ubi.commit()  # lugares_recurso_agrupado puede crear unidades que faltaban
+        con_ubi.close()
 
     salida = {'slug': slug, 'query': query, 'total': len(resultados), 'resultados': limpios}
     if len(resultados) > LIMITE_BUSQUEDA:
@@ -212,8 +223,8 @@ def _detalle_entidad_fmt(slug, id, permisos=frozenset()):
     resultado = dict(fila)
     resultado['relaciones'] = {}
     for sec in secciones:
-        # No todas las secciones son (id, nombre): la de "Por ubicación" trae
-        # (ubicacion, cantidad) y sin este chequeo reventaba con KeyError 'id'.
+        # No todas las secciones son (id, nombre): la de "Ubicación" (recursos) trae
+        # (ubicacion, numeros) y sin este chequeo reventaba con KeyError 'id'.
         # La clave es el slug sólo si es una entidad real (así el modelo puede pasarla a
         # buscar_entidad/detalle_entidad). El desglose por ubicación no lo es: para esas
         # secciones manda el título, que dice qué son.

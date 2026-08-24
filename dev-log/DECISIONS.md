@@ -6,6 +6,54 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-08-24] — `puntaje_busqueda`: una palabra candidata más corta que la query no cuenta
+
+Buscar "pelacable" traía 7 resultados con el correcto ("Pela cable Weidmuller", vía alias
+"pelacables") en el puesto #4: palabras sueltas cortas de OTROS recursos ("cable", "placa",
+de alias como "cable extension USB" o "placa arduino") daban ratio 0.71 contra la query
+completa — arriba del umbral 0.68 — sin relación real, porque una palabra corta CONTENIDA en
+una query larga infla artificialmente el ratio. Se agregó un guard en el loop palabra por
+palabra de `texto.py::puntaje_busqueda`: si `len(palabra) < len(q_norm)`, no cuenta. No toca
+los 9 casos ya validados en el comentario de `UMBRAL_SIMILITUD` (todos dan lo mismo con o sin
+guard) porque ahí es la query la corta comparando contra una palabra larga, no al revés.
+Portado también a los dos puertos JS del mismo algoritmo (`static/gestion.js`,
+`templates/salidas/formulario.html`) para que sigan siendo un puerto fiel.
+
+---
+
+## [2026-08-24] — Búsqueda en vivo de `/gestion`: se revierte "solo substring" de 2026-07-21
+
+Esa decisión rechazó portar `difflib` a JS por duplicar lógica, y dejó el fuzzy server-side
+como respaldo vía "Enter con JS apagado, o URLs `?q=`". Pero con JS activo (el caso real,
+casi siempre) el propio script bloquea el Enter y esconde el botón BUSCAR — ese respaldo
+nunca fue alcanzable para un usuario tipeando. Se porta `texto.puntaje_busqueda` a JS
+(`static/gestion.js`), mismo criterio que ya se aceptó para `formulario.html` (autocompletado
+de estudiantes, 2026-08-08+): duplicar el algoritmo ya es un patrón usado, no algo a evitar.
+
+---
+
+## [2026-08-22] — Se elimina `recursos.ubicacion`: la ubicación es siempre la lista de unidades
+
+Con `recurso_unidades` ya numerando cada unidad (ver el reemplazo de `recurso_ubicaciones`,
+abajo), tener además un campo `ubicacion` simple en `recursos` dejaba dos fuentes de verdad que
+podían desincronizarse (el campo decía un lugar, el desglose otro). Se saca el campo: un recurso
+sin desglosar pasa a tener igual su unidad 1, y la ficha/listado siempre muestran la lista
+agrupada por lugar, aunque sea de un solo ítem. `gestion.migrar()` reparte el valor viejo de
+`ubicacion` entre las unidades antes de tirar la columna (`ALTER TABLE ... DROP COLUMN`); el
+agente pierde `ubicacion` de `crear_entidad`/`editar_entidad` y la fija solo con `mover_ubicacion`.
+
+---
+
+## [2026-08-22] — `recurso_ubicaciones` (agregado, del 2026-08-21) se reemplaza por `recurso_unidades` (numerado)
+
+No es un revert: el pedido pasó de "cuántas unidades hay en cada lugar" a poder direccionar
+una unidad puntual ("el destornillador 3 y el 5 están en el taller"), algo que un contador
+por lugar no puede expresar. Mantener las dos tablas hubiera significado sincronizar un
+agregado con un detalle que ya lo contiene (divergencia garantizada), así que la tabla vieja
+se migra a filas numeradas (1 unidad = 1 fila) y se borra; ver `migrar()` en `gestion.py`.
+
+---
+
 ## [2026-08-21] — Se elimina `conjuntos`/`actividades`/préstamos de `/gestion`, no se archiva
 
 Decisión de producto: la escuela no iba a seguir cargando kits ni prácticas de taller, y el

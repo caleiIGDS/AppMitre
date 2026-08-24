@@ -51,6 +51,17 @@ def norm(texto):
 # calibrado para un solo tipo de texto por casualidad — se midió en los dos.
 UMBRAL_SIMILITUD = 0.68
 
+# Guard del match palabra por palabra (ver abajo): una palabra candidata más CORTA que la
+# query completa se descarta. Sin esto, "pelacable" (9) contra la palabra suelta "cable" (5,
+# de un alias como "cable extension USB") da ratio 0.71 — arriba del umbral, puro ruido,
+# porque una palabra corta CONTENIDA en una query larga infla el ratio (2*M/(len_a+len_b)
+# con len_b chico) sin que tengan relación real. Medido sobre el inventario real: "pelacable"
+# traía 7 resultados (3 de ellos sin ninguna relación) con el ítem correcto en el puesto #4;
+# con el guard, 1 resultado, el correcto. No afecta ningún caso ya validado arriba —
+# "nati"→Natalia sigue andando porque ahí la query ("nati", corta) es la que compara contra
+# la palabra larga ("natalia"), no al revés; y los 7 casos de typo (`multimetr0`, `alikate`,
+# etc.) dan exactamente los mismos resultados con o sin el guard.
+
 
 def puntaje_busqueda(q_norm, *textos, umbral=UMBRAL_SIMILITUD):
     """Qué tan bien `q_norm` (ya normalizado) matchea los textos dados.
@@ -74,6 +85,8 @@ def puntaje_busqueda(q_norm, *textos, umbral=UMBRAL_SIMILITUD):
         if difuso:
             mejor = max(mejor, difflib.SequenceMatcher(None, q_norm, t_norm).ratio())
             for palabra in t_norm.split():
+                if len(palabra) < len(q_norm):
+                    continue  # ver el comentario de UMBRAL_SIMILITUD: palabra corta, ruido
                 mejor = max(mejor, difflib.SequenceMatcher(None, q_norm, palabra).ratio())
     if substring:
         return 1.0 + mejor  # substring exacto siempre primero; desempata por similitud

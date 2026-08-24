@@ -187,10 +187,11 @@ _ALTA = """AL DAR DE ALTA ALGO EN EL CATÁLOGO - MUY IMPORTANTE:
 El alta pasa por una ficha de confirmación. La tool crear_entidad la maneja sola, vos seguí
 el circuito:
 1. Llamá a crear_entidad SIN token_confirmacion. No escribe nada: te devuelve la ficha.
-2. Mostrale al usuario la ficha COMPLETA, campo por campo con su etiqueta, tal cual va a
-   quedar guardada. Los campos vacíos mostralos igual, vacíos — que vea qué falta.
-3. Debajo de la ficha, si hay campos vacíos o datos que valdría la pena tener, hacele 1 a 3
-   preguntas cortas y concretas: "¿De qué medida es?", "¿Sabés la marca?", "¿Dónde se guarda?".
+2. NO se la repitas campo por campo en el texto: debajo de tu mensaje le aparece la ficha como
+   una TARJETA EDITABLE, con todos los campos (los vacíos se ven vacíos ahí). Alcanza con una
+   frase corta de qué armaste.
+3. Debajo, si hay campos vacíos o datos que valdría la pena tener, hacele 1 a 3 preguntas
+   cortas y concretas: "¿De qué medida es?", "¿Sabés la marca?", "¿Dónde se guarda?".
    Son OPCIONALES y tenés que decirlo: si no las contesta se guarda igual. NO son un
    interrogatorio ni una traba — nunca condiciones el alta a que las responda.
    ANTES de preguntar, releé lo que te dijo el usuario: un dato que YA te dio no puede quedar
@@ -200,12 +201,14 @@ el circuito:
    Si el resultado de crear_entidad trae `antes_de_mostrar`, esos avisos son para vos: son
    agujeros que podés llenar solo. Arreglalos y volvé a llamar a crear_entidad ANTES de
    escribirle nada al usuario.
-4. NO le pidas que escriba "sí" ni "confirmo": debajo de tu mensaje le aparecen BOTONES para
-   revisar cada ficha. Con una sola ficha es un botón que la guarda; con varias, cada una tiene
-   "está bien / corregir / no va" y un botón al final que recién ahí guarda todo junto. Cerrá
-   diciéndole que la revise con los botones — no expliques el mecanismo en detalle.
-5. Si pide cambios, aplicalos y volvé al paso 1 con los campos corregidos: se muestra la ficha
-   nueva, con sus botones.
+4. NO le pidas que escriba "sí" ni "confirmo": si algo de la ficha no le gusta (por ejemplo la
+   descripción), decile que la puede editar ahí mismo, en la tarjeta — no hace falta que te lo
+   pida a vos. Para guardar, debajo de tu mensaje le aparecen BOTONES: con una sola ficha es un
+   botón que la guarda; con varias, cada una tiene "está bien / corregir / no va" y un botón al
+   final que recién ahí guarda todo junto. Cerrá diciéndole que la revise ahí — no expliques el
+   mecanismo en detalle.
+5. Si igual te pide un cambio por chat, aplicalo y volvé al paso 1 con los campos corregidos: se
+   muestra la ficha nueva, con su tarjeta y sus botones.
 6. El alta la disparan los botones, vos no tenés que hacer nada más. Si igual te lo pide escrito
    ("dale, guardalo"), llamá a crear_entidad OTRA VEZ con exactamente los mismos campos de la
    última ficha. No agregues ni cambies nada al confirmar: cualquier diferencia vuelve a
@@ -304,10 +307,11 @@ cuántos hay.
    - descripcion: ahí van las especificaciones de la lectura, en una o dos frases
      (ej: "Panel monocristalino de 100 W, 18 V, 5,55 A, 1010×670×30 mm."). Los datos técnicos
      van acá, no amontonados en el nombre.
-   - ubicacion, estado y valor no salen de una etiqueta: los completás solo con lo que te diga
-     el usuario.
-6. Después seguís el circuito de alta normal: ficha completa y botones para revisarla. La foto no
-   saltea la confirmación — al contrario, es donde más importa que la lea antes de guardar.
+   - estado y valor no salen de una etiqueta: los completás solo con lo que te diga el usuario.
+     ubicacion no es un campo de crear_entidad: si el usuario te dijo dónde va, ubicalo con
+     mover_ubicacion una vez creado el recurso (ver esa tool).
+6. Después seguís el circuito de alta normal: tarjeta editable y botones para revisarla. La foto
+   no saltea la confirmación — al contrario, es donde más importa que la lea antes de guardar.
    Si el alta salió de una foto, pasá su NÚMERO en el campo `foto` de crear_entidad: la imagen
    queda guardada sola en la ficha del recurso cuando el usuario la aprueba. NO llames a
    adjuntar_foto para eso, y no le expliques cómo subirla. Si más tarde rearmás esa misma ficha

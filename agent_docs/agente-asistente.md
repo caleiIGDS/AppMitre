@@ -120,6 +120,15 @@ Las dependencias van en una sola dirección y **no hay ciclos**:
 - **`POST /agente/revisar`** — acepta `{token, estado, nota?}` y marca una ficha del lote como
   `ok` / `observada` / `descartada`. **No escribe en el inventario ni llama al modelo.** `400` si
   el estado no existe, `409` si la ficha ya no está. Ver "Cargar de a muchas: el lote".
+- **`POST /agente/editar_ficha`** — acepta `{token, campos}` y aplica una edición manual desde
+  la tarjeta del chat. **No escribe en el inventario ni llama al modelo**: recalcula el token
+  (es el hash del contenido) y reemplaza la ficha en la sesión bajo el token nuevo, con el
+  `estado` de revisión vuelto a `pendiente`. `400` si el campo-nombre queda vacío, `409` si el
+  token ya no está pendiente. Ver "Alta con ficha de confirmación".
+- **`POST /agente/descartar`** — acepta `{token}` y baja UNA ficha pendiente sin guardar nada
+  (el "✕ Cancelar" al lado del botón verde, en el circuito de una sola ficha). Saca la ficha
+  de la sesión, tira su foto pendiente si tenía, y agrega el resultado al historial como un
+  turno más (mismo patrón que `/confirmar`). `409` si el token ya no está pendiente.
 - **`POST /agente/lote`** — cierra la revisión: escribe las aprobadas y manda las acotadas a una
   segunda vuelta con el modelo. `409` si no hay ninguna ficha revisada.
 - **`POST /agente/reset`** — limpia `session['agente_historial']` y
@@ -146,13 +155,14 @@ caso normal y un 401 pelado ahí es un callejón sin salida.
 
 Mismo motor de accesos y mismo `next` scopeado al prefijo propio (contra open redirect) que
 `/gestion` e `/historia`. Con acceso pero **sin** el permiso de la ruta la respuesta es **403**, no
-el login. Cinco casos piden más que el permiso base:
+el login. Seis casos piden más que el permiso base:
 
 | ruta | permiso | por qué |
 |---|---|---|
 | `/agente/confirmar` | `agente.escribir` | **escribe sin pasar por el LLM**: filtrar las tools no la protege en absoluto |
 | `/agente/lote` | `agente.escribir` | ídem: escribe todas las fichas aprobadas de una |
 | `/agente/revisar` | `agente.escribir` | no toca el dominio, pero es el circuito de alta: quien no puede escribir no tiene fichas que revisar |
+| `/agente/editar_ficha` | `agente.escribir` | ídem: tampoco toca el dominio, pero es el circuito de alta |
 | `/agente/log` | `agente.auditar` | la auditoría es de administración |
 | `/agente/chat` y `/agente/chat/stream` **con `imagenes`** | `agente.vision` | gasta la API de visión; sin el permiso devuelve `403` |
 
@@ -319,20 +329,30 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
   foto"
 
 **Escritura** — `agente.escribir` (se auditan, guardan snapshot "antes"):
-- `crear_entidad(slug, campos, foto?)` — alta **en dos pasos con ficha de confirmación**, ver
-  abajo. `foto` es de qué foto del turno salió la ficha, y es lo que hace que la imagen termine
-  en el registro correcto
+- `crear_entidad(slug, campos, foto?, sub_recursos?)` — alta **en dos pasos con ficha de
+  confirmación**, ver abajo. `foto` es de qué foto del turno salió la ficha, y es lo que hace que
+  la imagen termine en el registro correcto. `sub_recursos` (solo `recursos`) convierte el alta en
+  un KIT: lista de `{titulo, cantidad}` — nada más, sin descripción ni estado propios — que se
+  escribe en `gestion.kit_items` recién al confirmar, junto con el recurso. Se muestra al final de
+  la tarjeta del chat como lista de solo lectura (una línea por item); el `recurso_asignado` de
+  cada sub-recurso queda vacío, sólo se completa a mano desde la web. Hay que reenviarla completa
+  en cada llamada, igual que el resto de la ficha — si se omite en una corrección, se pierde. Ver
+  "Kits" en `agent_docs/gestion-conocimiento.md`
 - `editar_entidad(slug, id, campos)` — update
 - `adjuntar_foto(slug, id, foto?)` — guarda las fotos de ESTE turno en la galería de un registro
   que ya existe (sin `foto` van todas, con `foto` sólo esa). Sin ficha de confirmación (es
   aditivo); las imágenes salen de `contexto_turno`, no de un parámetro
 - `vincular_entidad` / `desvincular_entidad` — gestionar M2M
-- `mover_ubicacion(recurso, cantidad, origen?, destino)` — mueve unidades de un recurso entre
-  lugares en `gestion.recurso_ubicaciones` (desglose OPCIONAL, sólo para recursos repartidos
-  en más de un sitio; el campo `ubicacion` simple no se toca). **Nunca bloquea** por falta de
-  desglose previo: si `origen` no tenía tanto registrado, igual mueve lo pedido y avisa
-  (`avisos`) — ver `agent_docs/gestion-conocimiento.md`. `origen` es opcional (unidades sin
-  lugar registrado antes)
+- `mover_ubicacion(recurso, destino, numeros?, cantidad?, origen?)` — la ÚNICA forma de fijar
+  dónde está un recurso: no hay un campo `ubicacion` aparte (ni en `crear_entidad` ni en
+  `editar_entidad`), la ubicación es siempre la lista de unidades en `gestion.recurso_unidades`,
+  aunque el recurso tenga una sola. Cada unidad tiene su propio número: `numeros` mueve unidades
+  puntuales ("el destornillador 3 y el 5"), `cantidad` mueve N unidades sin importar cuáles
+  (incluida la única unidad de un recurso sin desglosar) — hace falta uno de los dos. **Nunca
+  bloquea** por falta de desglose previo: números que no existen, o (con `cantidad`) un `origen`
+  con menos registrado, igual mueve lo que se puede y avisa (`avisos`) — ver
+  `agent_docs/gestion-conocimiento.md`. `origen` sólo aplica junto con `cantidad` y es opcional
+  (unidades sin lugar registrado antes)
 - `eliminar_entidad` — **requiere confirmación en turno separado** (el system prompt instruye
   a Claude a no ejecutar en el mismo turno en que se solicita, sino responder primero qué va
   a borrar y esperar confirmación)
@@ -452,23 +472,34 @@ quedar guardado. Circuito:
    escribe nada**: devuelve `{requiere_confirmacion: true, ficha, campos_vacios,
    redactados_por_vos, instruccion}` (y `tipos_en_uso` si el slug es `recursos`, o
    `antes_de_mostrar` si es `hitos` y la ficha salió con agujeros evitables).
-2. El asistente muestra la ficha y, debajo, 1 a 3 preguntas cortas por lo que falta
-   ("¿de qué medida es?", "¿sabés la marca?"). **No son bloqueantes**: si el usuario no
-   contesta, se guarda igual — está en el prompt y en el `instruccion` de la ficha.
-3. Si el usuario pide cambios, el asistente vuelve a llamar con los campos corregidos y
-   sale otra ficha (con sus botones). Se repite hasta el OK.
+2. El asistente **no repite la ficha en el texto**: `gestion-agente.js` la pinta debajo del
+   mensaje como una **tarjeta editable** (`tarjetaFicha()`), un input por campo, con
+   `confirmaciones[].campos` (`[{nombre, label, tipo, valor, opciones?, redactado?}, …]`,
+   armado por `fichas._campos_para_editar()` reusando el mismo `tipo`/`opciones` que declara
+   `ENTIDADES` para el form de /gestion o /historia). El asistente sólo agrega, debajo, 1 a 3
+   preguntas cortas por lo que falta ("¿de qué medida es?", "¿sabés la marca?"). **No son
+   bloqueantes**: si el usuario no contesta, se guarda igual — está en el prompt y en el
+   `instruccion` de la ficha.
+3. **Si algo no le gusta, el usuario lo edita ahí mismo** — no hace falta pedírselo al
+   asistente por chat. Cada campo postea a **`POST /agente/editar_ficha`** (`{token,
+   campos}`) al perder el foco: como el token es el hash del contenido, la edición recalcula
+   uno nuevo y reemplaza la entrada vieja en la sesión — mismo mecanismo que cuando el
+   modelo rearma la ficha, pero sin pasar por el LLM ni escribir en el inventario. Si el
+   usuario **sí** le pide el cambio por chat, el asistente vuelve a llamar a `crear_entidad`
+   con los campos corregidos y sale otra ficha (con su tarjeta). Se repite hasta el OK.
 4. **El OK es un botón, no una respuesta escrita.** `/chat` devuelve además
-   `confirmaciones: [{token, etiqueta, nombre, estado, nota?, foto?}, …]` con las fichas
-   pendientes, y `gestion-agente.js` las pinta debajo del mensaje
+   `confirmaciones: [{token, etiqueta, nombre, estado, campos, nota?, foto?, sub_recursos?}, …]` con las
+   fichas pendientes, y `gestion-agente.js` las pinta debajo del mensaje
    (`agregarConfirmaciones()`). **Con una sola ficha** es el botón verde de siempre, que pega
    en **`POST /agente/confirmar`** con su token: el alta se resuelve ahí, en Python, **sin
    llamar al modelo** — instantánea, gratis, y sin margen para que el modelo escriba otra
-   cosa. Los campos salen de la sesión, nunca del request. **Con dos o más** entra el circuito
-   de revisión en lote (ver abajo). El resultado se agrega al historial como un turno
-   más, con el nombre de lo que se guardó, para que el asistente sepa después que eso ya
-   está y qué sigue pendiente.
+   cosa. Los campos salen de la sesión, nunca del request (los edite o no el usuario en la
+   tarjeta). **Con dos o más** entra el circuito de revisión en lote (ver abajo). El
+   resultado se agrega al historial como un turno más, con el nombre de lo que se guardó,
+   para que el asistente sepa después que eso ya está y qué sigue pendiente.
 5. Escribir "dale, guardalo" también funciona: el modelo llama **otra vez con exactamente
-   los mismos campos** y el hash coincide. Los dos caminos terminan en el mismo lugar.
+   los mismos campos** y el hash coincide. Los tres caminos —tocar el botón, editar la
+   tarjeta y escribir "dale"— terminan en el mismo lugar.
 
 **Varias altas en un turno** (`_confirmaciones`). "Creá a Pablo y a Ezequiel" son dos
 llamadas a `crear_entidad` en la misma respuesta y **dos fichas con dos juegos de botones**.
@@ -1257,7 +1288,8 @@ que la lectura pegada tampoco se le muestra al usuario como si la hubiera escrit
 **Reglas en el system prompt** (sección "FOTOS DE DATASHEETS…"): el agente trabaja **solo con
 lo que dice la lectura**, nunca completando con lo que sabe de esa marca/modelo; la cantidad
 no sale nunca de la foto sino de lo que dice el usuario (si no la dijo, se pregunta antes de
-la ficha, junto con la ubicación); cinco unidades iguales son **un** recurso con `cantidad` 5,
+la ficha); la ubicación no es un campo de la ficha, se fija después con `mover_ubicacion`;
+cinco unidades iguales son **un** recurso con `cantidad` 5,
 no cinco altas; antes de la ficha se busca por marca/modelo y por nombre genérico, porque con
 una foto lo más común es que el recurso ya exista y corresponda sumar stock con
 `editar_entidad`; las especificaciones van en `descripcion`, no amontonadas en el `nombre`.
@@ -1476,7 +1508,7 @@ ficha del mismo docente le parte la historia en dos.
 - Si el `slug` de la sección es una entidad real (está en `modulo.ENTIDADES`), la clave **es
   el slug** (`hitos`, `personas`): así el modelo puede pasarla tal cual a `buscar_entidad` /
   `detalle_entidad`.
-- Si no lo es, manda el **título** (hoy, sólo `"Por ubicación"` en recursos: el desglose por
+- Si no lo es, manda el **título** (hoy, sólo `"Ubicación"` en recursos: el desglose por
   lugar no es una entidad y no tiene id que pasarle a ninguna tool).
 
 Regla general, con un bug real de origen (2026-08-11: una sección de préstamos usaba un slug
@@ -1494,7 +1526,7 @@ como prosa no puede depender de un detalle de routing.**
   `ENTIDADES`, `LIMPIEZA_M2M` y el hook `secciones_detalle`. **Un área nueva tiene que cumplir el
   contrato de `agent_docs/crud-motor.md`** para que el agente la vea.
 - De `gestion.py` (y solo de ahí) salen además `_stock`, `_int` y `FORMATO_FECHA_REVISION`. El
-  desglose de recursos por ubicación (`mover_ubicacion`, `ubicaciones_recurso`) es exclusivo
+  desglose de recursos por unidad (`mover_unidades`, `lugares_recurso_agrupado`) es exclusivo
   del área de recursos y no pasa por el motor.
 - **`texto.norm` / `texto.puntaje_busqueda` / `texto.UMBRAL_SIMILITUD`** son la única fuente de
   normalización y búsqueda difusa del archivo, para las tres fuentes de datos. Antes esto se le

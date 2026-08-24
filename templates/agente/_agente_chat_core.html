@@ -6,9 +6,9 @@
 
 <div id="agente-messages" class="agente-messages">
   <div class="agente-welcome">
-    <div class="agente-welcome-icon">🤖</div>
+    <span class="agente-welcome-icon" aria-hidden="true"></span>
     <div class="agente-welcome-text">
-      <strong>¡Hola!</strong><br>
+      <strong>Asistente en línea</strong><br>
       Preguntá sobre horarios, recursos, historia de la escuela o cualquier otra cosa.
     </div>
   </div>
@@ -25,15 +25,16 @@
   {% endif %}
 
   <div class="agente-input-row">
+    <span class="agente-prompt" aria-hidden="true">&gt;</span>
+    <textarea id="agente-input" class="agente-input" placeholder="Escribí tu consulta…" rows="2"
+              autocomplete="off" autocapitalize="sentences" enterkeyhint="send"></textarea>
     {% if puede('agente.vision') %}
     <button id="agente-image-btn" class="agente-toolbar-btn" title="Adjuntar imágenes" aria-label="Adjuntar imágenes">
-      📷
+      Foto
     </button>
     {% endif %}
-    <textarea id="agente-input" class="agente-input" placeholder="Escribí tu pregunta..." rows="2"
-              autocomplete="off" autocapitalize="sentences" enterkeyhint="send"></textarea>
     <button id="agente-send-btn" class="agente-send-btn" title="Enviar" aria-label="Enviar">
-      <span class="agente-send-icon">→</span>
+      Enviar <span class="agente-send-icon">▸</span>
     </button>
   </div>
   {% if puede('agente.vision') %}
@@ -41,6 +42,7 @@
   {% endif %}
 
   <div class="agente-footer">
-    <a href="{{ url_for('agente.agente_log') }}" target="_blank" class="agente-footer-link">📋 Auditoría</a>
+    <span class="agente-footer-hint">Enter envía · Shift+Enter salta línea</span>
+    <a href="{{ url_for('agente.agente_log') }}" target="_blank" class="agente-footer-link">Auditoría ▸</a>
   </div>
 </div>

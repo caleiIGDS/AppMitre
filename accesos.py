@@ -54,6 +54,11 @@ TABLA_TESTIGO = 'dispositivos'
 # una vez canjeado, el dispositivo entra hasta que el admin lo revoque.
 INVITACION_DIAS = 7
 
+# Un link "sin límite de usos" no se pensó para vencer a los 7 días (es para un cartel o un
+# grupo de WhatsApp, no para una persona puntual): vive 10 años, que en la práctica es "no
+# vence". Sigue usando la misma columna `expira` que el resto — nada más lee un plazo largo.
+INVITACION_DIAS_MULTIUSO = 3650
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS dispositivos (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,9 +84,14 @@ CREATE TABLE IF NOT EXISTS invitaciones (
     creada         TEXT NOT NULL,
     expira         TEXT NOT NULL,
     usada          TEXT,
-    dispositivo_id INTEGER
+    dispositivo_id INTEGER,
+    multiuso       INTEGER NOT NULL DEFAULT 0
 );
 """
+# `multiuso`: 1 = link público, no se quema al canjear (lo puede abrir cualquiera) y no
+# tiene un `dispositivo_id` propio, porque genera uno nuevo por cada persona que entra.
+# `usada` se queda en NULL para siempre en estos — es lo que los mantiene visibles y
+# vigentes en `listar_invitaciones()` sin tocar esa query.
 # `dispositivos.nombre` lo escribe LA PERSONA al canjear; `etiqueta` la escribió el ADMIN
 # al invitar. Se guardan las dos a propósito: si no coinciden, el link se reenvió.
 # `email`/`google_sub` quedan reservados para sumar Google Sign-In sin migrar nada; hoy
@@ -105,6 +115,9 @@ def init_db():
     respaldos.respaldar(DB_PATH, PREFIJO_BACKUP, TABLA_TESTIGO)
     con = conectar()
     con.executescript(SCHEMA)
+    columnas = {c[1] for c in con.execute("PRAGMA table_info(invitaciones)").fetchall()}
+    if 'multiuso' not in columnas:
+        con.execute("ALTER TABLE invitaciones ADD COLUMN multiuso INTEGER NOT NULL DEFAULT 0")
     con.commit()
     con.close()
 
@@ -403,21 +416,24 @@ def _ahora_txt():
     return ahora().strftime('%Y-%m-%d %H:%M:%S')
 
 
-def crear_invitacion(etiqueta, perfil, permisos_lista):
-    """Un link de un solo uso. Devuelve el token.
+def crear_invitacion(etiqueta, perfil, permisos_lista, multiuso=False):
+    """Un link, de un solo uso o público. Devuelve el token.
 
     Los permisos se congelan acá: si mañana cambia el preset del perfil, este link sigue
-    dando lo que el admin vio cuando lo generó.
+    dando lo que el admin vio cuando lo generó. `multiuso` cambia sólo el vencimiento (ver
+    `INVITACION_DIAS_MULTIUSO`) y queda grabado para que `canjear()` sepa si quemarlo.
     """
     token = secrets.token_urlsafe(32)
     creada = ahora()
+    dias = INVITACION_DIAS_MULTIUSO if multiuso else INVITACION_DIAS
     con = conectar()
     con.execute(
-        "INSERT INTO invitaciones (token, etiqueta, perfil, permisos, creada, expira) "
-        "VALUES (?,?,?,?,?,?)",
+        "INSERT INTO invitaciones (token, etiqueta, perfil, permisos, creada, expira, multiuso) "
+        "VALUES (?,?,?,?,?,?,?)",
         (token, etiqueta, perfil, json.dumps(sorted(set(permisos_lista))),
          creada.strftime('%Y-%m-%d %H:%M:%S'),
-         (creada + timedelta(days=INVITACION_DIAS)).strftime('%Y-%m-%d %H:%M:%S')))
+         (creada + timedelta(days=dias)).strftime('%Y-%m-%d %H:%M:%S'),
+         1 if multiuso else 0))
     con.commit()
     con.close()
     return token
@@ -436,7 +452,11 @@ def invitacion_valida(token):
 
 
 def canjear(token, nombre, user_agent):
-    """Crea el dispositivo y QUEMA el token. Devuelve el dispositivo, o None si no sirve."""
+    """Crea el dispositivo. Devuelve el dispositivo, o None si no sirve.
+
+    En un link normal QUEMA el token (un solo uso); en uno `multiuso` lo deja intacto para
+    que la próxima persona lo pueda volver a abrir.
+    """
     con = conectar()
     cur = con.cursor()
     inv = cur.execute(
@@ -453,16 +473,19 @@ def canjear(token, nombre, user_agent):
          user_agent, inv['id']))
     disp_id = cur.lastrowid
 
-    # El `AND usada IS NULL` es lo que hace el un-solo-uso atómico: si dos clicks entran
-    # a la vez, el segundo UPDATE afecta 0 filas y ese canje se deshace.
-    cur.execute("UPDATE invitaciones SET usada = ?, dispositivo_id = ? "
-                "WHERE id = ? AND usada IS NULL", (_ahora_txt(), disp_id, inv['id']))
-    if cur.rowcount == 0:
-        con.rollback()
-        con.close()
-        return None
+    if inv['multiuso']:
+        con.commit()
+    else:
+        # El `AND usada IS NULL` es lo que hace el un-solo-uso atómico: si dos clicks entran
+        # a la vez, el segundo UPDATE afecta 0 filas y ese canje se deshace.
+        cur.execute("UPDATE invitaciones SET usada = ?, dispositivo_id = ? "
+                    "WHERE id = ? AND usada IS NULL", (_ahora_txt(), disp_id, inv['id']))
+        if cur.rowcount == 0:
+            con.rollback()
+            con.close()
+            return None
+        con.commit()
 
-    con.commit()
     fila = cur.execute("SELECT * FROM dispositivos WHERE id = ?", (disp_id,)).fetchone()
     resultado = dict(fila)
     con.close()
@@ -504,17 +527,26 @@ def listar_dispositivos():
 
 
 def listar_invitaciones():
-    """Sólo las que todavía sirven: las usadas ya figuran como dispositivo."""
+    """Sólo las que todavía sirven: las usadas ya figuran como dispositivo.
+
+    Un link `multiuso` nunca queda "usada" (ver `canjear`), así que sigue apareciendo acá
+    mientras no venza o el admin lo anule — es lo que lo mantiene activo para la próxima
+    persona que lo abra.
+    """
     con = conectar()
     filas = con.execute(
         "SELECT * FROM invitaciones WHERE usada IS NULL AND expira >= ? ORDER BY id DESC",
         (_ahora_txt(),)).fetchall()
-    con.close()
     salida = []
     for fila in filas:
         d = dict(fila)
         d['perfil_etiqueta'] = ETIQUETA_PERFIL.get(d['perfil'], d['perfil'])
+        if d['multiuso']:
+            d['usos'] = con.execute(
+                "SELECT COUNT(*) FROM dispositivos WHERE invitacion_id = ? AND revocado IS NULL",
+                (d['id'],)).fetchone()[0]
         salida.append(d)
+    con.close()
     return salida
 
 
@@ -555,13 +587,13 @@ def _link_de(token):
     return url_for('acceso_canjear_ver', token=token, _external=True)
 
 
-def _render_panel(link_nuevo=None, error=None):
+def _render_panel(link_nuevo=None, link_multiuso=False, error=None):
     return render_template(
         'accesos/panel.html', dispositivos=listar_dispositivos(),
         invitaciones=listar_invitaciones(), grupos=catalogo_por_grupo(),
         perfiles=[(p, ETIQUETA_PERFIL.get(p, p)) for p in PERFILES],
         preset={p: permisos_de_perfil(p) for p in PERFILES},
-        link_nuevo=link_nuevo, error=error, activo='accesos')
+        link_nuevo=link_nuevo, link_multiuso=link_multiuso, error=error, activo='accesos')
 
 
 @bp.route('/')
@@ -591,8 +623,9 @@ def invitar():
     elif marcados != sorted(permisos_de_perfil(perfil)):
         perfil = 'custom'
 
-    token = crear_invitacion(etiqueta, perfil, marcados)
-    return _render_panel(link_nuevo=_link_de(token))
+    multiuso = request.form.get('multiuso') == 'on'
+    token = crear_invitacion(etiqueta, perfil, marcados, multiuso=multiuso)
+    return _render_panel(link_nuevo=_link_de(token), link_multiuso=multiuso)
 
 
 @bp.route('/otro/<int:disp_id>', methods=['POST'])

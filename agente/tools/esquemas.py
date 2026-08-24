@@ -13,6 +13,7 @@ Al final del archivo está `PERMISO_POR_TOOL`, que dice qué permiso pide cada u
 """
 import accesos
 import crud
+import gestion
 import historia
 
 from .. import PERMISO_VISION
@@ -338,7 +339,9 @@ TOOLS_SCHEMA = [
                         'buscá con buscar_entidad para no duplicar uno que ya existe. Si te piden '
                         'dar de alta varias cosas de una, llamala una vez por cada una en el mismo '
                         'turno: cada ficha sale con sus propios botones y el usuario las revisa por '
-                        'separado.'),
+                        'separado. RECURSOS no tiene un campo `ubicacion` acá: la ubicación se fija '
+                        'DESPUÉS de la alta, con mover_ubicacion sobre el id que te devuelve esta '
+                        'tool. Si el usuario ya dijo dónde va, avisale que se lo ubicás enseguida.'),
         'input_schema': {
             'type': 'object',
             'properties': {
@@ -357,9 +360,8 @@ TOOLS_SCHEMA = [
                                                           + ', '.join(historia.TIPOS_HITO))},
                 'cantidad': {'type': 'integer', 'description': 'Stock disponible. Solo recursos'},
                 'descripcion': {'type': 'string', 'description': 'Descripción redactada por VOS con lo que contó el usuario: para qué sirve, medidas, marca y modelo, en qué estado está. Una o dos frases, sin inventar lo que no te dijeron. Aplica a todos los slugs'},
-                'ubicacion': {'type': 'string', 'description': 'Dónde se guarda (ej: A2, Taller de Electricidad). Solo recursos'},
                 'estado': {'type': 'string',
-                           'enum': ['Disponible', 'Retirado', 'En uso', 'En reparación', 'De baja', 'Sin revisar'],
+                           'enum': gestion.ESTADOS_RECURSO,
                            'description': 'Estado del recurso en el inventario. Solo recursos'},
                 'valor': {'type': 'string', 'enum': ['Básico', 'Secundario', 'Alto valor'],
                           'description': 'IMPORTANCIA del recurso dentro del inventario (qué tan crítico es), NO para qué sirve — eso va en descripcion. Solo recursos'},
@@ -368,7 +370,25 @@ TOOLS_SCHEMA = [
                 'nivel': {'type': 'string', 'enum': historia.NIVELES_HITO,
                           'description': 'Importancia del hito en la línea del tiempo. Básico: evento o actividad común. Importante: logro, programa nuevo. Crítico: olimpiada, construcción significativa. Solo hitos'},
                 'etiquetas': {'type': 'string', 'description': 'Temas del hito separados por coma, para agrupar la línea del tiempo (ej: "Olimpiada, Matemática, Nacional"; para lo que antes era un "proyecto", agregá "Proyecto"). REUSÁ las que ya existen — mirá las de otros hitos con buscar_hitos antes de inventar una nueva. Solo hitos'},
-                'protagonistas': {'type': 'string', 'description': 'Personas o cursos involucrados, en texto (ej: "Pablo Errio, Ezequiel Toñanes"). Es un campo de texto suelto: para dejar el vínculo navegable entre una persona ya cargada y el hito, además usá vincular_entidad. Solo hitos'}
+                'protagonistas': {'type': 'string', 'description': 'Personas o cursos involucrados, en texto (ej: "Pablo Errio, Ezequiel Toñanes"). Es un campo de texto suelto: para dejar el vínculo navegable entre una persona ya cargada y el hito, además usá vincular_entidad. Solo hitos'},
+                'sub_recursos': {
+                    'type': 'array',
+                    'description': ('Convierte este recurso en un KIT que agrupa sub-recursos '
+                                    '(ej: "Kit Arduino" con la lista de sensores que trae). Cada '
+                                    'item es SOLO título + cantidad, nada más: no tienen '
+                                    'descripción, estado ni ubicación propios. Mandala COMPLETA '
+                                    'en cada llamada, igual que el resto de la ficha: si '
+                                    'rearmás la ficha por un cambio y omitís esta lista, se '
+                                    'borra. Solo recursos.'),
+                    'items': {
+                        'type': 'object',
+                        'properties': {
+                            'titulo': {'type': 'string', 'description': 'Nombre del sub-recurso, ej: "Sensor ultrasónico HC-SR04"'},
+                            'cantidad': {'type': 'string', 'description': 'Cuántos trae, como texto (ej: "2")'}
+                        },
+                        'required': ['titulo']
+                    }
+                }
             },
             # `nombre` no puede ir acá: hitos usa `titulo`. Cuál de los dos hace falta lo
             # valida _crear_entidad contra crud.campo_nombre() de la entidad.
@@ -380,7 +400,8 @@ TOOLS_SCHEMA = [
         'description': ('Modifica una entidad existente. Es una edición PARCIAL: mandá solo los campos '
                         'que cambian y el resto queda como está. El id sacalo de buscar_entidad, nunca '
                         'de tu memoria. Cada campo aplica a determinados slugs (ver parámetros); mandar '
-                        'uno que no corresponde al slug no hace nada.'),
+                        'uno que no corresponde al slug no hace nada. RECURSOS no tiene `ubicacion` acá: '
+                        'para mover un recurso de lugar usá mover_ubicacion.'),
         'input_schema': {
             'type': 'object',
             'properties': {
@@ -392,9 +413,8 @@ TOOLS_SCHEMA = [
                                                           + ', '.join(historia.TIPOS_HITO))},
                 'cantidad': {'type': 'integer', 'description': 'Stock disponible. Solo recursos'},
                 'descripcion': {'type': 'string', 'description': 'Descripción libre. Aplica a todos los slugs'},
-                'ubicacion': {'type': 'string', 'description': 'Dónde está guardado (ej: A2, Taller de Electricidad). Solo recursos'},
                 'estado': {'type': 'string',
-                           'enum': ['Disponible', 'Retirado', 'En uso', 'En reparación', 'De baja', 'Sin revisar'],
+                           'enum': gestion.ESTADOS_RECURSO,
                            'description': 'Estado del recurso en el inventario. Solo recursos'},
                 'valor': {'type': 'string', 'enum': ['Básico', 'Secundario', 'Alto valor'],
                           'description': 'IMPORTANCIA del recurso dentro del inventario (qué tan crítico es), NO para qué sirve — eso va en descripcion. Solo recursos'},
@@ -496,33 +516,45 @@ TOOLS_SCHEMA = [
     },
     {
         'name': 'mover_ubicacion',
-        'description': ('Mueve unidades de un recurso de un lugar a otro dentro del pañol '
-                        '("moví 3 destornilladores de laboratorio a taller"). Es para cuando '
-                        'un recurso con varias unidades está repartido en más de un lugar: '
-                        'el campo `ubicacion` de la ficha sigue siendo el lugar principal o '
-                        'único cuando no hace falta desglosar, y no lo toca esta tool. '
-                        'NO HACE FALTA que el desglose por lugar esté cargado de antes ni que '
-                        'sume el total de la cantidad del recurso: si el lugar de origen no '
-                        'tiene registrada tanta cantidad como se pide mover (o no tiene '
-                        'ninguna fila todavía), IGUAL se mueve lo pedido — nunca se bloquea '
-                        'por eso. Si hubo una diferencia entre lo pedido y lo que había '
-                        'registrado, la respuesta trae `avisos`: contáselos al usuario. '
-                        '`origen` es opcional: si no se sabía de dónde salían (nunca se había '
-                        'registrado un desglose para este recurso), omitilo y sólo se suma la '
-                        'cantidad a `destino`. `destino` es obligatorio. Si el nombre del '
-                        'recurso es ambiguo devuelve ok:false con `opciones`: mostráselas al '
-                        'usuario y preguntá cuál es, no elijas vos. Después de mover, contale '
-                        'al usuario cómo quedó el desglose ENTERO (`ubicaciones` en la '
-                        'respuesta), no sólo lo que acaba de pedir.'),
+        'description': ('Mueve unidades de un recurso de un lugar a otro dentro del pañol. Es la '
+                        'ÚNICA forma de fijar dónde está un recurso: no hay un campo `ubicacion` '
+                        'aparte en la ficha (ni en crear_entidad ni en editar_entidad) — un recurso '
+                        'recién dado de alta queda "sin ubicar" hasta que llamás a esta tool, aunque '
+                        'tenga una sola unidad. Cada unidad de un recurso tiene su propio número '
+                        '(1, 2, 3...) — usá `numeros` cuando el pedido menciona unidades puntuales '
+                        '("el destornillador 3 y el 5 están en el taller"), y `cantidad` cuando el '
+                        'pedido es genérico y no dice cuáles ("moví 3 destornilladores de laboratorio '
+                        'a taller", o simplemente "el multímetro está en el pañol" para un recurso de '
+                        'una sola unidad): hace falta uno de los dos. '
+                        'NO HACE FALTA que el desglose esté cargado de antes: números que no existan '
+                        'en el recurso, o (con `cantidad`) un origen con menos unidades registradas '
+                        'de las pedidas, IGUAL se mueve lo que se puede — nunca se bloquea por eso, '
+                        'la respuesta trae `avisos` con la diferencia: contáselos al usuario. '
+                        '`origen` sólo se usa junto con `cantidad` (no con `numeros`) y es opcional: '
+                        'si no se sabía de dónde salían, omitilo. `destino` es obligatorio. Si el '
+                        'nombre del recurso es ambiguo devuelve ok:false con `opciones`: mostráselas '
+                        'al usuario y preguntá cuál es, no elijas vos. Después de mover, contale al '
+                        'usuario cómo quedó el desglose ENTERO (`ubicaciones` en la respuesta, '
+                        'agrupado por lugar con los números de cada uno), no sólo lo que acaba de '
+                        'pedir.'),
         'input_schema': {
             'type': 'object',
             'properties': {
                 'recurso': {'type': 'string', 'description': 'Nombre del recurso (tolera aproximados y tildes) o su ID como string'},
-                'cantidad': {'type': 'integer', 'description': 'Unidades a mover'},
-                'origen': {'type': 'string', 'description': 'Lugar de donde salen. Opcional: si no se sabía dónde estaban, se omite'},
-                'destino': {'type': 'string', 'description': 'Lugar al que llegan. Obligatorio'}
+                'numeros': {'type': 'array', 'items': {'type': 'integer'},
+                            'description': 'Números puntuales de las unidades a mover, ej: [3, 5]. Usalo cuando el '
+                                           'usuario menciona unidades concretas. No lo combines con `cantidad`.'},
+                'cantidad': {'type': 'integer', 'description': 'Cantidad de unidades a mover, sin importar cuáles '
+                             '(el sistema elige). Usalo cuando el pedido es genérico, sin números puntuales.'},
+                'origen': {'type': 'string', 'description': 'Lugar de donde salen (sólo tiene efecto junto con '
+                           '`cantidad`, no con `numeros`). Opcional: si no se sabía dónde estaban, se omite. '
+                           f'Lugares habituales (usalos tal cual si el pedido no da un detalle distinto): {", ".join(gestion.LUGARES_RECURSO)}'},
+                'destino': {'type': 'string', 'description': 'Lugar al que llegan. Obligatorio. '
+                            f'Lugares habituales (usalos tal cual si el pedido no da un detalle distinto): {", ".join(gestion.LUGARES_RECURSO)}. '
+                            'Si el usuario menciona algo que no es uno de estos lugares (una excepción real, ej: '
+                            '"el techo", "panel solar instalado afuera"), escribilo tal cual lo dijo: no está limitado a esta lista.'}
             },
-            'required': ['recurso', 'cantidad', 'destino']
+            'required': ['recurso', 'destino']
         }
     },
     {

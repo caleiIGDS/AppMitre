@@ -59,7 +59,11 @@
       "Bash(ls /c/Users/calei/projects/AppMitre/Salidas/)",
       "Read(//c/Users/calei/projects/AppMitre/Salidas//**)",
       "Bash(grep -n \"lugar_dia_hora_salida\\\\|lugar_dia_hora_regreso\" -r /c/Users/calei/projects/AppMitre --include=*.py --include=*.html --include=*.js --include=*.json --include=*.md)",
-      "Bash(python -c \"import gestion, crud, agente.tools.esquemas, agente.tools.entidades\")"
+      "Bash(python -c \"import gestion, crud, agente.tools.esquemas, agente.tools.entidades\")",
+      "Bash(git commit -m ' *)",
+      "Bash(python -c \"import sys; sys.stdout.reconfigure\\(encoding='utf-8'\\); print\\(sys.stdin.buffer.read\\(\\).decode\\('utf-8', errors='replace'\\)\\)\")",
+      "Bash(python -m py_compile agente/tools/fichas.py agente/rutas.py agente/prompt.py)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('gestion.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('crud.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\calei\\projects\\AppMitre\\static\\vendor\\pdfjs\\build",

@@ -255,7 +255,7 @@ compartido — es del área, y quien lo necesite lo importa de ahí (como el paq
 
 ## Qué NO está en el motor
 
-`gestion.py` conserva entero su **desglose de recursos por ubicación** (`recurso_ubicaciones`):
+`gestion.py` conserva entero su **desglose de recursos por unidad** (`recurso_unidades`):
 reparte las unidades de un mismo recurso en más de un lugar, algo que no entra en la config
 declarativa (no es una relación M2M entre dos entidades, es una tabla auxiliar de una sola).
 No está duplicado en ningún lado, así que no hay nada que extraer — es dominio puro de gestión,

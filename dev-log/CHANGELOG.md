@@ -6,6 +6,75 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-24] — El chat puede armar un kit al dar de alta un recurso
+
+**Archivos**: `agente/tools/esquemas.py`, `agente/tools/__init__.py`, `agente/tools/fichas.py`,
+`agente/rutas.py`, `gestion.py`, `static/gestion-agente.js`, `static/gestion.css`
+
+`crear_entidad` suma el parámetro `sub_recursos` (solo `recursos`): lista `{titulo, cantidad}`
+que se guarda en `kit_items` recién al confirmar. Participa del hash de la ficha (se pierde si
+se omite en una corrección) y sobrevive a editar otro campo de la tarjeta del chat. Se muestra
+al final de la tarjeta como lista de solo lectura.
+
+## [2026-08-24] — Recursos pueden ser kits con sub-recursos (`kit_items`)
+
+**Archivos**: `gestion.py`, `crud.py`, `templates/gestion/lista.html`, `templates/gestion/detalle.html`
+
+Tabla nueva `kit_items` (titulo, cantidad, recurso_asignado texto libre). Nuevo hook opcional
+de `crud.py::lista()`, `resultados_extra_busqueda(slug, q, cur)`: sólo con `?q=`, agrega filas
+extra al contexto (`extra_filas`) sin que el motor sepa qué son — ver
+`agent_docs/gestion-conocimiento.md`.
+
+## [2026-08-24] — La búsqueda en vivo de `/gestion` ahora tolera typos, no solo substring
+
+**Archivos**: `static/gestion.js`
+
+Porta `texto.puntaje_busqueda` a JS (mismo umbral 0.68), igual que ya hacía
+`templates/salidas/formulario.html`. Antes el filtro en vivo era substring puro y, con JS
+activo, Enter no recarga la página — así que el fallback fuzzy server-side era inalcanzable
+en la práctica para un usuario normal.
+
+## [2026-08-22] — La ficha de alta del chat se edita en la tarjeta, no pidiéndoselo al asistente
+
+**Archivos**: `agente/tools/fichas.py`, `agente/rutas.py`, `agente/prompt.py`, `static/gestion-agente.js`
+
+`confirmaciones[]` suma `campos` (`[{nombre, label, tipo, valor, opciones?, redactado?}]`) en
+cada fila. Nuevo `POST /agente/editar_ficha` (`{token, campos}`, permiso `agente.escribir`):
+recalcula el token y reemplaza la ficha en sesión, sin escribir ni llamar al modelo. Nuevo
+`POST /agente/descartar` (`{token}`, mismo permiso): baja una ficha sin guardar nada.
+
+## [2026-08-22] — Links de invitación "sin límite de usos" en `/accesos`
+
+**Archivos**: `accesos.py`, `templates/accesos/{panel,canjear}.html`
+
+`invitaciones` suma la columna `multiuso` (migración aditiva en `init_db()`); `crear_invitacion()`
+tiene el param nuevo `multiuso=False`. Con él tildado, `canjear()` no quema el token: cualquiera que
+abra el link entra y queda como dispositivo aparte. "Un link = un dispositivo" ya no es siempre
+cierto — sólo para los links normales.
+
+## [2026-08-22] — Se saca `recursos.ubicacion`: la ubicación pasa a ser siempre `recurso_unidades`
+
+**Tipo**: contrato roto — columna eliminada, campos de tool removidos
+**Archivos**: `gestion.py`, `templates/gestion/{lista,detalle}.html`, `static/gestion.js`,
+`agente/tools/{esquemas,entidades}.py`, `agente/prompt.py`
+
+`recursos.ubicacion` se borra (`migrar()` reparte el valor viejo en `recurso_unidades` antes de
+tirarla). El listado y la ficha muestran siempre la lista agrupada por lugar (`lugares_por_recurso`/
+`lugares_recurso_agrupado`), nunca un campo simple. `crear_entidad`/`editar_entidad` ya no aceptan
+`ubicacion`: sólo `mover_ubicacion` la fija. Ver DECISIONS 2026-08-22.
+
+## [2026-08-22] — `recurso_ubicaciones` (agregado) → `recurso_unidades` (numerado por unidad)
+
+**Tipo**: contrato roto — tabla, rutas y params de tool renombrados/migrados
+**Archivos**: `gestion.py`, `templates/gestion/detalle.html`, `agente/tools/{ubicaciones,esquemas,__init__}.py`
+
+Rutas `/gestion/recursos/<id>/ubicaciones[/eliminar]` → `/unidades/{mover,quitar}`. Tool
+`mover_ubicacion` cambia de `(recurso, cantidad, origen?, destino)` a `(recurso, destino,
+numeros?, cantidad?, origen?)` — `destino` ahora obligatorio, `cantidad` opcional. Migración
+automática de datos existentes en `migrar()`. Ver DECISIONS 2026-08-22.
+
+---
+
 ## [2026-08-21] — Se saca `conjuntos`, `actividades` y préstamos/carrito de `/gestion`
 
 **Tipo**: contrato roto — desaparecen rutas, tools del agente y una entidad del schema

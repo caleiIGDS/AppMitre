@@ -26,7 +26,8 @@ from .padrones import _personas_nombradas_en
 from .proveedores import _get_config, _get_vision_config
 from .tools import ejecutar_tool
 from .tools.entidades import _vincular_entidad
-from .tools.fichas import _nombre_de
+from .tools.fichas import (_campos_para_editar, _campos_validos, _nombre_de,
+                           _normalizar_borrador, _token_ficha)
 
 # Endpoints que devuelven HTML. Sin sesión conviene mandarlos al login propio de /agente
 # (con `next` para volver acá), no un 401 pelado: entrar por link directo a /agente
@@ -605,11 +606,14 @@ def _confirmaciones(fichas):
         nombre = _nombre_de(slug, pendiente['campos'])
         singular = (_modulo(slug).ENTIDADES.get(slug, {}).get('singular') or 'registro').lower()
         fila = {'token': token, 'etiqueta': f'Guardar {singular}', 'nombre': nombre,
-                'estado': pendiente.get('estado', 'pendiente')}
+                'estado': pendiente.get('estado', 'pendiente'),
+                'campos': _campos_para_editar(slug, pendiente['campos'])}
         if pendiente.get('nota'):
             fila['nota'] = pendiente['nota']
         if pendiente.get('foto'):
             fila['foto'] = pendiente['foto']
+        if pendiente['campos'].get('_sub_recursos'):
+            fila['sub_recursos'] = pendiente['campos']['_sub_recursos']
         por_entidad[_identidad_ficha(pendiente)] = fila
     # Ordenadas por número de foto: el usuario las mandó en ese orden y las revisa mirando
     # el chat, donde las miniaturas están en esa misma secuencia.
@@ -812,6 +816,38 @@ def confirmar():
                     'tools': [{'tool': 'crear_entidad', 'ok': ok}]})
 
 
+@bp.route('/descartar', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
+def descartar():
+    """Descarta UNA ficha pendiente desde su botón. No guarda nada ni pasa por el modelo.
+
+    Es el "cancelar" del circuito de una sola ficha: `/lote` ya tiene su "✕ no va" por fila,
+    pero acá no hay lote que cerrar — sin esto la única forma de bajar una ficha que no se
+    quiere era dejarla pendiente para siempre (hasta que la desplazara el tope FICHAS_MAX).
+
+    Mismo permiso que `/confirmar`: no escribe en el inventario, pero sí borra la foto
+    pendiente si la ficha tenía una.
+    """
+    token = (request.get_json() or {}).get('token', '')
+    conv = _conv_cargar()
+    fichas = dict(conv['fichas'])
+
+    if token not in fichas:
+        return jsonify({'ok': False,
+                        'respuesta': 'Esa ficha ya no está pendiente.'}), 409
+
+    pendiente = fichas.pop(token)
+    slug = pendiente['slug']
+    nombre = _nombre_de(slug, pendiente['campos'])
+    _foto_lote_tomar(pendiente.get('foto'))
+    _cerrar_lote(fichas)
+
+    respuesta = f"🗑️ Descarté: **{nombre}**. No se guardó nada."
+    _turno_de_botones(conv, f'(cancelé con el botón el alta de: {nombre})', respuesta, fichas)
+
+    return jsonify({'ok': True, 'respuesta': respuesta, 'confirmaciones': _confirmaciones(fichas)})
+
+
 ESTADOS_REVISION = ('pendiente', 'ok', 'observada', 'descartada')
 
 
@@ -859,6 +895,60 @@ def revisar():
     # nada que no vaya a leer después, ya resumido, en el mensaje de /lote.
     _conv_guardar(conv['historial'], conv['entidad_actual'], fichas)
     return jsonify({'ok': True, 'confirmaciones': _confirmaciones(fichas)})
+
+
+@bp.route('/editar_ficha', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
+def editar_ficha():
+    """Aplica en la tarjeta del chat una edición manual de una ficha pendiente. NO escribe nada.
+
+    El usuario corrige el campo ahí mismo en vez de pedírselo al asistente por chat. El token
+    es un hash del CONTENIDO de la ficha (ver fichas._token_ficha): cambiar un campo cambia el
+    token, así que acá se recalcula y la entrada vieja se reemplaza por la nueva bajo su token
+    nuevo — lo mismo que pasa cuando el modelo rearma una ficha, pero sin pasar por el LLM. Es
+    lo que hace que `/confirmar` siga guardando exactamente lo que el usuario tiene en pantalla.
+
+    El estado de revisión del lote vuelve a 'pendiente': el contenido cambió, así que una ficha
+    que ya estaba marcada ✅ tiene que volver a aprobarse.
+
+    Mismo permiso que `/revisar`: no toca el dominio, pero es el circuito de alta.
+    """
+    data = request.get_json() or {}
+    token = data.get('token', '')
+    campos_editados = data.get('campos') or {}
+
+    conv = _conv_cargar()
+    fichas = dict(conv['fichas'])
+    if token not in fichas:
+        return jsonify({'ok': False,
+                        'respuesta': 'Esa ficha ya no está pendiente. Pedile al asistente que '
+                                     'la vuelva a armar.'}), 409
+
+    pendiente = dict(fichas[token])
+    slug = pendiente['slug']
+    validos = set(_campos_validos(slug))
+    nuevos = dict(pendiente['campos'])
+    for nombre, valor in campos_editados.items():
+        if nombre in validos:
+            nuevos[nombre] = valor
+    borrador = _normalizar_borrador(slug, nuevos)
+
+    campo_nombre = crud.campo_nombre(_modulo(slug).ENTIDADES[slug])
+    if not borrador.get(campo_nombre):
+        return jsonify({'ok': False, 'error': f'El campo "{campo_nombre}" no puede quedar '
+                                              'vacío.'}), 400
+
+    nuevo_token = _token_ficha(slug, borrador)
+    pendiente['campos'] = borrador
+    pendiente['estado'] = 'pendiente'
+    pendiente.pop('nota', None)
+
+    if nuevo_token != token:
+        fichas.pop(token, None)
+    fichas[nuevo_token] = pendiente
+
+    _conv_guardar(conv['historial'], conv['entidad_actual'], fichas)
+    return jsonify({'ok': True, 'token': nuevo_token, 'confirmaciones': _confirmaciones(fichas)})
 
 
 def _mensaje_correcciones(guardados, descartados, observadas):

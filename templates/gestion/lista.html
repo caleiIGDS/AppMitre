@@ -1,1 +1,141 @@
+{# Recursos tiene su propio listado (rediseño de diseño importado); cualquier otra
+   entidad futura del área sigue con el genérico de templates/crud/lista.html. #}
 {% extends 'crud/lista.html' %}
+{% block contenido %}
+{% if slug != 'recursos' %}
+{{ super() }}
+{% else %}
+<div class="g-panel-top">
+    <div class="g-toolbar">
+        <div style="display: flex; align-items: baseline; gap: 12px;">
+            <h2>{{ cfg.plural | upper }}</h2>
+            <span class="g-fichas-count">{{ filas | rejectattr('estado', 'equalto', 'Dado de baja') | list | length }} FICHAS</span>
+        </div>
+        <div class="g-toolbar-actions">
+            <form method="get" class="g-search g-search-mini" action="{{ url_for(area_nombre ~ '.lista', slug=slug) }}">
+                <span class="g-search-arrow" aria-hidden="true">&gt;</span>
+                <input type="text" name="q" value="{{ q }}" placeholder="NOMBRE, TIPO O UBICACIÓN…">
+                <button type="submit">BUSCAR</button>
+            </form>
+            {% if puede(permiso_escritura) %}
+            <a class="g-btn" href="{{ url_for(area_nombre ~ '.nuevo', slug=slug) }}">+ CREAR {{ cfg.singular | upper }}</a>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if filas %}
+    {# Filtros client-side (gestion.js): combinan con la búsqueda de arriba sobre las filas
+       ya renderizadas, sin ir al servidor. Sin JS quedan visibles pero inertes: la búsqueda
+       por texto sigue funcionando server-side igual que en cualquier otro listado. #}
+    <div class="g-filtros">
+        <span class="g-filtros-label">Filtros</span>
+        {% if lugares_filtro %}
+        <select class="g-filtro-select" id="filtro-ubicacion">
+            <option value="">Ubicación: todas</option>
+            {% for lugar in lugares_filtro %}
+            <option value="{{ lugar }}">{{ lugar }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+        <span class="g-filtro-spacer"></span>
+        <button type="button" class="g-chip-vencidos" id="filtro-vencidos" aria-pressed="false">
+            Sin revisar hace +6 meses <span id="filtro-vencidos-count">{{ vencidos_recurso | length }}</span>
+        </button>
+        <button type="button" class="g-chip-vencidos" id="filtro-baja" aria-pressed="false">
+            Mostrar dados de baja
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+{% if filas %}
+<div class="g-table-wrap">
+    <table class="g-table">
+        <thead>
+            <tr>
+                <th>RECURSO</th>
+                <th>CANT.</th>
+                <th>LUGAR ASIGNADO</th>
+                <th>ESTADO</th>
+            </tr>
+        </thead>
+        <tbody>
+            {# La fila entera lleva al detalle (data-href + el script de gestion.js), mismo
+               patrón que /salidas. Sin JS sigue funcionando desde el nombre del recurso. #}
+            {% for fila in filas %}
+            <tr data-buscar="{{ buscar[fila['id']] }}"
+                data-ubicacion="|{{ ubicaciones_recurso[fila['id']] | map(attribute='ubicacion') | join('|') }}|"
+                data-vencido="{{ '1' if fila['id'] in vencidos_recurso else '0' }}"
+                data-href="{{ url_for(area_nombre ~ '.detalle', slug=slug, id=fila['id']) }}"
+                {{ 'hidden' if fila['estado'] == 'Dado de baja' }}
+                class="{{ 'g-recurso-baja' if fila['estado'] == 'Dado de baja' }}">
+                <td data-label="RECURSO">
+                    <a class="g-item-link" href="{{ url_for(area_nombre ~ '.detalle', slug=slug, id=fila['id']) }}">{{ fila['nombre'] }}</a>
+                    {%- if fila['id'] in via_alias %}<span class="g-tag-alias">· por alias</span>{% endif -%}
+                    {%- if fila['tipo'] %}<span class="g-recurso-sub">{{ fila['tipo'] }}</span>{% endif -%}
+                </td>
+                <td data-label="CANT.">{{ fila['cantidad'] }}</td>
+                <td data-label="LUGAR ASIGNADO">
+                    {%- set grupos = ubicaciones_recurso[fila['id']] -%}
+                    {%- if grupos | length > 1 -%}
+                    <div class="g-lugares-multi">
+                        {%- for g in grupos %}
+                        <span class="g-lugar-item">{{ g['cantidad'] }} x {{ g['ubicacion'] }}</span>
+                        {%- endfor %}
+                    </div>
+                    {%- else -%}
+                    {{ grupos[0]['ubicacion'] if grupos else '' }}
+                    {%- endif -%}
+                </td>
+                <td data-label="ESTADO">{%- if fila['estado'] -%}<span class="g-badge">{{ fila['estado'] }}</span>{%- endif -%}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% elif not extra_filas %}
+<div class="g-empty">
+    {% if q %}
+    <p>No se encontraron recursos para "{{ q }}".</p>
+    {% else %}
+    <p>Todavía no hay recursos cargados.</p>
+    {% if puede(permiso_escritura) %}
+    <a class="g-btn" href="{{ url_for(area_nombre ~ '.nuevo', slug=slug) }}">+ CREAR EL PRIMERO</a>
+    {% endif %}
+    {% endif %}
+</div>
+{% endif %}
+
+{% if extra_filas %}
+{# Sub-recursos de kits que matchean la búsqueda: el listado principal nunca los muestra
+   sueltos sin buscar (ver crud.py::lista, hook `resultados_extra_busqueda`). #}
+<div class="g-panel-top" style="margin-top: 24px;">
+    <h3>SUB-RECURSOS DE KITS</h3>
+</div>
+<div class="g-table-wrap">
+    <table class="g-table">
+        <thead>
+            <tr>
+                <th>SUB-RECURSO</th>
+                <th>CANT.</th>
+                <th>RECURSO ASIGNADO</th>
+                <th>KIT</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in extra_filas %}
+            <tr data-href="{{ url_for(area_nombre ~ '.detalle', slug='recursos', id=item['kit_id']) }}">
+                <td data-label="SUB-RECURSO">{{ item['titulo'] }}</td>
+                <td data-label="CANT.">{{ item['cantidad'] }}</td>
+                <td data-label="RECURSO ASIGNADO">{{ item['recurso_asignado'] }}</td>
+                <td data-label="KIT">
+                    <a class="g-item-link" href="{{ url_for(area_nombre ~ '.detalle', slug='recursos', id=item['kit_id']) }}">{{ item['kit_nombre'] }}</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

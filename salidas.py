@@ -41,9 +41,14 @@ DB_PATH = os.path.join(_AQUI, 'salidas.db')
 PDF_DIR = os.path.join(_AQUI, 'salidas_pdfs')
 ANEXOS_JSON_DIR = os.path.join(_AQUI, 'Salidas')
 
+# Piloto: verbo 'admin' (no 'leer'/'escribir') mientras el área está en desarrollo — ese
+# verbo no entra en ningún preset de invitación (ver PERFILES en accesos.py), así que sólo
+# lo tiene quien entra con comodín '*' (admin real o dispositivo con perfil 'admin'). El
+# link de nav ya está atrás de `puede('salidas.leer')`, así que se oculta solo. Volver a
+# 'leer'/'escribir' cuando el área esté lista para el resto de los dispositivos internos.
 PERMISOS = [
-    ('salidas.leer', 'Ver las salidas guardadas y sus PDF', 'leer'),
-    ('salidas.editar', 'Cargar y guardar salidas nuevas', 'escribir'),
+    ('salidas.leer', 'Ver las salidas guardadas y sus PDF', 'admin'),
+    ('salidas.editar', 'Cargar y guardar salidas nuevas', 'admin'),
 ]
 GRUPO_PERMISOS = 'Salidas educativas'
 PERMISO_LECTURA = 'salidas.leer'

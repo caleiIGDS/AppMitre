@@ -190,22 +190,21 @@ body {
     background: #d1d5db;
     border: 1px solid #9ca3af;
     color: var(--g-dark);
-    padding: 9px 18px;
+    padding: 8px 15px;
     font-family: var(--g-font);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: bold;
     text-decoration: none;
-    letter-spacing: 1px;
-    clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px);
+    clip-path: polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%);
+    transition: all 0.2s;
 }
 
-.g-nav-tag:hover { background: #e5e7eb; }
+.g-nav-tag:hover { background: var(--g-primary); color: white; }
 
 .g-nav-tag.active {
-    background: var(--g-primary);
-    border-color: var(--g-primary);
+    background: var(--g-accent);
+    border-color: var(--g-accent);
     color: white;
-    border-bottom: 3px solid var(--g-accent);
 }
 
 /* ---------- Layout general ---------- */
@@ -709,7 +708,6 @@ body {
     height: 560px;
     background: var(--g-surface);
     border: 2px solid var(--g-primary);
-    border-radius: 12px;
     display: flex;
     flex-direction: column;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
@@ -734,32 +732,33 @@ body {
 }
 
 .agente-widget-header {
-    background: linear-gradient(135deg, var(--g-primary) 0%, #0d1f3c 100%);
+    background: var(--g-primary);
     color: white;
-    padding: 16px;
+    padding: 10px 12px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-radius: 10px 10px 0 0;
-    border-bottom: 3px solid var(--g-accent);
+    border-bottom: 4px solid var(--g-accent);
 }
 
 .agente-widget-title {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-weight: 600;
-    font-size: 15px;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
 }
 
-.agente-title-icon {
-    font-size: 20px;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
+/* Reemplaza el 🤖 pulsante: un cuadro sólido, como el resto de los indicadores de estado
+   del sistema (ver el punto de "En Curso" del dashboard de horarios). */
+.agente-title-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--g-accent);
+    display: block;
+    flex-shrink: 0;
 }
 
 .agente-widget-actions {
@@ -769,47 +768,43 @@ body {
 }
 
 .agente-expand-btn {
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.45);
     color: white;
-    font-size: 15px;
+    font-size: 13px;
     text-decoration: none;
     padding: 4px 8px;
     line-height: 1;
-    border-radius: 4px;
     transition: all 0.2s;
 }
 
 .agente-expand-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-    transform: scale(1.1);
+    background: var(--g-accent);
+    border-color: var(--g-accent);
 }
 
 .agente-close-btn,
 .agente-reset-btn {
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.45);
     color: white;
-    font-size: 16px;
+    font-family: var(--g-font);
+    font-size: 13px;
+    font-weight: 700;
     cursor: pointer;
     padding: 4px 8px;
     line-height: 1;
-    border-radius: 4px;
     transition: all 0.2s;
 }
 
 .agente-close-btn {
-    font-size: 18px;
+    font-size: 15px;
 }
 
 .agente-close-btn:hover,
 .agente-reset-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-    transform: scale(1.1);
-}
-
-.agente-reset-btn:hover {
-    transform: scale(1.1) rotate(-90deg);
+    background: var(--g-accent);
+    border-color: var(--g-accent);
 }
 
 .agente-messages {
@@ -818,8 +813,12 @@ body {
     padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    background: #f8f9fa;
+    gap: 16px;
+    background: var(--g-bg);
+    background-image:
+        linear-gradient(rgba(26, 54, 93, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(26, 54, 93, 0.08) 1px, transparent 1px);
+    background-size: 20px 20px;
 }
 
 .agente-messages::-webkit-scrollbar {
@@ -844,15 +843,18 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    padding: 20px;
+    gap: 10px;
+    padding: 16px;
     text-align: center;
     color: var(--g-muted);
+    border: 1px dashed var(--g-border);
+    background: rgba(255, 255, 255, 0.7);
 }
 
 .agente-welcome-icon {
-    font-size: 40px;
-    opacity: 0.8;
+    width: 8px;
+    height: 8px;
+    background: var(--g-accent);
 }
 
 .agente-welcome-text {
@@ -862,11 +864,45 @@ body {
 
 .agente-welcome-text strong {
     color: var(--g-primary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 11px;
+}
+
+/* Etiqueta de rol + hora arriba de cada mensaje: "registro de bitácora", no un globito de
+   chat genérico. Ver agregarMensaje() en gestion-agente.js. */
+.agente-message-meta {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--g-muted);
+    padding: 0 2px;
+}
+
+.agente-message-wrap.is-assistant .agente-message-meta {
+    color: var(--g-primary);
+}
+
+.agente-message-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    max-width: 92%;
+}
+
+.agente-message-wrap.is-user {
+    align-self: flex-end;
+    align-items: flex-end;
+    max-width: 72%;
+}
+
+.agente-message-wrap.is-assistant {
+    align-self: flex-start;
 }
 
 .agente-message {
     padding: 10px 12px;
-    border-radius: 8px;
     font-size: 13px;
     line-height: 1.5;
     word-wrap: break-word;
@@ -887,10 +923,9 @@ body {
 .agente-message-user {
     background: var(--g-primary);
     color: white;
+    border: 2px solid var(--g-primary);
     align-self: flex-end;
-    max-width: 85%;
-    border-radius: 8px 2px 8px 8px;
-    box-shadow: 0 2px 4px rgba(26, 54, 93, 0.2);
+    max-width: 100%;
 }
 
 .agente-message-user a {
@@ -918,9 +953,9 @@ body {
     background: white;
     color: var(--g-dark);
     border: 1px solid var(--g-border);
+    border-left: 4px solid var(--g-primary);
     align-self: flex-start;
-    max-width: 96%;
-    border-radius: 2px 8px 8px 8px;
+    max-width: 100%;
 }
 
 .agente-message-assistant p {
@@ -1001,9 +1036,9 @@ body {
     background: #fee2e2;
     color: #991b1b;
     border: 1px solid #fca5a5;
+    border-left: 4px solid var(--g-alert);
     align-self: flex-start;
-    max-width: 85%;
-    border-radius: 2px 8px 8px 8px;
+    max-width: 100%;
 }
 
 .agente-message-loading {
@@ -1012,23 +1047,27 @@ body {
     align-self: flex-start;
     max-width: 85%;
     border: 1px solid var(--g-border);
-    border-radius: 2px 8px 8px 8px;
+    border-left: 4px solid var(--g-primary);
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--g-muted);
 }
 
 .agente-loader {
     display: inline-flex;
-    gap: 3px;
+    gap: 4px;
 }
 
 .agente-loader span {
-    width: 4px;
-    height: 4px;
-    background: var(--g-muted);
-    border-radius: 50%;
-    animation: bounce 1.4s infinite;
+    width: 7px;
+    height: 7px;
+    background: var(--g-accent);
+    animation: agenteBlk 1.2s infinite;
 }
 
 .agente-loader span:nth-child(2) {
@@ -1039,33 +1078,27 @@ body {
     animation-delay: 0.4s;
 }
 
-@keyframes bounce {
-    0%, 80%, 100% {
-        opacity: 0.5;
-        transform: translateY(0);
-    }
-    40% {
-        opacity: 1;
-        transform: translateY(-6px);
-    }
+@keyframes agenteBlk {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.15; }
 }
 
 .agente-input-area {
-    border-top: 1px solid var(--g-border);
+    border-top: 2px solid var(--g-primary);
     padding: 12px;
     background: white;
-    border-radius: 0 0 10px 10px;
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
 .agente-image-preview {
-    font-size: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
     color: #16a34a;
     padding: 2px 6px;
     background: #dcfce7;
-    border-radius: 3px;
     display: none;
 }
 
@@ -1075,43 +1108,54 @@ body {
 
 .agente-input-row {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    align-items: stretch;
+    gap: 0;
     background: white;
-    border: 1px solid var(--g-border);
-    border-radius: 14px;
-    padding: 6px;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    border: 2px solid var(--g-border);
+    transition: border-color 0.2s;
 }
 
 .agente-input-row:focus-within {
     border-color: var(--g-primary);
-    box-shadow: 0 0 0 2px rgba(26, 54, 93, 0.1);
+}
+
+.agente-prompt {
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    color: var(--g-accent);
+    font-size: 15px;
+    font-weight: 700;
+    border-right: 1px solid var(--g-border);
+    flex-shrink: 0;
 }
 
 .agente-toolbar-btn {
-    padding: 0;
-    background: #f1f5f9;
+    padding: 0 12px;
+    background: transparent;
+    color: var(--g-primary);
     border: none;
-    border-radius: 8px;
+    border-left: 1px solid var(--g-border);
     cursor: pointer;
-    font-size: 16px;
+    font-family: var(--g-font);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
     transition: background 0.2s;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
     flex-shrink: 0;
 }
 
 .agente-toolbar-btn:hover {
-    background: #e2e8f0;
+    background: var(--g-bg);
 }
 
 .agente-input {
     flex: 1;
-    padding: 7px 4px;
+    padding: 9px 8px;
     border: none;
     background: transparent;
     font-family: var(--g-font);
@@ -1131,27 +1175,27 @@ body {
 }
 
 .agente-send-btn {
-    padding: 0;
+    padding: 0 16px;
     background: var(--g-primary);
     color: white;
     border: none;
-    border-radius: 8px;
     cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
+    font-family: var(--g-font);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
     line-height: 1;
-    transition: all 0.2s;
+    transition: background 0.2s;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
+    gap: 4px;
     flex-shrink: 0;
 }
 
 .agente-send-btn:hover:not(:disabled) {
-    background: #0d1f3c;
-    box-shadow: 0 2px 8px rgba(26, 54, 93, 0.3);
+    background: var(--g-accent);
 }
 
 .agente-send-btn:disabled {
@@ -1164,21 +1208,36 @@ body {
 }
 
 .agente-footer {
-    text-align: center;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
     padding-top: 4px;
-    border-top: 1px solid #f0f0f0;
+    font-size: 10px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--g-muted);
+}
+
+.agente-footer-hint {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .agente-footer-link {
-    font-size: 11px;
+    font-size: 10px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
     color: var(--g-primary);
     text-decoration: none;
+    border-bottom: 1px solid var(--g-accent);
+    white-space: nowrap;
     transition: color 0.2s;
 }
 
 .agente-footer-link:hover {
     color: var(--g-accent);
-    text-decoration: underline;
 }
 
 /* ---------- Galería de fotos ---------- */
@@ -1427,7 +1486,7 @@ body.g-sin-scroll {
 }
 
 /* ---------- Botón de confirmar alta ---------- */
-/* Aparece debajo del mensaje con la ficha; el alta se confirma tocándolo, no
+/* Aparece antes del mensaje con la ficha; el alta se confirma tocándolo, no
    escribiendo "sí". Ver agregarConfirmacion() en gestion-agente.js. */
 
 .agente-confirm {
@@ -1439,11 +1498,19 @@ body.g-sin-scroll {
     animation: fadeIn 0.3s ease-in;
 }
 
+/* Con UNA sola ficha, la caja no ocupa todo el ancho del chat — así se lee como una tarjeta
+   más del asistente (mismo criterio que .agente-message-wrap.is-assistant) y no como un
+   formulario aparte. El lote (:not acá) sigue ocupando todo el ancho: tiene varias filas y
+   sus propios botones de estado, no es una tarjeta suelta. */
+.agente-confirm:not(.agente-confirm-lote) {
+    align-self: flex-start;
+    width: 92%;
+}
+
 .agente-confirm-btn {
     background: #16a34a;
     color: white;
     border: none;
-    border-radius: 6px;
     padding: 11px 18px;
     font-family: var(--g-font);
     font-size: 14px;
@@ -1472,6 +1539,129 @@ body.g-sin-scroll {
     padding-left: 2px;
 }
 
+/* Aceptar a la izquierda, cancelar a la derecha (orden de inserción en el DOM). */
+.agente-confirm-botones {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+
+.agente-confirm-botones .agente-confirm-btn {
+    flex: 1 1 auto;
+}
+
+.agente-confirm-cancelar-btn {
+    flex: 0 0 auto;
+    background: transparent;
+    color: var(--g-muted);
+    border: 1px solid var(--g-border);
+    padding: 11px 16px;
+    font-family: var(--g-font);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 44px;
+    transition: all 0.2s;
+}
+
+.agente-confirm-cancelar-btn:hover:not(:disabled) {
+    border-color: #DC2626;
+    color: #DC2626;
+}
+
+.agente-confirm-cancelar-btn:disabled {
+    opacity: 0.6;
+    cursor: progress;
+}
+
+/* ---------- Tarjeta editable de una ficha de alta ---------- */
+/* La ficha ya no es prosa del asistente: es esta tarjeta, con un input por campo. Editar
+   dispara /agente/editar_ficha al perder el foco (ver tarjetaFicha() en gestion-agente.js).
+   El texto va al mismo tamaño que .agente-message: es contenido del chat, no un formulario
+   aparte. La excepción es el input en mobile (ver el media query de abajo): ahí SÍ tiene
+   que ser 16px o iOS hace zoom al enfocar, mismo motivo que .agente-input. */
+
+.agente-ficha {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    align-self: stretch;
+    padding: 8px;
+    border: 1px solid var(--g-border);
+    border-top: 3px solid var(--g-accent);
+    background: var(--g-surface);
+}
+
+.agente-ficha-campo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.agente-ficha-campo.is-redactado {
+    border-left: 2px solid var(--g-accent);
+    padding-left: 6px;
+    margin-left: -6px;
+}
+
+.agente-ficha-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--g-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.agente-ficha-tag {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--g-accent);
+    border: 1px solid var(--g-accent);
+    padding: 0 5px;
+}
+
+.agente-ficha-input {
+    width: 100%;
+    min-height: 30px;
+    padding: 5px 7px;
+    border: 1px solid var(--g-border);
+    font-family: var(--g-font);
+    font-size: 13px;
+    background: var(--g-bg);
+    color: var(--g-dark);
+}
+
+textarea.agente-ficha-input {
+    min-height: 44px;
+    resize: vertical;
+}
+
+.agente-ficha-input:focus {
+    outline: none;
+    border-color: var(--g-primary);
+}
+
+.agente-ficha-subrecursos {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: 6px;
+    border-top: 1px solid var(--g-border);
+}
+
+.agente-ficha-subrecursos ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 13px;
+    color: var(--g-dark);
+}
+
 /* ---------- Revisión en lote ---------- */
 /* Con dos o más fichas pendientes, en vez del botón que guarda al toque va una fila por
    ficha (está bien / corregir / no va) y un botón al final que recién ahí escribe todo.
@@ -1484,7 +1674,6 @@ body.g-sin-scroll {
     border-left: 3px solid var(--g-primary);
     padding: 10px 0 10px 10px;
     background: var(--g-bg);
-    border-radius: 0 6px 6px 0;
 }
 
 .agente-revision {
@@ -1495,7 +1684,6 @@ body.g-sin-scroll {
     padding: 8px 10px 8px 8px;
     border: 1px solid var(--g-border);
     border-left: 3px solid var(--g-border);
-    border-radius: 4px;
     background: var(--g-surface);
 }
 
@@ -1532,7 +1720,6 @@ body.g-sin-scroll {
     min-height: 44px;
     padding: 8px 10px;
     border: 1px solid var(--g-border);
-    border-radius: 6px;
     background: transparent;
     color: var(--g-muted);
     font-family: var(--g-font);
@@ -1566,7 +1753,6 @@ body.g-sin-scroll {
     min-height: 44px;
     padding: 8px 10px;
     border: 1px solid var(--g-border);
-    border-radius: 6px;
     font-family: var(--g-font);
     /* 16px o iOS hace zoom al enfocar y descuadra el chat (misma razón que .agente-input) */
     font-size: 16px;
@@ -1578,7 +1764,6 @@ body.g-sin-scroll {
     min-height: 44px;
     padding: 8px 14px;
     border: none;
-    border-radius: 6px;
     background: var(--g-primary);
     color: #fff;
     font-family: var(--g-font);
@@ -1599,7 +1784,6 @@ body.g-sin-scroll {
     background: #16a34a;
     color: white;
     border: none;
-    border-radius: 6px;
     padding: 12px 20px;
     font-family: var(--g-font);
     font-size: 14px;
@@ -1673,22 +1857,20 @@ body.g-sin-scroll {
     flex-direction: column;
     background: var(--g-surface);
     border: 2px solid var(--g-primary);
-    border-radius: 10px;
     overflow: hidden;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     /* En desktop es un panel alto dentro del layout normal; en mobile pasa a
        ocupar toda la pantalla (ver la media query de abajo). */
     height: min(72vh, 700px);
 }
 
 .agente-page-bar {
-    background: linear-gradient(135deg, var(--g-primary) 0%, #0d1f3c 100%);
+    background: var(--g-primary);
     color: white;
-    padding: 12px 16px;
+    padding: 10px 16px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 3px solid var(--g-accent);
+    border-bottom: 4px solid var(--g-accent);
     flex-shrink: 0;
 }
 
@@ -1696,12 +1878,10 @@ body.g-sin-scroll {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-weight: 600;
-    font-size: 15px;
-}
-
-.agente-page .agente-input-area {
-    border-radius: 0;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
 }
 
 /* ---------- Chat en celular: pantalla completa, input siempre visible ---------- */
@@ -1739,7 +1919,6 @@ body.g-sin-scroll {
         min-height: 0;
         border-width: 1px;
         border-bottom: none;
-        border-radius: 8px 8px 0 0;
     }
 
     /* Header y footer comen pantalla que acá vale oro. */
@@ -1773,32 +1952,29 @@ body.g-sin-scroll {
         right: 10px;
         left: 10px;
         max-width: 100%;
-        border-radius: 8px;
     }
 
     .agente-messages {
         padding: 12px;
-        gap: 10px;
+        gap: 12px;
     }
 
     .agente-message {
         font-size: 14px;
     }
 
-    .agente-message-user,
-    .agente-message-assistant {
-        max-width: 92%;
+    .agente-message-wrap {
+        max-width: 96%;
+    }
+
+    .agente-message-wrap.is-user {
+        max-width: 88%;
     }
 
     .agente-input-area {
         padding: 10px;
         /* Barra gestual del iPhone: sin esto el botón de enviar queda abajo de ella. */
         padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-    }
-
-    .agente-input-row {
-        padding: 8px;
-        border-radius: 16px;
     }
 
     .agente-input {
@@ -1810,16 +1986,21 @@ body.g-sin-scroll {
         padding: 10px 6px;
     }
 
+    /* Mismo motivo que .agente-input de arriba: en mobile el input de la tarjeta editable
+       necesita 16px sí o sí, aunque en desktop vaya al tamaño de .agente-message. */
+    .agente-ficha-input {
+        font-size: 16px;
+        min-height: 44px;
+    }
+
     /* Objetivos táctiles de 44px, que es el mínimo usable con el dedo. */
     .agente-send-btn {
-        width: 44px;
-        height: 44px;
-        font-size: 18px;
+        min-height: 44px;
+        font-size: 13px;
     }
 
     .agente-toolbar-btn {
-        width: 44px;
-        height: 44px;
+        min-height: 44px;
     }
 
     .agente-reset-btn,
@@ -2302,6 +2483,138 @@ body.g-sidebar-abierto { overflow: hidden; }
 
     .g-table .g-td-actions .g-link { margin: 0; }
 }
+
+/* ---------- Listado de recursos (rediseño) ---------- */
+/* Sólo /gestion/recursos usa estas clases (templates/gestion/lista.html); el resto de
+   los listados sigue con .g-count/.g-search de siempre. */
+
+/* Encierra toolbar + filtros en la misma tarjeta que .g-table-wrap: mismo fondo y
+   mismo borde, para que se lean como dos bloques separados y no como un solo div. */
+.g-panel-top {
+    position: relative;
+    z-index: 1;
+    background: var(--g-surface);
+    border: 2px solid var(--g-primary);
+    border-bottom: none;
+    padding: 18px 20px;
+    margin-bottom: -1px;
+}
+
+.g-panel-top .g-filtros { margin-bottom: 0; }
+
+.g-panel-top + .g-table-wrap .g-item-link { border-bottom: none; }
+
+.g-fichas-count {
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--g-muted);
+    white-space: nowrap;
+}
+
+/* Caja con flecha alrededor del input de búsqueda: modificador de .g-search, no lo
+   reemplaza (gestion.js sigue enganchando por `.g-search input[name="q"]`). */
+.g-search-mini {
+    border: 2px solid var(--g-border);
+    padding-left: 10px;
+    gap: 0;
+}
+
+.g-search-mini:focus-within { border-color: var(--g-primary); }
+
+.g-search-mini .g-search-arrow {
+    display: flex;
+    align-items: center;
+    color: var(--g-accent);
+    font-weight: bold;
+}
+
+.g-search-mini input {
+    border: none;
+    padding: 9px 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.g-search-mini input:focus { border: none; }
+
+.g-filtros {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    border-top: 1px dashed var(--g-border);
+    padding-top: 12px;
+    margin: -8px 0 16px;
+}
+
+.g-filtros-label {
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--g-muted);
+    margin-right: 4px;
+    white-space: nowrap;
+}
+
+.g-filtro-select {
+    font-family: var(--g-font);
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 5px 8px;
+    border: 1px solid var(--g-border);
+    background: var(--g-surface);
+    color: var(--g-primary);
+}
+
+.g-filtro-spacer { flex: 1; }
+
+.g-chip-vencidos {
+    background: var(--g-surface);
+    border: 1px dashed var(--g-accent);
+    color: var(--g-accent);
+    font-family: var(--g-font);
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 5px 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+}
+
+.g-chip-vencidos:hover { background: rgba(217, 122, 52, 0.08); }
+
+.g-chip-vencidos[aria-pressed="true"] {
+    background: var(--g-accent);
+    border-style: solid;
+    color: white;
+}
+
+/* Línea secundaria bajo el nombre del recurso: tipo. */
+.g-recurso-sub {
+    display: inline;
+    font-size: 11px;
+    color: var(--g-muted);
+    margin-left: 6px;
+}
+
+.g-lugares-multi {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.g-lugar-item {
+    font-size: 11px;
+}
+
+.g-recurso-baja { opacity: 0.55; }
+.g-recurso-baja .g-item-link { text-decoration: line-through; }
 
 /* Celulares angostos: el header entra en una sola línea (logo + nombre + ☰). */
 @media (max-width: 420px) {

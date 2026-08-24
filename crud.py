@@ -26,6 +26,7 @@ concreta entra por un **hook opcional**, nunca por un `if slug == '...'` acá ad
       migrar(cur)                     ALTERs aditivos para DBs viejas
       seed(cur)                       datos de ejemplo en instalación nueva
       secciones_detalle(slug, id, cur)  relaciones a mostrar en el detalle
+      resultados_extra_busqueda(slug, q, cur)  filas extra para el listado cuando hay `q`
       derivados(slug, valores)        columnas calculadas al guardar (no van en 'campos')
       valores_iniciales(slug)         defaults del form de alta
       extras_template(vista, slug)    kwargs extra para render_template
@@ -542,7 +543,6 @@ def registrar_rutas(bp, area):
         con = conectar(area)
         cur = con.cursor()
         filas = cur.execute(f"{select(cfg_ent)} ORDER BY nombre COLLATE NOCASE").fetchall()
-        con.close()
         campo_al = campo_alias(cfg_ent)
         via_alias = set()
         if q:
@@ -575,9 +575,17 @@ def registrar_rutas(bp, area):
                 base += f" {fila[campo_al]}"
             return texto.norm(base)
         buscar = {fila['id']: _texto_buscar(fila) for fila in filas}
+        # Filas que no son de esta entidad pero matchean la búsqueda (ej: sub-recursos de
+        # un kit): el hook decide qué son, el motor sólo las reenvía a la plantilla.
+        extra_filas = []
+        if q:
+            extra_hook = _hook(area, 'resultados_extra_busqueda')
+            if extra_hook:
+                extra_filas = extra_hook(slug, q, cur)
+        con.close()
         return render_template(f'{nombre}/lista.html', cfg=cfg_ent, slug=slug, filas=filas,
                                q=q, activo=slug, buscar=buscar, via_alias=via_alias,
-                               **_extras('lista', slug))
+                               extra_filas=extra_filas, **_extras('lista', slug))
 
     @bp.route('/<slug>/nuevo', methods=['GET', 'POST'])
     @accesos.requiere(escritura)

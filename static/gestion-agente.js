@@ -108,9 +108,9 @@ document.addEventListener('DOMContentLoaded', function() {
           loteAbierto = [];
           messagesDiv.innerHTML = `
             <div class="agente-welcome">
-              <div class="agente-welcome-icon">🤖</div>
+              <span class="agente-welcome-icon" aria-hidden="true"></span>
               <div class="agente-welcome-text">
-                <strong>¡Hola!</strong><br>
+                <strong>Asistente en línea</strong><br>
                 Preguntá sobre horarios, recursos, historia de la escuela o cualquier otra cosa.
               </div>
             </div>`;
@@ -331,19 +331,19 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(data => {
         // Remover loader
         const loader = messagesDiv.querySelector('.agente-message-loading');
-        if (loader) loader.remove();
+        if (loader) (loader.closest('.agente-message-wrap') || loader).remove();
 
         if (data.error) {
           agregarMensaje('Error: ' + data.error, 'error');
         } else {
-          agregarMensaje(data.respuesta, 'assistant');
-          agregarConfirmaciones(data.confirmaciones);
+          const wrap = agregarMensaje(data.respuesta, 'assistant');
+          agregarConfirmaciones(data.confirmaciones, wrap);
         }
       })
       .catch(error => {
         // Remover loader
         const loader = messagesDiv.querySelector('.agente-message-loading');
-        if (loader) loader.remove();
+        if (loader) (loader.closest('.agente-message-wrap') || loader).remove();
 
         agregarMensaje('Error de conexión: ' + error.message, 'error');
       })
@@ -377,17 +377,56 @@ document.addEventListener('DOMContentLoaded', function() {
     this.style.height = Math.min(this.scrollHeight, tope) + 'px';
   });
 
+  // "Consulta · 10:04" / "Asistente · 10:04 · 2 fotos". Sólo para mensajes recién llegados:
+  // el historial no guarda la hora de cada turno, así que esos se repintan sin ella (ver
+  // cargarHistorial). Es cosmético — el registro con hora real, para auditoría, es
+  // agente_log — así que tomarla del reloj del navegador alcanza.
+  function etiquetaMeta(tipo, conHora, cantidadFotos) {
+    const rol = tipo === 'user' ? 'Consulta' : 'Asistente';
+    let etiqueta = rol;
+    if (conHora) {
+      const ahora = new Date();
+      const hh = String(ahora.getHours()).padStart(2, '0');
+      const mm = String(ahora.getMinutes()).padStart(2, '0');
+      etiqueta += ' · ' + hh + ':' + mm;
+    }
+    if (cantidadFotos === 1) etiqueta += ' · 1 foto';
+    else if (cantidadFotos > 1) etiqueta += ' · ' + cantidadFotos + ' fotos';
+    return etiqueta;
+  }
+
   // Agregar mensaje al chat. `imagenes` (opcional, solo mensajes del usuario) pinta las
   // fotos adjuntas como miniaturas, clickeables para verlas enteras. Acepta una sola URL
-  // suelta además de la lista, que es como la llama el historial viejo.
-  function agregarMensaje(texto, tipo, imagenes) {
-    const msgDiv = document.createElement('div');
+  // suelta además de la lista, que es como la llama el historial viejo. `conHora` es false
+  // al repintar el historial guardado, que no tiene la hora de cada turno.
+  function agregarMensaje(texto, tipo, imagenes, conHora) {
     const urls = !imagenes ? [] : (Array.isArray(imagenes) ? imagenes : [imagenes]);
 
     if (tipo === 'loading') {
+      const wrap = document.createElement('div');
+      wrap.className = 'agente-message-wrap is-assistant';
+      const meta = document.createElement('span');
+      meta.className = 'agente-message-meta';
+      meta.textContent = etiquetaMeta('assistant', conHora !== false);
+      const msgDiv = document.createElement('div');
       msgDiv.className = 'agente-message agente-message-loading';
       msgDiv.innerHTML = '<div class="agente-loader"><span></span><span></span><span></span></div><span class="agente-loader-texto">Pensando...</span>';
-    } else if (tipo === 'assistant') {
+      wrap.appendChild(meta);
+      wrap.appendChild(msgDiv);
+      messagesDiv.appendChild(wrap);
+      irAlFinal();
+      return;
+    }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'agente-message-wrap ' + (tipo === 'user' ? 'is-user' : 'is-assistant');
+    const meta = document.createElement('span');
+    meta.className = 'agente-message-meta';
+    meta.textContent = etiquetaMeta(tipo, conHora !== false, urls.length);
+    wrap.appendChild(meta);
+
+    const msgDiv = document.createElement('div');
+    if (tipo === 'assistant') {
       msgDiv.className = 'agente-message agente-message-' + tipo;
       msgDiv.innerHTML = renderMarkdown(texto);
     } else {
@@ -426,9 +465,11 @@ document.addEventListener('DOMContentLoaded', function() {
         msgDiv.appendChild(linea);
       }
     }
+    wrap.appendChild(msgDiv);
 
-    messagesDiv.appendChild(msgDiv);
+    messagesDiv.appendChild(wrap);
     irAlFinal();
+    return wrap;
   }
 
   // --- Botones de confirmar alta ---
@@ -486,10 +527,10 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(r => r.json().then(data => ({ ok: r.ok, data })))
         .then(({ data }) => {
           caja.remove();
-          agregarMensaje(data.respuesta || 'Sin respuesta', data.ok ? 'assistant' : 'error');
-          // Si quedaron altas sin guardar, vuelven a pintarse abajo del "✅ Guardado": si
-          // se quedaran arriba, el usuario no las ve y las da por hechas.
-          agregarConfirmaciones(data.confirmaciones);
+          const wrap = agregarMensaje(data.respuesta || 'Sin respuesta', data.ok ? 'assistant' : 'error');
+          // Si quedaron altas sin guardar, vuelven a pintarse ANTES del "✅ Guardado": si
+          // se quedaran abajo, el usuario no las ve y las da por hechas.
+          agregarConfirmaciones(data.confirmaciones, wrap);
           irAlFinal();
         })
         .catch(error => {
@@ -504,6 +545,175 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     return btn;
+  }
+
+  function botonCancelar(conf, caja) {
+    const btn = document.createElement('button');
+    btn.className = 'agente-confirm-cancelar-btn';
+    btn.textContent = '✕ Cancelar';
+
+    btn.addEventListener('click', function() {
+      if (enviando) return;
+      enviando = true;
+      btn.disabled = true;
+      btn.textContent = 'Cancelando…';
+
+      fetch('/agente/descartar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: conf.token })
+      })
+        .then(r => r.json().then(data => ({ ok: r.ok, data })))
+        .then(({ data }) => {
+          caja.remove();
+          const wrap = agregarMensaje(data.respuesta || 'Sin respuesta', data.ok ? 'assistant' : 'error');
+          agregarConfirmaciones(data.confirmaciones, wrap);
+          irAlFinal();
+        })
+        .catch(error => {
+          btn.disabled = false;
+          btn.textContent = '✕ Cancelar';
+          agregarMensaje('Error de conexión: ' + error.message, 'error');
+        })
+        .finally(() => {
+          enviando = false;
+          sendBtn.disabled = false;
+        });
+    });
+
+    return btn;
+  }
+
+  // --- Tarjeta editable: la ficha ya no es prosa del asistente, es texto que se edita ---
+  // El usuario corrige un campo ahí mismo en vez de pedírselo al asistente por chat. Cada
+  // campo llega de `conf.campos` (lo arma `agente._campos_para_editar`, mismo tipo/opciones
+  // que ya usa el form de /gestion). Al perder el foco de un campo se postea la tarjeta
+  // entera a /agente/editar_ficha: como el token es un hash del contenido, cambia con
+  // cualquier edición, así que el token vigente de la ficha se muta en el propio `conf`
+  // (mismo objeto que usan el botón de confirmar y la fila del lote) y NO se repinta toda la
+  // tarjeta — repintar de golpe podría pisar lo que el usuario ya tecleó en otro campo
+  // mientras la respuesta viajaba.
+
+  let colaEdicion = Promise.resolve();
+
+  function editarFicha(getToken, campos) {
+    const pedido = colaEdicion.then(() => fetch('/agente/editar_ficha', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: getToken(), campos: campos })
+    }).then(r => r.json().then(data => ({ ok: r.ok, data }))));
+    colaEdicion = pedido.catch(() => {});
+    return pedido;
+  }
+
+  function campoInput(campo) {
+    let el;
+    if (campo.tipo === 'textarea') {
+      el = document.createElement('textarea');
+      el.rows = 3;
+      el.value = campo.valor || '';
+    } else if (campo.tipo === 'select') {
+      el = document.createElement('select');
+      const opciones = campo.opciones || [];
+      if (campo.valor && opciones.indexOf(campo.valor) === -1) {
+        const o = document.createElement('option');
+        o.value = campo.valor;
+        o.textContent = campo.valor;
+        el.appendChild(o);
+      }
+      opciones.forEach(function(op) {
+        const o = document.createElement('option');
+        o.value = op;
+        o.textContent = op;
+        el.appendChild(o);
+      });
+      el.value = campo.valor || '';
+    } else {
+      el = document.createElement('input');
+      el.type = (campo.tipo === 'number' || campo.tipo === 'date') ? campo.tipo : 'text';
+      el.value = campo.valor || '';
+    }
+    el.className = 'agente-ficha-input';
+    el.dataset.campo = campo.nombre;
+    return el;
+  }
+
+  // `onCambio(filaNueva)` se llama después de una edición guardada, con la fila fresca que
+  // devuelve el server (o `undefined` si esa ficha ya no está — la sacó otra edición en
+  // paralelo). Quien arma la tarjeta decide qué repintar alrededor (el botón verde, el
+  // nombre de la fila del lote, su estado).
+  function tarjetaFicha(conf, onCambio) {
+    const tarjeta = document.createElement('div');
+    tarjeta.className = 'agente-ficha';
+    if (!(conf.campos || []).length) return tarjeta;
+
+    const inputs = {};
+    conf.campos.forEach(function(campo) {
+      const fila = document.createElement('label');
+      fila.className = 'agente-ficha-campo' + (campo.redactado ? ' is-redactado' : '');
+
+      const etiqueta = document.createElement('span');
+      etiqueta.className = 'agente-ficha-label';
+      etiqueta.textContent = campo.label;
+      if (campo.redactado) {
+        const tag = document.createElement('span');
+        tag.className = 'agente-ficha-tag';
+        tag.textContent = 'propuesto';
+        etiqueta.appendChild(tag);
+      }
+
+      const input = campoInput(campo);
+      inputs[campo.nombre] = input;
+      fila.appendChild(etiqueta);
+      fila.appendChild(input);
+      tarjeta.appendChild(fila);
+
+      input.addEventListener('change', function() {
+        const campos = {};
+        Object.keys(inputs).forEach(function(n) { campos[n] = inputs[n].value; });
+        editarFicha(function() { return conf.token; }, campos)
+          .then(function(res) {
+            const data = res.data;
+            if (!res.ok || data.ok === false) {
+              agregarMensaje(data.error || data.respuesta || 'No se pudo guardar el cambio',
+                             'error');
+              return;
+            }
+            const fresca = (data.confirmaciones || []).find(f => f.token === data.token);
+            conf.token = data.token;
+            if (fresca) {
+              conf.nombre = fresca.nombre;
+              conf.campos = fresca.campos;
+              conf.estado = fresca.estado;
+            }
+            if (onCambio) onCambio(fresca);
+          })
+          .catch(function(error) {
+            agregarMensaje('Error de conexión: ' + error.message, 'error');
+          });
+      });
+    });
+
+    // Sub-recursos de un kit: sólo lectura acá, una línea por item ("título — cantidad").
+    // Se editan desde la ficha web del recurso una vez creado, no desde esta tarjeta.
+    if ((conf.sub_recursos || []).length) {
+      const bloque = document.createElement('div');
+      bloque.className = 'agente-ficha-subrecursos';
+      const titulo = document.createElement('span');
+      titulo.className = 'agente-ficha-label';
+      titulo.textContent = 'Sub-recursos del kit';
+      bloque.appendChild(titulo);
+      const lista = document.createElement('ul');
+      conf.sub_recursos.forEach(function(item) {
+        const li = document.createElement('li');
+        li.textContent = item.cantidad ? (item.titulo + ' — ' + item.cantidad) : item.titulo;
+        lista.appendChild(li);
+      });
+      bloque.appendChild(lista);
+      tarjeta.appendChild(bloque);
+    }
+
+    return tarjeta;
   }
 
   // --- Circuito del lote: revisar primero, guardar al final ---
@@ -553,6 +763,18 @@ document.addEventListener('DOMContentLoaded', function() {
     marca.className = 'agente-revision-marca';
     cabecera.appendChild(marca);
     fila.appendChild(cabecera);
+
+    // La tarjeta editable de esta ficha: cambia el nombre de la cabecera y devuelve el
+    // estado a "pendiente" cuando el usuario edita algo, porque lo que ya había marcado
+    // (✅/✏️/✕) era sobre el contenido viejo.
+    fila.appendChild(tarjetaFicha(conf, function(fresca) {
+      nombre.textContent = (conf.foto ? conf.foto + '. ' : '') + (conf.nombre || 'sin nombre');
+      if (!fresca) return;
+      conf.estado = 'pendiente';
+      conf.nota = '';
+      pintarEstado('pendiente', '');
+      actualizarBarra(caja);
+    }));
 
     const botones = document.createElement('div');
     botones.className = 'agente-revision-botones';
@@ -692,7 +914,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(r => r.json().then(data => ({ ok: r.ok, data })))
         .then(({ ok, data }) => {
           const loader = messagesDiv.querySelector('.agente-message-loading');
-          if (loader) loader.remove();
+          if (loader) (loader.closest('.agente-message-wrap') || loader).remove();
           // Si falló, el lote SIGUE ahí: no se borra la revisión que el usuario ya hizo por
           // un error del server. Sólo se rehabilita el botón y se cuenta qué pasó.
           if (!ok) {
@@ -702,13 +924,13 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
           }
           caja.remove();
-          agregarMensaje(data.respuesta || 'Sin respuesta', 'assistant');
-          agregarConfirmaciones(data.confirmaciones);
+          const wrap = agregarMensaje(data.respuesta || 'Sin respuesta', 'assistant');
+          agregarConfirmaciones(data.confirmaciones, wrap);
           irAlFinal();
         })
         .catch(error => {
           const loader = messagesDiv.querySelector('.agente-message-loading');
-          if (loader) loader.remove();
+          if (loader) (loader.closest('.agente-message-wrap') || loader).remove();
           agregarMensaje('Error de conexión: ' + error.message, 'error');
           actualizarBarra(caja);
         })
@@ -721,7 +943,11 @@ document.addEventListener('DOMContentLoaded', function() {
     return barra;
   }
 
-  function agregarConfirmaciones(lista) {
+  // `anteDe` es el wrap del mensaje del asistente de este turno (lo devuelve
+  // agregarMensaje()): la ficha se inserta ANTES de ese mensaje y no al final del chat, para
+  // que se lea como "acá está lo que armé" seguido del comentario del asistente, y no al
+  // revés. Sin `anteDe` (o si ya no está en el DOM) se agrega al final, como antes.
+  function agregarConfirmaciones(lista, anteDe) {
     quitarConfirmaciones();
     loteAbierto = lista || [];
     if (!loteAbierto.length) return;
@@ -730,10 +956,21 @@ document.addEventListener('DOMContentLoaded', function() {
     caja.className = 'agente-confirm';
 
     if (loteAbierto.length === 1) {
+      const conf = loteAbierto[0];
       const nota = document.createElement('span');
       nota.className = 'agente-confirm-nota';
-      nota.textContent = 'o seguí escribiendo para cambiar algo';
-      caja.appendChild(botonConfirmar(loteAbierto[0], caja));
+      nota.textContent = 'Podés editar los campos de arriba antes de guardar';
+      const btn = botonConfirmar(conf, caja);
+      caja.appendChild(tarjetaFicha(conf, function() {
+        btn.textContent = textoBoton(conf);
+      }));
+      const botones = document.createElement('div');
+      botones.className = 'agente-confirm-botones';
+      // Cancelar a la izquierda, aceptar a la derecha: el orden en que se agregan es el
+      // orden en que se ven (la fila es un flex row).
+      botones.appendChild(botonCancelar(conf, caja));
+      botones.appendChild(btn);
+      caja.appendChild(botones);
       caja.appendChild(nota);
     } else {
       caja.classList.add('agente-confirm-lote');
@@ -748,7 +985,11 @@ document.addEventListener('DOMContentLoaded', function() {
       actualizarBarra(caja);
     }
 
-    messagesDiv.appendChild(caja);
+    if (anteDe && anteDe.parentNode === messagesDiv) {
+      messagesDiv.insertBefore(caja, anteDe);
+    } else {
+      messagesDiv.appendChild(caja);
+    }
     irAlFinal();
   }
 
@@ -766,12 +1007,16 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(data => {
         if (!data || !data.mensajes || !data.mensajes.length) return;
         limpiarBienvenida();
-        data.mensajes.forEach(m => agregarMensaje(m.texto, m.rol === 'user' ? 'user' : 'assistant',
-                                                  m.imagenes));
+        let ultimoWrap = null;
+        data.mensajes.forEach(m => {
+          ultimoWrap = agregarMensaje(m.texto, m.rol === 'user' ? 'user' : 'assistant',
+                                      m.imagenes, false);
+        });
         // Las altas sin guardar recuperan sus botones, y con el estado de revisión que
         // tenían: si no, cambiar de página dejaba las fichas vivas en el servidor y sin
         // forma de darles OK — y con un lote a medio revisar, había que revisarlo de nuevo.
-        agregarConfirmaciones(data.confirmaciones);
+        // Van ANTES del último mensaje (el que las presenta), no al final del historial.
+        agregarConfirmaciones(data.confirmaciones, ultimoWrap);
       })
       .catch(() => {});  // sin historial el chat igual funciona: no vale molestar con un error
   }

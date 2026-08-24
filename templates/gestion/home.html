@@ -1,14 +1,6 @@
 {% extends 'gestion/base.html' %}
 {% block titulo %}Inicio{% endblock %}
 {% block contenido %}
-<section class="g-intro">
-    <h2>Memoria técnica de la escuela</h2>
-    <p>
-        Registrá recursos y sus fotos: qué hay, cuánto, dónde y en qué estado.
-        Acá vive la fuente de verdad del inventario técnico.
-    </p>
-</section>
-
 <div class="g-cards">
     {% for t in tarjetas %}
     <div class="g-card">
@@ -16,7 +8,7 @@
             <h3>{{ t.plural | upper }}</h3>
             <span class="g-count">{{ t.total }}</span>
         </div>
-        <p class="g-card-desc">{{ t.descripcion }}</p>
+        {% if t.descripcion %}<p class="g-card-desc">{{ t.descripcion }}</p>{% endif %}
         <div class="g-card-actions">
             <a class="g-btn" href="{{ url_for('gestion.lista', slug=t.slug) }}">VER {{ t.plural | upper }}</a>
             <a class="g-btn-outline-dark" href="{{ url_for('gestion.nuevo', slug=t.slug) }}">+ CREAR {{ t.singular | upper }}</a>

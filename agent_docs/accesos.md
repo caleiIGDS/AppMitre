@@ -95,13 +95,19 @@ consumiría solo en el camino. Un nombre vacío tampoco lo quema: vuelve al form
 Se guardan **las dos identidades**: `nombre` (lo escribió la persona) y `etiqueta` (lo escribió el
 admin). El panel muestra las dos, y que no coincidan es la señal de que el link se reenvió.
 
-**Un link = un dispositivo.** Para la persona con celular y notebook está el botón
+**Un link = un dispositivo**, salvo que se tilde **SIN LÍMITE DE USOS** al generarlo: ese link queda
+`multiuso` y no se quema en `canjear()` — cualquiera que lo abra escribe su nombre y se crea un
+dispositivo nuevo, todas las veces que haga falta. Sirve para un cartel o un grupo, no para una
+persona puntual. Para la persona con celular y notebook (link normal) está el botón
 `+ OTRO DISPOSITIVO`, que genera una invitación nueva con su nombre y permisos ya cargados. Quedan
 dos filas separadas: si pierde el celular se revoca esa y la notebook sigue andando.
 
 **No hay vencimiento automático**: el acceso dura hasta que el admin lo revoque. Lo que vence a los
-7 días es el LINK sin usar. La columna "último uso" del panel es lo que permite limpiar la lista —
-conviene repasarla a fin de año lectivo, cuando rotan los alumnos.
+7 días es el LINK sin usar (`INVITACION_DIAS`); uno `multiuso` vence a los 3650
+(`INVITACION_DIAS_MULTIUSO`), que en la práctica es "no vence". "ANULAR" en el panel borra la
+invitación (para que nadie más entre por ese link) sin tocar los dispositivos que ya canjearon —
+esos se revocan aparte. La columna "último uso" del panel es lo que permite limpiar la lista de
+dispositivos — conviene repasarla a fin de año lectivo, cuando rotan los alumnos.
 
 ## Qué va en la cookie
 
@@ -233,10 +239,13 @@ hay respaldos (guarda anti-pérdida), y una `accesos.db` vacía es un estado leg
 ```sql
 dispositivos(id, nombre, etiqueta, perfil, permisos, alta, ultimo_uso, user_agent,
              revocado, invitacion_id, email, google_sub)
-invitaciones(id, token, etiqueta, perfil, permisos, creada, expira, usada, dispositivo_id)
+invitaciones(id, token, etiqueta, perfil, permisos, creada, expira, usada, dispositivo_id,
+             multiuso)
 ```
 
-`permisos` es JSON (`["gestion.leer"]` o `["*"]`). `revocado`/`usada` en NULL = activo.
+`permisos` es JSON (`["gestion.leer"]` o `["*"]`). `revocado`/`usada` en NULL = activo. Un link
+`multiuso` (1) se queda con `usada` en NULL para siempre — es lo que lo mantiene vigente en
+`listar_invitaciones()` sin que esa query tenga que saber nada de multiuso.
 `email`/`google_sub` están reservados para sumar Google Sign-In sin migrar nada; hoy nadie los lee.
 El token va **en claro**: hashearlo sólo protegería contra la fuga del `.db`, que está en el mismo
 servidor que el `.env`, y a cambio se perdería poder re-copiar un link todavía sin usar. Las

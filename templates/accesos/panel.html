@@ -10,9 +10,17 @@
 
 {% if link_nuevo %}
 <div class="g-card" style="border-color: var(--secondary);">
+    {% if link_multiuso %}
+    <h3>LINK PÚBLICO LISTO — COMPARTILO DONDE HAGA FALTA</h3>
+    <p class="g-help">Lo puede abrir <strong>cualquiera</strong>, todas las veces que
+        quiera: no se quema. Cada uno escribe su nombre y queda un dispositivo nuevo, con
+        los mismos permisos. Sirve para un cartel o un grupo — para anularlo, "ANULAR" en
+        la lista de abajo.</p>
+    {% else %}
     <h3>LINK LISTO — MANDÁSELO A LA PERSONA</h3>
     <p class="g-help">Sirve <strong>una sola vez</strong> y vence en 7 días. Al abrirlo va
         a escribir su nombre y queda habilitado ese dispositivo.</p>
+    {% endif %}
     <div class="g-field">
         <input id="link-nuevo" type="text" readonly value="{{ link_nuevo }}"
                onclick="this.select()" style="width:100%;">
@@ -69,18 +77,20 @@
 </table>
 
 {% if invitaciones %}
-<div class="g-toolbar"><h2>LINKS MANDADOS, TODAVÍA SIN USAR</h2></div>
+<div class="g-toolbar"><h2>LINKS ACTIVOS</h2></div>
 <table class="g-table">
-    <thead><tr><th>PARA QUIÉN</th><th>ACCESO</th><th>CREADO</th><th>VENCE</th><th></th></tr></thead>
+    <thead><tr><th>PARA QUIÉN</th><th>ACCESO</th><th>TIPO</th><th>CREADO</th><th>VENCE</th><th></th></tr></thead>
     <tbody>
         {% for i in invitaciones %}
         <tr>
             <td>{{ i.etiqueta }}</td>
             <td>{{ i.perfil_etiqueta }}</td>
+            <td>{% if i.multiuso %}Público · {{ i.usos }} dispositivo{{ 's' if i.usos != 1 else '' }}{% else %}Un solo uso, sin usar{% endif %}</td>
             <td>{{ i.creada[:10] }}</td>
             <td>{{ i.expira[:10] }}</td>
             <td>
-                <form method="post" action="{{ url_for('accesos.borrar_inv', inv_id=i.id) }}" style="display:inline;">
+                <form method="post" action="{{ url_for('accesos.borrar_inv', inv_id=i.id) }}" style="display:inline;"
+                      {% if i.multiuso %}onsubmit="return confirm('Anular este link público? Nadie más va a poder entrar con él; los dispositivos que ya entraron siguen activos.');"{% endif %}>
                     <button class="g-btn-outline" type="submit">ANULAR</button>
                 </form>
             </td>
@@ -124,6 +134,16 @@
         {% endfor %}
     </div>
     {% endfor %}
+
+    <div class="g-field">
+        <label style="display:block; font-weight:normal;">
+            <input type="checkbox" name="multiuso">
+            SIN LÍMITE DE USOS — cualquiera que abra el link entra, no sólo la primera persona
+        </label>
+        <span class="g-help">Para un cartel o un grupo, no para una persona puntual: no se
+            quema al usarlo y no vence a los 7 días. Cada uno que entra escribe su nombre y
+            queda como un dispositivo aparte, revocable por separado.</span>
+    </div>
 
     <div class="g-form-actions">
         <button type="submit" class="g-btn">GENERAR LINK</button>

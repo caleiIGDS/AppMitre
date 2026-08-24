@@ -148,12 +148,13 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
                 limite=tool_input.get('limite', 50)
             )
         elif tool_name == 'crear_entidad':
-            # `foto` queda AFUERA de los campos: no es un campo de la entidad sino de qué
-            # imagen salió la ficha (ver fichas._ficha_confirmacion).
+            # `foto` y `sub_recursos` quedan AFUERA de los campos: no son columnas de la
+            # entidad — `foto` es de qué imagen salió la ficha, `sub_recursos` son los
+            # items del kit (ver fichas._ficha_confirmacion / fichas._crear_entidad).
             resultado = _crear_entidad(
                 tool_input.get('slug', ''),
-                {k: v for k, v in tool_input.items() if k not in ('slug', 'foto')},
-                contexto_turno, permisos, tool_input.get('foto'))
+                {k: v for k, v in tool_input.items() if k not in ('slug', 'foto', 'sub_recursos')},
+                contexto_turno, permisos, tool_input.get('foto'), tool_input.get('sub_recursos'))
         elif tool_name == 'leer_foto':
             resultado = _leer_foto_fmt(contexto_turno, tool_input.get('modo', MODO_DEFAULT),
                                        tool_input.get('foto'))
@@ -168,8 +169,9 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
         elif tool_name == 'desvincular_entidad':
             resultado = _desvincular_entidad(tool_input.get('slug_origen'), tool_input.get('id_origen'), tool_input.get('slug_destino'), tool_input.get('id_destino'))
         elif tool_name == 'mover_ubicacion':
-            resultado = _mover_ubicacion_fmt(tool_input.get('recurso', ''), tool_input.get('cantidad'),
-                                             tool_input.get('origen'), tool_input.get('destino'))
+            resultado = _mover_ubicacion_fmt(tool_input.get('recurso', ''), tool_input.get('destino'),
+                                             numeros=tool_input.get('numeros'), cantidad=tool_input.get('cantidad'),
+                                             origen=tool_input.get('origen'))
         elif tool_name == 'eliminar_entidad':
             resultado = _eliminar_entidad(tool_input.get('slug', ''), tool_input.get('id', 0),
                                           tool_input.get('nombre_confirmacion'))

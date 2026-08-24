@@ -21,6 +21,12 @@
             <option value="{{ op }}" {{ 'selected' if op == actual }}>{{ op }}</option>
             {% endfor %}
         </select>
+        {% elif c.tipo == 'text_datalist' %}
+        <input id="campo-{{ c.nombre }}" type="text" name="{{ c.nombre }}" list="datalist-{{ c.nombre }}"
+               value="{{ valores[c.nombre] or '' }}" {% if c.requerido %}required{% endif %}>
+        <datalist id="datalist-{{ c.nombre }}">
+            {% for op in c.opciones %}<option value="{{ op }}">{% endfor %}
+        </datalist>
         {% else %}
         <input id="campo-{{ c.nombre }}" type="{{ c.tipo }}" name="{{ c.nombre }}"
                value="{{ valores[c.nombre] or '' }}" {% if c.requerido %}required{% endif %}>
