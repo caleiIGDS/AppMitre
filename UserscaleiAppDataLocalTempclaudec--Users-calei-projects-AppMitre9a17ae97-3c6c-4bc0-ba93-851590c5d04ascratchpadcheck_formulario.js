@@ -1,0 +1,1542 @@
+
+/* ============================================================================
+   DATOS FIJOS DE LA ESCUELA
+   Se precargan solos en todos los anexos que los piden. Editá este bloque una
+   sola vez (con un editor de texto) y queda listo para todo el ciclo lectivo.
+   ============================================================================ */
+const DATOS_FIJOS = {
+  institucion_educativa: "E.E.S.T. 'Ing. Emilio Mitre'",
+  numero_institucion:    "4",             // N° de establecimiento
+  cue:                   "061155400",     // Código Único de Establecimiento
+  region:                "7",
+  distrito:              "General San Martín",
+  domicilio:             "San Martín 1714",
+  telefono:              "011 4755-2116",
+  director:              "Moschet Javier", // Apellido y nombre del/la director/a
+  tipo_gestion:          "estatal",       // "estatal" | "privada"
+  representante_legal:   "",              // sólo gestión privada (DIEGEP)
+  entidad_propietaria:   ""               // sólo gestión privada (DIEGEP)
+};
+
+/* ============================================================================
+   SEGUROS ESCOLARES CONOCIDOS (Anexo IX — el de la ESCUELA, no el del transporte).
+   La escuela puede tener más de una póliza vigente a la vez (ej. una para
+   estudiantes menores de edad y otra para mayores) — por eso no hay un solo
+   "seguro fijo": el formulario ofrece estos presets para elegir y completa los
+   4 campos solo, pero quedan editables a mano igual. Instructivo interno,
+   actualizar acá cuando cambien las pólizas.
+   ============================================================================ */
+const SEGUROS_PRESET = [
+  { id:"menores", label:"Estudiantes menores de edad — Provincia Seguros (129690)",
+    compania_aseguradora:"Provincia Seguros",
+    tipo_seguro:"Seguro de Responsabilidad Civil para estudiantes menores de edad",
+    numero_poliza:"129690", vigencia_poliza:"31/12/25-31/12/26" },
+  { id:"mayores", label:"Estudiantes mayores de edad — Provincia Seguros (129904)",
+    compania_aseguradora:"Provincia Seguros",
+    tipo_seguro:"Seguro de Responsabilidad Civil para estudiantes mayores de edad",
+    numero_poliza:"129904", vigencia_poliza:"31/12/25-31/12/26" },
+  { id:"accidentes", label:"Accidentes personales — Provincia/Sancor Seguros (13239265)",
+    compania_aseguradora:"Provincia Seguros/ Sancor Seguros",
+    tipo_seguro:"Seguro de accidentes personales (Seguro escolar)",
+    numero_poliza:"13239265", vigencia_poliza:"1/01/26-1/01/27" }
+];
+
+/* ============================================================================
+   DATOS COMUNES — se cargan una vez y se replican en todos los anexos.
+   `destino` lista los campos "anexo.campo" que se completan solos con este valor.
+   ============================================================================ */
+const COMUNES = [
+  { grupo:"Institución", campos:[
+    {id:"institucion_educativa", label:"Institución educativa", tipo:"text", fijo:true,
+     destino:["IV.institucion_educativa","V.institucion_educativa","VI.establecimiento_educativo","VII.institucion","IX.nombre_establecimiento"],
+     a:"Nombre del establecimiento tal como figura en la documentación oficial. Se replica en los Anexos IV, V, VI, VII y IX."},
+    {id:"numero_institucion", label:"N° de establecimiento", tipo:"text", fijo:true,
+     destino:["IV.numero_institucion","V.numero_institucion","VI.numero_establecimiento","IX.numero_establecimiento"],
+     a:"Número con el que se identifica la escuela ante la DGCyE. Va en los Anexos IV, V, VI y IX."},
+    {id:"cue", label:"CUE", tipo:"text", fijo:true, destino:["IX.cue"],
+     a:"Código Único de Establecimiento. Sólo lo pide el Anexo IX (Declaración Jurada de directivos)."},
+    {id:"region", label:"Región", tipo:"text", fijo:true, destino:["IV.region"],
+     a:"Región educativa a la que pertenece el distrito. Sólo la pide el Anexo IV."},
+    {id:"distrito", label:"Distrito", tipo:"text", fijo:true,
+     destino:["IV.distrito","V.distrito","VI.distrito","IX.distrito"],
+     a:"Distrito escolar del establecimiento. Se replica en los Anexos IV, V, VI y IX."},
+    {id:"domicilio", label:"Domicilio de la escuela", tipo:"text", fijo:true,
+     destino:["IV.domicilio","IX.domicilio"],
+     a:"Dirección del establecimiento (no la del lugar a visitar). Va en los Anexos IV y IX."},
+    {id:"telefono", label:"Teléfono de la escuela", tipo:"text", fijo:true, destino:["IV.telefono"],
+     a:"Teléfono de contacto del establecimiento. Sólo lo pide el Anexo IV."},
+    {id:"director", label:"Director/a del establecimiento", tipo:"text", fijo:true,
+     destino:["IX.director"],
+     a:"Apellido y nombre de quien firma la Declaración Jurada del Anexo IX. Es el/la responsable de que todo el legajo esté completo antes de la partida."},
+    {id:"tipo_gestion", label:"Tipo de gestión", tipo:"select", opciones:["estatal","privada"], fijo:true,
+     destino:["IX.tipo_gestion"],
+     a:"Estatal o privada. No es un campo del formulario original: define si el Anexo IX además necesita los datos y la firma del/la Representante Legal, como exige el Anexo I para las escuelas de gestión privada."}
+  ]},
+  { grupo:"Proyecto y salida", campos:[
+    {id:"denominacion_proyecto", label:"Denominación del proyecto", tipo:"text",
+     destino:["IV.denominacion_proyecto","VI.nombre_proyecto"],
+     a:"Nombre con el que se identifica la propuesta pedagógica. La salida tiene que desprenderse de un proyecto enmarcado en el Proyecto Institucional (Anexo I). Se replica en los Anexos IV y VI."},
+    {id:"lugar_a_visitar", label:"Lugar a visitar", tipo:"text",
+     destino:["IV.lugar_a_visitar","V.lugar_a_visitar"],
+     a:"Consignar dirección, localidad y distrito del destino. Se replica en los Anexos IV y V."},
+    {id:"localidad_salida", label:"Localidad del destino", tipo:"text",
+     destino:["VI.localidad_salida","VII.localidad_salida"],
+     a:"Sólo la localidad del destino (sin dirección). Es lo que se lee en las autorizaciones que firman las familias (Anexo VI) y los/las estudiantes mayores de edad (Anexo VII)."},
+    {id:"fecha_salida", label:"Fecha de salida", tipo:"date",
+     destino:["IV.fecha_salida","V.fecha"],
+     a:"Día de partida. De acá se calculan solos el día, mes y año que piden los Anexos VI y VII, y la fecha de la planilla de asistencia del Anexo V. Ojo con los plazos del Anexo II: 5 días hábiles de anticipación si es dentro del distrito con regreso en el día, 10 si supera las 24 horas, 20 si es fuera de la provincia o del país."},
+    {id:"hora_salida", label:"Hora de salida", tipo:"time", destino:["IV.hora_salida"],
+     a:"Horario de partida. Si el traslado de estudiantes mayores de edad es por sus propios medios, la salida se computa desde el horario y lugar donde arranca la experiencia pedagógica (Anexo I, punto 8.11)."},
+    {id:"lugar_salida", label:"Lugar de partida", tipo:"text", destino:["IV.lugar_salida"],
+     a:"Punto de encuentro desde donde parte el grupo (normalmente la puerta de la escuela)."},
+    {id:"fecha_regreso", label:"Fecha de regreso", tipo:"date", destino:["IV.fecha_regreso"],
+     a:"Día de vuelta. Si es distinta de la fecha de salida, la salida supera las 24 horas: cambian los plazos de presentación y se habilitan los campos de hospedaje del Anexo IV."},
+    {id:"hora_regreso", label:"Hora de regreso", tipo:"time", destino:["IV.hora_regreso"],
+     a:"Horario estimado de llegada."},
+    {id:"lugar_regreso", label:"Lugar de regreso", tipo:"text", destino:["IV.lugar_regreso"],
+     a:"Dónde se entrega el grupo al finalizar la salida."},
+    {id:"tipo_salida", label:"Tipo de salida", tipo:"select",
+     opciones:["educativa","representacion_institucional"], destino:["VI.tipo_salida","VII.tipo_salida"],
+     a:"Educativa (propuesta didáctica de la escuela) o de representación institucional (la escuela participa en un acto, torneo, feria o convocatoria de otro organismo). En el papel original de los Anexos VI y VII se tacha la que no corresponde; acá se resuelve solo."}
+  ]}
+];
+
+/* ============================================================================
+   ESQUEMAS DE LOS ANEXOS (subconjunto de los AnexoN.json de esta carpeta)
+   `a` = texto del ícono de ayuda.  `auto` = se completa desde Datos comunes.
+
+   A propósito, acá faltan los campos de FIRMA y de "LUGAR Y FECHA" (de la
+   firma) que sí están en los AnexoN.json: esos van a mano sobre el papel
+   impreso, nunca se tipean. Los AnexoN.json siguen siendo el espejo fiel
+   del formulario en papel completo — esta lista es a propósito más chica.
+   El PDF que arma el servidor (salidas.py) sí recorre el AnexoN.json entero,
+   así que esos campos aparecen en blanco ahí, listos para completar a mano.
+   ============================================================================ */
+const ANEXOS = [
+{
+  n:"III", numero:3, firma_papel:true,
+  titulo:"Autorización general del ciclo lectivo",
+  quien:"La completa la familia",
+  nota:"Se firma una sola vez por año y vale para todas las salidas dentro del barrio o área geográfica inmediata que no usen transporte. Se archiva en el Legajo del estudiante. Debe imprimirse y llevar firma original aunque se complete acá.",
+  campos:[
+    {id:"nombre_estudiante", label:"Nombre y apellido del estudiante", tipo:"text", req:true,
+     a:"Estudiante autorizado/a. Esta autorización general sólo cubre salidas a pie por el barrio: cualquier salida con transporte necesita el Anexo VI, específico para esa fecha."},
+    {id:"dni_estudiante", label:"DNI del estudiante", tipo:"text", req:true, a:"Documento del estudiante, sin puntos."},
+    {id:"anio_curso", label:"Año", tipo:"text", req:true, a:"Año que cursa, por ejemplo 3°."},
+    {id:"seccion_curso", label:"Sección", tipo:"text", req:true, a:"División o sección del curso."}
+  ]
+},
+{
+  n:"IV", numero:4, firma_papel:true,
+  titulo:"Presentación de la salida — itinerario, actividades y cronograma",
+  quien:"La completa el Equipo Directivo",
+  nota:"Se completa de forma digital y se envía al/la Inspector/a en ese mismo formato. Además se imprime para que firme la Autoridad del establecimiento. Es el anexo que describe la propuesta: sin él no hay salida autorizada.",
+  campos:[
+    {id:"region", label:"Región", tipo:"text", req:true, auto:true},
+    {id:"distrito", label:"Distrito", tipo:"text", req:true, auto:true},
+    {id:"institucion_educativa", label:"Institución educativa", tipo:"text", req:true, auto:true},
+    {id:"numero_institucion", label:"N°", tipo:"text", req:true, auto:true},
+    {id:"domicilio", label:"Domicilio", tipo:"text", req:true, auto:true},
+    {id:"telefono", label:"Teléfono", tipo:"text", req:true, auto:true},
+    {id:"denominacion_proyecto", label:"Denominación del Proyecto", tipo:"text", req:true, auto:true},
+    {id:"lugar_a_visitar", label:"Lugar a visitar", tipo:"text", req:true, auto:true},
+    {id:"fecha_salida", label:"Fecha de salida", tipo:"date", req:true, auto:true},
+    {id:"hora_salida", label:"Hora de salida", tipo:"time", req:true, auto:true},
+    {id:"lugar_salida", label:"Lugar de salida", tipo:"text", req:true, auto:true},
+    {id:"fecha_regreso", label:"Fecha de regreso", tipo:"date", req:true, auto:true},
+    {id:"hora_regreso", label:"Hora de regreso", tipo:"time", req:true, auto:true},
+    {id:"lugar_regreso", label:"Lugar de regreso", tipo:"text", req:true, auto:true},
+    {id:"observaciones_fechas", label:"Observaciones respecto a las fechas", tipo:"textarea", req:false, ancho:true,
+     a:"Sólo en caso de corresponder: fechas alternativas por clima, reprogramaciones previstas, etc."},
+    {id:"itinerario", label:"Itinerario", tipo:"textarea", req:true, ancho:true,
+     a:"Detalle pormenorizado del recorrido: por dónde se va, paradas intermedias con lugar y hora, y qué recorridos se hacen en el destino. Si se viaja en un vehículo de la escuela o de la cooperadora, el Anexo I (punto 8.5.1) exige este detalle sí o sí."},
+    {id:"actividades", label:"Actividades", tipo:"textarea", req:true, ancho:true,
+     a:"Qué van a hacer concretamente los/las estudiantes durante la salida. Si hay alguna actividad de riesgo considerable o inusual, hay que fundamentarla y pedir autorización especial y explícita a las familias (Anexo I, punto 4)."},
+    {id:"objetivos_salida", label:"Objetivos de la salida", tipo:"textarea", req:true, ancho:true,
+     a:"Para qué se hace, en términos pedagógicos. Debe poder enmarcarse en el Diseño Curricular y en el Proyecto Institucional: es lo que distingue una salida educativa de un paseo."},
+    {id:"cronograma_diario", label:"Cronograma diario", tipo:"textarea", req:true, ancho:true,
+     a:"Distribución de la jornada hora por hora. En salidas de más de un día, un cronograma por cada día."},
+    {id:"cantidad_alumnos", label:"Cantidad de alumnos", tipo:"number", req:true, calc:true,
+     a:"Se calcula solo desde la tabla de Personas."},
+    {id:"cantidad_docentes_acompanantes", label:"Cantidad de docentes acompañantes", tipo:"number", req:true, calc:true,
+     a:"Se calcula solo desde la tabla de Personas (titulares + reemplazantes)."},
+    {id:"cantidad_no_docentes_acompanantes", label:"Cantidad de no docentes acompañantes", tipo:"number", req:false, calc:true,
+     a:"Se calcula solo desde la tabla de Personas. Puede ser cero: los acompañantes no docentes nunca son responsables de la vigilancia del grupo (Anexo I, punto 3.4)."},
+    {id:"total_personas", label:"Total de personas", tipo:"number", req:true, calc:true,
+     a:"Se calcula solo. No puede superar la cantidad de asientos declarada del transporte (Anexo I, punto 8.5.2)."},
+    {id:"hospedaje_nombre", label:"Hospedaje", tipo:"text", req:false, seccion:"Sólo salidas de más de 24 horas",
+     a:"Nombre del alojamiento. Sólo se completa si la salida supera las 24 horas."},
+    {id:"hospedaje_telefono", label:"Teléfono del hospedaje", tipo:"text", req:false, seccion:"Sólo salidas de más de 24 horas",
+     a:"Teléfono directo del alojamiento, para que la escuela y las familias puedan ubicar al grupo."},
+    {id:"hospedaje_domicilio", label:"Domicilio del hospedaje", tipo:"text", req:false, seccion:"Sólo salidas de más de 24 horas", a:"Dirección del alojamiento."},
+    {id:"hospedaje_localidad", label:"Localidad del hospedaje", tipo:"text", req:false, seccion:"Sólo salidas de más de 24 horas", a:"Localidad donde está el alojamiento."},
+    {id:"gastos_estimativos", label:"Gastos estimativos y modo de solventarlos", tipo:"textarea", req:true, ancho:true, seccion:"Cierre",
+     a:"Cuánto sale la actividad y de dónde sale la plata (cooperadora, familias, financiamiento del organismo convocante, etc.)."},
+    {id:"autoridad_que_completo", label:"Autoridad del establecimiento que completó el formulario", tipo:"text", req:true, seccion:"Cierre",
+     a:"Apellido y nombre del integrante del Equipo Directivo que lo llenó."}
+  ]
+},
+{
+  n:"V", numero:5, firma_papel:false,
+  titulo:"Planilla de estudiantes y acompañantes — asistencia",
+  quien:"La completa el Equipo Directivo",
+  nota:"El listado se arma solo desde la sección Personas de más arriba. Se envía digital al/la Inspector/a, pero además hay que imprimirla y llevarla en el viaje: la asistencia se registra ese mismo día, a mano, junto con cualquier cambio de último momento.",
+  campos:[
+    {id:"institucion_educativa", label:"Institución educativa", tipo:"text", req:true, auto:true},
+    {id:"numero_institucion", label:"N°", tipo:"text", req:true, auto:true},
+    {id:"distrito", label:"Distrito", tipo:"text", req:true, auto:true},
+    {id:"lugar_a_visitar", label:"Lugar a visitar", tipo:"text", req:true, auto:true},
+    {id:"fecha", label:"Fecha", tipo:"date", req:true, auto:true},
+    {id:"observaciones", label:"Observaciones", tipo:"textarea", req:false, ancho:true,
+     a:"Para completar ante cualquier eventualidad: un estudiante que no viajó, un docente que se reemplazó a último momento, un accidente. Si hubo un accidente, esta planilla se presenta ante la aseguradora junto con los Anexos IV y IX."}
+  ]
+},
+{
+  n:"VI", numero:6, firma_papel:true,
+  titulo:"Planilla informativa y autorización de la familia",
+  quien:"Punto 1 la escuela · el resto la familia",
+  nota:"La escuela completa la parte informativa y se lo envía a las familias. Vuelve en papel, con firma original, y el/la docente responsable debe llevarlo consigo el día de la salida.",
+  campos:[
+    {id:"nombre_proyecto", label:"Nombre del Proyecto de la Salida", tipo:"text", req:true, auto:true, seccion:"1 · Informativa (completa la escuela)"},
+    {id:"lugar_dia_hora_salida", label:"Lugar, día y hora de salida", tipo:"text", req:true, calc:true, seccion:"1 · Informativa (completa la escuela)",
+     a:"Se arma solo con los datos comunes de la salida."},
+    {id:"lugar_dia_hora_regreso", label:"Lugar, día y hora de regreso", tipo:"text", req:true, calc:true, seccion:"1 · Informativa (completa la escuela)",
+     a:"Se arma solo con los datos comunes de la salida."},
+    {id:"lugares_estadia", label:"Lugares de estadía (domicilios y teléfonos)", tipo:"textarea", req:false, ancho:true, seccion:"1 · Informativa (completa la escuela)",
+     a:"Sólo si hay pernocte. Es el dato que le permite a una familia ubicar a su hijo/a durante el viaje."},
+    {id:"nombres_telefonos_acompanantes", label:"Nombres y teléfonos de los acompañantes", tipo:"acompañantes_telefonos", req:true, ancho:true, seccion:"1 · Informativa (completa la escuela)",
+     a:"Quiénes van a cargo del grupo y cómo ubicarlos durante la salida. Seleccioná los teléfonos de cada acompañante."},
+    {id:"empresas_contratadas", label:"Empresa/s contratada/s (nombre, dirección, teléfonos)", tipo:"textarea", req:false, ancho:true, seccion:"1 · Informativa (completa la escuela)",
+     a:"Sólo si se contrata transporte u otro servicio. Los datos completos de la empresa van en el Anexo VIII."},
+    {id:"infraestructura_disponible", label:"Otros datos de la infraestructura disponible", tipo:"textarea", req:false, ancho:true, seccion:"1 · Informativa (completa la escuela)"},
+    {id:"hospitales_cercanos", label:"Hospitales y centros asistenciales cercanos", tipo:"textarea", req:true, ancho:true, seccion:"1 · Informativa (completa la escuela)",
+     a:"Direcciones y teléfonos de los centros de salud más próximos al destino. Es información obligatoria: hay que averiguarla antes de viajar, no en el momento de la urgencia."},
+    {id:"otros_datos_interes", label:"Otros datos de interés", tipo:"textarea", req:false, ancho:true, seccion:"1 · Informativa (completa la escuela)",
+     a:"Cualquier cosa que las familias deban saber: qué llevar, vianda, ropa, costo."},
+
+    {id:"nombre_estudiante", label:"Nombre del hijo/a", tipo:"text", req:true, seccion:"2 · Autorización (completa la familia)",
+     a:"Estudiante que se autoriza a participar de esta salida en particular."},
+    {id:"dni_estudiante", label:"DNI del hijo/a", tipo:"text", req:true, seccion:"2 · Autorización (completa la familia)", a:"Documento del estudiante."},
+    {id:"tipo_salida", label:"Tipo de salida", tipo:"select", opciones:["educativa","representacion_institucional"], req:true, auto:true, seccion:"2 · Autorización (completa la familia)"},
+    {id:"establecimiento_educativo", label:"Establecimiento educativo", tipo:"text", req:true, auto:true, seccion:"2 · Autorización (completa la familia)"},
+    {id:"numero_establecimiento", label:"N° del establecimiento", tipo:"text", req:true, auto:true, seccion:"2 · Autorización (completa la familia)"},
+    {id:"distrito", label:"Distrito", tipo:"text", req:true, auto:true, seccion:"2 · Autorización (completa la familia)"},
+    {id:"localidad_salida", label:"Localidad donde se realiza la salida", tipo:"text", req:true, auto:true, seccion:"2 · Autorización (completa la familia)"},
+    {id:"dias_salida", label:"Día/días de la salida", tipo:"text", req:true, calc:true, seccion:"2 · Autorización (completa la familia)",
+     a:"Se calcula solo desde la fecha de salida."},
+    {id:"mes_salida", label:"Mes de la salida", tipo:"text", req:true, calc:true, seccion:"2 · Autorización (completa la familia)",
+     a:"Se calcula solo desde la fecha de salida."},
+
+    {id:"indicaciones_salud", label:"Indicaciones para el personal docente y médico", tipo:"textarea", req:false, ancho:true, seccion:"3 · Salud (completa la familia)",
+     a:"Alergias, medicación, tratamientos, condiciones que el/la docente a cargo tenga que conocer ante una urgencia. Si no hay nada para informar, se deja en blanco."},
+    {id:"tiene_obra_social", label:"¿Tiene obra social o prepaga?", tipo:"bool", req:true, seccion:"3 · Salud (completa la familia)",
+     a:"Si se marca, se habilitan los datos de la cobertura. Este dato convive con el seguro escolar y con la póliza de responsabilidad civil de la escuela: no la reemplaza."},
+    {id:"nombre_obra_social", label:"Nombre de la obra social/prepaga", tipo:"text", req:false, cond:{campo:"tiene_obra_social", valor:true}, seccion:"3 · Salud (completa la familia)",
+     a:"Se completa sólo si el/la estudiante tiene cobertura."},
+    {id:"numero_socio", label:"N° de socio", tipo:"text", req:false, cond:{campo:"tiene_obra_social", valor:true}, seccion:"3 · Salud (completa la familia)",
+     a:"Número de afiliado/a, el que figura en la credencial."},
+    {id:"telefonos_urgencia", label:"Teléfonos de contacto en caso de urgencia", tipo:"textarea", req:true, ancho:true, seccion:"3 · Salud (completa la familia)",
+     a:"Consignar varios, de personas distintas ya que un solo teléfono que no atiende deja al docente sin nadie a quien avisar."}
+  ]
+},
+{
+  n:"VII", numero:7, firma_papel:true,
+  titulo:"Declaración jurada — estudiante mayor de 18 o emancipada/o",
+  quien:"La completa cada estudiante",
+  nota:"Reemplaza la autorización familiar para estudiantes mayores de edad o emancipados/as. No hace falta para salidas dentro del barrio (ahí alcanza con la declaración general del inicio del ciclo). El/la docente responsable debe llevarla el día de la salida.",
+  campos:[
+    {id:"nombre_estudiante", label:"Nombre y apellido", tipo:"text", req:true,
+     a:"Estudiante que firma la declaración. Al ser mayor de edad, se autoriza a sí mismo/a: no interviene la familia."},
+    {id:"dni_estudiante", label:"DNI", tipo:"text", req:true, a:"Documento del/la estudiante."},
+    {id:"domicilio", label:"Domicilio", tipo:"text", req:true, a:"Domicilio particular del/la estudiante, no el de la escuela."},
+    {id:"localidad", label:"Localidad de domicilio", tipo:"text", req:true, a:"Localidad donde vive el/la estudiante."},
+    {id:"institucion", label:"Institución a la que concurre", tipo:"text", req:true, auto:true},
+    {id:"tipo_salida", label:"Tipo de salida", tipo:"select", opciones:["educativa","representacion_institucional"], req:true, auto:true},
+    {id:"localidad_salida", label:"Localidad donde se realiza la salida", tipo:"text", req:true, auto:true},
+    {id:"dias_salida", label:"Día/días de la salida", tipo:"text", req:true, calc:true, a:"Se calcula solo desde la fecha de salida."},
+    {id:"mes_salida", label:"Mes de la salida", tipo:"text", req:true, calc:true, a:"Se calcula solo desde la fecha de salida."},
+    {id:"anio_salida", label:"Año de la salida", tipo:"text", req:true, calc:true, a:"Se calcula solo desde la fecha de salida."},
+    {id:"indicaciones_salud", label:"Indicaciones para el personal docente y médico", tipo:"textarea", req:false, ancho:true,
+     a:"Alergias, medicación o condiciones que el/la docente a cargo deba conocer ante una urgencia."},
+    {id:"tiene_obra_social", label:"¿Tiene obra social o prepaga?", tipo:"bool", req:true, a:"Si se marca, se habilitan los datos de la cobertura."},
+    {id:"nombre_obra_social", label:"Nombre de la obra social/prepaga", tipo:"text", req:false, cond:{campo:"tiene_obra_social", valor:true}, a:"Se completa sólo si tiene cobertura."},
+    {id:"numero_socio", label:"N° de socio", tipo:"text", req:false, cond:{campo:"tiene_obra_social", valor:true}, a:"Número de afiliado/a."},
+    {id:"telefonos_urgencia", label:"Teléfonos de contacto en caso de urgencia", tipo:"textarea", req:true, ancho:true,
+     a:"Consignar varios, de personas distintas que puedan responder durante la salida."}
+  ]
+},
+{
+  n:"VIII", numero:8, firma_papel:false,
+  titulo:"Informe del transporte a contratar",
+  quien:"La completa la empresa de transporte o la escuela",
+  nota:"Se completa una vez visada toda la documentación del transporte, cosa que después el/la directora/a declara bajo juramento en el Anexo IX. Si se viaja en transporte público de línea, en lugar de estos datos se consignan los del pasaje o boleto. Ojo: el seguro que se carga acá es el de la empresa, distinto del seguro escolar del Anexo IX.",
+  campos:[
+    {id:"nombre_empresa", label:"Nombre de la empresa o razón social", tipo:"text", req:true,
+     a:"Razón social del prestador del servicio. Si se contrata una agencia de viajes, además hay que cumplir la Ley 25599 (Art. 12 de la Resolución)."},
+    {id:"nombre_gerente_responsable", label:"Nombre del gerente o responsable", tipo:"text", req:true, a:"Persona responsable de la empresa ante la escuela."},
+    {id:"domicilio_propietario_empresa", label:"Domicilio del propietario o la empresa", tipo:"text", req:true, a:"Dirección legal de la empresa."},
+    {id:"telefono_propietario_empresa", label:"Teléfono del propietario o la empresa", tipo:"text", req:true, a:"Teléfono de la empresa."},
+    {id:"domicilio_gerente_responsable", label:"Domicilio del gerente o responsable", tipo:"text", req:true, a:"Domicilio de la persona responsable."},
+    {id:"telefono", label:"Teléfono", tipo:"text", req:false, a:"Teléfono fijo de contacto."},
+    {id:"telefono_movil", label:"Teléfono móvil", tipo:"text", req:false,
+     a:"Celular de contacto. Conviene tenerlo a mano el día de la salida por si hay que reubicar al conductor."},
+    {id:"titularidad_vehiculo", label:"Titularidad y tipo de vehículo", tipo:"text", req:true,
+     a:"Micro, ómnibus, combi, automóvil, camioneta, barco, lancha o avión, y a nombre de quién está."},
+    {id:"habilitacion_vehiculo", label:"Habilitación del/los vehículos", tipo:"textarea", req:true, ancho:true,
+     a:"Número de registro, fecha, tipo de habilitación, cantidad de asientos y vigencia de la VTV hasta el regreso. Qué organismo habilita depende del destino: dentro de la provincia rige la Res. 122/18; a otra provincia es obligatoria la habilitación de la CNRT; a CABA sirve el transporte escolar habilitado si la salida no supera las 48 horas."},
+    {id:"compania_aseguradora", label:"Compañía aseguradora (del transporte)", tipo:"text", req:true,
+     a:"Aseguradora de la empresa de transporte. No confundir con el seguro escolar de la escuela, que va en el Anexo IX."},
+    {id:"numero_poliza", label:"N° de póliza", tipo:"text", req:true, a:"Número de póliza del transporte."},
+    {id:"tipo_seguro", label:"Tipo de seguro", tipo:"text", req:true, a:"Cobertura contratada por la empresa de transporte."},
+    {id:"nombre_conductor", label:"Nombre del/los conductor/es", tipo:"text", req:true,
+     a:"Puede haber más de uno. Si el día de la partida cambia el conductor por una indisposición, hay que comunicarlo a la autoridad educativa (Anexo I, punto 9.4)."},
+    {id:"dni_conductor", label:"DNI del/los conductor/es", tipo:"text", req:true, a:"Documento de cada conductor/a."},
+    {id:"numero_carnet_conducir", label:"N° de carnet de conducir y vigencia", tipo:"text", req:true,
+     a:"Registro con la categoría que habilite ese tipo de vehículo, y su fecha de vencimiento: tiene que estar vigente al momento del viaje."},
+    {id:"adjunto_constancia_habilitaciones", label:"Adjunta constancia de habilitaciones", tipo:"bool", req:true, seccion:"Adjuntos (fotocopias)",
+     a:"Marcar cuando la fotocopia ya esté adjuntada al legajo en papel."},
+    {id:"adjunto_carnet_conductor", label:"Adjunta carnet de conductor", tipo:"bool", req:true, seccion:"Adjuntos (fotocopias)",
+     a:"Marcar cuando la fotocopia ya esté adjuntada."},
+    {id:"adjunto_dni_conductor", label:"Adjunta DNI del/los conductor/es", tipo:"bool", req:true, seccion:"Adjuntos (fotocopias)",
+     a:"Marcar cuando la fotocopia ya esté adjuntada."}
+  ]
+},
+{
+  n:"IX", numero:9, firma_papel:false,
+  titulo:"Declaración jurada de directivos y/o representantes legales",
+  quien:"La completa el/la director/a",
+  nota:"Además de completarlo, hay que transcribirlo de puño y letra en el Libro de Actas Institucionales de Salidas Educativas, con fecha anterior a la partida. Para enviarlo al/la Inspector/a y al Seguro Escolar sirve el formato digital o una foto de la transcripción en PDF.",
+  campos:[
+    {id:"nombre_establecimiento", label:"Nombre del establecimiento", tipo:"text", req:true, auto:true},
+    {id:"numero_establecimiento", label:"N°", tipo:"text", req:true, auto:true},
+    {id:"cue", label:"CUE", tipo:"text", req:true, auto:true},
+    {id:"domicilio", label:"Domicilio", tipo:"text", req:true, auto:true},
+    {id:"distrito", label:"Distrito", tipo:"text", req:true, auto:true},
+    {id:"director", label:"Director/a del establecimiento", tipo:"text", req:true, auto:true},
+    {id:"representante_legal", label:"Representante Legal (DIEGEP)", tipo:"text", req:false, cond:{campo:"tipo_gestion", valor:"privada"},
+     a:"Sólo para escuelas de gestión privada. En ese caso el/la Representante Legal también firma la declaración."},
+    {id:"entidad_propietaria", label:"Entidad propietaria (DIEGEP)", tipo:"text", req:false, cond:{campo:"tipo_gestion", valor:"privada"},
+     a:"Sólo para gestión privada: en esas escuelas la entidad propietaria es la responsable de la salida."},
+    {id:"fecha_lugar_realizacion", label:"Fecha y lugar de realización de la salida", tipo:"text", req:true, calc:true,
+     a:"Se arma solo con los datos comunes de la salida."},
+    {id:"compania_aseguradora", label:"Compañía aseguradora (seguro escolar)", tipo:"text", req:true, seccion:"Seguro escolar"},
+    {id:"tipo_seguro", label:"Tipo de seguro", tipo:"text", req:true, seccion:"Seguro escolar"},
+    {id:"numero_poliza", label:"Póliza N°", tipo:"text", req:true, seccion:"Seguro escolar"},
+    {id:"vigencia_poliza", label:"Vigencia", tipo:"text", req:true, seccion:"Seguro escolar"},
+    {id:"observaciones", label:"Observaciones", tipo:"textarea", req:false, ancho:true, seccion:"Seguro escolar",
+     a:"Todo lo que pueda surgir y no esté previsto en el formulario. Si la salida es fuera de la provincia o del país, acá se deja constancia de la ampliación de la póliza."}
+  ]
+}
+];
+
+/* Ayudas de los campos automáticos: heredan el texto del dato común */
+const AYUDA_COMUN = {};
+COMUNES.forEach(g => g.campos.forEach(c => {
+  (c.destino || []).forEach(d => { AYUDA_COMUN[d] = c.a; });
+}));
+const AYUDA_SEGURO = {
+  "IX.compania_aseguradora":"Aseguradora del seguro escolar de la escuela. Debe constar en la póliza que el tipo de seguro es de responsabilidad civil. No es la del transporte (esa va en el Anexo VIII).",
+  "IX.tipo_seguro":"Tiene que ser Responsabilidad Civil: es lo que exige el art. 1767 del Código Civil y Comercial para los establecimientos educativos.",
+  "IX.numero_poliza":"Número de póliza del seguro escolar.",
+  "IX.vigencia_poliza":"Período de vigencia de la póliza. Tiene que cubrir la fecha de la salida."
+};
+Object.assign(AYUDA_COMUN, AYUDA_SEGURO);
+
+/* Normativa — referencias a la Resolución 3871/24 para cada campo/aviso */
+const NORMATIVA = [];
+
+/* Padrón de estudiantes (estudiantes.db, vía estudiantes.py) — alimenta el autocompletado
+   de "Apellido y Nombre" en la tabla de Personas. Sólo vive en esta computadora: nunca
+   sale de acá ni se guarda con la salida (ver agent_docs/salidas-educativas.md). */
+const ESTUDIANTES = [];
+
+// Mismo criterio que normalize() de static/js/script.js (sin acentos, minúsculas,
+// espacios colapsados) — duplicado a propósito porque este formulario es autocontenido
+// y no carga ese script.
+function normTexto(s){
+  return (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
+}
+
+// Puerto de texto.py::puntaje_busqueda (Ratcliff/Obershelp, mismo algoritmo que
+// difflib.SequenceMatcher.ratio del backend) para que el autocompletado de estudiante
+// perdone typos ("sofa" → "sofia") en vez de exigir substring exacto. Mismo umbral 0.68
+// que el backend ya validó específicamente sobre nombres de personas (ver texto.py).
+const UMBRAL_SIMILITUD = 0.68;
+
+function longestMatch(a, b, alo, ahi, blo, bhi){
+  let besti = alo, bestj = blo, bestsize = 0, j2len = {};
+  for (let i = alo; i < ahi; i++){
+    const newj2len = {};
+    for (let j = blo; j < bhi; j++){
+      if (a[i] === b[j]){
+        const k = (j2len[j-1] || 0) + 1;
+        newj2len[j] = k;
+        if (k > bestsize){ besti = i-k+1; bestj = j-k+1; bestsize = k; }
+      }
+    }
+    j2len = newj2len;
+  }
+  return [besti, bestj, bestsize];
+}
+
+function totalMatches(a, b, alo, ahi, blo, bhi){
+  const [i, j, k] = longestMatch(a, b, alo, ahi, blo, bhi);
+  if (k === 0) return 0;
+  let total = k;
+  if (alo < i && blo < j) total += totalMatches(a, b, alo, i, blo, j);
+  if (i+k < ahi && j+k < bhi) total += totalMatches(a, b, i+k, ahi, j+k, bhi);
+  return total;
+}
+
+function ratioTexto(a, b){
+  if (!a.length && !b.length) return 1.0;
+  return (2.0 * totalMatches(a, b, 0, a.length, 0, b.length)) / (a.length + b.length);
+}
+
+// Igual criterio que texto.puntaje_busqueda: substring normalizado siempre gana (y
+// desempata por similitud); si no hay substring, el difuso solo entra con 3+ caracteres
+// y por encima del umbral. Devuelve puntaje (mayor = mejor matcheo) o null.
+function puntajeBusqueda(qNorm, texto){
+  const tNorm = normTexto(texto);
+  if (!tNorm) return null;
+  const difuso = qNorm.length >= 3;
+  let mejor = 0.0, substring = tNorm.includes(qNorm);
+  if (difuso){
+    mejor = ratioTexto(qNorm, tNorm);
+    for (const palabra of tNorm.split(" ")){
+      mejor = Math.max(mejor, ratioTexto(qNorm, palabra));
+    }
+  }
+  if (substring) return 1.0 + mejor;
+  if (difuso && mejor >= UMBRAL_SIMILITUD) return mejor;
+  return null;
+}
+
+/* Datos fijos que alimentan campos del Anexo IX que no son del bloque de seguro (ese
+   bloque ya no es "auto": tiene su propio selector de preset, ver SEGUROS_PRESET y
+   selectorPresetSeguro — necesita quedar editable a mano sin que refrescarDerivados() lo
+   pise en cada tecla que se toca en Datos Comunes). */
+const SEGURO_A_FIJO = {
+  "IX.representante_legal":"representante_legal",
+  "IX.entidad_propietaria":"entidad_propietaria"
+};
+
+const ROLES = [
+  {v:"estudiante",           t:"Estudiante"},
+  {v:"docente_titular",      t:"Docente titular"},
+  {v:"docente_reemplazante", t:"Docente reemplazante"},
+  {v:"no_docente",           t:"Acompañante no docente"}
+];
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+
+/* ============================================================================
+   ESTADO
+   ============================================================================ */
+const estado = { comunes:{}, personas:[], anexos:{} };
+ANEXOS.forEach(a => estado.anexos[a.n] = {});
+COMUNES.forEach(g => g.campos.forEach(c => {
+  if (c.fijo && DATOS_FIJOS[c.id] !== undefined) estado.comunes[c.id] = DATOS_FIJOS[c.id];
+}));
+
+// Precarga de datos si se está editando una salida existente
+let idEditar = null;
+const datosPrecargar = [];
+if (datosPrecargar) {
+  idEditar = [];
+  estado.comunes = datosPrecargar.datos_comunes || {};
+  estado.personas = datosPrecargar.personas || [];
+  normalizarPersonas();
+  ANEXOS.forEach(a => estado.anexos[a.n] = (datosPrecargar.anexos && datosPrecargar.anexos[a.n]) || {});
+}
+
+let tocado = false;
+function marcarCambio(){
+  tocado = true;
+  document.getElementById("estado").textContent = "Cambios sin guardar — acordate de apretar Guardar salida.";
+}
+
+/* ============================================================================
+   HELPERS
+   ============================================================================ */
+function el(tag, attrs, ...hijos){
+  const n = document.createElement(tag);
+  for (const k in (attrs||{})){
+    if (k === "class") n.className = attrs[k];
+    else if (k === "text") n.textContent = attrs[k];
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), attrs[k]);
+    else if (attrs[k] !== null && attrs[k] !== undefined) n.setAttribute(k, attrs[k]);
+  }
+  hijos.flat().forEach(h => { if (h) n.appendChild(typeof h === "string" ? document.createTextNode(h) : h); });
+  return n;
+}
+
+function botonAyuda(texto, clave){
+  if (!texto) return null;
+  const b = el("button", {class:"info", type:"button", title:"Qué va en este campo", "aria-label":"Ayuda"}, "i");
+  b.addEventListener("click", () => {
+    const caja = b.closest(".campo").querySelector(".ayuda");
+    if (caja) caja.classList.toggle("visible");
+  });
+  // Si hay referencia normativa para esta clave, marcar el botón
+  if (clave && NORMATIVA && NORMATIVA[clave] && NORMATIVA[clave].pagina_pdf) {
+    b.style.borderColor = "#FF6B00";
+    b.title = "Qué va en este campo (con referencia a la Resolución)";
+  }
+  return b;
+}
+
+function agregarLinkNormativa(cajaAyuda, clave){
+  if (!clave || !NORMATIVA || !NORMATIVA[clave] || !NORMATIVA[clave].pagina_pdf) return;
+  const ref = NORMATIVA[clave];
+  const pag = ref.pagina_pdf;
+  const buscar = ref.frase_resaltar || "";
+  let href = "[]?pagina=" + pag;
+  if (buscar) href += "&buscar=" + encodeURIComponent(buscar);
+  const link = el("a", {href:href, target:"_blank", rel:"noopener", class:"link-normativa", text:"📄 Ver en la Resolución"});
+  link.style.display = "block";
+  link.style.marginTop = "8px";
+  link.style.fontSize = "11px";
+  link.style.color = "var(--primary)";
+  link.style.textDecoration = "underline";
+  cajaAyuda.appendChild(link);
+}
+
+function crearLinkNormativaAlerta(clave){
+  if (!clave || !NORMATIVA || !NORMATIVA[clave] || !NORMATIVA[clave].pagina_pdf) return null;
+  const ref = NORMATIVA[clave];
+  const pag = ref.pagina_pdf;
+  const buscar = ref.frase_resaltar || "";
+  let href = "[]?pagina=" + pag;
+  if (buscar) href += "&buscar=" + encodeURIComponent(buscar);
+  const link = el("a", {href:href, target:"_blank", rel:"noopener", text:"📄 Ver en la Resolución"});
+  link.style.display = "inline-block";
+  link.style.marginLeft = "10px";
+  link.style.fontSize = "11px";
+  link.style.color = "var(--primary)";
+  link.style.textDecoration = "underline";
+  link.style.fontWeight = "700";
+  return link;
+}
+
+/* Conversión entre formatos de fecha */
+function isoADdMmYyyy(iso){
+  if (!iso) return "";
+  const [a,m,d] = iso.split("-");
+  return `${String(d).padStart(2,"0")}/${String(m).padStart(2,"0")}/${a}`;
+}
+function ddMmYyyyAIso(ddMmYyyy){
+  if (!ddMmYyyy) return "";
+  const partes = ddMmYyyy.split("/");
+  if (partes.length !== 3) return "";
+  const [d,m,a] = partes;
+  return `${a}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+}
+function validarFecha(ddMmYyyy){
+  if (!ddMmYyyy || ddMmYyyy.length !== 10) return false;
+  const iso = ddMmYyyyAIso(ddMmYyyy);
+  if (!iso) return false;
+  const fecha = new Date(iso + "T00:00:00");
+  return !isNaN(fecha.getTime());
+}
+function aplicarMascaraFecha(inp){
+  // Máscara: dd/mm/yyyy — solo números y barras automáticas
+  inp.addEventListener("input", () => {
+    let num = inp.value.replace(/[^0-9]/g, "");
+    if (num.length > 8) num = num.slice(0,8);
+    let v = num;
+    if (num.length >= 2) v = num.slice(0,2) + "/" + num.slice(2);
+    if (num.length >= 4) v = num.slice(0,2) + "/" + num.slice(2,4) + "/" + num.slice(4);
+    inp.value = v;
+  });
+}
+
+function fechaLarga(iso){
+  if (!iso) return "";
+  const [a,m,d] = iso.split("-");
+  return `${Number(d)} de ${MESES[Number(m)-1]} de ${a}`;
+}
+function soloDia(iso){ return iso ? String(Number(iso.split("-")[2])) : ""; }
+function soloMes(iso){ return iso ? MESES[Number(iso.split("-")[1])-1] : ""; }
+function soloAnio(iso){ return iso ? iso.split("-")[0] : ""; }
+function hhmm(v){ return v || ""; }
+
+/* Valores calculados a partir de comunes + personas */
+function calculado(anexo, campo){
+  const c = estado.comunes, p = contarPersonas();
+  const clave = anexo + "." + campo;
+  switch (clave){
+    case "IV.cantidad_alumnos": return p.estudiantes;
+    case "IV.cantidad_docentes_acompanantes": return p.docentes;
+    case "IV.cantidad_no_docentes_acompanantes": return p.no_docentes;
+    case "IV.total_personas": return p.total;
+    case "VI.lugar_dia_hora_salida":
+      return [c.lugar_salida, fechaLarga(c.fecha_salida), hhmm(c.hora_salida) && (hhmm(c.hora_salida)+" hs")].filter(Boolean).join(" — ");
+    case "VI.lugar_dia_hora_regreso":
+      return [c.lugar_regreso, fechaLarga(c.fecha_regreso), hhmm(c.hora_regreso) && (hhmm(c.hora_regreso)+" hs")].filter(Boolean).join(" — ");
+    case "VI.dias_salida": case "VII.dias_salida": return soloDia(c.fecha_salida);
+    case "VI.mes_salida":  case "VII.mes_salida":  return soloMes(c.fecha_salida);
+    case "VII.anio_salida": return soloAnio(c.fecha_salida);
+    case "IX.fecha_lugar_realizacion":
+      return [fechaLarga(c.fecha_salida), c.lugar_a_visitar].filter(Boolean).join(" — ");
+    default: return "";
+  }
+}
+
+function valorAuto(anexo, campo){
+  const clave = anexo + "." + campo;
+  if (SEGURO_A_FIJO[clave]) return DATOS_FIJOS[SEGURO_A_FIJO[clave]] || "";
+  for (const g of COMUNES) for (const c of g.campos){
+    if ((c.destino||[]).includes(clave)) return estado.comunes[c.id] || "";
+  }
+  return "";
+}
+
+function normalizarPersonas(){
+  estado.personas.forEach(p => {
+    if (!("cargo" in p)) p.cargo = "";
+    if (!("fecha_nacimiento" in p)) p.fecha_nacimiento = "";
+    if (!("grupo_edad" in p)) {
+      if ("menor16" in p) {
+        p.grupo_edad = p.menor16 ? null : "+16";
+        delete p.menor16;
+      } else {
+        p.grupo_edad = null;
+      }
+    }
+  });
+}
+
+function contarPersonas(){
+  const p = {estudiantes:0, docentes:0, no_docentes:0, total:0, menores16:0, desde16:0, desde18:0};
+  estado.personas.forEach(x => {
+    if (x.rol === "estudiante"){
+      p.estudiantes++;
+      if (x.grupo_edad === null) p.menores16++;
+      else if (x.grupo_edad === "+16") p.desde16++;
+      else if (x.grupo_edad === "+18") p.desde18++;
+    }
+    else if (x.rol === "docente_titular" || x.rol === "docente_reemplazante") p.docentes++;
+    else if (x.rol === "no_docente") p.no_docentes++;
+  });
+  p.total = p.estudiantes + p.docentes + p.no_docentes;
+  return p;
+}
+
+/* ============================================================================
+   RENDER — datos comunes
+   ============================================================================ */
+function renderComunes(){
+  const cuerpo = el("div", {class:"cuerpo"});
+  COMUNES.forEach(grupo => {
+    cuerpo.appendChild(el("div", {class:"subtitulo", text:grupo.grupo}));
+    const grilla = el("div", {class:"grilla"});
+    grupo.campos.forEach(c => grilla.appendChild(campoComun(c)));
+    cuerpo.appendChild(grilla);
+  });
+  const sec = el("section", {class:"bloque"},
+    el("h2", {onclick:e => e.currentTarget.parentElement.classList.toggle("cerrado")},
+      el("span", {text:"Datos comunes — se cargan una vez"}),
+      el("span", {class:"flecha", text:"▼"})),
+    cuerpo);
+  return sec;
+}
+
+function campoComun(c){
+  const wrap = el("div", {class:"campo" + (c.ancho ? " ancho" : "")});
+  const lab = el("label", {}, el("span", {text:c.label}));
+  const info = botonAyuda(c.a, "COMUN." + c.id); if (info) lab.appendChild(info);
+  if (c.fijo) lab.appendChild(el("span", {class:"tag tag-auto", text:"precargado"}));
+  wrap.appendChild(lab);
+  const claveComun = "COMUN." + c.id;
+  if (c.a) {
+    const ayuda = el("div", {class:"ayuda", text:c.a});
+    agregarLinkNormativa(ayuda, claveComun);
+    wrap.appendChild(ayuda);
+  }
+
+  let inp;
+  if (c.tipo === "select"){
+    inp = el("select", {});
+    inp.appendChild(el("option", {value:""}, "— elegir —"));
+    c.opciones.forEach(o => inp.appendChild(el("option", {value:o}, o.replace(/_/g," "))));
+  } else if (c.tipo === "date"){
+    inp = el("input", {type:"text", placeholder:"dd/mm/yyyy"});
+    inp.maxLength = 10;
+  } else {
+    inp = el("input", {type:c.tipo});
+  }
+  inp.setAttribute("data-comun-id", c.id);
+
+  // Para fechas, mostrar en formato dd/mm/yyyy pero almacenar ISO internamente
+  if (c.tipo === "date"){
+    inp.value = isoADdMmYyyy(estado.comunes[c.id] || "");
+    aplicarMascaraFecha(inp);
+  } else {
+    inp.value = estado.comunes[c.id] || "";
+  }
+
+  inp.addEventListener("input", () => {
+    if (c.tipo === "date"){
+      // Convertir de dd/mm/yyyy a ISO para almacenar
+      const iso = ddMmYyyyAIso(inp.value);
+      estado.comunes[c.id] = iso;
+      // Validar mientras escribe (formato parcial está bien)
+      if (inp.value.length === 10 && !validarFecha(inp.value)){
+        inp.style.borderColor = "var(--alert)";
+      } else {
+        inp.style.borderColor = "";
+      }
+    } else {
+      estado.comunes[c.id] = inp.value;
+    }
+    marcarCambio();
+    refrescarDerivados();
+    // Autocompletados
+    if (c.id === "fecha_salida" && estado.comunes[c.id]) {
+      estado.comunes.fecha_regreso = estado.comunes[c.id];
+      refrescarDerivados();
+    }
+  });
+  wrap.appendChild(inp);
+  return wrap;
+}
+
+/* ============================================================================
+   RENDER — tabla de personas
+   ============================================================================ */
+function renderPersonas(){
+  const cuerpo = el("div", {class:"cuerpo"});
+  // REMOVIDO: cartel de "marcar menor de 16" — se reemplazó por selector automático de grupo_edad
+  // pero quedó una inconsistencia entre la lógica del selector y el comportamiento esperado.
+  // TODO: resolver inconsistencia antes de mostrar este cartel de nuevo.
+  // cuerpo.appendChild(el("p", {class:"nota-anexo", text:
+  //   "Este listado es la fuente del Anexo V y de las cantidades del Anexo IV: se carga una sola vez acá. " +
+  //   "Marcá \"menor de 16\" en los estudiantes para que se controle la relación docente-estudiante que exige el Anexo I " +
+  //   "(1 adulto cada 12 estudiantes de menos de 16 años; 1 cada 15 a partir de los 16, en Nivel Secundario)."}));
+
+  const tabla = el("table", {},
+    el("thead", {}, el("tr", {},
+      el("th", {style:"width:44px"}, "N°"),
+      el("th", {}, "Apellido y Nombre"),
+      el("th", {style:"width:130px"}, "Documento"),
+      el("th", {style:"width:120px", id:"th-cargo"}, "Cargo"),
+      el("th", {style:"width:120px", id:"th-fecha-nac"}, "Fecha Nac."),
+      el("th", {style:"width:60px", id:"th-edad"}, "Edad"),
+      el("th", {style:"width:190px"}, "Rol"),
+      el("th", {style:"width:80px", id:"th-menor16"}, "-16 años"),
+      el("th", {style:"width:46px"}, ""))),
+    el("tbody", {id:"cuerpo-personas"}));
+
+  cuerpo.appendChild(el("div", {style:"margin-bottom:10px"},
+    el("button", {class:"btn-chico", type:"button", onclick:() => abrirModalPorCurso()}, "+ Agregar por curso")));
+  cuerpo.appendChild(el("div", {class:"tabla-scroll"}, tabla));
+  cuerpo.appendChild(el("div", {style:"margin-top:12px; display:flex; gap:8px; flex-wrap:wrap"},
+    el("button", {class:"btn-chico", type:"button", onclick:() => agregarPersona()}, "+ Agregar persona"),
+    el("button", {class:"btn-chico", type:"button", onclick:() => { for(let i=0;i<5;i++) agregarPersona(true); pintarPersonas(); }}, "+ 5 filas")));
+  cuerpo.appendChild(el("div", {class:"totales", id:"totales"}));
+
+  const sec = el("section", {class:"bloque"},
+    el("h2", {onclick:e => e.currentTarget.parentElement.classList.toggle("cerrado")},
+      el("span", {text:"Personas — estudiantes, docentes y acompañantes"}),
+      el("span", {class:"flecha", text:"▼"})),
+    cuerpo);
+  return sec;
+}
+
+function agregarPersona(sinPintar){
+  estado.personas.push({apellido_nombre:"", documento:"", rol:"estudiante", cargo:"", fecha_nacimiento:"", grupo_edad:null});
+  marcarCambio();
+  if (!sinPintar) pintarPersonas();
+}
+
+// Modal "Agregar por curso": misma idea visual que el selector de cursos para
+// imprimir horarios (agrupado por año, chips por división), pero sin selección
+// múltiple — un solo click carga de una todos los estudiantes de esa división.
+let modalPorCurso = null;
+
+function cerrarModalPorCurso(){
+  if (modalPorCurso){ modalPorCurso.remove(); modalPorCurso = null; }
+  document.removeEventListener("keydown", cerrarModalPorCursoConEscape);
+}
+function cerrarModalPorCursoConEscape(e){
+  if (e.key === "Escape") cerrarModalPorCurso();
+}
+
+function abrirModalPorCurso(){
+  const grupos = {};
+  ESTUDIANTES.forEach(al => {
+    (grupos[al.curso] ||= {});
+    grupos[al.curso][al.division] = (grupos[al.curso][al.division] || 0) + 1;
+  });
+  const anios = Object.keys(grupos).sort((a, b) => Number(a) - Number(b));
+
+  const filas = anios.map(anio => {
+    const divisiones = Object.keys(grupos[anio]).sort();
+    const chips = divisiones.map(div => {
+      const chip = el("button", {class:"curso-chip", type:"button"},
+        `${anio}°${div}`, el("span", {class:"n"}, `${grupos[anio][div]}`));
+      chip.addEventListener("click", () => agregarPorCurso(anio, div));
+      return chip;
+    });
+    return el("div", {class:"cursos-fila"},
+      el("span", {class:"anio-label", text:`${anio}°`}),
+      el("div", {class:"cursos-chips"}, chips));
+  });
+
+  const caja = el("div", {class:"modal-caja"},
+    el("h3", {text:"Agregar por curso"}),
+    el("div", {class:"cursos-selector"}, filas));
+  const fondo = el("div", {class:"modal-fondo"}, caja);
+  fondo.addEventListener("mousedown", e => { if (e.target === fondo) cerrarModalPorCurso(); });
+  document.body.appendChild(fondo);
+  document.addEventListener("keydown", cerrarModalPorCursoConEscape);
+  modalPorCurso = fondo;
+}
+
+function agregarPorCurso(curso, division){
+  const yaCargados = new Set(estado.personas.map(p => p.documento).filter(Boolean));
+  ESTUDIANTES
+    .filter(al => al.curso === curso && al.division === division && !yaCargados.has(al.dni))
+    .forEach(al => {
+      estado.personas.push({apellido_nombre:al.apellido_nombre, documento:al.dni, rol:"estudiante", cargo:"", fecha_nacimiento:"", grupo_edad:null});
+      yaCargados.add(al.dni);
+    });
+  marcarCambio();
+  pintarPersonas();
+  cerrarModalPorCurso();
+}
+
+function calcularEdad(fechaNac){
+  if (!fechaNac) return "";
+  const fechaRef = estado.comunes.fecha_salida || new Date().toISOString().split('T')[0];
+  const hoy = new Date(fechaRef + "T00:00:00");
+  const nac = new Date(fechaNac + "T00:00:00");
+  if (isNaN(hoy) || isNaN(nac)) return "";
+  let edad = hoy.getFullYear() - nac.getFullYear();
+  const mesHoy = hoy.getMonth();
+  const mesNac = nac.getMonth();
+  if (mesHoy < mesNac || (mesHoy === mesNac && hoy.getDate() < nac.getDate())) edad--;
+  return edad >= 0 ? String(edad) : "";
+}
+
+function obtenerGrupoEdad(fechaNac){
+  const edad = obtenerEdad(fechaNac);
+  if (edad === null) return null;
+  if (edad < 16) return null;
+  if (edad < 18) return "+16";
+  return "+18";
+}
+
+function obtenerEdad(fechaNac){
+  if (!fechaNac) return null;
+  const fechaRef = estado.comunes.fecha_salida || new Date().toISOString().split('T')[0];
+  const hoy = new Date(fechaRef + "T00:00:00");
+  const nac = new Date(fechaNac + "T00:00:00");
+  if (isNaN(hoy) || isNaN(nac)) return null;
+  let edad = hoy.getFullYear() - nac.getFullYear();
+  const mesHoy = hoy.getMonth();
+  const mesNac = nac.getMonth();
+  if (mesHoy < mesNac || (mesHoy === mesNac && hoy.getDate() < nac.getDate())) edad--;
+  return edad >= 0 ? edad : null;
+}
+
+// Autocompletado de estudiantes en la tabla de Personas: mismo criterio de tolerancia
+// (sin acentos, minúsculas, substring) que la búsqueda de profesores del SPA de horarios.
+// El dropdown se ancla con `position:fixed` sobre el input (no anidado en `.tabla-scroll`,
+// que tiene overflow-x:auto — un hijo absoluto ahí quedaría recortado en vez de flotar).
+let dropdownEstudiante = null;
+
+function cerrarSugerenciasEstudiante(){
+  if (dropdownEstudiante){ dropdownEstudiante.remove(); dropdownEstudiante = null; }
+}
+
+function mostrarSugerenciasEstudiante(inpNombre, p, inpDoc){
+  cerrarSugerenciasEstudiante();
+  const q = normTexto(inpNombre.value);
+  if (p.rol !== "estudiante" || q.length < 2) return;
+  const coincidencias = ESTUDIANTES
+    .map(al => ({al, puntaje: puntajeBusqueda(q, al.apellido_nombre)}))
+    .filter(m => m.puntaje !== null)
+    .sort((a, b) => b.puntaje - a.puntaje)
+    .slice(0, 8)
+    .map(m => m.al);
+  if (!coincidencias.length) return;
+
+  const rect = inpNombre.getBoundingClientRect();
+  const lista = el("div", {class:"autocomplete-lista"});
+  lista.style.position = "fixed";
+  lista.style.top = rect.bottom + "px";
+  lista.style.left = rect.left + "px";
+  // El input es angosto (comparte fila con cargo/DNI/fecha/edad), así que el
+  // dropdown se ensancha más allá del input, sin salirse de la pantalla, para
+  // que entren apellido y nombre completos.
+  lista.style.width = Math.min(Math.max(rect.width, 320), window.innerWidth - rect.left - 12) + "px";
+  coincidencias.forEach(al => {
+    const item = el("div", {class:"autocomplete-item"},
+      el("span", {class:"ac-nombre"}, al.apellido_nombre,
+         el("span", {class:"ac-dni"}, `DNI ${al.dni}`)),
+      el("span", {class:"ac-curso"}, `${al.curso}°${al.division}`));
+    item.addEventListener("mousedown", (e) => {
+      e.preventDefault(); // gana al blur del input, que si no cierra la lista antes del click
+      p.apellido_nombre = al.apellido_nombre;
+      p.documento = al.dni;
+      inpNombre.value = al.apellido_nombre;
+      inpDoc.value = al.dni;
+      marcarCambio();
+      cerrarSugerenciasEstudiante();
+    });
+    lista.appendChild(item);
+  });
+  document.body.appendChild(lista);
+  dropdownEstudiante = lista;
+}
+
+function pintarPersonas(){
+  const tb = document.getElementById("cuerpo-personas");
+  tb.textContent = "";
+  const hayDocentes = estado.personas.some(p => p.rol.startsWith("docente"));
+  const hayEstudiantes = estado.personas.some(p => p.rol === "estudiante");
+
+  document.getElementById("th-cargo").style.visibility = hayDocentes ? "visible" : "collapse";
+  document.getElementById("th-fecha-nac").style.visibility = hayEstudiantes ? "visible" : "collapse";
+  document.getElementById("th-edad").style.visibility = hayEstudiantes ? "visible" : "collapse";
+  document.getElementById("th-menor16").style.visibility = hayEstudiantes ? "visible" : "collapse";
+
+  if (!estado.personas.length){
+    const span = 9;
+    tb.appendChild(el("tr", {}, el("td", {colspan:String(span), class:"vacio"},
+      "Todavía no hay nadie cargado. Usá \"Agregar persona\".")));
+  }
+  // Ordenar por rol y luego alfabéticamente por nombre
+  const rolesOrden = ROLES.map(r => r.v);
+  const personasOrdenadas = [...estado.personas].sort((a, b) => {
+    const idxRolA = rolesOrden.indexOf(a.rol);
+    const idxRolB = rolesOrden.indexOf(b.rol);
+    if (idxRolA !== idxRolB) return idxRolA - idxRolB;
+    return a.apellido_nombre.localeCompare(b.apellido_nombre, 'es');
+  });
+
+  personasOrdenadas.forEach((p) => {
+    const i = estado.personas.indexOf(p);
+    const inpNombre = el("input", {type:"text", value:p.apellido_nombre, placeholder:"Apellido y Nombre"});
+    const inpDoc = el("input", {type:"text", value:p.documento, placeholder:"DNI"});
+    inpNombre.addEventListener("input", () => {
+      p.apellido_nombre = inpNombre.value;
+      marcarCambio();
+      mostrarSugerenciasEstudiante(inpNombre, p, inpDoc);
+    });
+    inpNombre.addEventListener("blur", () => setTimeout(cerrarSugerenciasEstudiante, 150));
+
+    inpDoc.addEventListener("input", () => { p.documento = inpDoc.value; marcarCambio(); });
+
+    const inpCargo = el("input", {type:"text", value:p.cargo, placeholder:"Ej: Profesor de Matemática"});
+    inpCargo.addEventListener("input", () => { p.cargo = inpCargo.value; marcarCambio(); });
+    const tdCargo = el("td", {style:p.rol.startsWith("docente") ? "" : "visibility:collapse"}, inpCargo);
+
+    const inpFechaNac = el("input", {type:"text", placeholder:"dd/mm/yyyy", maxLength:"10", value:isoADdMmYyyy(p.fecha_nacimiento || "")});
+    aplicarMascaraFecha(inpFechaNac);
+    const tdEdad = el("td", {style:p.rol === "estudiante" ? "text-align:center; color:var(--tinta-suave);" : "visibility:collapse", text:calcularEdad(p.fecha_nacimiento)});
+
+    const selGrupoEdad = el("select", {});
+    selGrupoEdad.appendChild(el("option", {value:""}, "< 16"));
+    selGrupoEdad.appendChild(el("option", {value:"+16"}, "+16"));
+    selGrupoEdad.appendChild(el("option", {value:"+18"}, "+18"));
+    selGrupoEdad.value = p.grupo_edad || "";
+    selGrupoEdad.disabled = p.rol !== "estudiante";
+    selGrupoEdad.addEventListener("change", () => { p.grupo_edad = selGrupoEdad.value || null; marcarCambio(); pintarTotales(); });
+    const tdMenor16 = el("td", {style:p.rol === "estudiante" ? "text-align:center" : "visibility:collapse"}, selGrupoEdad);
+
+    inpFechaNac.addEventListener("input", () => {
+      const iso = ddMmYyyyAIso(inpFechaNac.value);
+      p.fecha_nacimiento = iso;
+      if (p.rol === "estudiante") {
+        p.grupo_edad = obtenerGrupoEdad(iso);
+        selGrupoEdad.value = p.grupo_edad || "";
+      }
+      // Validar mientras escribe
+      if (inpFechaNac.value.length === 10 && !validarFecha(inpFechaNac.value)){
+        inpFechaNac.style.borderColor = "var(--alert)";
+      } else {
+        inpFechaNac.style.borderColor = "";
+      }
+      tdEdad.textContent = calcularEdad(p.fecha_nacimiento);
+      marcarCambio();
+    });
+    const tdFechaNac = el("td", {style:p.rol === "estudiante" ? "" : "visibility:collapse"}, inpFechaNac);
+
+    const selRol = el("select", {});
+    ROLES.forEach(r => {
+      const o = el("option", {value:r.v}, r.t);
+      if (p.rol === r.v) o.selected = true;
+      selRol.appendChild(o);
+    });
+    selRol.addEventListener("change", () => { p.rol = selRol.value; marcarCambio(); pintarPersonas(); });
+
+    const btn = el("button", {class:"btn-borrar", type:"button", title:"Quitar"}, "×");
+    btn.addEventListener("click", () => { estado.personas.splice(i,1); marcarCambio(); pintarPersonas(); });
+
+    tb.appendChild(el("tr", {},
+      el("td", {text:String(i+1)}),
+      el("td", {}, inpNombre),
+      el("td", {}, inpDoc),
+      tdCargo,
+      tdFechaNac,
+      tdEdad,
+      el("td", {}, selRol),
+      tdMenor16,
+      el("td", {}, btn)));
+  });
+  pintarTotales();
+  refrescarDerivados();
+  actualizarAnexoVI();
+}
+
+function actualizarAnexoVI(){
+  const anexoVI = ANEXOS.find(a => a.n === 'VI');
+  if (!anexoVI) return;
+  const contenedor = document.getElementById(`anexo-${anexoVI.n}`);
+  if (!contenedor) return;
+  const nuevoContenido = renderAnexo(anexoVI);
+  contenedor.replaceWith(nuevoContenido);
+}
+
+function pintarTotales(){
+  const p = contarPersonas();
+  const cont = document.getElementById("totales");
+  cont.textContent = "";
+  [["Estudiantes",p.estudiantes],["Docentes",p.docentes],["No docentes",p.no_docentes]].forEach(([t,n]) => {
+    cont.appendChild(el("div", {class:"total"}, el("div", {class:"n", text:String(n)}), el("div", {class:"t", text:t})));
+  });
+  cont.appendChild(el("div", {class:"total destacado"},
+    el("div", {class:"n", text:String(p.total)}), el("div", {class:"t", text:"Total de personas"})));
+
+  // REMOVIDO: validación de relación docente-estudiante — hay inconsistencia en el cálculo
+  // que debe resolverse antes de mostrar estos carteles. TODO: revisar y validar.
+  // const adultos = p.docentes + p.no_docentes;
+  // const requeridos = Math.ceil(p.menores16/12) + Math.ceil((p.desde16 + p.desde18)/15);
+  // if (p.estudiantes > 0){
+  //   const ok = adultos >= requeridos && p.docentes >= 1;
+  //   const alertaDiv = el("div", {class:"alerta-relacion " + (ok ? "ok" : "mal"), style:"flex:1 1 100%"});
+  //
+  //   if (ok){
+  //     const msg = `Relación docente-estudiante cubierta: ${adultos} adulto/s para ${p.estudiantes} estudiante/s (mínimo ${Math.max(requeridos,1)}).`;
+  //     alertaDiv.appendChild(document.createTextNode(msg));
+  //     const link = crearLinkNormativaAlerta("PERSONAS.RATIO");
+  //     if (link) alertaDiv.appendChild(link);
+  //   } else {
+  //     const desde16plus = p.desde16 + p.desde18;
+  //     const msg = `Faltan acompañantes: para ${p.menores16} estudiante/s de menos de 16 y ${desde16plus} de 16 o más hacen falta al menos ${Math.max(requeridos,1)} adulto/s y un/a docente. Hay ${adultos}.`;
+  //     alertaDiv.appendChild(document.createTextNode(msg));
+  //     const link = crearLinkNormativaAlerta("PERSONAS.RATIO");
+  //     if (link) alertaDiv.appendChild(link);
+  //   }
+  //   cont.appendChild(alertaDiv);
+  // }
+  document.getElementById("resumen-personas").textContent =
+    p.total === 1 ? "1 persona cargada" : p.total + " personas cargadas";
+}
+
+/* Campos que NO deben aparecer: son los que completan las familias en anexos VI y VII */
+function debeOcultarCampo(anexo, campo){
+  if (anexo.n === "VI"){
+    // Remover: Autorización (completa la familia) y Salud (completa la familia)
+    const ocultarEnVI = [
+      "nombre_estudiante", "dni_estudiante", "establecimiento_educativo", "numero_establecimiento",
+      "distrito", "localidad_salida", "dias_salida", "mes_salida",
+      "indicaciones_salud", "tiene_obra_social", "nombre_obra_social", "numero_socio", "telefonos_urgencia"
+    ];
+    return ocultarEnVI.includes(campo.id);
+  }
+  if (anexo.n === "VII"){
+    // Remover: Salud (completa la familia/estudiante mayor de edad)
+    const ocultarEnVII = [
+      "indicaciones_salud", "tiene_obra_social", "nombre_obra_social", "numero_socio", "telefonos_urgencia"
+    ];
+    return ocultarEnVII.includes(campo.id);
+  }
+  return false;
+}
+
+/* ============================================================================
+   RENDER — anexos
+   ============================================================================ */
+function renderAnexo(anexo){
+  const cuerpo = el("div", {class:"cuerpo"});
+  cuerpo.appendChild(el("p", {class:"nota-anexo", text:anexo.nota}));
+
+  let seccionActual = null, grilla = null;
+  anexo.campos.forEach(campo => {
+    if (debeOcultarCampo(anexo, campo)) return;  // Saltar campos que llenan las familias
+    if (campo.seccion && campo.seccion !== seccionActual){
+      seccionActual = campo.seccion;
+      cuerpo.appendChild(el("div", {class:"subtitulo", text:seccionActual}));
+      grilla = el("div", {class:"grilla"});
+      cuerpo.appendChild(grilla);
+    } else if (!grilla){
+      grilla = el("div", {class:"grilla"});
+      cuerpo.appendChild(grilla);
+    }
+    // El selector de preset va justo antes del primer campo del seguro escolar — elegir
+    // uno completa los 4 campos, que siguen editables a mano después (ver SEGUROS_PRESET).
+    if (anexo.n === "IX" && campo.id === "compania_aseguradora"){
+      grilla.appendChild(campoPresetSeguro("Usar un seguro conocido", preset => {
+        copiarPreset(estado.anexos.IX, preset);
+        ["compania_aseguradora", "tipo_seguro", "numero_poliza", "vigencia_poliza"].forEach(id => {
+          const inp = document.querySelector(`[data-campo="IX.${id}"]`);
+          if (inp) inp.value = preset[id];
+        });
+        marcarCambio();
+      }, false));
+    }
+    grilla.appendChild(campoAnexo(anexo, campo));
+  });
+
+  if (anexo.n === "IV") cuerpo.appendChild(espejoDocentes());
+  if (anexo.n === "V")  cuerpo.appendChild(espejoPersonas());
+  if (anexo.n === "IX") cuerpo.appendChild(segurosAdicionales());
+
+  const h2 = el("h2", {onclick:e => e.currentTarget.parentElement.classList.toggle("cerrado")},
+    el("span", {text:`Anexo ${anexo.n} — ${anexo.titulo}`}),
+    el("span", {style:"display:flex; gap:8px; align-items:center"},
+      el("span", {class:"quien", text:anexo.quien}),
+      el("span", {class:"flecha", text:"▼"})));
+
+  const sec = el("section", {id:`anexo-${anexo.n}`, class:"bloque cerrado", "data-anexo":anexo.n}, h2, cuerpo);
+  return sec;
+}
+
+function campoAnexo(anexo, campo){
+  const clave = anexo.n + "." + campo.id;
+  const ayuda = campo.a || AYUDA_COMUN[clave] || "";
+  const wrap = el("div", {class:"campo" + (campo.ancho ? " ancho" : ""), "data-clave":clave});
+
+  const lab = el("label", {},
+    el("span", {text:campo.label}),
+    campo.req ? el("span", {class:"req", text:"*"}) : null);
+  const info = botonAyuda(ayuda, clave); if (info) lab.appendChild(info);
+  if (campo.auto) lab.appendChild(el("span", {class:"tag tag-auto", text:"auto"}));
+  if (campo.calc) lab.appendChild(el("span", {class:"tag tag-auto", text:"calculado"}));
+  wrap.appendChild(lab);
+  if (ayuda) {
+    const cajaAyuda = el("div", {class:"ayuda", text:ayuda});
+    agregarLinkNormativa(cajaAyuda, clave);
+    wrap.appendChild(cajaAyuda);
+  }
+
+  let inp;
+  if (campo.tipo === "acompañantes_telefonos"){
+    // Lista de acompañantes con campos para telefonos
+    const datosAct = estado.anexos[anexo.n][campo.id] || {};
+    const tabla = el("table", {style:"width:100%; border-collapse:collapse"},
+      el("thead", {}, el("tr", {},
+        el("th", {style:"text-align:left; padding:8px; border-bottom:1px solid #ccc"}, "Acompañante"),
+        el("th", {style:"text-align:left; padding:8px; border-bottom:1px solid #ccc"}, "Teléfono"))),
+      el("tbody", {}));
+
+    const tbody = tabla.querySelector("tbody");
+    // Recopilar todos los acompañantes: docentes titulares + reemplazantes + no docentes
+    const acompañantes = [
+      ...estado.personas.filter(p => p.rol === "docente_titular" && p.apellido_nombre),
+      ...estado.personas.filter(p => p.rol === "docente_reemplazante" && p.apellido_nombre),
+      ...estado.personas.filter(p => p.rol === "no_docente" && p.apellido_nombre)
+    ];
+
+    acompañantes.forEach(acomp => {
+      const inpTel = el("input", {type:"text", placeholder:"Ej: 011-1234-5678", style:"width:100%; padding:6px; border:1px solid #ddd; border-radius:3px"});
+      inpTel.value = datosAct[acomp.apellido_nombre] || "";
+      inpTel.addEventListener("input", () => {
+        datosAct[acomp.apellido_nombre] = inpTel.value;
+        estado.anexos[anexo.n][campo.id] = datosAct;
+        marcarCambio();
+      });
+      tbody.appendChild(el("tr", {style:"border-bottom:1px solid #eee"},
+        el("td", {style:"padding:8px"}, acomp.apellido_nombre),
+        el("td", {style:"padding:8px"}, inpTel)));
+    });
+
+    if (acompañantes.length === 0){
+      tbody.appendChild(el("tr", {}, el("td", {colspan:"2", style:"padding:8px; color:#999; text-align:center"}, "Agregá personas a la tabla de arriba para que aparezcan acá")));
+    }
+
+    wrap.appendChild(tabla);
+    return wrap;
+  }
+
+  if (campo.tipo === "textarea"){
+    inp = el("textarea", {});
+  } else if (campo.tipo === "select"){
+    inp = el("select", {});
+    inp.appendChild(el("option", {value:""}, "— elegir —"));
+    campo.opciones.forEach(o => inp.appendChild(el("option", {value:o}, o.replace(/_/g," "))));
+  } else if (campo.tipo === "bool"){
+    inp = el("input", {type:"checkbox"});
+    wrap.classList.add("check");
+  } else if (campo.tipo === "date"){
+    inp = el("input", {type:"text", placeholder:"dd/mm/yyyy", maxLength:"10"});
+  } else {
+    inp = el("input", {type:campo.tipo});
+  }
+
+  if (campo.auto || campo.calc) inp.setAttribute("data-auto","1");
+  inp.setAttribute("data-campo", clave);
+
+  // Para fechas, mostrar en formato dd/mm/yyyy pero almacenar ISO internamente
+  if (campo.tipo === "date"){
+    inp.value = isoADdMmYyyy(estado.anexos[anexo.n][campo.id] || "");
+    aplicarMascaraFecha(inp);
+  } else if (campo.tipo !== "bool"){
+    inp.value = estado.anexos[anexo.n][campo.id] || "";
+  } else {
+    inp.checked = !!estado.anexos[anexo.n][campo.id];
+  }
+
+  const ev = (campo.tipo === "select" || campo.tipo === "bool") ? "change" : "input";
+  inp.addEventListener(ev, () => {
+    if (campo.tipo === "bool"){
+      estado.anexos[anexo.n][campo.id] = inp.checked;
+    } else if (campo.tipo === "date"){
+      const iso = ddMmYyyyAIso(inp.value);
+      estado.anexos[anexo.n][campo.id] = iso;
+      // Validar mientras escribe
+      if (inp.value.length === 10 && !validarFecha(inp.value)){
+        inp.style.borderColor = "var(--alert)";
+      } else {
+        inp.style.borderColor = "";
+      }
+    } else {
+      estado.anexos[anexo.n][campo.id] = inp.value;
+    }
+    marcarCambio();
+    aplicarCondiciones();
+  });
+
+  wrap.appendChild(inp);
+  return wrap;
+}
+
+function docentesPorRol(rol){
+  return estado.personas
+    .filter(p => p.rol === rol && p.apellido_nombre)
+    .map(p => ({apellido_nombre:p.apellido_nombre, cargo:p.cargo || ""}));
+}
+
+function espejoDocentes(){
+  const caja = el("div", {style:"margin-top:18px"});
+  caja.appendChild(el("div", {class:"subtitulo", text:"Docentes responsables (se arma solo)"}));
+  // REMOVIDO: aclaración sobre responsabilidad indelegable — hay inconsistencia a resolver antes de aclarar esto
+  // caja.appendChild(el("p", {class:"nota-anexo", text:
+  //   "Sale de la tabla de Personas: los cargados con rol \"Docente titular\" van como responsables y los \"Docente reemplazante\" como reemplazantes. " +
+  //   "Son los/las docentes en actividad que asumen la responsabilidad del grupo; el Anexo I aclara que esa responsabilidad es indelegable y nunca puede recaer en un acompañante no docente."}));
+
+  // Nota funcional: se mantiene la lógica de separación de docentes titulares vs reemplazantes
+  const nota = el("p", {class:"nota-anexo", text:
+    "Sale de la tabla de Personas: los cargados con rol \"Docente titular\" van como responsables y los \"Docente reemplazante\" como reemplazantes."});
+  caja.appendChild(nota);
+  const tabla = el("table", {},
+    el("thead", {}, el("tr", {},
+      el("th", {style:"width:170px"}, "Condición"), el("th", {}, "Apellido y Nombre"), el("th", {style:"width:200px"}, "Cargo"))),
+    el("tbody", {id:"espejo-docentes"}));
+  caja.appendChild(el("div", {class:"tabla-scroll"}, tabla));
+  return caja;
+}
+
+function pintarEspejoDocentes(){
+  const tb = document.getElementById("espejo-docentes");
+  if (!tb) return;
+  tb.textContent = "";
+  const filas = [
+    ...docentesPorRol("docente_titular").map(d => ["Responsable titular", d]),
+    ...docentesPorRol("docente_reemplazante").map(d => ["Reemplazante", d])
+  ];
+  if (!filas.length){
+    tb.appendChild(el("tr", {}, el("td", {colspan:"3", class:"vacio"},
+      "Sin docentes cargados. Agregalos en la tabla de Personas.")));
+    return;
+  }
+  filas.forEach(([cond, d]) => {
+    tb.appendChild(el("tr", {},
+      el("td", {text:cond}),
+      el("td", {text:d.apellido_nombre || "—"}),
+      el("td", {text:d.cargo || "—"})));
+  });
+}
+
+function espejoPersonas(){
+  const caja = el("div", {style:"margin-top:18px"});
+  caja.appendChild(el("div", {class:"subtitulo", text:"Listado de personas (se arma solo)"}));
+  caja.appendChild(el("p", {class:"nota-anexo", text:
+    "Refleja la tabla de Personas de arriba, con las columnas del formulario original. La asistencia (P/A) se completa a mano el día de la salida, sobre la planilla impresa."}));
+  const tabla = el("table", {},
+    el("thead", {}, el("tr", {},
+      el("th", {style:"width:44px"}, "N°"), el("th", {}, "Apellido y Nombre"), el("th", {}, "Documento"),
+      el("th", {}, "Estudiante"), el("th", {}, "Docente"), el("th", {}, "No Docente"), el("th", {}, "Asistencia"))),
+    el("tbody", {id:"espejo-personas"}));
+  caja.appendChild(el("div", {class:"tabla-scroll"}, tabla));
+  return caja;
+}
+
+function pintarEspejo(){
+  const tb = document.getElementById("espejo-personas");
+  if (!tb) return;
+  tb.textContent = "";
+  if (!estado.personas.length){
+    tb.appendChild(el("tr", {}, el("td", {colspan:"7", class:"vacio"}, "Sin personas cargadas.")));
+    return;
+  }
+  estado.personas.forEach((p,i) => {
+    const esDoc = p.rol.startsWith("docente");
+    tb.appendChild(el("tr", {},
+      el("td", {text:String(i+1)}),
+      el("td", {text:p.apellido_nombre || "—"}),
+      el("td", {text:p.documento || "—"}),
+      el("td", {style:"text-align:center", text:p.rol === "estudiante" ? "X" : ""}),
+      el("td", {style:"text-align:center", text:esDoc ? "X" : ""}),
+      el("td", {style:"text-align:center", text:p.rol === "no_docente" ? "X" : ""}),
+      el("td", {style:"text-align:center; color:#94a3b8", text:"__"})));
+  });
+}
+
+/* Selector de preset de seguro escolar (ver SEGUROS_PRESET) — reutilizado por el seguro
+   principal del Anexo IX y por cada tarjeta de segurosAdicionales(). Elegir un preset
+   copia sus 4 campos a `destinoObj` vía `onElegir`; si resetear=false (seguro principal),
+   el select queda mostrando el preset elegido. Si resetear=true (adicionales), vuelve a
+   "— elegir —" para poder agregar otro. */
+function campoPresetSeguro(labelTexto, onElegir, resetear = true){
+  const wrap = el("div", {class:"campo ancho preset-seguro"});
+  wrap.appendChild(el("label", {}, el("span", {text:labelTexto})));
+  const sel = el("select", {});
+  sel.appendChild(el("option", {value:""}, "— elegir preset (o cargar los datos a mano abajo) —"));
+  SEGUROS_PRESET.forEach(p => sel.appendChild(el("option", {value:p.id}, p.label)));
+  sel.addEventListener("change", () => {
+    const preset = SEGUROS_PRESET.find(p => p.id === sel.value);
+    if (preset) onElegir(preset);
+    if (resetear) sel.value = "";
+  });
+  wrap.appendChild(sel);
+  return wrap;
+}
+
+function copiarPreset(destinoObj, preset){
+  destinoObj.compania_aseguradora = preset.compania_aseguradora;
+  destinoObj.tipo_seguro = preset.tipo_seguro;
+  destinoObj.numero_poliza = preset.numero_poliza;
+  destinoObj.vigencia_poliza = preset.vigencia_poliza;
+}
+
+/* Seguros escolares además del principal (Anexo IX.compania_aseguradora y compañía). En
+   el papel real cada Declaración Jurada sólo tiene lugar para una póliza, así que cada
+   entrada acá genera su propia copia completa del Anexo IX al guardar (mismos datos de
+   identificación, sólo cambia el seguro) — ver `_seguros_adicionales` en salidas.py. */
+function segurosAdicionales(){
+  const caja = el("div", {style:"margin-top:18px"});
+  caja.appendChild(el("div", {class:"subtitulo", text:"Otros seguros escolares"}));
+  caja.appendChild(el("p", {class:"nota-anexo", text:
+    "Si la escuela tiene más de una póliza vigente (ej. una para estudiantes menores de edad y otra para mayores), agregalas acá: cada una imprime su propia copia del Anexo IX, con los mismos datos de identificación y esa póliza."}));
+  caja.appendChild(el("div", {id:"lista-seguros-extra"}));
+  const btn = el("button", {type:"button", class:"btn-chico", text:"+ Agregar otro seguro"});
+  btn.addEventListener("click", () => {
+    if (!estado.anexos.IX._seguros_adicionales) estado.anexos.IX._seguros_adicionales = [];
+    estado.anexos.IX._seguros_adicionales.push(
+      {compania_aseguradora:"", tipo_seguro:"", numero_poliza:"", vigencia_poliza:"", observaciones:""});
+    marcarCambio();
+    pintarSegurosAdicionales();
+  });
+  caja.appendChild(btn);
+  return caja;
+}
+
+function pintarSegurosAdicionales(){
+  const cont = document.getElementById("lista-seguros-extra");
+  if (!cont) return;
+  cont.textContent = "";
+  const extras = (estado.anexos.IX && estado.anexos.IX._seguros_adicionales) || [];
+  extras.forEach((seg, i) => {
+    const encabezado = el("div", {class:"tarjeta-seguro-head"},
+      el("strong", {text:`Seguro adicional #${i + 2} (imprime su propio Anexo IX)`}));
+    const btnQuitar = el("button", {type:"button", class:"btn-borrar", text:"✕", title:"Quitar este seguro"});
+    btnQuitar.addEventListener("click", () => { extras.splice(i, 1); marcarCambio(); pintarSegurosAdicionales(); });
+    encabezado.appendChild(btnQuitar);
+
+    const grilla = el("div", {class:"grilla"});
+    [["compania_aseguradora", "Compañía aseguradora"], ["tipo_seguro", "Tipo de seguro"],
+     ["numero_poliza", "Póliza N°"], ["vigencia_poliza", "Vigencia"]].forEach(([campo, label]) => {
+      const wrap = el("div", {class:"campo"});
+      wrap.appendChild(el("label", {}, el("span", {text:label})));
+      const inp = el("input", {type:"text"});
+      inp.value = seg[campo] || "";
+      inp.addEventListener("input", () => { seg[campo] = inp.value; marcarCambio(); });
+      wrap.appendChild(inp);
+      grilla.appendChild(wrap);
+    });
+    const wrapObs = el("div", {class:"campo ancho"});
+    wrapObs.appendChild(el("label", {}, el("span", {text:"Observaciones"})));
+    const ta = el("textarea", {});
+    ta.value = seg.observaciones || "";
+    ta.addEventListener("input", () => { seg.observaciones = ta.value; marcarCambio(); });
+    wrapObs.appendChild(ta);
+    grilla.appendChild(wrapObs);
+
+    cont.appendChild(el("div", {class:"tarjeta-seguro"},
+      encabezado,
+      campoPresetSeguro("Usar un seguro conocido", preset => {
+        copiarPreset(seg, preset);
+        marcarCambio();
+        pintarSegurosAdicionales();
+      }),
+      grilla));
+  });
+}
+
+/* ============================================================================
+   DERIVADOS Y CONDICIONES
+   ============================================================================ */
+function refrescarDerivados(){
+  ANEXOS.forEach(anexo => anexo.campos.forEach(campo => {
+    if (!campo.auto && !campo.calc) return;
+    const clave = anexo.n + "." + campo.id;
+    const inp = document.querySelector(`[data-campo="${clave}"]`);
+    const valor = campo.calc ? calculado(anexo.n, campo.id) : valorAuto(anexo.n, campo.id);
+    estado.anexos[anexo.n][campo.id] = valor;
+    if (inp && document.activeElement !== inp) {
+      if (campo.tipo === "date") inp.value = isoADdMmYyyy(valor);
+      else inp.value = valor;
+    }
+  }));
+  // Las dos tablas de docentes del Anexo IV no tienen input: salen de Personas
+  estado.anexos["IV"].docentes_responsables_titulares = docentesPorRol("docente_titular");
+  estado.anexos["IV"].docentes_reemplazantes = docentesPorRol("docente_reemplazante");
+  // El Anexo V lleva el listado completo, con las columnas del formulario original
+  estado.anexos["V"].listado_personas = estado.personas.map((p,i) => ({
+    numero: i+1,
+    apellido_nombre: p.apellido_nombre,
+    documento: p.documento,
+    estudiante: p.rol === "estudiante",
+    docente: p.rol.startsWith("docente"),
+    no_docente: p.rol === "no_docente",
+    asistencia: ""   // se completa a mano el día de la salida
+  }));
+
+  // Anexo VI: armar el texto de nombres y telefonos de acompañantes desde la lista
+  if (estado.anexos["VI"]){
+    const datosAcompañantes = estado.anexos["VI"].nombres_telefonos_acompanantes || {};
+    const acompañantesLista = [
+      ...estado.personas.filter(p => p.rol === "docente_titular" && p.apellido_nombre),
+      ...estado.personas.filter(p => p.rol === "docente_reemplazante" && p.apellido_nombre),
+      ...estado.personas.filter(p => p.rol === "no_docente" && p.apellido_nombre)
+    ];
+    const textosAcompañantes = acompañantesLista.map(a => {
+      const tel = datosAcompañantes[a.apellido_nombre];
+      return tel ? (a.apellido_nombre + " - " + tel) : a.apellido_nombre;
+    }).filter(x => x);
+    estado.anexos["VI"].nombres_telefonos_acompanantes_texto = textosAcompañantes.join("\n");
+  }
+
+  pintarEspejo();
+  pintarEspejoDocentes();
+  aplicarCondiciones();
+}
+
+function aplicarCondiciones(){
+  ANEXOS.forEach(anexo => anexo.campos.forEach(campo => {
+    if (!campo.cond) return;
+    const wrap = document.querySelector(`[data-clave="${anexo.n}.${campo.id}"]`);
+    if (!wrap) return;
+    const actual = estado.anexos[anexo.n][campo.cond.campo];
+    const cumple = (campo.cond.valor === true) ? !!actual : actual === campo.cond.valor;
+    wrap.classList.toggle("oculto", !cumple);
+  }));
+}
+
+/* ============================================================================
+   GUARDAR
+
+   "Guardar salida" manda el JSON al servidor (POST /salidas/api/guardar):
+   ahí queda registrada la salida durante 1 año y se generan los PDF de cada
+   anexo. Es la única acción que persiste algo fuera de esta pestaña.
+   ============================================================================ */
+function datosActuales(){
+  const datos = {
+    formato: "appmitre.salidas.v1",
+    resolucion: "RESOC-2024-3871-GDEBA-DGCYE",
+    generado: new Date().toISOString(),
+    datos_comunes: estado.comunes,
+    personas: estado.personas,
+    totales: contarPersonas(),
+    anexos: estado.anexos
+  };
+  // Asegurar que tipo_gestion es siempre "estatal"
+  datos.anexos.IX.tipo_gestion = "estatal";
+  if (idEditar) datos._id_editar = idEditar;
+  return datos;
+}
+
+async function guardarEnServidor(){
+  const datos = datosActuales();
+  const boton = document.getElementById("btn-exportar");
+  boton.disabled = true;
+  document.getElementById("estado").textContent = "Guardando en el servidor...";
+  try {
+    const resp = await fetch("[]", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(datos)
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.id) throw new Error(data.error || ("HTTP " + resp.status));
+    tocado = false;
+    document.getElementById("estado").textContent = "Guardado en el servidor. Redirigiendo...";
+    const destino = idEditar ? ("[]".slice(0,-1) + data.id) : ("[]" + data.id);
+    location.href = destino;
+  } catch (err) {
+    boton.disabled = false;
+    document.getElementById("estado").textContent = "No se pudo guardar en el servidor.";
+    alert("No se pudo guardar la salida en el servidor.\n\n" + err.message);
+  }
+}
+
+function autocompletarLugarPartida(){
+  if (!estado.comunes.lugar_salida) {
+    const institucion = estado.comunes.institucion_educativa || "";
+    const domicilio = estado.comunes.domicilio || "";
+    if (institucion || domicilio) {
+      estado.comunes.lugar_salida = [institucion, domicilio].filter(Boolean).join(", ");
+      // Actualizar el input si existe
+      const inp = document.querySelector('input[data-comun-id="lugar_salida"]');
+      if (inp) inp.value = estado.comunes.lugar_salida;
+    }
+  }
+}
+
+/* ============================================================================
+   ARRANQUE
+   ============================================================================ */
+function dibujarTodo(){
+  const cont = document.getElementById("contenedor");
+  cont.textContent = "";
+  cont.appendChild(renderComunes());
+  cont.appendChild(renderPersonas());
+  ANEXOS.forEach(a => cont.appendChild(renderAnexo(a)));
+
+  // volcar valores guardados en los inputs
+  ANEXOS.forEach(anexo => anexo.campos.forEach(campo => {
+    const v = estado.anexos[anexo.n][campo.id];
+    if (v === undefined || v === "") return;
+    const inp = document.querySelector(`[data-campo="${anexo.n}.${campo.id}"]`);
+    if (!inp) return;
+    if (campo.tipo === "bool") inp.checked = !!v;
+    else if (campo.tipo === "date") inp.value = isoADdMmYyyy(v);
+    else inp.value = v;
+  }));
+
+  pintarPersonas();
+  pintarSegurosAdicionales();
+  refrescarDerivados();
+  autocompletarLugarPartida();
+}
+
+document.getElementById("btn-exportar").addEventListener("click", guardarEnServidor);
+window.addEventListener("beforeunload", e => {
+  if (tocado){ e.preventDefault(); e.returnValue = ""; }
+});
+
+dibujarTodo();

@@ -560,6 +560,24 @@ def kit_item_agregar(id):
     return redirect(url_for('gestion.detalle', slug='recursos', id=id))
 
 
+@bp.route('/recursos/<int:id>/kit/<int:item_id>/editar', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
+def kit_item_editar(id, item_id):
+    titulo = request.form.get('titulo', '').strip()
+    cantidad = request.form.get('cantidad', '').strip()
+    recurso_asignado = request.form.get('recurso_asignado', '').strip()
+    if titulo:
+        con = conectar()
+        cur = con.cursor()
+        cur.execute(
+            "UPDATE kit_items SET titulo = ?, cantidad = ?, recurso_asignado = ? "
+            "WHERE id = ? AND recurso_id = ?",
+            (titulo, cantidad, recurso_asignado, item_id, id))
+        con.commit()
+        con.close()
+    return redirect(url_for('gestion.detalle', slug='recursos', id=id))
+
+
 @bp.route('/recursos/<int:id>/kit/<int:item_id>/eliminar', methods=['POST'])
 @accesos.requiere(PERMISO_ESCRITURA)
 def kit_item_eliminar(id, item_id):

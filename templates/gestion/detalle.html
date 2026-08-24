@@ -52,16 +52,26 @@
             <tbody>
                 {% for item in s['items'] %}
                 <tr>
-                    <td data-label="TÍTULO">{{ item['titulo'] }}</td>
-                    <td data-label="CANT.">{{ item['cantidad'] }}</td>
-                    <td data-label="RECURSO ASIGNADO">{{ item['recurso_asignado'] }}</td>
                     {% if puede(permiso_escritura) %}
+                    <td colspan="3">
+                        <form method="post" class="g-inline-form"
+                              action="{{ url_for('gestion.kit_item_editar', id=fila['id'], item_id=item['id']) }}">
+                            <input type="text" name="titulo" value="{{ item['titulo'] }}" placeholder="Título" required>
+                            <input type="text" name="cantidad" value="{{ item['cantidad'] }}" placeholder="Cantidad" style="width:6em">
+                            <input type="text" name="recurso_asignado" value="{{ item['recurso_asignado'] }}" placeholder="Recurso asignado">
+                            <button type="submit" class="g-btn-mini" title="Guardar">Guardar</button>
+                        </form>
+                    </td>
                     <td>
                         <form method="post" class="g-inline-form" style="display:inline"
                               action="{{ url_for('gestion.kit_item_eliminar', id=fila['id'], item_id=item['id']) }}">
                             <button type="submit" class="g-btn-mini g-btn-danger" title="Quitar">×</button>
                         </form>
                     </td>
+                    {% else %}
+                    <td data-label="TÍTULO">{{ item['titulo'] }}</td>
+                    <td data-label="CANT.">{{ item['cantidad'] }}</td>
+                    <td data-label="RECURSO ASIGNADO">{{ item['recurso_asignado'] }}</td>
                     {% endif %}
                 </tr>
                 {% endfor %}
