@@ -352,7 +352,19 @@ un renglón por ítem, con nombre y cantidad tal como se leyeron.
    el inventario, y no se puede deshacer sin editar a mano.
 6. Después seguís el circuito de alta normal: ficha con tarjeta editable y botón de
    confirmación. Si la lista salió de una foto, pasá su número en el campo `foto` de
-   crear_entidad, igual que con una etiqueta."""
+   crear_entidad, igual que con una etiqueta.
+
+SI EL KIT LLEGA EN VARIAS TANDAS (dos fotos de la misma lista en turnos distintos, o el usuario
+dicta el resto más tarde): antes de armar nada, buscá con buscar_entidad si el kit YA existe.
+- Si NO existe todavía (la primera tanda no se confirmó, o nunca se cargó), juntá los ítems de
+  todas las tandas que tengas a mano en un solo crear_entidad con el `sub_recursos` completo —
+  no llames a crear_entidad una vez por tanda, cada llamada nueva antes de confirmar reemplaza
+  la ficha anterior.
+- Si el kit YA está creado (ya lo confirmaron en un turno anterior) y llega una tanda nueva de
+  ítems para ese mismo kit, NO uses crear_entidad de nuevo — usás editar_entidad(id, sub_recursos=
+  [...]) con SOLO los ítems nuevos: a diferencia de crear_entidad, acá `sub_recursos` SUMA sin
+  pisar lo que el kit ya tenía, así que no hace falta (ni conviene) repetir los de antes. Esto
+  escribe directo, sin ficha de confirmación — avisale al usuario qué sumaste."""
 
 # ---------------------------------------------------------------------------
 # Bloques que sólo van si el acceso es de consulta

@@ -13,6 +13,7 @@ import texto
 
 from ..dominio import SLUGS_ENTIDAD, _modulo, ve_entidad
 from ..padrones import _gente_horarios_parecida
+from .fichas import _normalizar_sub_recursos
 
 # Tope de resultados que se le mandan a Claude. La búsqueda difusa no acota: con una
 # query sin match literal devuelve cualquier cosa que se parezca de escritura, y con
@@ -242,7 +243,7 @@ def _detalle_entidad_fmt(slug, id, permisos=frozenset()):
     return resultado
 
 
-def _editar_entidad(slug, id, campos_dict):
+def _editar_entidad(slug, id, campos_dict, sub_recursos=None):
     """Editar recurso/hito/persona (edición PARCIAL).
 
     `crud.guardar_entidad` hace UPDATE de TODAS las columnas usando
@@ -252,6 +253,14 @@ def _editar_entidad(slug, id, campos_dict):
     se guardarían vacíos. Por eso acá partimos de la fila actual y aplicamos encima solo
     lo que vino. Se arregla del lado del código y no pidiéndole al modelo que mande todos
     los campos, que es justo el tipo de regla que a veces cumple y a veces no.
+
+    `sub_recursos` (solo `recursos`) es aparte, igual que en `fichas._crear_entidad`: NO es
+    una columna de la fila, así que no entra en `campos_merge`. A diferencia del alta, acá
+    es ADITIVO — suma sub-recursos al kit que ya existe, nunca reemplaza ni borra los que
+    ya tiene: es lo que permite mandar el contenido de un kit en varias tandas (dos fotos
+    en turnos distintos) sin perder lo que ya se cargó ni el `recurso_asignado` que alguien
+    haya completado a mano desde la web. Editar o borrar un sub-recurso puntual sigue siendo
+    solo desde la web (`gestion.kit_item_editar` / `kit_item_eliminar`): el chat no lo hace.
     """
     modulo = _modulo(slug)
     con = crud.conectar(modulo)
@@ -271,10 +280,23 @@ def _editar_entidad(slug, id, campos_dict):
 
     # Guardar
     id_result = crud.guardar_entidad(modulo, slug, campos_merge, id=id, con=con)
+
+    agregados = None
+    if id_result and slug == 'recursos' and sub_recursos:
+        items = _normalizar_sub_recursos(sub_recursos)
+        if items:
+            gestion.agregar_kit_items(con.cursor(), id_result, items)
+            con.commit()
+            agregados = items
+
     con.close()
 
     if id_result:
-        return {'ok': True, 'id': id_result, 'antes': antes, 'mensaje': f'Editado {slug} id={id}'}
+        resultado = {'ok': True, 'id': id_result, 'antes': antes, 'mensaje': f'Editado {slug} id={id}'}
+        if agregados:
+            resultado['mensaje'] += f', se sumaron {len(agregados)} sub-recurso(s) al kit'
+            resultado['sub_recursos_agregados'] = agregados
+        return resultado
     else:
         return {'ok': False, 'error': f'Error al editar {slug} id={id}'}
 

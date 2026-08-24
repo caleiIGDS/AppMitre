@@ -115,14 +115,18 @@ cargados acá — no hay tipo/flag aparte, mismo criterio orgánico que `recurso
 sub-recurso es sólo `titulo` + `cantidad` + `recurso_asignado` (texto libre e independiente,
 **no** un link a otro recurso de `recursos`). Helpers en `gestion.py`: `kit_items_recurso()`
 (sub-recursos de un kit, para la ficha) y `buscar_kit_items()` (los que matchean una búsqueda,
-en cualquier kit, para el listado — ver "Búsqueda tolerante" abajo). Se edita sólo desde la
-ficha web (rutas `/gestion/recursos/<id>/kit/agregar` y `/kit/<item_id>/eliminar`, sección
-"Sub-recursos (kit)" del detalle, siempre visible); sin ruta de editar — se corrige quitando y
-volviendo a cargar, igual que las unidades. El chat también puede armar un kit **al dar de alta**
-el recurso: `crear_entidad(..., sub_recursos=[{titulo, cantidad}, ...])` (ver "Alta con ficha de
-confirmación" en `agent_docs/agente-asistente.md`) — sólo título y cantidad, sin
-`recurso_asignado` (ese campo queda para completar a mano desde la web). El chat NO tiene forma de
-agregar sub-recursos a un kit ya existente, sólo en el alta.
+en cualquier kit, para el listado — ver "Búsqueda tolerante" abajo). Desde la ficha web (sección
+"Sub-recursos (kit)" del detalle, siempre visible) se agrega, edita y borra por renglón (rutas
+`/gestion/recursos/<id>/kit/agregar`, `/kit/<item_id>/editar`, `/kit/<item_id>/eliminar`) —
+ahí es donde se completa `recurso_asignado`, que el chat nunca toca.
+
+El chat arma un kit **al dar de alta** el recurso: `crear_entidad(..., sub_recursos=[{titulo,
+cantidad}, ...])` (ver "Alta con ficha de confirmación" en `agent_docs/agente-asistente.md`) —
+sólo título y cantidad, sin `recurso_asignado`. También puede sumar sub-recursos a un kit **ya
+existente** con `editar_entidad(id, sub_recursos=[...])`: a diferencia del resto de esa tool, acá
+es ADITIVO (agrega sin reemplazar ni pisar lo que ya tenía), pensado para cargar un kit en varias
+tandas. El chat no tiene forma de editar ni borrar un sub-recurso puntual — eso sigue siendo
+solo desde la web.
 
 **Galería de fotos** (`fotos`): array JSON con objetos `{b64, tipo, fecha}`.
 - `b64`: imagen codificada en base64 (embedded, sin servicios externos)
@@ -209,6 +213,7 @@ unidad y los sub-recursos de un kit, pero el mecanismo de limpieza es idéntico)
 | `/gestion/recursos/<id>/unidades/mover` | POST | Fija un lugar para unidades puntuales (`numeros`) o una cantidad de ellas |
 | `/gestion/recursos/<id>/unidades/quitar` | POST | Marca una unidad puntual como "sin ubicar" |
 | `/gestion/recursos/<id>/kit/agregar` | POST | Agrega un sub-recurso (`titulo`, `cantidad`, `recurso_asignado`) |
+| `/gestion/recursos/<id>/kit/<item_id>/editar` | POST | Actualiza los tres campos de un sub-recurso puntual |
 | `/gestion/recursos/<id>/kit/<item_id>/eliminar` | POST | Borra un sub-recurso puntual |
 
 `slug` sólo puede ser `recursos`; otro valor → 404. (`hitos` y `personas` viven en

@@ -445,7 +445,27 @@ TOOLS_SCHEMA = [
                                           'términos alternativos razonables (jerga de taller, nombres comunes, '
                                           'abreviaturas, marcas). Si en cualquier momento el usuario nombra un '
                                           'recurso ya cargado con un término distinto al que tiene guardado, '
-                                          'sumalo acá también.')}
+                                          'sumalo acá también.')},
+                'sub_recursos': {
+                    'type': 'array',
+                    'description': ('SUMA sub-recursos a un kit que YA EXISTE — a diferencia de todo lo demás '
+                                    'en esta tool, esto NO reemplaza nada: se agregan a los que el kit ya '
+                                    'tiene, nunca se borran ni se pisan. Es para cargar el contenido de un kit '
+                                    'en varias tandas (ej: te mandaron la mitad de la lista, la cargaste, y '
+                                    'después llega el resto — cada tanda es una llamada a editar_entidad con '
+                                    'estos ítems nuevos, NO tenés que volver a mandar los que ya están). Cada '
+                                    'item es SOLO título + cantidad. Para corregir o borrar un sub-recurso que '
+                                    'ya está cargado no hay tool: decile al usuario que lo haga desde la ficha '
+                                    'del recurso en /gestion. Solo recursos.'),
+                    'items': {
+                        'type': 'object',
+                        'properties': {
+                            'titulo': {'type': 'string', 'description': 'Nombre del sub-recurso, ej: "Sensor ultrasónico HC-SR04"'},
+                            'cantidad': {'type': 'string', 'description': 'Cuántos trae, como texto (ej: "2")'}
+                        },
+                        'required': ['titulo']
+                    }
+                }
             },
             'required': ['slug', 'id']
         }

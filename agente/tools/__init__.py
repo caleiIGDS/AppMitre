@@ -163,7 +163,12 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
                 tool_input.get('slug', ''), tool_input.get('id', 0), contexto_turno,
                 tool_input.get('foto'))
         elif tool_name == 'editar_entidad':
-            resultado = _editar_entidad(tool_input.get('slug', ''), tool_input.get('id', 0), {k: v for k, v in tool_input.items() if k not in ['slug', 'id']})
+            # `sub_recursos` queda AFUERA de los campos por el mismo motivo que en
+            # crear_entidad: no es una columna de la entidad (ver entidades._editar_entidad).
+            resultado = _editar_entidad(
+                tool_input.get('slug', ''), tool_input.get('id', 0),
+                {k: v for k, v in tool_input.items() if k not in ('slug', 'id', 'sub_recursos')},
+                tool_input.get('sub_recursos'))
         elif tool_name == 'vincular_entidad':
             resultado = _vincular_entidad(tool_input.get('slug_origen'), tool_input.get('id_origen'), tool_input.get('slug_destino'), tool_input.get('id_destino'))
         elif tool_name == 'desvincular_entidad':
