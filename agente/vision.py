@@ -7,12 +7,18 @@ elegir entre "bueno para razonar" y "ve imágenes".
 
 Sólo se dispara desde la tool `leer_foto`: nunca automáticamente al llegar una foto.
 
-Tiene dos modos, que son dos prompts sobre la misma llamada y el mismo modelo. El modelo
+Tiene tres modos, que son tres prompts sobre la misma llamada y el mismo modelo. El modelo
 de visión siempre pudo mirar la imagen entera; lo que lo acota a transcribir es el prompt,
 así que agregar "que además describa" no es cambiar de proveedor, es elegir cuál mandar:
 
-- `etiqueta` (default): transcribe lo que está escrito. Es el que alimenta el alta.
+- `etiqueta` (default): transcribe la chapa de UN producto. Es el que alimenta el alta simple.
 - `analisis`: describe lo que se ve cuando no hay nada escrito que sirva.
+- `listado`: transcribe una PÁGINA o TABLA con VARIOS ítems distintos (el contenido de un kit,
+  un remito, una lista de materiales) como un renglón por ítem. Es el que alimenta el alta de
+  un kit vía `sub_recursos` (ver `agente/tools/fichas.py`) — sin este modo, esa clase de foto
+  caía en `etiqueta`, que está pensado para la chapa de un solo producto y no para una tabla
+  de veinte, así que el modelo la trataba como "no es una etiqueta" y sólo la describía en una
+  frase en vez de transcribir la lista.
 
 Se mantienen separados en vez de fusionarlos en un prompt que haga las dos cosas porque
 son dos exigencias opuestas. En `etiqueta` "quedate corto antes que inventar" es la regla
@@ -71,18 +77,47 @@ Reglas:
 6. Si la foto está oscura, movida o muy lejos, decilo en una línea y pedí otra.
 7. No saludes, no expliques lo que vas a hacer, no cierres con preguntas de cortesía."""
 
+# Tercer modo: una página/tabla con VARIOS ítems distintos (contenido de un kit, remito,
+# lista de materiales). Mismas anclas que el lector de etiquetas —sólo lo escrito, la duda
+# explícita, nada de completar con lo que el modelo sepa— pero un renglón por ítem en vez de
+# los campos de un solo producto.
+PROMPT_LISTADO_IMAGEN = """Sos un lector de listas de contenido para el inventario de una escuela técnica.
+Te llega una foto de una PÁGINA, TABLA O PLANILLA con VARIOS ítems distintos (el contenido de
+un kit, un remito, una lista de materiales) y devolvés, en texto plano y en castellano, cada
+ítem que se lea, uno por línea.
+
+Reglas:
+1. Un ítem por línea, en el formato "Nombre: cantidad" (ej: "LED Color verde: 8"). Si el ítem
+   no tiene cantidad visible, poné "Nombre: (sin cantidad)".
+2. Transcribí el nombre tal como está escrito, sin resumir ni traducir. Si hay una foto o ícono
+   sin texto que lo acompañe, ignoralo: esto es para lo que está ESCRITO, no para describir
+   fotos.
+3. NUNCA completes con lo que sepas de ese producto por fuera de lo escrito. Si la cantidad no
+   se lee, no la inventes.
+4. Ignorá lo que no es un ítem: título de la página, número de capítulo, número de página,
+   encabezados de sección.
+5. Si algo se lee a medias, marcalo con la duda explícita (ej: "Modulo Joystick (¿o Joystick
+   x1?): 1").
+6. Si la foto no es una lista de varios ítems sino la chapa de un solo producto, decilo en una
+   línea en vez de forzar un listado de uno solo.
+7. No saludes, no expliques lo que vas a hacer, no cierres con preguntas de cortesía. Solo el
+   listado."""
+
 # Tope de la respuesta, por modo. Una etiqueta bien leída son ~150 tokens; con 500 entra
 # holgada y se acota lo que puede llegar a costar una foto rara. La descripción de un objeto
 # es más larga por naturaleza, pero tampoco queremos un ensayo: 900 alcanza para las cuatro
-# o cinco frases que pide el prompt.
+# o cinco frases que pide el prompt. Un listado de veinte ítems a ~15 tokens cada uno son
+# ~300; 1600 deja margen para una tabla larga sin dejar la puerta abierta a un costo disparado.
 VISION_MAX_TOKENS = 500
 VISION_MAX_TOKENS_ANALISIS = 900
+VISION_MAX_TOKENS_LISTADO = 1600
 
 # El default es `etiqueta` en todos lados: es el caso que alimenta el alta, y si el modelo
 # llama a la tool sin elegir modo, el que no inventa es el que queremos.
 MODOS = {
     'etiqueta': (PROMPT_LECTOR_IMAGEN, VISION_MAX_TOKENS),
     'analisis': (PROMPT_ANALISIS_IMAGEN, VISION_MAX_TOKENS_ANALISIS),
+    'listado': (PROMPT_LISTADO_IMAGEN, VISION_MAX_TOKENS_LISTADO),
 }
 MODO_DEFAULT = 'etiqueta'
 

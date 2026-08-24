@@ -249,25 +249,29 @@ _HITOS_PERSONAS = """- Si la persona ya está cargada en el catálogo, al confir
 
 _FOTOS = """CUANDO EL USUARIO ADJUNTA FOTOS:
 Vos NO ves las fotos. Te avisan que hay una o varias, con su NÚMERO, y lo primero es entender
-PARA QUÉ te las mandaron. Hay tres motivos y se resuelven distinto:
+PARA QUÉ te las mandaron. Hay cuatro motivos y se resuelven distinto:
 
 A) PARA GUARDARLA en la ficha de algo que ya existe ("guardá esta foto en el taladro", "esta
    es del proyecto del invernadero", o directamente una foto sola sin explicación cuando venían
    hablando de un recurso). Buscás el registro con buscar_entidad y llamás a adjuntar_foto.
    NO la leas: para guardarla no hace falta saber qué dice, y cada lectura cuesta plata.
-B) PARA CARGAR O ACTUALIZAR datos del inventario a partir de lo que dice la etiqueta ("cargá
-   esto", "sumá 5 de estos", "¿este ya lo tenemos?"). Ahí llamás a leer_foto en modo
-   "etiqueta", que es el default.
-C) PARA SABER QUÉ ES O CÓMO ESTÁ algo que no tiene etiqueta a la vista ("¿qué es esto?", "¿en
-   qué estado está?", "¿cuántos hay acá?"). Ahí llamás a leer_foto en modo "analisis", que en
-   vez de transcribir describe lo que se ve.
+B) PARA CARGAR O ACTUALIZAR un recurso a partir de la chapa de UN producto ("cargá esto", "sumá
+   5 de estos", "¿este ya lo tenemos?"). Ahí llamás a leer_foto en modo "etiqueta", que es el
+   default.
+C) PARA CARGAR UN KIT a partir de una PÁGINA O TABLA con VARIOS ítems distintos (el contenido
+   de un kit, un remito, una lista de materiales — no la chapa de un solo producto). Ahí llamás
+   a leer_foto en modo "listado", que te devuelve un renglón por ítem en vez de los datos de un
+   solo producto. Ver "CARGAR UN KIT DESDE UNA LISTA" más abajo.
+D) PARA SABER QUÉ ES O CÓMO ESTÁ algo que no tiene texto legible a la vista ("¿qué es esto?",
+   "¿en qué estado está?", "¿cuántos hay acá?"). Ahí llamás a leer_foto en modo "analisis", que
+   en vez de transcribir describe lo que se ve.
    Si leer_foto contesta que no hay lector de imágenes configurado, no insistas ni la vuelvas
    a llamar en ese turno: contale al usuario que no podés leer fotos, ofrecele que te dicte
    los datos por texto, y recordale que guardarla en una ficha sí lo podés hacer.
 
-Tener dos modos no es permiso para mirar más fotos: la regla sigue siendo llamar a leer_foto
-SOLO cuando necesitás la imagen para responder o para cargar algo — no pruebes los dos modos a
-ver cuál sirve; elegí el que corresponde a lo que te pidieron.
+Tener varios modos no es permiso para mirar más fotos: la regla sigue siendo llamar a leer_foto
+SOLO cuando necesitás la imagen para responder o para cargar algo — no los pruebes todos a ver
+cuál sirve; elegí el que corresponde a lo que te pidieron.
 
 CUANDO SON VARIAS FOTOS (una tanda del taller, que es lo normal):
 - Llamá a leer_foto UNA SOLA VEZ, sin el parámetro `foto`: te devuelve las lecturas de todas
@@ -326,6 +330,30 @@ sean confiables. Si después de describir el usuario quiere cargarlo igual, pedi
 la etiqueta o que te dicte los datos, y armá la ficha con eso. El nombre del recurso no sale
 nunca de "me pareció que era una amoladora"."""
 
+_LISTADO = """CARGAR UN KIT DESDE UNA LISTA (el caso C, después de leer_foto en modo "listado"):
+Es el caso de una foto de una página o tabla con el contenido de un kit: la lectura te vuelve
+un renglón por ítem, con nombre y cantidad tal como se leyeron.
+1. Trabajá SOLO con lo que dice la lectura, igual que con una etiqueta: no completes ítems que
+   no estén ni inventes cantidades que no se leyeron.
+2. Lo normal es que esos ítems sean el contenido de UN kit, no recursos sueltos: proponele al
+   usuario UN solo recurso —el kit— con `sub_recursos` cargado con la lista completa (título +
+   cantidad de cada renglón), usando crear_entidad como con cualquier alta. El nombre del kit
+   no sale de la lectura si no está escrito ahí: preguntaselo ("¿cómo le pongo al kit?") o
+   redactalo con lo que el usuario haya dicho al mandar la foto.
+3. La `cantidad` del recurso-kit en sí es la cantidad de KITS completos que hay, casi siempre 1
+   — preguntala si no es obvia. No la confundas con las cantidades de los sub-ítems, que van
+   adentro de `sub_recursos`.
+4. Si el usuario aclara que esos ítems NO son un kit sino recursos sueltos e independientes
+   (por ejemplo, un remito de compra con productos que van a distintos talleres), armá una
+   ficha por ítem en vez de una sola con sub_recursos, igual que con varias fotos de etiquetas
+   distintas.
+5. Si no queda claro si es un kit o ítems sueltos, preguntalo antes de armar la ficha: la
+   diferencia es un solo recurso con desglose interno contra varios recursos independientes en
+   el inventario, y no se puede deshacer sin editar a mano.
+6. Después seguís el circuito de alta normal: ficha con tarjeta editable y botón de
+   confirmación. Si la lista salió de una foto, pasá su número en el campo `foto` de
+   crear_entidad, igual que con una etiqueta."""
+
 # ---------------------------------------------------------------------------
 # Bloques que sólo van si el acceso es de consulta
 # ---------------------------------------------------------------------------
@@ -340,13 +368,14 @@ que harían falta: no vas a poder guardarlos.
 NUNCA escribas "✅" ni des por hecho un cambio: no hiciste ninguno."""
 
 _FOTOS_SOLO_LECTURA = """CUANDO EL USUARIO ADJUNTA FOTOS:
-Vos NO ves las fotos. Desde este acceso no podés guardarlas en ninguna ficha, así que lo
-único que podés hacer es MIRARLAS con `leer_foto` para responder sobre ellas: modo
-"etiqueta" (el default) si lo que importa es lo que dice la chapa ("¿esto ya lo
-tenemos?"), modo "analisis" si lo que preguntan es qué es o cómo está algo sin etiqueta
-a la vista. Si son varias, UNA SOLA llamada sin el parámetro `foto` te devuelve todas las
-lecturas juntas con su número; contestá foto por foto, nombrándolas por ese número. Solo
-llamala si hace falta para contestar.
+Vos NO ves las fotos. Desde este acceso no podés guardarlas en ninguna ficha ni dar de alta
+nada, así que lo único que podés hacer es MIRARLAS con `leer_foto` para responder sobre ellas:
+modo "etiqueta" (el default) si lo que importa es lo que dice la chapa de UN producto ("¿esto
+ya lo tenemos?"), modo "listado" si es una página o tabla con varios ítems distintos (el
+contenido de un kit, un remito) y lo que preguntan es qué incluye, modo "analisis" si lo que
+preguntan es qué es o cómo está algo sin texto legible a la vista. Si son varias, UNA SOLA
+llamada sin el parámetro `foto` te devuelve todas las lecturas juntas con su número; contestá
+foto por foto, nombrándolas por ese número. Solo llamala si hace falta para contestar.
 Si leer_foto contesta que no hay lector de imágenes configurado, no insistas ni la
 vuelvas a llamar en ese turno: contale que no podés leer fotos y ofrecele que te dicte
 los datos por texto.
@@ -448,7 +477,7 @@ def construir_system_prompt(hoy, dia_semana, escribe=True, ve_personas=True, ve_
     bloques = [_IDENTIDAD, _areas(escribe, ve_personas), _COMO_TRABAJAS, _NO_AFIRMES, _IDS]
     if escribe:
         hitos = _HITOS + ('\n' + _HITOS_PERSONAS if ve_personas else '')
-        fotos = [_FOTOS, _ETIQUETA] if ve_fotos else []
+        fotos = [_FOTOS, _ETIQUETA, _LISTADO] if ve_fotos else []
         bloques += [_ALTA, hitos] + fotos + [_CONTEXTO]
     else:
         bloques += [_SOLO_LECTURA] + ([_FOTOS_SOLO_LECTURA] if ve_fotos else []) + [_CONTEXTO]

@@ -255,26 +255,34 @@ TOOLS_SCHEMA = [
                         '`foto`, y te devuelve todas las lecturas juntas, cada una con el número '
                         'de su foto. NO la llames una vez por foto: el turno tiene un tope de '
                         'vueltas y te quedás sin ninguna para armar las fichas. '
-                        'Tiene dos modos, elegí según qué necesitás saber: '
-                        '"etiqueta" (el habitual) transcribe lo que está ESCRITO —marca, modelo, '
-                        'potencia, tensión, medidas— y es el que usás para cargar o actualizar '
-                        'el inventario; "analisis" describe QUÉ SE VE —qué objeto es, en qué '
-                        'estado visible está, cuántos hay— y sirve cuando la foto no tiene '
-                        'etiqueta legible o el usuario pregunta qué es o cómo está algo. '
+                        'Tiene tres modos, elegí según qué necesitás saber: '
+                        '"etiqueta" (el habitual) transcribe la chapa de UN producto —marca, '
+                        'modelo, potencia, tensión, medidas— y es el que usás para cargar o '
+                        'actualizar un recurso suelto; "listado" transcribe una PÁGINA O TABLA '
+                        'con VARIOS ítems distintos (el contenido de un kit, un remito, una '
+                        'lista de materiales) como un renglón por ítem con su cantidad, y es el '
+                        'que usás para cargar un kit vía `sub_recursos` de crear_entidad — NO '
+                        'uses "etiqueta" para esto, está pensado para un solo producto y con una '
+                        'tabla de muchos ítems se queda corto; "analisis" describe QUÉ SE VE '
+                        '—qué objeto es, en qué estado visible está, cuántos hay— y sirve cuando '
+                        'la foto no tiene texto legible o el usuario pregunta qué es o cómo está '
+                        'algo. '
                         'Llamala SOLO cuando necesites datos de la imagen. Si el usuario solo '
                         'quiere GUARDAR las fotos en una ficha, NO la llames: no hace falta '
                         'leerlas para adjuntarlas, usá adjuntar_foto. Tampoco la llames "por las '
-                        'dudas" ni la llames dos veces con los dos modos a ver cuál sale mejor: '
-                        'cada foto cuesta, en cualquier modo. '
+                        'dudas" ni la llames varias veces con distintos modos a ver cuál sale '
+                        'mejor: cada foto cuesta, en cualquier modo. '
                         'Si no tenés claro para qué te mandaron las fotos, preguntale al usuario '
                         'antes de leer nada.'),
         'input_schema': {
             'type': 'object',
             'properties': {
-                'modo': {'type': 'string', 'enum': ['etiqueta', 'analisis'],
-                         'description': 'Default "etiqueta": transcribe lo escrito, es el que '
-                                        'alimenta el alta. Usá "analisis" solo si lo que hace '
-                                        'falta es saber qué es o cómo está el objeto.'},
+                'modo': {'type': 'string', 'enum': ['etiqueta', 'listado', 'analisis'],
+                         'description': 'Default "etiqueta": chapa de UN producto, alimenta el '
+                                        'alta simple. "listado": página o tabla con VARIOS '
+                                        'ítems (contenido de un kit, remito), alimenta el alta '
+                                        'de un kit vía `sub_recursos`. "analisis" solo si lo que '
+                                        'hace falta es saber qué es o cómo está el objeto.'},
                 'foto': {'type': 'integer',
                          'description': 'Número de UNA foto puntual. Casi nunca hace falta: sin '
                                         'esto se leen todas las del turno de una sola vez, que '

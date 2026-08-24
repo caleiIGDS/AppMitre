@@ -61,9 +61,10 @@ def _leer_foto_fmt(contexto_turno=None, modo=MODO_DEFAULT, foto=None):
     loop de tool-calling tiene un tope de vueltas, así que una llamada por foto se comía el
     turno entero antes de llegar a armar las fichas.
 
-    `modo` elige qué mirar, no si mirar: 'etiqueta' transcribe la chapa, 'analisis' describe
-    el objeto. Los dos cuestan una llamada de visión igual, así que la regla de llamarla solo
-    cuando hacen falta los datos no cambia — tener un modo más no es una excusa para leer
+    `modo` elige qué mirar, no si mirar: 'etiqueta' transcribe la chapa de un producto,
+    'listado' transcribe una página/tabla con varios ítems distintos, 'analisis' describe el
+    objeto. Los tres cuestan una llamada de visión igual, así que la regla de llamarla solo
+    cuando hacen falta los datos no cambia — tener más modos no es una excusa para leer
     por las dudas.
     """
     fotos, error = _fotos_del_turno(contexto_turno, foto)
@@ -93,8 +94,8 @@ def _leer_foto_fmt(contexto_turno=None, modo=MODO_DEFAULT, foto=None):
                          'Decíselo al usuario y ofrecele que te dicte los datos por texto o '
                          'que la mande de nuevo en un rato. NO inventes lo que decía.'}
 
-    # El techo es el mismo en los dos modos —lo que no está en la foto no se sabe— pero se
-    # dice distinto porque el riesgo es distinto: en `etiqueta` es completar la chapa de
+    # El techo es el mismo en los tres modos —lo que no está en la foto no se sabe— pero se
+    # dice distinto porque el riesgo es distinto: en `etiqueta`/`listado` es completar de
     # memoria, en `analisis` es opinar de lo que una foto no muestra (si anda, si sirve).
     if modo == 'analisis':
         instruccion = ('Esto es TODO lo que se ve en cada foto, y es una descripción, no una '
@@ -103,6 +104,12 @@ def _leer_foto_fmt(contexto_turno=None, modo=MODO_DEFAULT, foto=None):
                        'máquina, y no afirmes que funciona ni en qué estado está más allá de '
                        'lo que dice la descripción. Si hace falta cargarlo al inventario, '
                        'pedile al usuario los datos que faltan o una foto de la etiqueta.')
+    elif modo == 'listado':
+        instruccion = ('Esto es TODO lo que se leyó en cada foto: un renglón por ítem, con '
+                       'nombre y cantidad tal como estaban escritos. Lo que no está acá no lo '
+                       'sabés: no inventes ítems ni cantidades. Si esta lista es el contenido '
+                       'de un kit, proponé UN solo recurso con `sub_recursos` cargado con todos '
+                       'estos renglones — no una ficha por ítem.')
     else:
         instruccion = ('Esto es TODO lo que se lee en cada foto. Lo que no está acá no lo sabés: '
                        'no lo completes con lo que sepas de esa marca o modelo. Si una lectura '

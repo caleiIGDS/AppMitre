@@ -73,7 +73,7 @@ toda la superficie pública.
 | `db.py` | Las tres tablas propias en `gestion.db`: auditoría, conversación, fotos pendientes. |
 | `padrones.py` | Los dos padrones de personas y el cruce entre ellos. Fuera de `tools/` porque lo usan las tools **y** el system prompt. |
 | `lore.py` | La historia de la escuela y la voz de Emilio (`QUIEN_ES_EMILIO`, `COMO_CUENTA_EMILIO`, `EXCUSA_SIN_HISTORIA`). |
-| `vision.py` | El lector de etiquetas: una llamada suelta, sin tools. |
+| `vision.py` | El lector de etiquetas y listas: una llamada suelta, sin tools. |
 | `prompt.py` | `construir_system_prompt()` — ~280 líneas de contenido, aparte del motor. Lo que cambia en cada turno va al **final** (ver "El orden de los bloques es el cache"). |
 | `llm.py` | Clientes por proveedor y los **dos** loops de tool-calling. `chat_with_tools_stream()` es un **generador**: larga el progreso y devuelve la respuesta. |
 | `filtros.py` | `_ocultar_ids`, `_quitar_acotaciones` y las utilidades de contexto. |
@@ -323,7 +323,9 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
 - `leer_foto(modo?, foto?)` — mira las fotos adjuntadas en ESTE turno y las devuelve en texto,
   cada lectura con el número de su foto. **Sin `foto` lee todas de una sola llamada**, que es
   como hay que usarla. `modo`
-  `etiqueta` (default) transcribe lo escrito; `analisis` describe qué se ve. No
+  `etiqueta` (default) transcribe la chapa de un producto; `listado` transcribe una página o
+  tabla con varios ítems distintos (contenido de un kit, remito) como un renglón por ítem —
+  alimenta el alta de un kit vía `sub_recursos`; `analisis` describe qué se ve. No
   toca la base (por eso está acá) pero **sí gasta la API de visión** (una por foto), así que el
   prompt le pide llamarla solo cuando necesita los datos, nunca para adjuntar. Ver "Alta desde
   foto"
@@ -1181,7 +1183,8 @@ ve dos botones para la misma alta con contenidos distintos.
 | El usuario quiere… | Tool | ¿Cuesta visión? |
 |---|---|---|
 | Guardarlas en una ficha que ya existe ("guardá estas fotos en el taladro") | `adjuntar_foto(slug, id)` — sin `foto` van todas | **No** |
-| Cargar o actualizar el inventario con lo que dicen las etiquetas | `leer_foto()` → `crear_entidad(foto=N)` / `editar_entidad` | Sí (~US$0,0004 por foto) |
+| Cargar o actualizar el inventario con lo que dice la chapa de un producto | `leer_foto()` → `crear_entidad(foto=N)` / `editar_entidad` | Sí (~US$0,0004 por foto) |
+| Cargar un KIT desde una página/tabla con varios ítems distintos | `leer_foto(modo='listado')` → `crear_entidad(foto=N, sub_recursos=[…])` | Sí (misma llamada, tope más alto) |
 | Saber qué es o cómo está algo sin etiqueta legible | `leer_foto(modo='analisis')` | Sí (misma llamada, tope más alto) |
 | No se entiende | — | No: el prompt le pide **preguntar**, no leer por las dudas |
 
@@ -1293,8 +1296,11 @@ cinco unidades iguales son **un** recurso con `cantidad` 5,
 no cinco altas; antes de la ficha se busca por marca/modelo y por nombre genérico, porque con
 una foto lo más común es que el recurso ya exista y corresponda sumar stock con
 `editar_entidad`; las especificaciones van en `descripcion`, no amontonadas en el `nombre`.
-Si la lectura describe algo que no es una etiqueta (una máquina, un tablero, una planilla en
-papel), se cuenta qué se ve y se pregunta qué hacer, no se da de alta sola.
+Si la lectura describe algo que no es la chapa de un producto (una máquina entera, un tablero),
+se cuenta qué se ve y se pregunta qué hacer, no se da de alta sola. Una página o tabla con
+varios ítems (una lista de materiales, el contenido de un kit) no cae acá: para eso está el
+modo `listado` (ver abajo), no `etiqueta` — con `etiqueta` esa clase de foto se leía como "no es
+una etiqueta" y sólo se describía en una frase, sin transcribir la lista.
 
 #### El lector de imágenes (`_get_vision_config`, `_leer_imagen`)
 
@@ -1307,20 +1313,22 @@ Es una llamada suelta, **sin tools**. Todo lo que viene *después* de leer —ca
 duplicados, circuito de ficha— sigue en el system prompt del agente, que es quien tiene las
 tools. **Solo se dispara desde la tool `leer_foto`**: nunca automáticamente al llegar una foto.
 
-**Dos modos, que son dos prompts sobre la misma llamada y el mismo modelo** (`MODOS` en
+**Tres modos, que son tres prompts sobre la misma llamada y el mismo modelo** (`MODOS` en
 `vision.py`, elegidos con el parámetro `modo` de `leer_foto`):
 
 | Modo | Prompt | `max_tokens` | Para qué |
 |---|---|---|---|
-| `etiqueta` (default) | `PROMPT_LECTOR_IMAGEN` | 500 | Transcribir lo escrito. Es el que alimenta el alta |
+| `etiqueta` (default) | `PROMPT_LECTOR_IMAGEN` | 500 | Transcribir la chapa de UN producto. Es el que alimenta el alta simple |
+| `listado` | `PROMPT_LISTADO_IMAGEN` | 1600 | Transcribir una página/tabla con VARIOS ítems distintos, uno por renglón. Alimenta el alta de un kit vía `sub_recursos` (ver "CARGAR UN KIT DESDE UNA LISTA" en `prompt.py`) |
 | `analisis` | `PROMPT_ANALISIS_IMAGEN` | 900 | Describir qué objeto es, su estado visible y cuántos hay |
 
-Los dos comparten las mismas anclas —solo lo que se ve, la duda explícita, nunca completar con
-lo que el modelo sepa del producto— pero **se mantienen separados a propósito**: en `etiqueta`
-la regla "quedate corto antes que inventar" es lo que hace confiable el alta, y un prompt que
-además pidiera describir le abriría la puerta a completar la chapa de memoria. Un `modo`
-desconocido cae al default en vez de fallar: lo elige el modelo, y una alucinación en el nombre
-del modo no tiene por qué costar la foto.
+Los tres comparten las mismas anclas —solo lo que se ve, la duda explícita, nunca completar con
+lo que el modelo sepa del producto— pero **se mantienen separados a propósito**: en `etiqueta` y
+`listado` la regla "quedate corto antes que inventar" es lo que hace confiable el alta, y un
+prompt que además pidiera describir le abriría la puerta a completar de memoria. `listado` tiene
+un `max_tokens` más alto porque una tabla de veinte ítems no entra en el tope pensado para la
+chapa de un solo producto. Un `modo` desconocido cae al default en vez de fallar: lo elige el
+modelo, y una alucinación en el nombre del modo no tiene por qué costar la foto.
 
 **Tener dos modos no relaja el gate**: `leer_foto` se sigue llamando solo cuando hace falta la
 imagen, una vez por foto. El prompt le prohíbe explícitamente probar los dos modos a ver cuál
