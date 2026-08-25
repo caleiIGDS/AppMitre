@@ -36,11 +36,16 @@ PERMISOS = [
     # es un campo que ni el interno de lectura ni el de escritura deben poder ver/editar
     # desde ningún lado — lo completa el asistente solo (ver agent_docs/gestion-conocimiento.md).
     ('gestion.alias', 'Ver los alias ocultos de los recursos (solo consulta)', 'admin'),
+    # Mismo verbo 'admin' y mismo motivo que gestion.alias: son chips de auditoría del
+    # inventario (qué está vencido de revisión, qué está dado de baja), no algo que un
+    # interno de lectura/escritura necesite para su tarea del día a día.
+    ('gestion.auditoria', 'Ver los filtros de auditoría del listado (vencidos y dados de baja)', 'admin'),
 ]
 GRUPO_PERMISOS = 'Gestión de recursos'
 PERMISO_LECTURA = 'gestion.leer'
 PERMISO_ESCRITURA = 'gestion.editar'
 PERMISO_ALIAS = 'gestion.alias'
+PERMISO_AUDITORIA = 'gestion.auditoria'
 
 # Respaldos rotativos: la maquinaria vive en respaldos.py (capa 0). Acá sólo se declara
 # con qué prefijo se guardan y qué tabla mirar para saber si la DB tiene datos de verdad
@@ -274,9 +279,11 @@ def secciones_detalle(slug, id, cur):
         secciones.append({'titulo': 'Ubicación', 'slug': None,
                           'items': lugares_recurso_agrupado(cur, id), 'tipo': 'ubicaciones'})
         # Un recurso es "kit" en cuanto tiene sub-recursos cargados acá, sin flag aparte
-        # (mismo criterio orgánico que el desglose por ubicación).
+        # (mismo criterio orgánico que el desglose por ubicación). `oculto_si_vacio` para
+        # que un recurso sin sub-recursos no muestre la sección a quien no puede escribir.
         secciones.append({'titulo': 'Sub-recursos (kit)', 'slug': None,
-                          'items': kit_items_recurso(cur, id), 'tipo': 'kit_items'})
+                          'items': kit_items_recurso(cur, id), 'tipo': 'kit_items',
+                          'oculto_si_vacio': True})
     return secciones
 
 

@@ -70,6 +70,9 @@
 
     <div class="g-relations">
         {% for s in secciones %}
+        {# `oculto_si_vacio`: sección opcional (ej. sub-recursos de un kit) que no debe
+           llamar la atención de quien no puede escribir si no hay nada cargado. #}
+        {% if not (s.get('oculto_si_vacio') and not s['items'] and not puede(permiso_escritura)) %}
         <div class="g-relation-box">
             <h4>{{ s.titulo | upper }}</h4>
             {# `scoped` porque el bloque está dentro del for y necesita ver `s`. #}
@@ -85,6 +88,7 @@
             {% endif %}
             {% endblock %}
         </div>
+        {% endif %}
         {% endfor %}
     </div>
 </div>

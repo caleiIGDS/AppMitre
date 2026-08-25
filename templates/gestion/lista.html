@@ -38,12 +38,14 @@
         </select>
         {% endif %}
         <span class="g-filtro-spacer"></span>
+        {% if puede('gestion.auditoria') %}
         <button type="button" class="g-chip-vencidos" id="filtro-vencidos" aria-pressed="false">
             Sin revisar hace +6 meses <span id="filtro-vencidos-count">{{ vencidos_recurso | length }}</span>
         </button>
         <button type="button" class="g-chip-vencidos" id="filtro-baja" aria-pressed="false">
             Mostrar dados de baja
         </button>
+        {% endif %}
     </div>
     {% endif %}
 </div>

@@ -2434,14 +2434,17 @@ body.g-sidebar-abierto { overflow: hidden; }
 
     .g-table tbody tr:hover { background: var(--g-surface); }
 
+    /* flex-start (no space-between): con un valor corto como "CANT." el número
+       quedaba pegado al borde derecho de la pantalla, separado de su etiqueta
+       por un hueco enorme. Etiqueta y valor van juntos a la izquierda. */
     .g-table td {
         display: flex;
         align-items: baseline;
-        justify-content: space-between;
-        gap: 12px;
+        justify-content: flex-start;
+        gap: 8px;
         padding: 5px 12px;
         border-bottom: none;
-        text-align: right;
+        text-align: left;
     }
 
     /* Sin valor no hay línea: la etiqueta sola no dice nada. */
