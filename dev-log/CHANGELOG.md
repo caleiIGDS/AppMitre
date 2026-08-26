@@ -6,6 +6,15 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-26] — El chat del agente expira a las 4 horas, y avisa cuando reinicia
+
+**Archivos**: `agente/db.py`, `agente/rutas.py`, `static/gestion-agente.js`
+
+`CONVERSACION_MINUTOS` pasa de 15 a 240. Además `_conv_cargar()` distingue "nunca hubo
+conversación" de "venció por inactividad" (`vencida`), y `/chat` y `/chat/stream` lo exponen
+como `reiniciada` en la respuesta: el front lo usa para borrar del chat lo que había quedado
+pintado de una charla que el servidor ya olvidó.
+
 ## [2026-08-25] — El chat del agente expira a los 15 minutos, no a los 30 días
 
 **Archivos**: `agente/db.py`

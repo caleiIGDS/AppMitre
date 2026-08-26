@@ -250,6 +250,9 @@ def _turno_stream(mensaje_usuario, fotos=(), mandadas=0):
     """
     # Conversación: sale de gestion.db, no de la cookie (ver _conv_cargar).
     conv = _conv_cargar()
+    # Si venía vencida, lo que el front tiene pintado de antes ya no es lo que el agente
+    # recuerda (ver _conv_cargar). Viaja en la respuesta para que limpie la vista vieja.
+    reiniciada = conv['vencida']
     mensajes = conv['historial'][-HISTORIAL_AL_MODELO:]
 
     # Si el usuario hace una pregunta relativa sin especificar quién, inyectar referencia anterior
@@ -369,7 +372,8 @@ def _turno_stream(mensaje_usuario, fotos=(), mandadas=0):
     # en vez de que el usuario tenga que escribir "sí" (ver /revisar y /lote).
     return {'respuesta': respuesta, 'tools': trazas,
             'escritura_fantasma': escritura_fantasma,
-            'confirmaciones': _confirmaciones(fichas)}
+            'confirmaciones': _confirmaciones(fichas),
+            'reiniciada': reiniciada}
 
 
 def _identidad_ficha(pendiente):

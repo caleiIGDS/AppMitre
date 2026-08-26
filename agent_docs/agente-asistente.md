@@ -89,7 +89,10 @@ Las dependencias van en una sola dirección y **no hay ciclos**:
 `dominio → proveedores/db → padrones/lore/vision → tools → prompt/llm → rutas`.
 - **`POST /agente/chat`** — acepta `{mensaje, imagenes?}` (lista de hasta `FOTOS_MAX`=10 fotos
   en base64 o data URL; también acepta `imagen` singular, el contrato viejo);
-  retorna `{respuesta, confirmaciones}`. El backend llama al modelo con el mensaje + tools
+  retorna `{respuesta, confirmaciones, reiniciada}`. `reiniciada` es `true` cuando la
+  conversación había vencido por inactividad y este turno arrancó de cero (ver
+  `_conv_cargar`) — es lo que usa `gestion-agente.js` para borrar del chat lo que quedó
+  pintado de una charla que el servidor ya olvidó. El backend llama al modelo con el mensaje + tools
   disponibles, ejecuta lo que pida (tools de lectura y escritura), repite hasta respuesta final,
   audita escrituras en `agente_log`. `mensaje` puede venir vacío **si vienen `imagenes`** (mandar
   solo la foto de una etiqueta es un caso normal); vacío y sin fotos es `400`. El cuerpo del turno
@@ -1233,7 +1236,7 @@ incluso desde otra página (el historial se repinta y los botones siguen ahí), 
 tarde que el timeout de la conversación. Va en tabla propia y no dentro del JSON de `fichas`
 porque esa columna se reescribe entera en cada turno: con hasta ocho fotos en base64 adentro,
 cada mensaje del chat arrastraría varios MB de escritura. Las que quedan sin usar se barren a
-los `CONVERSACION_MINUTOS` (15) minutos, al cerrar el lote (`_cerrar_lote()`, cuando ya no
+los `CONVERSACION_MINUTOS` (240, 4 horas), al cerrar el lote (`_cerrar_lote()`, cuando ya no
 queda ninguna ficha que las necesite) y con `/reset`.
 
 #### Las fotos se ven en el chat
@@ -1436,7 +1439,7 @@ dentro de la conversación — no el turno, porque la confirmación puede llegar
 página o mucho después, y no el token de la ficha, porque ese cambia en cuanto la ficha se
 rearma con una corrección. Ver "La foto se ata al NÚMERO, no al token de la ficha".
 
-Las dos se barren a los `CONVERSACION_MINUTOS` (15) minutos de inactividad: al leer (si la fila
+Las dos se barren a los `CONVERSACION_MINUTOS` (240, 4 horas) de inactividad: al leer (si la fila
 está vencida, `_conv_cargar`/`_foto_lote_tomar` la tratan como si no existiera) y también en la
 misma escritura que las usa — no en `init_db()`, porque el server puede estar meses sin
 reiniciar.

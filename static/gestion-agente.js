@@ -288,7 +288,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // perder porque el usuario haya preguntado otra cosa en el medio (se repinta al llegar
     // la respuesta, con su estado).
     if (loteAbierto.length < 2) quitarConfirmaciones();
-    agregarMensaje(mensaje, 'user', imagenesSeleccionadas);
+    const wrapUsuario = agregarMensaje(mensaje, 'user', imagenesSeleccionadas);
 
     // Preparar payload
     const payload = { mensaje };
@@ -332,6 +332,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Remover loader
         const loader = messagesDiv.querySelector('.agente-message-loading');
         if (loader) (loader.closest('.agente-message-wrap') || loader).remove();
+
+        // El server venció la conversación por inactividad (ver CONVERSACION_MINUTOS) y
+        // arrancó de cero: lo que había pintado de turnos anteriores ya no es lo que el
+        // agente recuerda. Se borra todo menos el mensaje que se acaba de mandar, para que
+        // la vista no siga mostrando una charla que el servidor ya olvidó.
+        limpiarSiReiniciada(data, wrapUsuario);
 
         if (data.error) {
           agregarMensaje('Error: ' + data.error, 'error');
@@ -410,7 +416,7 @@ document.addEventListener('DOMContentLoaded', function() {
       meta.textContent = etiquetaMeta('assistant', conHora !== false);
       const msgDiv = document.createElement('div');
       msgDiv.className = 'agente-message agente-message-loading';
-      msgDiv.innerHTML = '<div class="agente-loader"><span></span><span></span><span></span></div><span class="agente-loader-texto">Pensando...</span>';
+      msgDiv.innerHTML = '<span class="agente-loader-texto">Pensando</span><div class="agente-loader"><span></span><span></span><span></span></div>';
       wrap.appendChild(meta);
       wrap.appendChild(msgDiv);
       messagesDiv.appendChild(wrap);
@@ -470,6 +476,18 @@ document.addEventListener('DOMContentLoaded', function() {
     messagesDiv.appendChild(wrap);
     irAlFinal();
     return wrap;
+  }
+
+  // El server marca `reiniciada: true` cuando la conversación venció por inactividad (ver
+  // CONVERSACION_MINUTOS en agente/db.py) y el turno arrancó de cero: lo que hay pintado de
+  // antes en el chat ya no es lo que el agente recuerda. Se borra todo menos lo que se
+  // agregó para ESTE intercambio (`exceptoWrap`), para que la vista no siga mostrando una
+  // charla que el servidor ya olvidó.
+  function limpiarSiReiniciada(data, exceptoWrap) {
+    if (!data || !data.reiniciada) return;
+    Array.from(messagesDiv.children).forEach(function(el) {
+      if (el !== exceptoWrap) el.remove();
+    });
   }
 
   // --- Botones de confirmar alta ---

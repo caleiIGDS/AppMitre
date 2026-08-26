@@ -53,8 +53,8 @@ CREATE TABLE IF NOT EXISTS agente_fotos_pendientes (
 HISTORIAL_GUARDADO = 60    # mensajes que se conservan en la DB (30 turnos)
 HISTORIAL_AL_MODELO = 24   # mensajes que se le mandan al LLM por turno (12 turnos)
 FICHAS_MAX = 20            # altas sin confirmar que se recuerdan a la vez
-CONVERSACION_MINUTOS = 15  # a los N minutos sin uso, la conversación (y sus fotos
-                           # pendientes de confirmar) se descarta
+CONVERSACION_MINUTOS = 240  # a los N minutos sin uso, la conversación (y sus fotos
+                            # pendientes de confirmar) se descarta
 
 # Fotos por mensaje. Cada una cuesta una llamada de visión y ~300 KB de subida: diez son
 # ~3 MB por el wifi de la escuela, que es una tanda de estantería y entra cómodo. Más que
@@ -103,17 +103,24 @@ def _conv_cargar():
     por una escritura a medias), arranca vacío en vez de reventar el chat. Lo mismo si la
     conversación quedó más de CONVERSACION_MINUTOS sin uso — el chat "muere" y arranca de
     cero, aunque el barrido de la fila en la DB recién pase en la próxima escritura.
+
+    `vencida` distingue ese último caso (había fila, pero ya no cuenta) de que nunca hubo
+    conversación: es lo que le avisa al front que lo que tiene pintado en pantalla ya no es
+    lo que el agente recuerda, para que lo borre en vez de seguir mostrando una charla que
+    el servidor olvidó.
     """
     con = conectar()
     fila = con.execute(
-        "SELECT historial, entidad_actual, fichas FROM agente_conversaciones "
-        "WHERE sid = ? AND actualizado >= ?",
-        (_sid(), _vencimiento())
+        "SELECT historial, entidad_actual, fichas, actualizado FROM agente_conversaciones "
+        "WHERE sid = ?",
+        (_sid(),)
     ).fetchone()
     con.close()
 
     if not fila:
-        return {'historial': [], 'entidad_actual': None, 'fichas': {}}
+        return {'historial': [], 'entidad_actual': None, 'fichas': {}, 'vencida': False}
+    if fila['actualizado'] < _vencimiento():
+        return {'historial': [], 'entidad_actual': None, 'fichas': {}, 'vencida': True}
     try:
         historial = json.loads(fila['historial'] or '[]')
         fichas = json.loads(fila['fichas'] or '{}')
@@ -121,7 +128,8 @@ def _conv_cargar():
         historial, fichas = [], {}
     return {'historial': historial,
             'entidad_actual': fila['entidad_actual'],
-            'fichas': fichas}
+            'fichas': fichas,
+            'vencida': False}
 
 
 def _conv_guardar(historial, entidad_actual, fichas):

@@ -1056,6 +1056,10 @@ body {
     letter-spacing: 1.2px;
     text-transform: uppercase;
     color: var(--g-muted);
+    /* padding-right extra: el ancho de esta burbuja sale de un shrink-to-fit anidado en dos
+       flex column, y el texto mayúscula+letter-spacing lo subestima un puñado de px frente
+       al render real — sin este colchón los puntitos asoman por el borde derecho. */
+    padding-right: 24px;
 }
 
 .agente-loader {
