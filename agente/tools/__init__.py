@@ -17,8 +17,8 @@ from ..lore import (EXCUSA_SIN_HISTORIA, _cargar_historia_completa, _historia_fm
                     _instruccion_tono)
 from ..vision import MODO_DEFAULT
 from .entidades import (_buscar_entidad_fmt, _desvincular_entidad, _detalle_entidad_fmt,
-                        _editar_entidad, _eliminar_entidad, _listar_todos_fmt,
-                        _vincular_entidad)
+                        _editar_entidad, _eliminar_entidad, _listar_alias_fmt,
+                        _listar_todos_fmt, _vincular_entidad)
 from .esquemas import (PERMISO_POR_TOOL, TOOLS_ESCRITURA, TOOLS_FOTO, TOOLS_SCHEMA,
                        slug_visible, tools_permitidas)
 from .fichas import _crear_entidad, _editar_sub_recurso, _eliminar_sub_recurso
@@ -115,6 +115,8 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
             resultado = _buscar_entidad_fmt(tool_input.get('slug', ''), tool_input.get('query', ''))
         elif tool_name == 'listar_todos':
             resultado = _listar_todos_fmt(tool_input.get('slug', ''))
+        elif tool_name == 'listar_alias':
+            resultado = _listar_alias_fmt(tool_input.get('slug', ''))
         elif tool_name == 'detalle_entidad':
             resultado = _detalle_entidad_fmt(tool_input.get('slug', ''),
                                              tool_input.get('id', 0), permisos)

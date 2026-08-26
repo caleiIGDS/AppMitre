@@ -6,6 +6,14 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-25] — El chat del agente expira a los 15 minutos, no a los 30 días
+
+**Archivos**: `agente/db.py`
+
+`CONVERSACION_DIAS` (30) pasa a ser `CONVERSACION_MINUTOS` (15) y ahora también se aplica al
+**leer** (`_conv_cargar`, `_foto_lote_tomar`), no solo al barrer en cada escritura: una
+conversación o foto pendiente sin uso por más de 15 min se trata como si no existiera.
+
 ## [2026-08-24] — El chat puede armar un kit al dar de alta un recurso
 
 **Archivos**: `agente/tools/esquemas.py`, `agente/tools/__init__.py`, `agente/tools/fichas.py`,

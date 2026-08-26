@@ -2619,6 +2619,252 @@ body.g-sidebar-abierto { overflow: hidden; }
 .g-recurso-baja { opacity: 0.55; }
 .g-recurso-baja .g-item-link { text-decoration: line-through; }
 
+/* ---------- Listado de recursos en celular (visual "6a") ---------- */
+/* Mockup: canvas de diseño "Inventario Celular - 2 propuestas", variante 6a.
+   Abajo de 700px el listado de recursos deja el modelo de tarjeta genérica
+   (la de arriba, ".g-table" de crud-motor) por un renglón compacto: nombre
+   arriba, lugar debajo en gris, cantidad fija a la derecha en toda la altura
+   de la fila, y el estado sólo si no es "Disponible" (la mayoría de las
+   fichas están disponibles: repetirlo en cada renglón es ruido). Todo por
+   selector — sin tocar el markup de templates/gestion/lista.html más que el
+   `data-estado` que ya trae cada <td> — porque ".g-panel-top" y ".g-fichas-count"
+   sólo los usa /gestion/recursos (ver el comentario de esa sección, arriba). */
+@media (max-width: 700px) {
+    /* Franja de búsqueda + alta, con el mismo azul que el header de la app:
+       sin el borde ni el título "RECURSOS" (el conteo ya lo da el recuento
+       de filas), para que se lea como parte del header y no como una tarjeta
+       más. */
+    .g-panel-top {
+        background: var(--g-primary);
+        border: none;
+        padding: 12px 14px;
+    }
+
+    /* Título + conteo de fichas: sobra en celular, el bloque de filtros de
+       abajo ya nombra la vista y cuenta las filas visibles. !important
+       porque ese div trae `style="display: flex"` inline en lista.html. */
+    .g-panel-top .g-toolbar > div:first-child { display: none !important; }
+
+    .g-panel-top .g-toolbar { margin-bottom: 10px; }
+
+    .g-panel-top .g-toolbar-actions { width: 100%; flex-wrap: nowrap; }
+
+    .g-panel-top .g-search-mini {
+        flex: 1;
+        min-width: 0;
+        background: rgba(0, 0, 0, 0.2);
+        border-color: rgba(255, 255, 255, 0.4);
+    }
+
+    .g-panel-top .g-search-mini input {
+        background: transparent;
+        color: white;
+    }
+
+    .g-panel-top .g-search-mini input::placeholder { color: rgba(255, 255, 255, 0.6); }
+
+    /* Botón CREAR: ícono "+" solo. El texto sigue ahí para lectores de
+       pantalla (font-size: 0 no lo saca del accessibility tree), sólo se
+       reemplaza visualmente con el "+" del ::before. */
+    .g-panel-top .g-toolbar-actions .g-btn {
+        flex: 0 0 auto;
+        width: 44px;
+        padding: 0;
+        font-size: 0;
+    }
+
+    .g-panel-top .g-toolbar-actions .g-btn::before {
+        content: '+';
+        font-size: 22px;
+        line-height: 1;
+    }
+
+    /* Filtros: tira blanca propia debajo del azul, que scrollea de costado
+       en vez de envolver en varias filas (antes ganaba altura de sobra). */
+    .g-filtros {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        border-top: none;
+        background: var(--g-surface);
+        margin: 0 -14px -12px;
+        padding: 10px 14px;
+    }
+
+    .g-filtros::-webkit-scrollbar { display: none; }
+
+    .g-filtros-label,
+    .g-filtro-spacer { display: none; }
+
+    .g-filtro-select,
+    .g-chip-vencidos {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    /* La tabla pasa de "tarjeta genérica" a lista compacta: se mantiene el
+       borde y el fondo que la tarjeta ya no tiene (pisa la regla genérica
+       de arriba porque este selector es más específico, no por el orden). */
+    .g-panel-top + .g-table-wrap {
+        border: 2px solid var(--g-primary);
+        border-top: none;
+        background: var(--g-surface);
+    }
+
+    /* Encabezado de columnas, pegado arriba al scrollear: "RECURSO · LUGAR"
+       nace del <th>RECURSO</th> (texto real oculto con font-size: 0, más
+       el ::before con el rótulo compuesto) y "CANT." se deja tal cual;
+       LUGAR ASIGNADO y ESTADO no tienen columna propia en esta vista. */
+    .g-panel-top + .g-table-wrap .g-table thead {
+        display: block;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .g-panel-top + .g-table-wrap .g-table thead tr {
+        display: grid;
+        grid-template-columns: 1fr 40px;
+        /* Sin este reset hereda fondo blanco y borde gris de ".g-table tr"
+           (la regla genérica de tarjeta, arriba): se veía como un borde
+           blanco arriba y abajo del encabezado pegajoso. */
+        background: var(--g-primary);
+        border: none;
+        margin-bottom: 0;
+        padding: 0;
+    }
+
+    .g-panel-top + .g-table-wrap .g-table thead th {
+        display: block;
+        padding: 6px 0 6px 12px;
+    }
+
+    .g-panel-top + .g-table-wrap .g-table thead th:first-child {
+        font-size: 0;
+    }
+
+    .g-panel-top + .g-table-wrap .g-table thead th:first-child::before {
+        content: 'RECURSO · LUGAR';
+        font-size: 10px;
+        font-weight: bold;
+        letter-spacing: 2px;
+    }
+
+    .g-panel-top + .g-table-wrap .g-table thead th:nth-child(2) {
+        text-align: center;
+        padding: 6px 2px;
+        font-size: 9px;
+        letter-spacing: 0.5px;
+        border-left: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .g-panel-top + .g-table-wrap .g-table thead th:nth-child(3),
+    .g-panel-top + .g-table-wrap .g-table thead th:nth-child(4) {
+        display: none;
+    }
+
+    /* Cada fila es un grid de 2 columnas: la cantidad (dato que se lee de
+       un vistazo) fija a la derecha, ocupando todo el alto; nombre, lugar y
+       estado apilados a la izquierda — reordenados con grid-row, no con el
+       DOM (que sigue siendo RECURSO/CANT./LUGAR/ESTADO, así el foco por
+       teclado no cambia). */
+    .g-panel-top + .g-table-wrap .g-table tbody tr {
+        display: grid;
+        grid-template-columns: 1fr 40px;
+        grid-template-rows: auto auto auto;
+        border: none;
+        border-bottom: 1px solid var(--g-border);
+        margin-bottom: 0;
+        padding: 0;
+    }
+
+    .g-panel-top + .g-table-wrap .g-table tbody tr:nth-child(even) { background: #fafbfc; }
+
+    /* La regla de arriba (display: grid) es más específica que ".g-table tbody
+       tr[hidden] { display: none }" de la sección de tabla base y se la comía:
+       la búsqueda en vivo y "mostrar dados de baja" (gestion.js) dejaban de
+       ocultar filas en celular. Se repite acá con más peso para que gane. */
+    .g-panel-top + .g-table-wrap .g-table tbody tr[hidden] { display: none; }
+
+    .g-panel-top + .g-table-wrap .g-table td {
+        display: block;
+        padding: 0;
+        border: none;
+    }
+
+    .g-panel-top + .g-table-wrap .g-table td::before { display: none; }
+
+    .g-panel-top + .g-table-wrap .g-table td[data-label="RECURSO"] {
+        grid-column: 1;
+        grid-row: 1;
+        padding: 9px 8px 2px 12px;
+        font-size: 14px;
+    }
+
+    /* El tipo y el "· por alias" no entran en el espacio de una lista de
+       nueve filas por pantalla; el nombre solo alcanza para reconocer el
+       ítem (para el detalle completo está la ficha). */
+    .g-panel-top + .g-table-wrap .g-table td[data-label="RECURSO"] .g-recurso-sub,
+    .g-panel-top + .g-table-wrap .g-table td[data-label="RECURSO"] .g-tag-alias {
+        display: none;
+    }
+
+    .g-panel-top + .g-table-wrap .g-table td[data-label="LUGAR ASIGNADO"] {
+        grid-column: 1;
+        grid-row: 2;
+        padding: 0 8px 9px 12px;
+        font-size: 11px;
+        color: var(--g-muted);
+    }
+
+    .g-panel-top + .g-table-wrap .g-table td[data-label="LUGAR ASIGNADO"] .g-lugar-item {
+        display: block;
+    }
+
+    /* "Sin revisar hace +6 meses" hoy sólo existe como conteo agregado del
+       filtro (data-vencido en la <tr>, ver lista.html): acá se vuelve visible
+       fila por fila, generado por CSS, sin agregar un <td> nuevo. */
+    .g-panel-top + .g-table-wrap .g-table tr[data-vencido="1"] td[data-label="LUGAR ASIGNADO"]::after {
+        content: 'Sin revisar';
+        display: block;
+        width: fit-content;
+        margin-top: 4px;
+        border: 1px dashed var(--g-accent);
+        color: var(--g-accent);
+        font-size: 10px;
+        font-weight: bold;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        padding: 2px 7px;
+    }
+
+    /* El estado sólo ocupa lugar cuando no es "Disponible" (data-estado
+       viene del propio fila['estado'], ver lista.html). */
+    .g-panel-top + .g-table-wrap .g-table td[data-label="ESTADO"]:empty,
+    .g-panel-top + .g-table-wrap .g-table td[data-estado="Disponible"] {
+        display: none;
+    }
+
+    .g-panel-top + .g-table-wrap .g-table td[data-label="ESTADO"]:not(:empty) {
+        grid-column: 1;
+        grid-row: 3;
+        padding: 0 8px 9px 12px;
+    }
+
+    .g-panel-top + .g-table-wrap .g-table td[data-label="CANT."] {
+        grid-column: 2;
+        grid-row: 1 / span 3;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-left: 1px solid var(--g-border);
+        font-size: 16px;
+        font-weight: bold;
+        color: var(--g-primary);
+    }
+}
+
 /* Celulares angostos: el header entra en una sola línea (logo + nombre + ☰). */
 @media (max-width: 420px) {
     .g-brand { --escudo: 64px; --marca-alto: 36px; }

@@ -337,7 +337,7 @@ def _turno_stream(mensaje_usuario, fotos=(), mandadas=0):
     # Las fotos de este turno que no terminaron en ninguna ficha se tiran acá mismo. La
     # mayoría de las fotos no son un alta —"¿qué es esto?", "guardala en el taladro"— y sin
     # esto cada una de esas dejaría cientos de KB esperando en la DB una confirmación que no
-    # va a llegar nunca, hasta el barrido de los 30 días.
+    # va a llegar nunca, hasta el barrido de los CONVERSACION_MINUTOS.
     reclamadas = {f.get('foto') for f in fichas.values() if f.get('foto')}
     for n in numeros:
         if n not in reclamadas:
@@ -464,6 +464,7 @@ ETIQUETA_TOOL = {
     'aulas_libres': 'viendo qué aulas hay libres',
     'buscar_entidad': 'buscando en el inventario',
     'listar_todos': 'revisando el inventario',
+    'listar_alias': 'revisando los alias',
     'detalle_entidad': 'leyendo la ficha',
     'consultar_historia': 'buscando en la memoria de la casa',
     'buscar_hitos': 'revisando la línea del tiempo',

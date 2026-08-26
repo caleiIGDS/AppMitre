@@ -309,7 +309,7 @@ El área declara tres, y el verbo es lo que los hace entrar solos en los perfile
 |---|---|---|
 | `gestion.leer` | leer | ver el inventario. Es el permiso base del blueprint |
 | `gestion.editar` | escribir | `nuevo`/`editar`/`eliminar`/fotos/desglose por ubicación |
-| `gestion.alias` | admin | `/gestion/alias`, la tabla de solo lectura con el alias oculto de cada recurso. Verbo `admin`: no entra en ningún preset de interno, solo lo tiene el comodín `'*'` (mismo criterio que `historia.personas`) |
+| `gestion.alias` | admin | `/gestion/alias` (tabla de solo lectura) y la tool del agente `listar_alias`. Verbo `admin`: no entra en ningún preset de interno, solo lo tiene el comodín `'*'` (mismo criterio que `historia.personas`) |
 
 `PERMISO_ESCRITURA` lo aplica `crud.registrar_rutas` a sus cinco rutas genéricas, y las dos
 rutas propias del desglose por ubicación lo piden a mano con `@accesos.requiere(...)`.

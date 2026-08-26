@@ -87,7 +87,7 @@ tocar dos archivos para agregar una tool en vez de uno. Ver `dev-log/DECISIONS.m
 
 Las dependencias van en una sola dirección y **no hay ciclos**:
 `dominio → proveedores/db → padrones/lore/vision → tools → prompt/llm → rutas`.
-- **`POST /agente/chat`** — acepta `{mensaje, imagenes?}` (lista de hasta `FOTOS_MAX`=8 fotos
+- **`POST /agente/chat`** — acepta `{mensaje, imagenes?}` (lista de hasta `FOTOS_MAX`=10 fotos
   en base64 o data URL; también acepta `imagen` singular, el contrato viejo);
   retorna `{respuesta, confirmaciones}`. El backend llama al modelo con el mensaje + tools
   disponibles, ejecuta lo que pida (tools de lectura y escritura), repite hasta respuesta final,
@@ -319,6 +319,9 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
 - `listar_todos(slug)` — lista completa de nombres + id; **fallback** de `buscar_entidad`
   cuando no hay ningún match `exacto`, ver abajo
 - `detalle_entidad(slug, id)` — detalle completo + relaciones (ver "Claves de `relaciones`")
+- `listar_alias(slug)` — **solo admin** (`gestion.alias`, igual que `/gestion/alias`): todos los
+  recursos con su alias en texto, para que el asistente los audite/mejore. Es la única tool que
+  expone ese texto — `buscar_entidad` sólo marca `match:"alias"` sin mostrarlo
 - `consultar_historia(tema)` — lore de la escuela y guiños internos, ver abajo
 - `leer_foto(modo?, foto?)` — mira las fotos adjuntadas en ESTE turno y las devuelve en texto,
   cada lectura con el número de su foto. **Sin `foto` lee todas de una sola llamada**, que es
@@ -1137,12 +1140,12 @@ leen (varían, típicamente 200–500 tokens por historia).
 
 Caso de uso central del asistente en el taller: sacan la foto de la etiqueta de un panel
 solar, escriben "tenemos 5" y el recurso queda cargado sin tipear especificaciones. Y en
-tandas: **hasta `FOTOS_MAX` = 8 fotos por mensaje**, una ficha por foto (ver "Cargar de a
+tandas: **hasta `FOTOS_MAX` = 10 fotos por mensaje**, una ficha por foto (ver "Cargar de a
 muchas: el lote").
 
 **Recorrido de las fotos**:
 1. `gestion-agente.js` las lee con `FileReader`, las **achica en un canvas** a 1568 px de lado
-   largo / JPEG calidad 0.85 —todas en paralelo, que con ocho se nota— y las deja en
+   largo / JPEG calidad 0.85 —todas en paralelo, que con diez se nota— y las deja en
    `imagenesSeleccionadas` como data URLs. Sin ese paso
    una foto de celular (3–8 MB, ~11 MB en base64) no entra en el límite de la API de visión
    y tarda una eternidad por el wifi de la escuela. 1568 px es lo que el modelo llega a
@@ -1150,8 +1153,8 @@ muchas: el lote").
    decodificar el archivo (HEIC de iPhone), se manda tal cual en vez de perder la foto.
 2. `POST /chat` con `{mensaje, imagenes}`. **Las fotos solas son un mensaje válido**: si no
    escribieron nada, el front igual envía y el backend pone "Te mando esta foto." como texto.
-   Si mandan más de ocho, el server **recorta y avisa** en vez de rechazar el mensaje: perder
-   las ocho primeras por haber mandado diez es peor.
+   Si mandan más de diez, el server **recorta y avisa** en vez de rechazar el mensaje: perder
+   las diez primeras por haber mandado doce es peor.
 3. `_turno()` **no le manda las fotos al agente ni las lee**: las numera con
    `_fotos_lote_guardar()`, las deja en `contexto_turno['fotos_turno']` y le agrega al mensaje
    del usuario una nota diciendo cuántas hay **y con qué números**. El agente nunca ve un píxel:
@@ -1200,7 +1203,7 @@ ve dos botones para la misma alta con contenidos distintos.
 
 **`leer_foto` se llama UNA VEZ para todas.** Sin el parámetro `foto` lee todas las del turno y
 devuelve `{lecturas: [{foto, lectura}, …]}`. No es comodidad: el loop de tool-calling tiene un
-tope de vueltas (`max_iterations`, 14) y una llamada por foto se comía el turno antes de llegar
+tope de vueltas (`max_iterations`, 16) y una llamada por foto se comía el turno antes de llegar
 a armar las fichas. El esquema y el prompt se lo dicen en esos términos.
 
 **Leer es una tool, no un paso automático.** La primera versión leía toda foto al entrar a
@@ -1225,12 +1228,13 @@ visión, no el inventario.
 > nada saca). Por eso el prompt y la descripción de `adjuntar_foto` insisten en preguntar
 > cuando el destino es ambiguo: una foto en el recurso equivocado se saca editando la base.
 
-**Por qué la foto se guarda en la DB y no en el turno**: la confirmación puede llegar mucho
-después, incluso desde otra página (el historial se repinta y los botones siguen ahí). Va en
-tabla propia y no dentro del JSON de `fichas` porque esa columna se reescribe entera en cada
-turno: con hasta ocho fotos en base64 adentro, cada mensaje del chat arrastraría varios MB de
-escritura. Las que quedan sin usar se barren a los `CONVERSACION_DIAS` días, al cerrar el lote
-(`_cerrar_lote()`, cuando ya no queda ninguna ficha que las necesite) y con `/reset`.
+**Por qué la foto se guarda en la DB y no en el turno**: la confirmación puede llegar después,
+incluso desde otra página (el historial se repinta y los botones siguen ahí), aunque no más
+tarde que el timeout de la conversación. Va en tabla propia y no dentro del JSON de `fichas`
+porque esa columna se reescribe entera en cada turno: con hasta ocho fotos en base64 adentro,
+cada mensaje del chat arrastraría varios MB de escritura. Las que quedan sin usar se barren a
+los `CONVERSACION_MINUTOS` (15) minutos, al cerrar el lote (`_cerrar_lote()`, cuando ya no
+queda ninguna ficha que las necesite) y con `/reset`.
 
 #### Las fotos se ven en el chat
 
@@ -1432,8 +1436,10 @@ dentro de la conversación — no el turno, porque la confirmación puede llegar
 página o mucho después, y no el token de la ficha, porque ese cambia en cuanto la ficha se
 rearma con una corrección. Ver "La foto se ata al NÚMERO, no al token de la ficha".
 
-Las dos se barren a los `CONVERSACION_DIAS` (30) días de inactividad, en la misma escritura
-que las usa — no en `init_db()`, porque el server puede estar meses sin reiniciar.
+Las dos se barren a los `CONVERSACION_MINUTOS` (15) minutos de inactividad: al leer (si la fila
+está vencida, `_conv_cargar`/`_foto_lote_tomar` la tratan como si no existiera) y también en la
+misma escritura que las usa — no en `init_db()`, porque el server puede estar meses sin
+reiniciar.
 
 ### Guardias de seguridad / guardrails de prompt
 
@@ -1461,15 +1467,17 @@ que las usa — no en `init_db()`, porque el server puede estar meses sin reinic
   claro en vez de fallar en silencio. Ollama no la usa.
 - **Env var** `AGENTE_MODEL` — modelo a usar. Defaults por proveedor: `deepseek-v4-pro`,
   `claude-haiku-4-5-20251001`, `mixtral-8x7b-32768`, `gpt-3.5-turbo`, `mistral`.
-- **`llm.MAX_TOKENS_SALIDA` = 4096** — tope de salida por vuelta del loop, en los dos loops.
+- **`llm.MAX_TOKENS_SALIDA` = 16000** — tope de salida por vuelta del loop, en los dos loops.
   **No lo bajes.** El default es un modelo de razonamiento (`deepseek-v4-pro`) y ese
   razonamiento se cobra como tokens de salida: medido, gasta 700–1600 antes de emitir la
   primera tool call. Estuvo en 1024 y el síntoma era **"Sin respuesta"** — `finish_reason`
-  volvía `'length'` con el contenido vacío y el loop lo traducía a ese literal. Se notaba
-  solo en los turnos difíciles (armar la ficha de un alta entraba justo por encima del
-  tope; contestar "¿qué preceptor tiene 1° C?" entraba holgado), que es lo que lo hacía
-  parecer intermitente. No es un tope de costo: solo se paga lo generado. Cuando aun así
-  se corta, `_loop_openai` distingue el caso y devuelve un aviso legible en vez del literal.
+  volvía `'length'` con el contenido vacío y el loop lo traducía a ese literal. Después subió
+  a 4096, pero el prompt le pide mandar TODAS las `crear_entidad` de un lote de fotos en la
+  MISMA vuelta (ver "Cargar de a muchas: el lote"), y con varias fotos (probado con 5) el
+  razonamiento más varias tool calls completas volvía a pasarse del tope. Cuando se corta,
+  `_loop_openai` distingue el caso (`finish_reason == 'length'` sin tool_calls ni texto) y
+  devuelve un aviso legible en vez de "Sin respuesta". No es un tope de costo: solo se paga
+  lo generado.
 - **Env var** `AGENTE_VISION` — `1` para declarar que el modelo del **chat** lee imágenes.
   Anthropic ya viene en `1`; esto es para gpt-4o u ollama+llava, donde depende del modelo.
   Solo se consulta si **no** hay lector configurado (rama 2 de `chat()`).

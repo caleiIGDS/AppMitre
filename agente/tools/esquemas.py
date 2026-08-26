@@ -19,6 +19,10 @@ import historia
 from .. import PERMISO_VISION
 from ..dominio import SLUGS_ENTIDAD, _modulo
 
+# Slugs cuya entidad declaró `campo_alias` (hoy sólo `recursos`, ver gestion.py). Calculado
+# y no a mano, mismo criterio que SLUGS_ENTIDAD: una entidad nueva con alias entra sola.
+SLUGS_CON_ALIAS = [s for s in SLUGS_ENTIDAD if crud.campo_alias(_modulo(s).ENTIDADES[s])]
+
 # ============================================================================
 # Esquemas de tools para Claude
 # ============================================================================
@@ -228,6 +232,26 @@ TOOLS_SCHEMA = [
             'properties': {
                 'slug': {'type': 'string', 'enum': SLUGS_ENTIDAD,
                          'description': 'Qué tipo de entidad listar (el mismo que usaste en buscar_entidad)'}
+            },
+            'required': ['slug']
+        }
+    },
+    {
+        'name': 'listar_alias',
+        'description': ('SOLO ADMIN. Lista todos los recursos con su alias oculto (los '
+                        'términos alternativos de búsqueda que vos mismo completás con '
+                        'editar_entidad) para auditarlos: detectá cuáles quedaron vacíos, '
+                        'proponé términos mejores, sacá redundancias. Es la única tool que '
+                        'te devuelve el TEXTO del alias — nunca lo repitas ni lo menciones '
+                        'frente al usuario, tratalo como un dato interno de mantenimiento '
+                        'aunque quien te lo pida sea el propio administrador. Para saber '
+                        'si UN resultado de búsqueda matcheó por alias sin pedir toda la '
+                        'lista, mirá el campo "match" de buscar_entidad.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'slug': {'type': 'string', 'enum': SLUGS_CON_ALIAS,
+                         'description': 'Qué entidad auditar (hoy sólo "recursos" tiene alias)'}
             },
             'required': ['slug']
         }
@@ -678,6 +702,9 @@ PERMISO_POR_TOOL = {
     'buscar_entidad': 'agente.leer',
     'listar_todos': 'agente.leer',
     'detalle_entidad': 'agente.leer',
+    # Admin puro y no 'agente.leer': es la única tool que expone el TEXTO del alias, mismo
+    # gate que la web (/gestion/alias, permiso gestion.alias) — ver entidades._listar_alias_fmt.
+    'listar_alias': gestion.PERMISO_ALIAS,
     'consultar_historia': 'agente.leer',
     'buscar_hitos': 'agente.leer',
     # No toca la base: lo que gasta es la API de visión, no el inventario.

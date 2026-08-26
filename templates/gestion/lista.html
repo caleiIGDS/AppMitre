@@ -89,7 +89,7 @@
                     {{ grupos[0]['ubicacion'] if grupos else '' }}
                     {%- endif -%}
                 </td>
-                <td data-label="ESTADO">{%- if fila['estado'] -%}<span class="g-badge">{{ fila['estado'] }}</span>{%- endif -%}</td>
+                <td data-label="ESTADO" data-estado="{{ fila['estado'] }}">{%- if fila['estado'] -%}<span class="g-badge">{{ fila['estado'] }}</span>{%- endif -%}</td>
             </tr>
             {% endfor %}
         </tbody>

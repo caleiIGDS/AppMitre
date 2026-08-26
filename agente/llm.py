@@ -61,14 +61,38 @@ def _crear_cliente_llm():
 
 PROVIDERS_OPENAI = ('openai', 'groq', 'ollama', 'deepseek')
 
+MSG_SIN_TOKENS = ('Me quedé sin tokens: la cuenta del proveedor del LLM se quedó sin '
+                 'crédito o cuota disponible. Avisale a un administrador para recargarla.')
+
+
+def _es_error_sin_tokens(e):
+    """Detecta si la excepción es por falta de crédito/cuota, no un error cualquiera.
+
+    Anthropic y OpenAI (y las compatibles: Groq, DeepSeek) usan códigos distintos para
+    lo mismo: 429 (rate/quota) o un 400 con 'credit balance too low'. Se mira el
+    status_code y el texto del mensaje en vez de importar las clases de excepción de
+    cada SDK, porque Groq es opcional y puede no estar instalado.
+    """
+    if getattr(e, 'status_code', None) == 429:
+        return True
+    texto = str(e).lower()
+    return 'credit balance' in texto or 'insufficient_quota' in texto or 'quota' in texto
+
 # Tope de salida por vuelta del loop. Estaba en 1024 y era MUY poco: `deepseek-v4-pro`
 # razona antes de emitir, y ese razonamiento se cobra como tokens de salida — medido,
 # gasta entre 700 y 1600 sólo en pensar antes de largar la primera tool call. Con 1024 se
 # quedaba sin presupuesto a mitad de camino y devolvía `finish_reason='length'` con el
 # contenido vacío, que el loop traducía a "Sin respuesta". El síntoma era peor cuanto más
 # difícil el turno: contestar "¿qué preceptor tiene 1° C?" entraba, armar la ficha de un
-# alta no. No es un tope de costo (sólo se cobra lo generado), así que se deja holgado.
-MAX_TOKENS_SALIDA = 4096
+# alta no.
+#
+# Se subió de nuevo a 16000 porque el prompt le pide al modelo mandar TODAS las
+# `crear_entidad` de un lote de fotos en la MISMA vuelta (ver "Cargar de a muchas: el
+# lote" en agent_docs/agente-asistente.md) — con FOTOS_MAX=10 eso es razonamiento + hasta
+# diez tool calls completas en una sola respuesta, y 4096 se quedaba corto a mitad de
+# camino igual que antes. No es un tope de costo (sólo se cobra lo generado), así que se
+# deja holgado.
+MAX_TOKENS_SALIDA = 16000
 
 
 def _tools_openai(tools):
@@ -166,6 +190,8 @@ def _loop_openai(client, model, system_prompt, mensajes_usuario, trazas, max_ite
                 tools=tools,
             )
         except Exception as e:
+            if _es_error_sin_tokens(e):
+                return MSG_SIN_TOKENS
             return f"Error llamando al LLM: {str(e)}"
 
         choice = response.choices[0]
@@ -283,10 +309,10 @@ def chat_with_tools_stream(mensajes_usuario, trazas=None, contexto_turno=None,
                                             ve_fotos=ve_fotos)
 
     # Una tanda de fotos es el turno más largo que existe: leer todas (1 vuelta) + una
-    # `crear_entidad` por foto. Si el modelo no las paraleliza, ocho fichas son ocho vueltas,
-    # y con el tope en 10 el turno se cortaba en "Máximo de iteraciones alcanzado" — con las
-    # fichas a medio armar y el usuario sin nada que revisar.
-    max_iterations = 14
+    # `crear_entidad` por foto. Si el modelo no las paraleliza, diez fichas (FOTOS_MAX) son
+    # diez vueltas, y con el tope corto el turno se cortaba en "Máximo de iteraciones
+    # alcanzado" — con las fichas a medio armar y el usuario sin nada que revisar.
+    max_iterations = 16
 
     # Estado compartido por todas las tools de ESTE turno (ver ejecutar_tool). Lo puede
     # sembrar el endpoint de chat con lo que venga de la sesión (fichas ya mostradas).
@@ -318,6 +344,8 @@ def chat_with_tools_stream(mensajes_usuario, trazas=None, contexto_turno=None,
                 messages=messages
             )
         except Exception as e:
+            if _es_error_sin_tokens(e):
+                return MSG_SIN_TOKENS
             return f"Error llamando al LLM: {str(e)}"
 
         # Determinar stop reason (compatible con Anthropic, Groq, OpenAI, Ollama)

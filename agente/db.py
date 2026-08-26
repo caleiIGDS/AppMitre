@@ -53,13 +53,14 @@ CREATE TABLE IF NOT EXISTS agente_fotos_pendientes (
 HISTORIAL_GUARDADO = 60    # mensajes que se conservan en la DB (30 turnos)
 HISTORIAL_AL_MODELO = 24   # mensajes que se le mandan al LLM por turno (12 turnos)
 FICHAS_MAX = 20            # altas sin confirmar que se recuerdan a la vez
-CONVERSACION_DIAS = 30     # a los N días sin uso, la conversación se descarta
+CONVERSACION_MINUTOS = 15  # a los N minutos sin uso, la conversación (y sus fotos
+                           # pendientes de confirmar) se descarta
 
-# Fotos por mensaje. Cada una cuesta una llamada de visión y ~300 KB de subida: ocho son
-# ~2,4 MB por el wifi de la escuela, que es una tanda de estantería y entra cómodo. Más que
+# Fotos por mensaje. Cada una cuesta una llamada de visión y ~300 KB de subida: diez son
+# ~3 MB por el wifi de la escuela, que es una tanda de estantería y entra cómodo. Más que
 # eso el POST se hace largo y el turno se llena de lecturas. `chat()` recorta y avisa en vez
-# de rechazar el mensaje entero: perder las ocho primeras por mandar diez es peor.
-FOTOS_MAX = 8
+# de rechazar el mensaje entero: perder las diez primeras por mandar doce es peor.
+FOTOS_MAX = 10
 
 def conectar():
     con = sqlite3.connect(DB_PATH)
@@ -75,6 +76,10 @@ def init_db():
 
 def _ahora():
     return ahora().strftime('%Y-%m-%d %H:%M:%S')
+
+def _vencimiento():
+    """Corte de tiempo: todo lo actualizado antes de esto se considera abandonado."""
+    return (ahora() - timedelta(minutes=CONVERSACION_MINUTOS)).strftime('%Y-%m-%d %H:%M:%S')
 
 
 # ============================================================================
@@ -95,12 +100,15 @@ def _conv_cargar():
     """Historial, entidad de contexto y fichas pendientes de esta conversación.
 
     Devuelve siempre un dict completo: si no hay fila todavía (o el JSON quedó corrupto
-    por una escritura a medias), arranca vacío en vez de reventar el chat.
+    por una escritura a medias), arranca vacío en vez de reventar el chat. Lo mismo si la
+    conversación quedó más de CONVERSACION_MINUTOS sin uso — el chat "muere" y arranca de
+    cero, aunque el barrido de la fila en la DB recién pase en la próxima escritura.
     """
     con = conectar()
     fila = con.execute(
-        "SELECT historial, entidad_actual, fichas FROM agente_conversaciones WHERE sid = ?",
-        (_sid(),)
+        "SELECT historial, entidad_actual, fichas FROM agente_conversaciones "
+        "WHERE sid = ? AND actualizado >= ?",
+        (_sid(), _vencimiento())
     ).fetchone()
     con.close()
 
@@ -132,8 +140,7 @@ def _conv_guardar(historial, entidad_actual, fichas):
     )
     # Barrido de conversaciones viejas. Va acá y no en init_db() porque el server puede
     # estar meses sin reiniciar; la tabla tiene una fila por navegador, no pesa.
-    con.execute("DELETE FROM agente_conversaciones WHERE actualizado < ?",
-                ((ahora() - timedelta(days=CONVERSACION_DIAS)).strftime('%Y-%m-%d %H:%M:%S'),))
+    con.execute("DELETE FROM agente_conversaciones WHERE actualizado < ?", (_vencimiento(),))
     con.commit()
     con.close()
 
@@ -203,7 +210,8 @@ def _fotos_lote_guardar(fotos):
         return []
     con = conectar()
     fila = con.execute(
-        "SELECT token FROM agente_fotos_pendientes WHERE sid = ?", (_sid(),)
+        "SELECT token FROM agente_fotos_pendientes WHERE sid = ? AND fecha >= ?",
+        (_sid(), _vencimiento())
     ).fetchall()
     usados = [int(f['token'].rsplit(':', 1)[-1]) for f in fila
               if f['token'].rsplit(':', 1)[-1].isdigit()]
@@ -221,8 +229,7 @@ def _fotos_lote_guardar(fotos):
 
     # Barrido de las que quedaron sin confirmar, con el mismo criterio que las
     # conversaciones abandonadas (ver _conv_guardar).
-    con.execute("DELETE FROM agente_fotos_pendientes WHERE fecha < ?",
-                ((ahora() - timedelta(days=CONVERSACION_DIAS)).strftime('%Y-%m-%d %H:%M:%S'),))
+    con.execute("DELETE FROM agente_fotos_pendientes WHERE fecha < ?", (_vencimiento(),))
     con.commit()
     con.close()
     return numeros
@@ -235,8 +242,9 @@ def _foto_lote_tomar(n):
     clave = _clave_foto(n)
     con = conectar()
     fila = con.execute(
-        "SELECT b64, tipo FROM agente_fotos_pendientes WHERE token = ? AND sid = ?",
-        (clave, _sid())
+        "SELECT b64, tipo FROM agente_fotos_pendientes "
+        "WHERE token = ? AND sid = ? AND fecha >= ?",
+        (clave, _sid(), _vencimiento())
     ).fetchone()
     if fila:
         con.execute("DELETE FROM agente_fotos_pendientes WHERE token = ?", (clave,))

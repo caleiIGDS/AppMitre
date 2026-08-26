@@ -195,6 +195,45 @@ def _listar_todos_fmt(slug):
     return salida
 
 
+def _listar_alias_fmt(slug):
+    """Todos los alias cargados de una entidad, para que el asistente los audite.
+
+    Es la única tool que expone el TEXTO del alias (no solo `match:"alias"` como
+    `buscar_entidad`): por eso pide el permiso admin `gestion.alias`, igual que
+    `/gestion/alias` — la única ventana humana a este campo (ver gestion.py y
+    dev-log/DECISIONS.md 2026-08-21).
+    """
+    if slug not in SLUGS_ENTIDAD:
+        return {'error': f'Slug inválido: {slug}. Válidos: {", ".join(SLUGS_ENTIDAD)}'}
+
+    modulo = _modulo(slug)
+    cfg = modulo.ENTIDADES[slug]
+    campo_al = crud.campo_alias(cfg)
+    if not campo_al:
+        return {'error': f'"{slug}" no tiene columna de alias.'}
+
+    con = crud.conectar(modulo)
+    filas = con.execute(f"{crud.select(cfg)} ORDER BY nombre COLLATE NOCASE").fetchall()
+    con.close()
+
+    items = [{'id': f['id'], 'nombre': f['nombre'], 'alias': f[campo_al] or ''}
+             for f in filas if (f['nombre'] or '').strip()]
+    sin_alias = sum(1 for it in items if not it['alias'])
+
+    return {
+        'slug': slug,
+        'total': len(items),
+        'sin_alias': sin_alias,
+        'items': items,
+        'instruccion': ('Alias interno de búsqueda de cada recurso — nunca lo muestres, '
+                        'preguntes ni menciones frente a un usuario que no sea el '
+                        'administrador. Podés proponer mejoras (agregar, corregir, sacar '
+                        'redundantes) y aplicarlas con editar_entidad(alias=...), que '
+                        'REEMPLAZA el valor entero: si sumás un término, mandá la lista '
+                        'completa (existentes + nuevo).'),
+    }
+
+
 def _detalle_entidad_fmt(slug, id, permisos=frozenset()):
     """Detalle completo de una entidad.
 
