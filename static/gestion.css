@@ -688,6 +688,381 @@ body {
 .g-tabla-detalle tbody tr:hover { background: #f8fafc; }
 .g-tabla-detalle tbody tr:last-child td { border-bottom: none; }
 
+/* ---------- Ficha de recurso (estética blueprint, diseño "Ficha Recurso PC - 8b") ---------- */
+/* Sólo /gestion la usa: la arma gestion/detalle.html sobreescribiendo el bloque `contenido`
+   de crud/detalle.html. Las demás áreas siguen con la ficha genérica (.g-detail / .g-props). */
+
+/* Cabecera del recuadro: título + chips + acciones. En escritorio es la fila `head`
+   del grid (span completo); la separa del cuerpo una línea azul. */
+.g-ficha-head {
+    grid-area: head;
+    background: var(--g-surface);
+    border-bottom: 2px solid var(--g-primary);
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.g-ficha-id {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.g-ficha-crumb {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--g-muted);
+}
+
+.g-ficha-crumb a {
+    color: var(--g-primary);
+    text-decoration: none;
+    border-bottom: 1px solid var(--g-accent);
+}
+
+.g-ficha-crumb a:hover { color: var(--g-accent); }
+
+.g-ficha-title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--g-primary);
+    line-height: 1.2;
+}
+
+.g-ficha-chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.g-ficha-chip {
+    border: 1px solid var(--g-border);
+    color: var(--g-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    white-space: nowrap;
+}
+
+.g-ficha-chip.is-valor {
+    border-color: var(--g-accent);
+    color: var(--g-accent);
+}
+
+.g-ficha-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+.g-ficha-actions form { margin: 0; }
+
+/* Menú "⋯": acciones que no se usan a diario (eliminar). <details> puro, sin JS. */
+.g-ficha-menu { position: relative; }
+
+.g-ficha-menu > summary {
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    padding: 9px 14px;
+    border: 2px solid var(--g-border);
+    color: var(--g-primary);
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.g-ficha-menu > summary::-webkit-details-marker { display: none; }
+.g-ficha-menu > summary::marker { content: ''; }
+.g-ficha-menu > summary:hover { border-color: var(--g-primary); }
+.g-ficha-menu[open] > summary { background: var(--g-primary); color: #fff; }
+
+.g-ficha-menu-pop {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 20;
+    background: var(--g-surface);
+    border: 2px solid var(--g-primary);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 180px;
+}
+
+.g-ficha-menu-pop .g-btn-danger { width: 100%; }
+
+/* Recuadro de la ficha: cabecera arriba (span completo) y debajo dos columnas —
+   izquierda las fotos, derecha lo que se consulta y edita a diario (dónde está cada
+   unidad) más la ficha técnica. En celular esto pasa a flex (ver el @media). */
+.g-ficha-body {
+    display: grid;
+    grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+    grid-template-areas:
+        "head head"
+        "media main";
+    background: var(--g-surface);
+    border: 2px solid var(--g-primary);
+}
+
+.g-ficha-col-media {
+    grid-area: media;
+    border-right: 2px solid var(--g-border);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.g-ficha-col-main {
+    grid-area: main;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* La galería reusa .g-foto-section/.g-galeria; acá se le saca todo el marco (borde,
+   fondo, padding, radio) para que las fotos vayan al ras de la columna. */
+.g-ficha-col-media .g-foto-section { margin: 0; }
+.g-ficha-col-media .g-galeria {
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+}
+
+/* Encabezado de sección: barra azul fija (lo que en el celular abre y cierra). */
+.g-ficha-bar {
+    background: var(--g-primary);
+    color: #fff;
+    padding: 9px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.g-ficha-seccion { padding: 12px 14px; }
+
+.g-ficha-lista {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.g-ficha-vacio {
+    padding: 12px 14px;
+    margin: 0;
+    font-size: 12px;
+    color: var(--g-muted);
+}
+.g-ficha-seccion .g-ficha-vacio { padding: 0; }
+
+/* Dónde está: una fila por lugar. Los números de unidad ganan su columna (cada chip
+   se puede quitar) y el total va en su propia celda con borde a la izquierda. */
+.g-ficha-ubic-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 58px;
+    align-items: stretch;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.g-ficha-ubic-row:nth-child(even) { background: #fafbfc; }
+
+.g-ficha-ubic-datos {
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.g-ficha-ubic-lugar {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--g-primary);
+}
+
+.g-ficha-unidades {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.g-ficha-unidad {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid var(--g-border);
+    background: var(--g-bg);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--g-primary);
+    padding: 3px 8px;
+    white-space: nowrap;
+}
+
+.g-ficha-unidad form { margin: 0; line-height: 1; }
+
+.g-ficha-unidad button {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--g-muted);
+    font-family: var(--g-font);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.g-ficha-unidad button:hover { color: var(--g-alert); }
+
+.g-ficha-ubic-count {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-left: 1px solid #e2e8f0;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--g-primary);
+}
+
+.g-ficha-mover {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 12px 14px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.g-ficha-mover input {
+    font-family: var(--g-font);
+    font-size: 13px;
+    padding: 7px 10px;
+    border: 2px solid var(--g-border);
+    background: var(--g-surface);
+    outline: none;
+}
+
+.g-ficha-mover input:focus { border-color: var(--g-accent); }
+
+/* Ficha técnica: descripción como texto y el resto como pares etiqueta/valor. */
+.g-ficha-detalle {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.g-ficha-specs {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 6px 12px;
+    margin: 0;
+    border-top: 1px dashed var(--g-border);
+    padding-top: 10px;
+    font-size: 12px;
+}
+
+.g-ficha-specs:first-child { border-top: none; padding-top: 0; }
+
+.g-ficha-specs dt {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--g-muted);
+}
+
+.g-ficha-specs dd { margin: 0; }
+.g-ficha-specs dd.g-pre { white-space: pre-wrap; }
+
+/* Celular: la ficha se apila. La foto va full-bleed y arriba de todo (banner del
+   diseño de celular), después el título, y al final las secciones en su recuadro.
+   El orden del DOM es foto → título → secciones; `order` sólo asegura que siga así
+   aunque el grid de escritorio lo hubiera reordenado. */
+@media (max-width: 800px) {
+    .g-ficha-body {
+        display: flex;
+        flex-direction: column;
+        border: none;
+    }
+    .g-ficha-col-media {
+        order: 1;
+        padding: 0;
+        border-right: none;
+    }
+    .g-ficha-head {
+        order: 2;
+        border: none;
+        border-bottom: 1px solid var(--g-border);
+        padding: 12px 14px;
+    }
+    .g-ficha-col-main {
+        order: 3;
+        border: 2px solid var(--g-primary);
+    }
+
+    /* Con fotos: la columna es el banner del diseño de celular — full-bleed, borde
+       naranja abajo, y el botón de agregar como chip sobre la última imagen. */
+    .g-ficha-col-media:has(.g-galeria) { border-bottom: 4px solid var(--g-accent); }
+    .g-ficha-col-media:has(.g-galeria) .g-foto-section { position: relative; }
+    .g-ficha-col-media:has(.g-galeria) .g-foto-toolbar {
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        border: none;
+        border-radius: 0;
+        padding: 4px;
+        background: rgba(26, 54, 93, 0.85);
+    }
+    .g-ficha-col-media:has(.g-galeria) .g-foto-btn {
+        border-color: rgba(255, 255, 255, 0.5);
+        color: #fff;
+    }
+    /* Una foto sola ocupa el ancho entero; con dos o más, dos por fila. */
+    .g-ficha-col-media .g-galeria-grid {
+        grid-template-columns: repeat(auto-fit, minmax(48%, 1fr));
+        gap: 2px;
+    }
+    .g-ficha-col-media .g-foto { height: 210px; border: none; border-radius: 0; }
+
+    /* Sin fotos: nada de banner. Si además no se puede escribir (sin botón de
+       agregar), la columna no aporta nada y se oculta. */
+    .g-ficha-col-media:not(:has(.g-galeria)) {
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--g-border);
+    }
+    .g-ficha-col-media:not(:has(.g-galeria)) .g-foto-toolbar { border: none; padding: 0; }
+    .g-ficha-col-media:not(:has(.g-galeria)):not(:has(.g-foto-toolbar)) { display: none; }
+}
+
 /* ---------- Footer ---------- */
 .g-footer {
     text-align: center;
@@ -2623,13 +2998,25 @@ body.g-sidebar-abierto { overflow: hidden; }
 .g-recurso-baja { opacity: 0.55; }
 .g-recurso-baja .g-item-link { text-decoration: line-through; }
 
+/* Recurso roto: la fila entera toma un tono rojizo (lo pone lista.html en la <tr>
+   según fila['estado']). Selectores con ".g-table tbody tr" para ganarle al hover
+   y al zebra de celular, que si no lo pisan. */
+.g-table tbody tr.g-recurso-roto { background: rgba(220, 38, 38, 0.07); }
+.g-table tbody tr.g-recurso-roto:hover { background: rgba(220, 38, 38, 0.12); }
+.g-recurso-roto .g-badge {
+    border-color: var(--g-alert);
+    color: var(--g-alert);
+    background: rgba(220, 38, 38, 0.08);
+}
+
 /* ---------- Listado de recursos en celular (visual "6a") ---------- */
 /* Mockup: canvas de diseño "Inventario Celular - 2 propuestas", variante 6a.
    Abajo de 700px el listado de recursos deja el modelo de tarjeta genérica
    (la de arriba, ".g-table" de crud-motor) por un renglón compacto: nombre
-   arriba, lugar debajo en gris, cantidad fija a la derecha en toda la altura
-   de la fila, y el estado sólo si no es "Disponible" (la mayoría de las
-   fichas están disponibles: repetirlo en cada renglón es ruido). Todo por
+   arriba, lugar debajo en gris, el estado en una columna propia entre el
+   nombre y la cantidad (sólo si no es "Funcional" — la mayoría de las fichas
+   lo están y repetirlo en cada renglón es ruido) y la cantidad fija a la
+   derecha en toda la altura de la fila. Todo por
    selector — sin tocar el markup de templates/gestion/lista.html más que el
    `data-estado` que ya trae cada <td> — porque ".g-panel-top" y ".g-fichas-count"
    sólo los usa /gestion/recursos (ver el comentario de esa sección, arriba). */
@@ -2729,7 +3116,7 @@ body.g-sidebar-abierto { overflow: hidden; }
 
     .g-panel-top + .g-table-wrap .g-table thead tr {
         display: grid;
-        grid-template-columns: 1fr 40px;
+        grid-template-columns: 1fr auto 40px;
         /* Sin este reset hereda fondo blanco y borde gris de ".g-table tr"
            (la regla genérica de tarjeta, arriba): se veía como un borde
            blanco arriba y abajo del encabezado pegajoso. */
@@ -2756,6 +3143,7 @@ body.g-sidebar-abierto { overflow: hidden; }
     }
 
     .g-panel-top + .g-table-wrap .g-table thead th:nth-child(2) {
+        grid-column: 3;
         text-align: center;
         padding: 6px 2px;
         font-size: 9px;
@@ -2768,15 +3156,16 @@ body.g-sidebar-abierto { overflow: hidden; }
         display: none;
     }
 
-    /* Cada fila es un grid de 2 columnas: la cantidad (dato que se lee de
-       un vistazo) fija a la derecha, ocupando todo el alto; nombre, lugar y
-       estado apilados a la izquierda — reordenados con grid-row, no con el
-       DOM (que sigue siendo RECURSO/CANT./LUGAR/ESTADO, así el foco por
+    /* Cada fila es un grid de 3 columnas: nombre y lugar apilados a la
+       izquierda, el estado en una columna propia al medio (sólo si no es
+       "Funcional") y la cantidad (dato que se lee de un vistazo) fija a la
+       derecha, ocupando todo el alto. Reordenado con grid-column/row, no con
+       el DOM (que sigue siendo RECURSO/CANT./LUGAR/ESTADO, así el foco por
        teclado no cambia). */
     .g-panel-top + .g-table-wrap .g-table tbody tr {
         display: grid;
-        grid-template-columns: 1fr 40px;
-        grid-template-rows: auto auto auto;
+        grid-template-columns: 1fr auto 40px;
+        grid-template-rows: auto auto;
         border: none;
         border-bottom: 1px solid var(--g-border);
         margin-bottom: 0;
@@ -2784,6 +3173,13 @@ body.g-sidebar-abierto { overflow: hidden; }
     }
 
     .g-panel-top + .g-table-wrap .g-table tbody tr:nth-child(even) { background: #fafbfc; }
+
+    /* El tono rojizo de un recurso roto tiene que ganarle también al zebra de
+       arriba (más específico que ".g-table tbody tr.g-recurso-roto"). */
+    .g-panel-top + .g-table-wrap .g-table tbody tr.g-recurso-roto,
+    .g-panel-top + .g-table-wrap .g-table tbody tr.g-recurso-roto:nth-child(even) {
+        background: rgba(220, 38, 38, 0.07);
+    }
 
     /* La regla de arriba (display: grid) es más específica que ".g-table tbody
        tr[hidden] { display: none }" de la sección de tabla base y se la comía:
@@ -2843,22 +3239,32 @@ body.g-sidebar-abierto { overflow: hidden; }
         padding: 2px 7px;
     }
 
-    /* El estado sólo ocupa lugar cuando no es "Disponible" (data-estado
+    /* El estado sólo ocupa lugar cuando no es "Funcional" (data-estado
        viene del propio fila['estado'], ver lista.html). */
     .g-panel-top + .g-table-wrap .g-table td[data-label="ESTADO"]:empty,
-    .g-panel-top + .g-table-wrap .g-table td[data-estado="Disponible"] {
+    .g-panel-top + .g-table-wrap .g-table td[data-estado="Funcional"] {
         display: none;
     }
 
     .g-panel-top + .g-table-wrap .g-table td[data-label="ESTADO"]:not(:empty) {
-        grid-column: 1;
-        grid-row: 3;
-        padding: 0 8px 9px 12px;
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+    }
+
+    /* En la lista angosta el badge no puede empujar al nombre: letra más
+       apretada y hasta dos renglones antes que crecer de ancho. */
+    .g-panel-top + .g-table-wrap .g-table td[data-label="ESTADO"] .g-badge {
+        letter-spacing: 0.5px;
+        text-align: center;
+        max-width: 92px;
     }
 
     .g-panel-top + .g-table-wrap .g-table td[data-label="CANT."] {
-        grid-column: 2;
-        grid-row: 1 / span 3;
+        grid-column: 3;
+        grid-row: 1 / span 2;
         display: flex;
         align-items: center;
         justify-content: center;

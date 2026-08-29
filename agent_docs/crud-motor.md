@@ -198,8 +198,10 @@ en admin.
 
 ## Templates
 
-`templates/crud/` tiene `lista.html`, `form.html`, `detalle.html` y `login.html` genéricos. Se
-adaptan a cualquier área con dos variables que inyecta `crud.contexto_base()`:
+`templates/crud/` tiene `lista.html`, `form.html`, `detalle.html` y `login.html` genéricos, más
+el partial `_detalle_fotos.html` (galería + visor de fotos, que `detalle.html` y la ficha
+propia de `gestion` comparten). Se adaptan a cualquier área con dos variables que inyecta
+`crud.contexto_base()`:
 
 - `base_template` → `{% extends base_template %}`, así cada área conserva su layout y su nav
 - `area_nombre` → `url_for(area_nombre ~ '.detalle', ...)`
@@ -212,18 +214,16 @@ siga funcionando y para que cualquier excepción sea explícita:
 {% extends 'crud/lista.html' %}
 ```
 
-Cuando un área necesita algo propio, llena un bloque en vez de forkear el template:
+Cuando un área necesita un retoque puntual, llena un bloque en vez de forkear el template:
+`acciones_fila` (celda de acciones de cada fila del listado), `acciones` (toolbar del detalle)
+y `seccion` (cada bloque de relaciones del detalle). `acciones_fila` y `seccion` están
+declarados **`scoped`** en el genérico: están dentro de un `for` y quien los sobreescriba
+necesita ver `fila` / `s`. Sin `scoped` esas variables no llegan al override.
 
-| bloque | dónde | quién lo usa |
-|---|---|---|
-| `acciones_fila` | celda de acciones de cada fila del listado | `gestion` (botón RETIRAR) |
-| `acciones` | toolbar del detalle | `gestion` (botón RETIRAR) |
-| `seccion` | cada bloque de relaciones del detalle | `gestion` (tabla "quién lo tiene ahora") |
-
-`acciones_fila` y `seccion` están declarados **`scoped`** en el genérico: están dentro de un `for` y
-quien los sobreescriba necesita ver `fila` / `s`. Sin `scoped` esas variables no llegan al override.
-El bloque `seccion` de `gestion` llama a `{{ super() }}` para el caso normal y sólo intercepta el
-suyo.
+Cuando la maqueta cambia de raíz —no un botón de más— el área reescribe entero el bloque
+`contenido`: lo hace `gestion/detalle.html` para la ficha de recurso (ver
+`agent_docs/gestion-conocimiento.md`), reusando el partial `crud/_detalle_fotos.html` para
+la galería y su visor.
 
 `base.html` y `home.html` **no** son genéricos: son la identidad visual y el texto de cada área.
 

@@ -1,95 +1,196 @@
-{# Ficha genérica (templates/crud/detalle.html) + lo propio de gestión: el desglose de
-   recursos por unidad (recurso_unidades), que no es relación M2M. #}
+{# Ficha de recurso — estética "blueprint" del diseño "Ficha Recurso PC - 8b":
+   el título como cabecera del recuadro (con chips de estado) y debajo dos columnas.
+   Izquierda: la identidad del recurso (las fotos). Derecha: lo que se consulta y edita
+   a diario — dónde está cada unidad — y la ficha técnica.
+
+   Los tres bloques (fotos, título, contenido) son hermanos dentro de `.g-ficha-body`
+   a propósito: en escritorio los ubica un grid (`grid-template-areas`), y en celular
+   un flex con `order` que pone la foto full-bleed arriba de todo, como el banner del
+   diseño de celular.
+
+   Sobreescribe entero el bloque `contenido` de crud/detalle.html en vez de sólo
+   `seccion`, porque la maqueta cambia de raíz. Las fotos salen del partial compartido.
+   El resto de las áreas usa la ficha genérica de crud/detalle.html sin tocar. #}
 {% extends 'crud/detalle.html' %}
 
-{% block seccion scoped %}
-{% if s.get('tipo') == 'ubicaciones' %}
-    {% if s['items'] %}
-    <div class="g-unidades">
-        {% for grupo in s['items'] %}
-        <div class="g-unidad-grupo">
-            <strong>{{ grupo['ubicacion'] }}:</strong>
-            {% for n in grupo['numeros'] %}
-            <span class="g-unidad-chip">
-                #{{ n }}
-                {% if puede(permiso_escritura) and grupo['ubicacion'] != 'Sin ubicar' %}
-                <form method="post" class="g-inline-form" style="display:inline"
-                      action="{{ url_for('gestion.unidad_quitar', id=fila['id']) }}">
-                    <input type="hidden" name="numero" value="{{ n }}">
-                    <button type="submit" class="g-btn-mini g-btn-danger" title="Marcar sin ubicar">×</button>
-                </form>
-                {% endif %}
+{% set campo_id = cfg.campo_nombre or 'nombre' %}
+
+{% block contenido %}
+<div class="g-ficha-body">
+
+    <div class="g-ficha-col-media">
+        {% include 'crud/_detalle_fotos.html' %}
+    </div>
+
+    <header class="g-ficha-head">
+        <div class="g-ficha-id">
+            <span class="g-ficha-crumb">
+                <a href="{{ url_for(area_nombre ~ '.lista', slug=slug) }}">{{ cfg.plural | upper }}</a>
+                {%- if fila['tipo'] %} / {{ fila['tipo'] }}{% endif -%}
             </span>
+            <h2 class="g-ficha-title">{{ fila[campo_id] }}</h2>
+            <div class="g-ficha-chips">
+                {% if fila['estado'] %}<span class="g-badge">{{ fila['estado'] }}</span>{% endif %}
+                {% if fila['valor'] %}<span class="g-ficha-chip is-valor">{{ fila['valor'] }}</span>{% endif %}
+                {% if fila['cantidad'] %}<span class="g-ficha-chip">{{ fila['cantidad'] }} unidades</span>{% endif %}
+                {% if fila['fecha_revision'] %}<span class="g-ficha-chip">Rev. {{ fila['fecha_revision'] }}</span>{% endif %}
+            </div>
+        </div>
+        {% if puede(permiso_escritura) %}
+        <div class="g-ficha-actions">
+            <a class="g-btn" href="{{ url_for(area_nombre ~ '.editar', slug=slug, id=fila['id']) }}">EDITAR</a>
+            {# ELIMINAR sale de la barra: va en el "⋯", lejos del botón que se usa siempre.
+               <details> puro, sin JS. #}
+            <details class="g-ficha-menu">
+                <summary aria-label="Más acciones">⋯</summary>
+                <div class="g-ficha-menu-pop">
+                    <form method="post" action="{{ url_for(area_nombre ~ '.eliminar', slug=slug, id=fila['id']) }}"
+                          onsubmit="return confirm('¿Eliminar este recurso? Esta acción no se puede deshacer.');">
+                        <button type="submit" class="g-btn-danger">ELIMINAR</button>
+                    </form>
+                </div>
+            </details>
+        </div>
+        {% endif %}
+    </header>
+
+    <div class="g-ficha-col-main">
+        {% for s in secciones %}
+        {# `oculto_si_vacio`: sección opcional (sub-recursos de un kit) que no debe llamar la
+           atención de quien no puede escribir si no hay nada cargado. #}
+        {% if not (s.get('oculto_si_vacio') and not s['items'] and not puede(permiso_escritura)) %}
+
+        {% if s.get('tipo') == 'ubicaciones' %}
+        <div class="g-ficha-bar">
+            <span>{{ s.titulo | upper }}</span>
+        </div>
+        {% if s['items'] %}
+        <div class="g-ficha-ubic">
+            {% for grupo in s['items'] %}
+            <div class="g-ficha-ubic-row">
+                <div class="g-ficha-ubic-datos">
+                    <span class="g-ficha-ubic-lugar">{{ grupo['ubicacion'] }}</span>
+                    <div class="g-ficha-unidades">
+                        {% for n in grupo['numeros'] %}
+                        <span class="g-ficha-unidad">
+                            #{{ n }}
+                            {% if puede(permiso_escritura) and grupo['ubicacion'] != 'Sin ubicar' %}
+                            <form method="post" action="{{ url_for('gestion.unidad_quitar', id=fila['id']) }}">
+                                <input type="hidden" name="numero" value="{{ n }}">
+                                <button type="submit" title="Marcar sin ubicar">&times;</button>
+                            </form>
+                            {% endif %}
+                        </span>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="g-ficha-ubic-count">{{ grupo['numeros'] | length }}</div>
+            </div>
             {% endfor %}
         </div>
-        {% endfor %}
-    </div>
-    {% else %}
-    <p class="g-help">Todavía no hay unidades cargadas.</p>
-    {% endif %}
-    {% if puede(permiso_escritura) %}
-    <form method="post" class="g-inline-form" action="{{ url_for('gestion.unidad_mover', id=fila['id']) }}">
-        <input type="text" name="numeros" placeholder="Números (ej: 1,3,5)" required style="width:10em">
-        <input type="text" name="ubicacion" list="datalist-lugar-desglose" placeholder="Lugar" required>
-        <datalist id="datalist-lugar-desglose">
-            {% for op in lugares_recurso %}<option value="{{ op }}">{% endfor %}
-        </datalist>
-        <button type="submit" class="g-btn-mini">Mover</button>
-    </form>
-    {% endif %}
-{% elif s.get('tipo') == 'kit_items' %}
-    {% if s['items'] %}
-    <div class="g-table-wrap">
-        <table class="g-table">
-            <thead>
-                <tr>
-                    <th>TÍTULO</th>
-                    <th>CANT.</th>
-                    <th>RECURSO ASIGNADO</th>
-                    {% if puede(permiso_escritura) %}<th></th>{% endif %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in s['items'] %}
-                <tr>
-                    {% if puede(permiso_escritura) %}
-                    <td colspan="3">
-                        <form method="post" class="g-inline-form"
-                              action="{{ url_for('gestion.kit_item_editar', id=fila['id'], item_id=item['id']) }}">
-                            <input type="text" name="titulo" value="{{ item['titulo'] }}" placeholder="Título" required>
-                            <input type="text" name="cantidad" value="{{ item['cantidad'] }}" placeholder="Cantidad" style="width:6em">
-                            <input type="text" name="recurso_asignado" value="{{ item['recurso_asignado'] }}" placeholder="Recurso asignado">
-                            <button type="submit" class="g-btn-mini" title="Guardar">Guardar</button>
-                        </form>
-                    </td>
-                    <td>
-                        <form method="post" class="g-inline-form" style="display:inline"
-                              action="{{ url_for('gestion.kit_item_eliminar', id=fila['id'], item_id=item['id']) }}">
-                            <button type="submit" class="g-btn-mini g-btn-danger" title="Quitar">×</button>
-                        </form>
-                    </td>
-                    {% else %}
-                    <td data-label="TÍTULO">{{ item['titulo'] }}</td>
-                    <td data-label="CANT.">{{ item['cantidad'] }}</td>
-                    <td data-label="RECURSO ASIGNADO">{{ item['recurso_asignado'] }}</td>
-                    {% endif %}
-                </tr>
+        {% else %}
+        <p class="g-ficha-vacio">Todavía no hay unidades cargadas.</p>
+        {% endif %}
+        {% if puede(permiso_escritura) %}
+        <form method="post" class="g-ficha-mover" action="{{ url_for('gestion.unidad_mover', id=fila['id']) }}">
+            <input type="text" name="numeros" placeholder="Números (ej: 1,3,5)" required style="width:10em">
+            <input type="text" name="ubicacion" list="datalist-lugar-desglose" placeholder="Lugar" required>
+            <datalist id="datalist-lugar-desglose">
+                {% for op in lugares_recurso %}<option value="{{ op }}">{% endfor %}
+            </datalist>
+            <button type="submit" class="g-btn-mini">Mover</button>
+        </form>
+        {% endif %}
+
+        {% elif s.get('tipo') == 'kit_items' %}
+        <div class="g-ficha-bar"><span>{{ s.titulo | upper }}</span></div>
+        <div class="g-ficha-seccion">
+            {% if s['items'] %}
+            <div class="g-table-wrap">
+                <table class="g-table">
+                    <thead>
+                        <tr>
+                            <th>TÍTULO</th>
+                            <th>CANT.</th>
+                            <th>RECURSO ASIGNADO</th>
+                            {% if puede(permiso_escritura) %}<th></th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in s['items'] %}
+                        <tr>
+                            {% if puede(permiso_escritura) %}
+                            <td colspan="3">
+                                <form method="post" class="g-inline-form"
+                                      action="{{ url_for('gestion.kit_item_editar', id=fila['id'], item_id=item['id']) }}">
+                                    <input type="text" name="titulo" value="{{ item['titulo'] }}" placeholder="Título" required>
+                                    <input type="text" name="cantidad" value="{{ item['cantidad'] }}" placeholder="Cantidad" style="width:6em">
+                                    <input type="text" name="recurso_asignado" value="{{ item['recurso_asignado'] }}" placeholder="Recurso asignado">
+                                    <button type="submit" class="g-btn-mini" title="Guardar">Guardar</button>
+                                </form>
+                            </td>
+                            <td>
+                                <form method="post" class="g-inline-form" style="display:inline"
+                                      action="{{ url_for('gestion.kit_item_eliminar', id=fila['id'], item_id=item['id']) }}">
+                                    <button type="submit" class="g-btn-mini g-btn-danger" title="Quitar">×</button>
+                                </form>
+                            </td>
+                            {% else %}
+                            <td data-label="TÍTULO">{{ item['titulo'] }}</td>
+                            <td data-label="CANT.">{{ item['cantidad'] }}</td>
+                            <td data-label="RECURSO ASIGNADO">{{ item['recurso_asignado'] }}</td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="g-ficha-vacio">Todavía no hay sub-recursos cargados.</p>
+            {% endif %}
+            {% if puede(permiso_escritura) %}
+            <form method="post" class="g-inline-form" action="{{ url_for('gestion.kit_item_agregar', id=fila['id']) }}">
+                <input type="text" name="titulo" placeholder="Título" required>
+                <input type="text" name="cantidad" placeholder="Cantidad" style="width:6em">
+                <input type="text" name="recurso_asignado" placeholder="Recurso asignado">
+                <button type="submit" class="g-btn-mini">Agregar</button>
+            </form>
+            {% endif %}
+        </div>
+
+        {% else %}
+        <div class="g-ficha-bar"><span>{{ s.titulo | upper }}</span></div>
+        <div class="g-ficha-seccion">
+            {% if s['items'] %}
+            <ul class="g-ficha-lista">
+                {% for it in s['items'] %}
+                <li><a class="g-item-link" href="{{ url_for(area_nombre ~ '.detalle', slug=s.slug, id=it['id']) }}">{{ it['nombre'] }}</a></li>
                 {% endfor %}
-            </tbody>
-        </table>
+            </ul>
+            {% else %}
+            <p class="g-ficha-vacio">Sin elementos vinculados.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% endif %}
+        {% endfor %}
+
+        {# Ficha técnica: en el diseño es una sección más de la columna derecha, debajo
+           de "Dónde está". `tipo` ya sale en el breadcrumb; `descripcion` va como texto. #}
+        <div class="g-ficha-bar"><span>Detalle</span></div>
+        <div class="g-ficha-detalle">
+            {% if fila['descripcion'] %}<span>{{ fila['descripcion'] }}</span>{% endif %}
+            <dl class="g-ficha-specs">
+                {% for c in cfg.campos %}
+                {% if c.nombre not in [campo_id, 'descripcion', 'tipo'] and fila[c.nombre] %}
+                <dt>{{ c.label }}</dt>
+                <dd class="{{ 'g-pre' if c.tipo == 'textarea' }}">{{ fila[c.nombre] }}</dd>
+                {% endif %}
+                {% endfor %}
+            </dl>
+        </div>
     </div>
-    {% else %}
-    <p class="g-help">Todavía no hay sub-recursos cargados.</p>
-    {% endif %}
-    {% if puede(permiso_escritura) %}
-    <form method="post" class="g-inline-form" action="{{ url_for('gestion.kit_item_agregar', id=fila['id']) }}">
-        <input type="text" name="titulo" placeholder="Título" required>
-        <input type="text" name="cantidad" placeholder="Cantidad" style="width:6em">
-        <input type="text" name="recurso_asignado" placeholder="Recurso asignado">
-        <button type="submit" class="g-btn-mini">Agregar</button>
-    </form>
-    {% endif %}
-{% else %}
-    {{ super() }}
-{% endif %}
+
+</div>
 {% endblock %}

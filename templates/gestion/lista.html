@@ -70,7 +70,7 @@
                 data-vencido="{{ '1' if fila['id'] in vencidos_recurso else '0' }}"
                 data-href="{{ url_for(area_nombre ~ '.detalle', slug=slug, id=fila['id']) }}"
                 {{ 'hidden' if fila['estado'] == 'Dado de baja' }}
-                class="{{ 'g-recurso-baja' if fila['estado'] == 'Dado de baja' }}">
+                class="{{ 'g-recurso-baja' if fila['estado'] == 'Dado de baja' else 'g-recurso-roto' if fila['estado'] == 'Roto' }}">
                 <td data-label="RECURSO">
                     <a class="g-item-link" href="{{ url_for(area_nombre ~ '.detalle', slug=slug, id=fila['id']) }}">{{ fila['nombre'] }}</a>
                     {%- if fila['id'] in via_alias %}<span class="g-tag-alias">· por alias</span>{% endif -%}

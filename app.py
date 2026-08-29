@@ -22,7 +22,7 @@ PERMISOS = [
     ('horarios.actualizar', 'Regenerar los horarios desde Google Sheets', 'admin'),
 ]
 GRUPO_PERMISOS = 'Horarios'
-from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS, TURNO_CURSOS, TURNO_DEFAULT, ESPECIALIDAD_CURSOS, ahora, PRODUCCION, SESION_DIAS
+from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS, TURNO_CURSOS, TURNO_DEFAULT, ESPECIALIDAD_CURSOS, ahora, PRODUCCION, SESION_DIAS, APPSCRIPT_URL, APPSCRIPT_SECRET
 from fpdf import FPDF
 import io
 from database import obtener_filas
@@ -42,6 +42,14 @@ if not _secret:
     _secret = 'appmitre-dev-inseguro'
     print("AVISO: SECRET_KEY no está seteada — usando la clave de desarrollo.")
 app.secret_key = _secret
+
+# Las planillas de horarios salen de un Drive privado vía el Web App de Apps Script
+# (ver apps_script/). Sin URL ni secreto no se puede regenerar escuela.db; en producción
+# eso deja la escuela sin horarios el día que Sheets se recargue, así que se exige de una.
+if PRODUCCION and not (APPSCRIPT_URL and APPSCRIPT_SECRET):
+    raise RuntimeError(
+        "Faltan SHEETS_PROXY_URL / SHEETS_PROXY_SECRET en el entorno. Sin ellas no se "
+        "puede bajar la planilla privada de horarios: no se arranca en producción.")
 
 # Sin esto la cookie muere al cerrar el navegador y hay que re-tipear la clave cada vez.
 # Con SESSION_REFRESH_EACH_REQUEST (default True) la expiración se corre en cada visita,

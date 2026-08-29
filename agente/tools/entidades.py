@@ -230,7 +230,10 @@ def _listar_alias_fmt(slug):
                         'administrador. Podés proponer mejoras (agregar, corregir, sacar '
                         'redundantes) y aplicarlas con editar_entidad(alias=...), que '
                         'REEMPLAZA el valor entero: si sumás un término, mandá la lista '
-                        'completa (existentes + nuevo).'),
+                        'completa (existentes + nuevo). Al auditar: las filas que son la '
+                        'misma cosa deben llevar el mismo conjunto de nombres, y un recurso '
+                        'que puede sustituir a otro en el uso debe tener el término de ese '
+                        'otro (ej: la zapatilla lleva "alargue").'),
     }
 
 

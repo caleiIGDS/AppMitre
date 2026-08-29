@@ -3,10 +3,13 @@ import csv
 import json
 import os
 import re
+import hmac
+import hashlib
+import time
 import urllib.request
 import io
 import texto
-from config import TURNO_CURSOS, TURNO_DEFAULT
+from config import TURNO_CURSOS, TURNO_DEFAULT, APPSCRIPT_URL, APPSCRIPT_SECRET
 
 def _cargar_nombre_mapeos():
     ruta = os.path.join(os.path.dirname(__file__), 'nombre_mapeos.json')
@@ -168,24 +171,77 @@ def limpiar_aula(aula):
 
 
 
+def _url_firmada(gid):
+    """URL del Web App de Apps Script con la petición firmada.
+
+    El Drive es privado: no se puede pegar más a docs.google.com/export. El proxy sabe
+    qué spreadsheet leer (Script Property `SHEET_ID`), así que sólo hace falta pasarle
+    el `gid`. La firma es HMAC-SHA256(secreto, timestamp_en_ms) en hex; el proxy la
+    recalcula y además exige que el timestamp esté dentro de su ventana.
+    """
+    if not APPSCRIPT_URL or not APPSCRIPT_SECRET:
+        raise RuntimeError(
+            "Faltan SHEETS_PROXY_URL / SHEETS_PROXY_SECRET: la planilla es privada y "
+            "sólo se baja por el Web App de Apps Script (ver apps_script/README.md)."
+        )
+    ms = str(int(time.time() * 1000))
+    sig = hmac.new(APPSCRIPT_SECRET.encode(), ms.encode(), hashlib.sha256).hexdigest()
+    return f"{APPSCRIPT_URL}?gid={gid}&t={ms}&sig={sig}"
+
+
+class ProxyError(RuntimeError):
+    """El proxy de Apps Script no devolvió un CSV. No es transitorio: no se reintenta.
+
+    Lleva el motivo concreto (firma inválida, sin permisos, Sheet inaccesible, deploy
+    viejo, gid inexistente) para que llegue tal cual a quien disparó la carga.
+    """
+
+
+def _verificar_csv(contenido, ctype, gid):
+    """Corta con un mensaje claro si lo que volvió del proxy no es el CSV esperado.
+
+    Apps Script sirve TODO con HTTP 200, así que un fallo del script no se ve como
+    error de red: llega como texto sentinel (`MITRE_PROXY_ERROR: ...`, nuestro) o como
+    una página HTML de Google con la excepción adentro. Sin este chequeo, ese HTML se
+    le pasaría a `csv.DictReader` y la carga metería basura (o nada) sin avisar.
+    """
+    if contenido.startswith('MITRE_PROXY_ERROR'):
+        raise ProxyError(f"El proxy rechazó la petición (gid {gid}): {contenido[:300].strip()}")
+
+    principio = contenido.lstrip()[:60].lower()
+    if 'text/html' in ctype.lower() or principio.startswith(('<!doctype', '<html')):
+        m = re.search(r'Exception:[^<]*', contenido)
+        detalle = (m.group(0) if m else ' '.join(contenido.split())[:300]).replace('&quot;', '"').strip()
+        raise ProxyError(
+            f"El proxy de Sheets no devolvió CSV para el gid {gid}. "
+            f"Respuesta de Google: {detalle}"
+        )
+
+
 def descargar_sheet(sheet_id, gid=0, skip_rows=0, intentos=3, demora=2):
-    import time
-    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+    # `sheet_id` se ignora: el spreadsheet lo resuelve el proxy de Apps Script. Se
+    # conserva el parámetro para no tocar los call sites ni las firmas de los cargar_*.
     for intento in range(intentos):
         try:
             time.sleep(demora if intento > 0 else 0.5)
+            url = _url_firmada(gid)  # re-firma en cada intento: un retry lento no puede quedar fuera de la ventana
             with urllib.request.urlopen(url, timeout=15) as response:
+                ctype = response.headers.get('Content-Type', '')
                 contenido = response.read().decode('utf-8')
-                lineas = contenido.splitlines()
 
-                if skip_rows > 0:
-                    lineas = lineas[skip_rows:]
+            _verificar_csv(contenido, ctype, gid)
 
-                # Normalizar encabezados: minúsculas, sin acentos, espacios a _
-                encabezados = lineas[0].lower().replace(' ', '_')
-                encabezados = eliminar_acentos(encabezados)
-                lineas[0] = encabezados
-                return io.StringIO('\n'.join(lineas))
+            lineas = contenido.splitlines()
+            if skip_rows > 0:
+                lineas = lineas[skip_rows:]
+
+            # Normalizar encabezados: minúsculas, sin acentos, espacios a _
+            encabezados = lineas[0].lower().replace(' ', '_')
+            encabezados = eliminar_acentos(encabezados)
+            lineas[0] = encabezados
+            return io.StringIO('\n'.join(lineas))
+        except (ProxyError, RuntimeError):
+            raise  # fallo determinístico del proxy o de config: reintentar no cambia nada
         except Exception as e:
             print(f"  Intento {intento + 1}/{intentos} fallido: {e}")
             if intento == intentos - 1:
@@ -198,7 +254,11 @@ def cargar_desde_sheets(sheet_id, gids):
     
     for nombre, gid in gids.items():
         print(f"Cargando {nombre} (GID {gid})...")
-        archivo = descargar_sheet(sheet_id, gid)
+        try:
+            archivo = descargar_sheet(sheet_id, gid)
+        except Exception as e:
+            con.close()
+            raise RuntimeError(f"Falló la descarga de la hoja '{nombre}' (gid {gid}): {e}") from e
         reader = csv.DictReader(archivo)
         
         for row in reader:
@@ -302,6 +362,7 @@ def cargar_horarios_preceptores(sheet_id, gid):
         if 'con' in locals():
             con.rollback()
         print(f"Error cargando horarios de preceptores desde Sheets: {e}")
+        raise RuntimeError(f"Falló la carga de horarios de preceptores: {e}") from e
     finally:
         if 'con' in locals():
             con.close()
@@ -422,6 +483,7 @@ def cargar_personal_no_docente(sheet_id, gid):
     except Exception as e:
         con.rollback()
         print(f"Error cargando personal no docente: {e}")
+        raise RuntimeError(f"Falló la carga de personal no docente: {e}") from e
     finally:
         con.close()
 

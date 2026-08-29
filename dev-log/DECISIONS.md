@@ -6,6 +6,18 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-08-27] — Los horarios se leen por un Web App de Apps Script, no del Sheet público
+
+El Drive de la escuela pasó a privado, así que `descargar_sheet()` ya no puede usar
+`docs.google.com/.../export?format=csv`. En vez de meter credenciales de servicio de Google
+en la app (otra key que rotar, otro scope que auditar), un Apps Script corre como el dueño
+del documento y devuelve el mismo CSV. El endpoint queda sin auth de Google (`ANYONE_ANONYMOUS`),
+así que la app firma cada request con `HMAC_SHA256(secreto, timestamp_ms)` y el script exige
+que el timestamp esté dentro de ±120 s — el secreto nunca viaja, sólo su HMAC, y una URL
+capturada deja de servir en dos minutos. Código y deploy del proxy: `apps_script/`.
+
+---
+
 ## [2026-08-24] — `puntaje_busqueda`: una palabra candidata más corta que la query no cuenta
 
 Buscar "pelacable" traía 7 resultados con el correcto ("Pela cable Weidmuller", vía alias

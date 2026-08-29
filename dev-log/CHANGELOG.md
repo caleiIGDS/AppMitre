@@ -6,6 +6,19 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-27] — Las planillas de horarios se bajan por un proxy firmado, no del Sheet público
+
+**Archivos**: `database.py`, `config.py`, `app.py`, `apps_script/`
+
+El Drive de la escuela pasa a privado. `descargar_sheet()` ya no pega a
+`docs.google.com/.../export`: ahora le pega al Web App de Apps Script `SHEETS_PROXY_URL`
+firmando cada request con `sig = HMAC_SHA256(SHEETS_PROXY_SECRET, timestamp_ms)`. Ambas
+env vars son obligatorias (en producción no arranca; en local `descargar_sheet` lanza
+`RuntimeError`). El `sheet_id` que reciben los `cargar_*` quedó ignorado — lo resuelve el proxy.
+`descargar_sheet` ahora valida que la respuesta sea CSV y no una página de error de Apps
+Script (que llega con HTTP 200) → nueva `database.ProxyError`; los tres `cargar_*` propagan
+el fallo nombrando la hoja en vez de tragárselo con `print`.
+
 ## [2026-08-26] — El chat del agente expira a las 4 horas, y avisa cuando reinicia
 
 **Archivos**: `agente/db.py`, `agente/rutas.py`, `static/gestion-agente.js`

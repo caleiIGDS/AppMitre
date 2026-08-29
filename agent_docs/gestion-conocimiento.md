@@ -34,9 +34,12 @@ el motor genérico `crud.py`, que no importa a ninguno de los dos — ver `agent
   `agente_conversaciones`, `agente_fotos_pendientes`), que son auditoría/sesión y no datos
   de dominio.
 - **`templates/gestion/`** — `base.html` (layout + nav), `home.html`, `lista.html`,
-  `form.html`, `detalle.html`, `alias_lista.html`. `lista.html`/`form.html`/`detalle.html`
-  son **genéricos**: se renderizan a partir de la config declarativa de la entidad; `detalle.html`
-  sólo sobreescribe la sección "Por ubicación" (el desglose, que no es una relación M2M).
+  `form.html`, `detalle.html`, `alias_lista.html`. `lista.html`/`form.html` son **genéricos**:
+  se renderizan a partir de la config declarativa de la entidad. `detalle.html` en cambio
+  reescribe entero el bloque `contenido` de `crud/detalle.html` para dar a la ficha de
+  recurso su maqueta propia (tarjeta de título con chips de estado, contenedor con borde y
+  barras de sección azules, el desglose por unidad con columna de chips y total). Las fotos
+  y su visor salen del partial compartido `templates/crud/_detalle_fotos.html`.
 - **`static/gestion.css`** — hoja standalone (paleta blueprint copiada, no importa
   `style.css` para que los dos sistemas no se pisen). Sin modo oscuro. La comparten
   `/historia`, `/agente` y `/accesos`: la identidad visual sí es común, la lógica de dominio no.
@@ -136,7 +139,8 @@ sale de `detalle_entidad`. Las tres escriben directo, sin ficha de confirmación
 - Upload: botón en ficha de detalle → POST `/<slug>/<id>/foto` → sube imagen, convierte a base64, guarda en DB
 - Renderizado: galería grid responsive (120px minmax) de miniaturas recortadas (`object-fit: cover`)
 - **Visor**: click en una miniatura abre un lightbox a pantalla completa (`.g-lightbox`, CSS en
-  `gestion.css`, JS inline en `detalle.html`) con la foto entera, contador `n / total`, flechas
+  `gestion.css`, JS inline en el partial `templates/crud/_detalle_fotos.html`) con la foto
+  entera, contador `n / total`, flechas
   ‹ › (y ← → del teclado), cierre con Esc o click en el fondo, y el botón **ELIMINAR**
 - Borrado: `POST /<slug>/<id>/foto/<indice>/eliminar` (con `confirm()`) → saca la foto del array
   y redirige a la ficha. **La referencia es la posición en el array**: las fotos no tienen id
@@ -160,13 +164,15 @@ no pasa por `_normalizar_borrador`.
 
 **Inventario físico**: la carga inicial vino del sheet "Inventario renovable 2026" vía
 `importar_inventario.py`, un script de root que se corrió una vez (81 insertados +
-2 actualizados) y **se eliminó el 2026-08-08**, ya cumplido su propósito. `gestion.db` es
-la fuente de verdad y nunca hubo write-back al sheet (ver DECISIONS 2026-07-19), así que
-la planilla quedó como material histórico. Si alguna vez hay que volver a importar, el
-script está en el historial de git (`git show 756a002:importar_inventario.py`) — ojo que
-mapeaba los estados Funcional→Disponible, Reparar→En reparación, nc→Sin revisar, y que
-traía las fechas de revisión en formato corto sin año, incompatible con
-`FORMATO_FECHA_REVISION`.
+2 actualizados) y **se eliminó definitivamente el 2026-08-27**, ya cumplido su propósito
+(había vuelto un tiempo como red secundaria, pero `gestion.db` tiene sus respaldos y el
+sheet quedó desactualizado). `gestion.db` es la fuente de verdad y nunca hubo write-back
+al sheet (ver DECISIONS 2026-07-19), así que la planilla quedó como material histórico.
+Si alguna vez hay que volver a importar, el script está en el historial de git
+(`git log --diff-filter=D -- importar_inventario.py` para el commit que lo borró) — ojo
+que mapeaba los estados Funcional→Disponible, Reparar→En reparación, nc→Sin revisar
+(vocabulario viejo, hoy sería Funcional/Roto/""), y que traía las fechas de revisión en
+formato corto sin año, incompatible con `FORMATO_FECHA_REVISION`.
 
 ## Config declarativa (`ENTIDADES` en gestion.py)
 

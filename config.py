@@ -42,6 +42,13 @@ def ahora():
 # ID del documento de Google Sheets (común para todas las hojas)
 SHEET_ID = "1GJxwpxXfLosqKxgIa6zyZhwjDK-89ZDavLi6nouWTsw"
 
+# El Drive de la escuela es privado: las planillas de horarios no se bajan por la URL
+# /export pública, sino por un Web App de Apps Script que corre como el dueño y devuelve
+# el mismo CSV. Cada request se firma con HMAC-SHA256 sobre el timestamp en ms (el script
+# recalcula la firma y exige que el timestamp esté dentro de una ventana). Ver apps_script/.
+APPSCRIPT_URL = os.environ.get('SHEETS_PROXY_URL', '')        # .../macros/s/AKfy.../exec
+APPSCRIPT_SECRET = os.environ.get('SHEETS_PROXY_SECRET', '')  # mismo valor que el Script Property PROXY_SECRET
+
 # Diccionario unificado de GIDs (IDs de las hojas individuales)
 # Los números del 1 al 7 corresponden a los horarios de cada año escolar.
 GIDS = {
