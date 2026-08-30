@@ -1,0 +1,146 @@
+/* global.css — Paleta y componentes compartidos
+   Se carga en TODAS las áreas: horarios, gestion, historia, agente, salidas.
+   Capa 0: no nombra nada específico de dominio. */
+
+:root {
+    --g-primary: #1A365D;
+    --g-accent: #D97A34;
+    --g-alert: #DC2626;
+    --g-bg: #F1F5F9;
+    --g-surface: #ffffff;
+    --g-border: #cbd5e1;
+    --g-muted: #70757a;
+    --g-dark: #0F172A;
+    --g-grid: rgba(26, 54, 93, 0.08);
+    --g-font: 'Roboto Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    font-family: var(--g-font);
+    background-color: var(--g-bg);
+    color: var(--g-dark);
+    margin: 0;
+    padding: 0;
+}
+
+.g-bg {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-image:
+        linear-gradient(var(--g-grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--g-grid) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+.g-container {
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* ---------- Header compartido ---------- */
+.g-header {
+    background: var(--g-primary);
+    color: white;
+    padding: 0;
+    border-bottom: 4px solid var(--g-accent);
+}
+
+.g-header-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
+.g-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.g-titles h1 {
+    margin: 0;
+    font-size: 24px;
+    letter-spacing: 3px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.g-serial {
+    font-size: 12px;
+    color: var(--g-accent);
+    background: rgba(0, 0, 0, 0.2);
+    padding: 2px 8px;
+    font-weight: normal;
+    border: 1px solid var(--g-accent);
+}
+
+.g-titles p {
+    margin: 2px 0 0;
+    font-size: 14px;
+    opacity: 0.9;
+    letter-spacing: 1px;
+}
+
+/* Escudo (cargado desde marca.css antes de este archivo).
+   Este CSS solo redefine el tamaño en breakpoints; el SVG viene de marca.css */
+.marca {
+    display: flex;
+    align-items: center;
+}
+
+.marca-escudo {
+    height: var(--escudo, 88px);
+    width: auto;
+}
+
+/* ---------- Escudo (marca.css consolidado) ----------
+   El escudo estaba definido dos veces (`.g-logo` y `.tech-logo`) y las copias
+   divergieron. Acá hay una sola definición, cargada por todas las pantallas.
+
+   Se usa así:
+     <div class="marca">
+       <img class="marca-escudo" …>
+       <div class="g-titles">…</div>
+     </div>
+
+   Cada área redefine --escudo y --marca-alto en sus breakpoints. */
+
+.marca {
+    --escudo: 88px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-height: var(--marca-alto, var(--escudo));
+    padding-left: calc(var(--escudo) + 8px);
+}
+
+.marca-escudo {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: var(--escudo);
+}
+
+@media (max-width: 768px) {
+    .marca { --escudo: 64px; }
+    .g-titles h1 { font-size: 18px; }
+    .g-titles p { font-size: 12px; }
+}
+
+@media (max-width: 480px) {
+    .marca { --escudo: 56px; }
+    .g-titles h1 { font-size: 16px; }
+    .g-header-flex { gap: 10px; }
+}

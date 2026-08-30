@@ -16,11 +16,11 @@ Google Sheets (privado) → Web App de Apps Script (proxy firmado con HMAC)
   → escuela.db (SQLite)
 ```
 
-El pipeline se dispara en dos situaciones:
-1. **Arranque directo** (`python app.py`): el bloque `__main__` llama `init_tablas()` + `tiene_datos()` + carga si está vacío.
-2. **Petición manual**: `POST /api/actualizar` (público, sin permiso) llama `crear_tablas()` (borra todo) + carga completa.
+Todo el pipeline vive en `horarios/datos.py` (ex-`database.py`). Se dispara en dos situaciones:
+1. **Arranque directo** (`python app.py`): el bloque `__main__` llama `horarios.cargar_inicial()` — `init_tablas()` + `tiene_datos()` + carga si está vacío.
+2. **Petición manual**: `POST /horarios/api/actualizar` (detrás del login de horarios, sin permiso extra) llama `crear_tablas()` (borra todo) + carga completa.
 
-**Importante — producción (PythonAnywhere/WSGI):** el bloque `__main__` no se ejecuta cuando el servidor WSGI importa el módulo. En PythonAnywhere el `escuela.db` persiste entre reinicios, pero en un deploy nuevo la DB está vacía y todas las rutas fallan. En ese caso hay que disparar `/api/actualizar` desde el botón. Solución estructural pendiente: ver `dev-log/tasks/TODO.md` #1.
+**Importante — producción (PythonAnywhere/WSGI):** el bloque `__main__` no se ejecuta cuando el servidor WSGI importa el módulo. En PythonAnywhere el `escuela.db` persiste entre reinicios, pero en un deploy nuevo la DB está vacía y todas las rutas fallan. En ese caso hay que disparar `/horarios/api/actualizar` desde el botón. Solución estructural pendiente: ver `dev-log/tasks/TODO.md` #1.
 
 ---
 
@@ -29,7 +29,7 @@ El pipeline se dispara en dos situaciones:
 - **URL construida**: pega al Web App de Apps Script (`SHEETS_PROXY_URL`) con la petición firmada — `?gid={gid}&t={ms}&sig={hex}`, donde `sig = HMAC_SHA256(SHEETS_PROXY_SECRET, ms)`. El proxy corre como el dueño y devuelve el mismo CSV que el viejo `/export`. El `sheet_id` que recibe la función se ignora (lo resuelve el proxy). Sin `SHEETS_PROXY_URL`/`SHEETS_PROXY_SECRET` lanza `RuntimeError`. Setup del proxy: `apps_script/README.md`.
 - La planilla de Google Sheets ya **no** necesita ser pública; el Drive está en privado y el proxy es el único que la lee.
 - **Apps Script responde todo con HTTP 200**, incluso cuando falla: el error viene en el cuerpo, como `MITRE_PROXY_ERROR: ...` (nuestro: firma/timestamp inválidos) o como una página HTML de Google con la excepción del script adentro (sin permisos, Sheet inaccesible, deploy viejo, gid inexistente). `_verificar_csv()` corta ambos casos con `ProxyError` (subclase de `RuntimeError`), extrayendo el texto `Exception: ...` de Google. Un `ProxyError` **no se reintenta** (no es transitorio). Sin esto, ese HTML se le pasaría a `csv.DictReader` y la carga metería basura sin avisar.
-- Los tres loaders (`cargar_desde_sheets`, `cargar_horarios_preceptores`, `cargar_personal_no_docente`) **propagan** el fallo nombrando la hoja; ya no lo tragan con un `print`. `/api/actualizar` lo devuelve como `{"status":"error","message": <motivo>}` HTTP 500.
+- Los tres loaders (`cargar_desde_sheets`, `cargar_horarios_preceptores`, `cargar_personal_no_docente`) **propagan** el fallo nombrando la hoja; ya no lo tragan con un `print`. `/horarios/api/actualizar` lo devuelve como `{"status":"error","message": <motivo>}` HTTP 500.
 - `skip_rows`: salta N filas antes de procesar. Actualmente se llama con `skip_rows=0` en todos los casos. En `cargar_horarios_preceptores` la fila de labels ("MAÑANA/TARDE/VESPERTINO") se descarta con `next(reader, None)`, y la fila de cabecera real (Preceptor|Curso|...) se filtra con el guard `preceptor.upper() != "PRECEPTOR"`.
 - **Reintentos**: 3 intentos con `time.sleep(2)` entre fallidos (0.5s antes del primer intento). Si el tercer intento falla, propaga la excepción.
 - **Normalización de headers**: la primera línea se convierte a minúsculas, sin acentos, con espacios → `_`. Esto permite que `csv.DictReader` use claves predecibles independientemente de mayúsculas en la planilla.
@@ -95,9 +95,9 @@ Archivo JSON `{nombre_sucio: nombre_canónico}`. Ambas claves ya deben estar en 
 **Para agregar un nuevo mapeo:**
 1. Determinar cómo llega el nombre desde Sheets (aplicar los pasos 1–6 mentalmente).
 2. Agregar la entrada en `nombre_mapeos.json`.
-3. Hacer `POST /api/actualizar` (o reiniciar) — el archivo se recarga al importar el módulo, por lo que requiere restart o recarga de la DB.
+3. Hacer `POST /horarios/api/actualizar` (o reiniciar) — el archivo se recarga al importar el módulo, por lo que requiere restart o recarga de la DB.
 
-**Limitación**: `_NOMBRE_MAPEOS` se carga una vez al iniciar. Editar el JSON sin reiniciar o sin disparar `/api/actualizar` no tiene efecto.
+**Limitación**: `_NOMBRE_MAPEOS` se carga una vez al iniciar. Editar el JSON sin reiniciar o sin disparar `/horarios/api/actualizar` no tiene efecto.
 
 ### `limpiar_aula(aula)`
 
@@ -165,7 +165,7 @@ Solo se inserta una fila en DB por cada día donde `inicio` y `fin` estén prese
 
 1. Crear la hoja en el Google Sheet con el mismo formato de columnas que las demás.
 2. Obtener el GID de la nueva hoja (visible en la URL de Google Sheets: `?gid=XXXXXXXXX`).
-3. En `config.py`, agregar la entrada en `GIDS`:
+3. En `horarios/config.py`, agregar la entrada en `GIDS`:
    ```python
    GIDS = {
        ...
@@ -173,7 +173,7 @@ Solo se inserta una fila en DB por cada día donde `inicio` y `fin` estén prese
    }
    ```
 4. `GIDS_CURSOS` se genera automáticamente excluyendo `horarios_preceptores` y `personal_no_docente`, así que el nuevo año se incluirá en la próxima carga.
-5. Disparar `POST /api/actualizar` (botón ACTUALIZAR HORARIOS, visible sólo para el admin).
+5. Disparar `POST /horarios/api/actualizar` (botón ACTUALIZAR HORARIOS, visible para cualquiera con la sesión de horarios).
 
 No hay nada más que cambiar en el código para un año adicional.
 
@@ -181,7 +181,7 @@ No hay nada más que cambiar en el código para un año adicional.
 
 ## Comportamiento ante errores
 
-- **Sheets caído / proxy sin permisos / firma inválida**: `descargar_sheet()` lanza (`ProxyError` es inmediato; un fallo de red reintenta 3 veces). Los tres loaders envuelven el error nombrando la hoja y lo propagan → `/api/actualizar` devuelve HTTP 500 con el motivo concreto en `message`. Los datos existentes NO se borran solo si el fallo es en la primera hoja: `crear_tablas()` ya corrió, así que si falla a mitad de camino la DB queda parcial hasta el próximo `/api/actualizar` exitoso.
+- **Sheets caído / proxy sin permisos / firma inválida**: `descargar_sheet()` lanza (`ProxyError` es inmediato; un fallo de red reintenta 3 veces). Los tres loaders envuelven el error nombrando la hoja y lo propagan → `/horarios/api/actualizar` devuelve HTTP 500 con el motivo concreto en `message`. Los datos existentes NO se borran solo si el fallo es en la primera hoja: `crear_tablas()` ya corrió, así que si falla a mitad de camino la DB queda parcial hasta el próximo `/horarios/api/actualizar` exitoso.
 - **CSV malformado**: `csv.DictReader` accede por nombre; columnas faltantes devuelven `None` → `limpiar_profesor(None)` devuelve `""` sin error. Filas parciales se insertan con campos vacíos.
 - **Campos `hora_inicio`/`hora_fin` vacíos**: se insertan tal cual. El frontend ignora clases sin horario válido (`timeToMin` devuelve 0 para strings inválidos). Esto puede causar bloques en posición 0 del calendario.
-- **Producción (PythonAnywhere/WSGI)**: el bloque `__main__` no corre al importar el módulo. En un deploy nuevo la DB está vacía → primera petición falla. Disparar `/api/actualizar` para inicializar. Solución estructural pendiente: ver `dev-log/tasks/TODO.md` #1.
+- **Producción (PythonAnywhere/WSGI)**: el bloque `__main__` no corre al importar el módulo. En un deploy nuevo la DB está vacía → primera petición falla. Disparar `/horarios/api/actualizar` para inicializar. Solución estructural pendiente: ver `dev-log/tasks/TODO.md` #1.

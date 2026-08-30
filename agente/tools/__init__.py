@@ -150,13 +150,16 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
                 limite=tool_input.get('limite', 50)
             )
         elif tool_name == 'crear_entidad':
-            # `foto` y `sub_recursos` quedan AFUERA de los campos: no son columnas de la
-            # entidad — `foto` es de qué imagen salió la ficha, `sub_recursos` son los
-            # items del kit (ver fichas._ficha_confirmacion / fichas._crear_entidad).
+            # `foto`, `sub_recursos` y `ubicacion` quedan AFUERA de los campos: no son
+            # columnas de la entidad — `foto` es de qué imagen salió la ficha,
+            # `sub_recursos` son los items del kit y `ubicacion` es el lugar del recurso,
+            # que se fija al confirmar (ver fichas._ficha_confirmacion / fichas._crear_entidad).
             resultado = _crear_entidad(
                 tool_input.get('slug', ''),
-                {k: v for k, v in tool_input.items() if k not in ('slug', 'foto', 'sub_recursos')},
-                contexto_turno, permisos, tool_input.get('foto'), tool_input.get('sub_recursos'))
+                {k: v for k, v in tool_input.items()
+                 if k not in ('slug', 'foto', 'sub_recursos', 'ubicacion')},
+                contexto_turno, permisos, tool_input.get('foto'),
+                tool_input.get('sub_recursos'), tool_input.get('ubicacion'))
         elif tool_name == 'leer_foto':
             resultado = _leer_foto_fmt(contexto_turno, tool_input.get('modo', MODO_DEFAULT),
                                        tool_input.get('foto'))

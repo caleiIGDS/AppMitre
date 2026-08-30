@@ -6,14 +6,32 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
-## [2026-08-29] — El sistema de horarios se movió a `/horarios` y pide sesión
+## [2026-08-30] — La ficha de alta del agente: sin fecha de revisión, con ubicación
 
-**Archivos**: `app.py`, `static/js/script.js`, `templates/index.html`, `templates/horarios/`
+**Archivos**: `agente/tools/{esquemas,fichas,__init__}.py`, `agente/rutas.py`, `agente/prompt.py`
 
-El SPA y su API son un blueprint (`horarios_bp`, prefijo `/horarios`) con gate de `accesos`:
-permiso base `horarios.ver` (verbo `leer`). `/` redirige a `/horarios/`; el front usa
-`API_BASE = '/horarios'` para todo `fetch`/`window.open`. Ya no hay nada público en horarios.
-Los dispositivos ya invitados **no** tienen `horarios.ver` hasta reinvitarlos; el admin sí.
+`crear_entidad` gana el parámetro `ubicacion` (solo `recursos`): va como pseudo-campo `_lugar`
+del borrador (entra al token, editable en la tarjeta como "Ubicación") y al confirmar se aplica
+con `gestion.mover_unidades`. `fecha_revision` sale de la ficha del chat (`CAMPOS_OCULTOS_FICHA`):
+siempre es hoy. La forma de `confirmaciones[].campos` cambió para `recursos` (sin `fecha_revision`,
+con `_lugar`); el front la itera genérica, no se rompe. `mover_ubicacion` sigue igual para un
+recurso que ya existe.
+
+## [2026-08-29] — El sistema de horarios es un paquete aparte (`horarios/`) con login propio
+
+**Archivos**: `horarios/` (nuevo: `__init__`, `config`, `acceso`, `datos`, `rutas`), `app.py`,
+`config.py`, `agente/padrones.py`, `agente/tools/horarios.py`, `templates/{index,horarios/*}.html`
+
+`database.py` → `horarios/datos.py`; la mitad horarios de `config.py` → `horarios/config.py`;
+las rutas del SPA salieron de `app.py` → `horarios/rutas.py`. `app.py` quedó como bootstrap.
+Rompe: `import database`, `from config import SHEET_ID/GIDS/FLOOR_MAPPING/TURNO_*/ESPECIALIDAD_CURSOS/APPSCRIPT_*`
+(ahora en `horarios.datos` / `horarios.config`). Gate propio (`horarios/acceso.py`): contraseña
+**`HORARIOS_CLAVE`** (nueva env, obligatoria en prod), flag `horarios_ok`, sin relación con
+`accesos` — `horarios` salió del catálogo (`horarios.ver` ya no existe). `agente` importa
+`horarios.datos`; horarios no importa nada del resto. `API_BASE = '/horarios'` sin cambios.
+Los datos también viven en el paquete: `escuela.db` y `nombre_mapeos.json` pasaron a
+`horarios/` (antes en la raíz). En un deploy viejo la `escuela.db` de la raíz queda huérfana
+—no importa: se regenera sola en `horarios/` al arrancar. `actualizar.py` no la toca.
 
 ## [2026-08-29] — La ubicación de un recurso se asigna clickeando los chips de unidad
 

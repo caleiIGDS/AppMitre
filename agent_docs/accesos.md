@@ -8,7 +8,7 @@ que declara sus `ENTIDADES`.
 
 | Nivel | Cómo entra | Qué ve |
 |---|---|---|
-| **Público** | nada | Casi nada: el canje de invitación (`/acceso/<token>`), el link de familias de salidas (`/salidas/completar/<token>`) y el visor `/salidas/normativa`. `/` sólo redirige a `/horarios`, que ya pide sesión |
+| **Público** | nada | Casi nada: el canje de invitación (`/acceso/<token>`), el link de familias de salidas (`/salidas/completar/<token>`) y el visor `/salidas/normativa`. `/` redirige a `/horarios`, que tiene su propia contraseña (`HORARIOS_CLAVE`, fuera de este sistema) |
 | **Interno** | link de invitación de un solo uso → **dispositivo habilitado** | Lo que digan sus permisos |
 | **Admin** | `GESTION_CLAVE` en `/gestion/login` (o el de cualquier área) | Todo: tiene el comodín `'*'` |
 
@@ -167,19 +167,20 @@ En los templates:
 `templates/crud/lista.html` y `detalle.html` usan `permiso_escritura` para que el motor siga sin
 nombrar ningún permiso concreto: la clave la pone el área.
 
-### Cómo se llega a las áreas desde la home
+### El sistema de horarios NO pasa por acá
 
-El SPA de horarios vive en `/horarios` y es un área con gate propio (`horarios_bp` en `app.py`,
-permiso base `horarios.ver`, verbo `leer` → entra en `interno-lectura`). `/` sólo redirige ahí, y el
-gate manda al anónimo a `/horarios/login`. Todo el que ve la página tiene sesión, así que el **☰ con
-las áreas internas** aparece siempre; cada link va por su permiso, así que el admin ve las cuatro
-áreas y un interno de consulta ve sólo las suyas. Detalle de implementación en
-`agent_docs/frontend-ui.md`.
+`/horarios` es un sitio aparte con su propio gate (`horarios/acceso.py`): contraseña
+`HORARIOS_CLAVE`, flag de sesión `horarios_ok`, sin catálogo, sin perfiles, sin
+`accesos.db`. No declara `PERMISOS` y no está en la lista de `registrar_app`. Entrar a
+`/horarios` no da acceso a las áreas de acá y viceversa; `/horarios/salir` no toca la
+sesión de `accesos`. `/` (a nivel app) sólo redirige a `/horarios/`.
 
-`/salir` (a nivel app) cierra la sesión y vuelve a `/` (que rebota a `/horarios/login`). Convive con
-el `/salir` de cada área — incluido el `/horarios/salir` que monta `registrar_acceso` —, que
-devuelve al login de esa área: bien para el staff que se va a volver a loguear ahí, pero mandar a
-`/gestion/login` a alguien que entró por link y no tiene ninguna contraseña sería un callejón.
+### Cómo se llega a las áreas internas
+
+Cada área (gestión, historia, agente, salidas, accesos) tiene su `/salir` que vuelve a su
+propio login, y `/salir` a nivel app (`salir_general` en `accesos.py`) que cierra todo y
+vuelve a `/`. El menú ☰ que salta entre estas áreas vive en sus `base.html` (no en el SPA
+de horarios, que ya no tiene puente al resto). Detalle en `agent_docs/frontend-ui.md`.
 
 ## El agente: no tener la tool, no tenerla prohibida
 

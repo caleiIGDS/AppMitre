@@ -1,7 +1,8 @@
 """Normalización de texto y búsqueda tolerante — capa 0, sin dominio.
 
-No conoce ninguna tabla, ninguna entidad ni Flask: sólo stdlib. Lo usan las tres áreas
-con datos (`gestion`, `historia`, horarios vía `database`) y el asistente.
+No conoce ninguna tabla, ninguna entidad ni Flask: sólo stdlib. Lo usan `gestion`,
+`historia` y el asistente. (El sistema de horarios es un paquete aparte y lleva su propia
+copia de `sin_acentos` en `horarios/datos.py`.)
 
 El nombre del archivo describe lo que hay adentro a propósito, en vez de `util.py`: un
 archivo llamado "util" no tiene forma de decirte que algo no pertenece ahí, y termina
@@ -16,9 +17,8 @@ import unicodedata
 def sin_acentos(texto):
     """Saca diacríticos, conserva mayúsculas y espacios tal como vienen.
 
-    Está separada de `norm()` porque el pipeline de horarios la necesita así:
-    `database.limpiar_profesor()` arma nombres en MAYÚSCULAS y depende de que acá no se
-    baje a minúsculas.
+    Está separada de `norm()` porque algunos pipelines la necesitan así: arman nombres en
+    MAYÚSCULAS y dependen de que acá no se baje a minúsculas.
     """
     if not texto:
         return ""

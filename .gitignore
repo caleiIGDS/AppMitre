@@ -1,5 +1,4 @@
-# Database
-escuela.db
+# Database (incluye horarios/escuela.db)
 *.db
 
 # PDFs generados por Salidas educativas (contienen DNI y datos de salud)

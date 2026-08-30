@@ -373,9 +373,9 @@ TOOLS_SCHEMA = [
                         'buscá con buscar_entidad para no duplicar uno que ya existe. Si te piden '
                         'dar de alta varias cosas de una, llamala una vez por cada una en el mismo '
                         'turno: cada ficha sale con sus propios botones y el usuario las revisa por '
-                        'separado. RECURSOS no tiene un campo `ubicacion` acá: la ubicación se fija '
-                        'DESPUÉS de la alta, con mover_ubicacion sobre el id que te devuelve esta '
-                        'tool. Si el usuario ya dijo dónde va, avisale que se lo ubicás enseguida.'),
+                        'separado. RECURSOS: si el usuario dijo dónde se guarda, mandá `ubicacion` '
+                        '— aparece en la ficha y se fija sola al confirmar. Para mover un recurso '
+                        'que YA existe es otra cosa: mover_ubicacion.'),
         'input_schema': {
             'type': 'object',
             'properties': {
@@ -399,7 +399,8 @@ TOOLS_SCHEMA = [
                            'description': 'Estado del recurso en el inventario. Solo recursos'},
                 'valor': {'type': 'string', 'enum': ['Básico', 'Secundario', 'Alto valor'],
                           'description': 'IMPORTANCIA del recurso dentro del inventario (qué tan crítico es), NO para qué sirve — eso va en descripcion. Solo recursos'},
-                'fecha_revision': {'type': 'string', 'description': 'Fecha del último control de inventario, en formato día/mes/año (ej: 08/08/2026). Solo recursos. NO hace falta que la mandes en un alta: si la omitís se completa sola con la de hoy y aparece en la ficha; mandala solo si el usuario dice otra fecha'},
+                'fecha_revision': {'type': 'string', 'description': 'Fecha del último control de inventario, en formato día/mes/año (ej: 08/08/2026). Solo recursos. EN UN ALTA no la mandes ni la preguntes: se completa sola con la fecha de hoy y NO aparece en la ficha (dar de alta ya es el control). Sí se usa en editar_entidad cuando el usuario revisa un recurso viejo'},
+                'ubicacion': {'type': 'string', 'description': 'Dónde se guarda el recurso (ej: "Taller Armario 3"). Solo recursos y solo en el alta: aparece en la ficha como un campo más y al confirmar se fija sola (por dentro es lo mismo que mover_ubicacion). Si el usuario no dijo dónde va, dejala vacía y preguntale — es opcional, se guarda igual'},
                 'fecha': {'type': 'string', 'description': 'Fecha del hito en formato ISO AAAA-MM-DD (ej: 2025-11-20), que es como la guarda la base. Solo hitos, y ahí es OBLIGATORIA: si el usuario no la dijo, preguntásela — un hito sin fecha no entra en la línea del tiempo'},
                 'nivel': {'type': 'string', 'enum': historia.NIVELES_HITO,
                           'description': 'Importancia del hito en la línea del tiempo. Básico: evento o actividad común. Importante: logro, programa nuevo. Crítico: olimpiada, construcción significativa. Solo hitos'},

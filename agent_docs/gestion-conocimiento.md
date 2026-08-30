@@ -40,9 +40,9 @@ el motor genérico `crud.py`, que no importa a ninguno de los dos — ver `agent
   recurso su maqueta propia (tarjeta de título con chips de estado, contenedor con borde y
   barras de sección azules, el desglose por unidad con columna de chips y total). Las fotos
   y su visor salen del partial compartido `templates/crud/_detalle_fotos.html`.
-- **`static/gestion.css`** — hoja standalone (paleta blueprint copiada, no importa
-  `style.css` para que los dos sistemas no se pisen). Sin modo oscuro. La comparten
-  `/historia`, `/agente` y `/accesos`: la identidad visual sí es común, la lógica de dominio no.
+- **`static/gestion.css`** — hoja de estilos para gestión/historia/agente/salidas/accesos (importa
+  `global.css`). Sin modo oscuro. La comparten `/historia`, `/agente` y `/accesos`: la identidad
+  visual sí es común, la lógica de dominio no. Completamente separada de `horarios.css`.
 - **`static/gestion.js`** — único JS del módulo: búsqueda en vivo del listado (vanilla, sin
   build step). Cargado en `base.html` con `defer`; no hace nada fuera de las páginas donde
   encuentra sus hooks (guarda por existencia de elementos).
@@ -106,9 +106,9 @@ agrupación para TODOS los recursos de una, para el listado), `mover_unidades()`
 puntual o por cantidad genérica, avisando si algo no coincidía con lo registrado), `_stock()`
 (cantidad total del recurso, la usa además `agente/tools/ubicaciones.py` para chequear que el id
 exista). Se edita desde la ficha web (rutas `/gestion/recursos/<id>/unidades/mover` y `/quitar`,
-sección "Ubicación" del detalle, siempre visible) y desde el chat (tool `mover_ubicacion`, la ÚNICA
-forma de fijar dónde está un recurso — no hay `ubicacion` en `crear_entidad`/`editar_entidad` — ver
-`agent_docs/agente-asistente.md`). Hasta el 2026-08-22 existió un campo `ubicacion` simple en
+sección "Ubicación" del detalle, siempre visible) y desde el chat (tool `mover_ubicacion` para un
+recurso que ya existe; en el alta, el parámetro `ubicacion` de `crear_entidad` la deja fijada al
+confirmar la ficha — ver `agent_docs/agente-asistente.md`). No hay `ubicacion` en `editar_entidad`. Hasta el 2026-08-22 existió un campo `ubicacion` simple en
 `recursos`, con este desglose como algo opcional aparte; se unificó porque un valor y su desglose
 podían quedar desincronizados. La migración de `gestion.migrar()` reparte el valor viejo entre las
 unidades la primera vez que corre — ver `dev-log/DECISIONS.md`.
@@ -152,9 +152,9 @@ Valor (recursos): "" / Básico / Secundario / Alto valor — es la *importancia*
 dentro del inventario, no su precio (se llamaba `utilidad`, renombrada 2026-08-08).
 `cantidad` y `fecha_revision` son TEXT. **`fecha_revision` se precarga con la fecha de hoy
 en todo alta de recurso**, por los dos caminos: el form web (`valores_iniciales()` en el
-GET de `/recursos/nuevo`) y el chat (`_normalizar_borrador()` en `agente/tools/fichas.py`, antes de
-calcular el token, para que la fecha aparezca en la ficha y el usuario la vea y la pueda
-cambiar). Dar de alta un recurso es un control de inventario; antes quedaba vacía y casi
+GET de `/recursos/nuevo`, donde sí es un campo editable) y el chat (`_normalizar_borrador()` en
+`agente/tools/fichas.py`, antes de calcular el token). En la ficha del chat **ya no se muestra**
+(`CAMPOS_OCULTOS_FICHA`): siempre es hoy y no se pregunta. Dar de alta un recurso es un control de inventario; antes quedaba vacía y casi
 ningún recurso terminaba con fecha. "Hoy" sale de `config.ahora()` (hora de Buenos Aires; el
 server de producción corre en UTC — ver "El reloj" en `agent_docs/crud-motor.md`). Formato
 `gestion.FORMATO_FECHA_REVISION` = `%d/%m/%Y` (ej `08/08/2026`) — **conviven** con las fechas

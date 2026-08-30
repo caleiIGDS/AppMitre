@@ -67,7 +67,9 @@
       "Bash(grep -nE '`/\\(api|export\\)/' static/js/script.js)",
       "Bash(grep -nE '\\\\$\\\\{API_BASE\\\\}' static/js/script.js)",
       "Bash(echo \"exit: $?\")",
-      "Bash(python -c \"import app; print\\('OK import'\\); print\\([str\\(r\\) for r in app.app.url_map.iter_rules\\(\\) if 'horarios' in r.endpoint or r.rule in \\('/','/salir'\\)]\\)\")"
+      "Bash(python -c \"import app; print\\('OK import'\\); print\\([str\\(r\\) for r in app.app.url_map.iter_rules\\(\\) if 'horarios' in r.endpoint or r.rule in \\('/','/salir'\\)]\\)\")",
+      "Bash(git mv *)",
+      "Bash(python -c \"import agente\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\calei\\projects\\AppMitre\\static\\vendor\\pdfjs\\build",

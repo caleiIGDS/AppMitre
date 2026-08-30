@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <title>Sistema de Horarios</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='marca.css') }}?v=1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=19">
+    <link rel="stylesheet" href="{{ url_for('static', filename='global.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='horarios.css') }}?v=19">
 </head>
 <body>
     <script>
@@ -30,19 +30,11 @@
                 </div>
                 <div class="header-actions">
                     <button id="btn-tema" class="tech-btn-tema" onclick="toggleTheme()" title="Modo nocturno" aria-label="Cambiar tema"></button>
-                    {# Sin permiso propio: cualquier dispositivo con sesión (todos tienen
-                       horarios.ver) puede regenerar la DB desde Sheets. #}
+                    {# Cualquiera con sesión de horarios puede regenerar la DB desde Sheets. #}
                     <button id="btn-actualizar" class="tech-btn-update" onclick="actualizarDatos()">ACTUALIZAR HORARIOS</button>
-                    {# Puerta a las áreas internas. Para el público esto no existe: sin
-                       acceso no se renderiza ni el botón ni el panel, así que la página
-                       queda exactamente como estaba y nada insinúa que haya algo más.
-                       Cada link va por su propio permiso, igual que en las otras áreas. #}
-                    {% if acceso_actual() %}
-                    <button type="button" id="areas-btn" class="tech-btn-menu"
-                            aria-label="Abrir menú" aria-controls="areas-panel" aria-expanded="false">
-                        <span class="tech-menu-bars" aria-hidden="true"></span>
-                    </button>
-                    {% endif %}
+                    {# Horarios es un sitio aparte: su único control de sesión es salir.
+                       No hay puente al resto de la app (eso vive en su propio menú). #}
+                    <a class="tech-btn-update" href="{{ url_for('horarios.salir') }}">SALIR</a>
                 </div>
             </div>
         </header>
@@ -200,38 +192,6 @@
     <footer>
         <p>Programa hecho por Calei | <a href="https://github.com/caleiIGDS/AppMitre" target="_blank">Repositorio en GitHub</a></p>
     </footer>
-
-    {# El panel se renderiza en el server, no lo arma el JS: así los links salen ya
-       filtrados por permiso y nunca viaja al navegador un link que no corresponde.
-       Es la diferencia con `mobile-nav.js`, que MUEVE nodos que ya existen. #}
-    {% if acceso_actual() %}
-    <div class="areas-overlay" id="areas-overlay"></div>
-    <aside class="areas-panel" id="areas-panel" aria-label="Menú de áreas">
-        <div class="areas-panel-head">
-            <span class="areas-panel-title">MENÚ</span>
-            <button type="button" class="areas-panel-close" aria-label="Cerrar menú">✕</button>
-        </div>
-        <div class="areas-panel-body">
-            {% if puede('gestion.leer') %}
-            <a href="{{ url_for('gestion.home') }}">GESTIÓN DE RECURSOS</a>
-            {% endif %}
-            {% if puede('historia.leer') %}
-            <a href="{{ url_for('historia.home') }}">HISTORIA INSTITUCIONAL</a>
-            {% endif %}
-            {% if puede('agente.leer') %}
-            <a href="{{ url_for('agente.chat_page') }}">🤖 ASISTENTE</a>
-            {% endif %}
-            {% if puede('salidas.leer') %}
-            <a href="{{ url_for('salidas.lista') }}">SALIDAS EDUCATIVAS</a>
-            {% endif %}
-            {% if puede('accesos.admin') %}
-            <a href="{{ url_for('accesos.panel') }}">🔑 ACCESOS</a>
-            {% endif %}
-            <a class="areas-salir" href="{{ url_for('salir_general') }}">SALIR</a>
-        </div>
-    </aside>
-    <script src="{{ url_for('static', filename='areas-nav.js') }}?v=1" defer></script>
-    {% endif %}
 
     <script>
         window.APP_DATA = {

@@ -6,13 +6,20 @@ import re
 import hmac
 import hashlib
 import time
+import unicodedata
 import urllib.request
 import io
-import texto
-from config import TURNO_CURSOS, TURNO_DEFAULT, APPSCRIPT_URL, APPSCRIPT_SECRET
+from .config import (TURNO_CURSOS, TURNO_DEFAULT, APPSCRIPT_URL, APPSCRIPT_SECRET,
+                     SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE)
+
+# Todo lo del sistema de horarios vive dentro del paquete, incluidos sus datos:
+# `escuela.db` (gitignoreada, se regenera desde Sheets) y `nombre_mapeos.json` si existe.
+AQUI = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(AQUI, 'escuela.db')
+
 
 def _cargar_nombre_mapeos():
-    ruta = os.path.join(os.path.dirname(__file__), 'nombre_mapeos.json')
+    ruta = os.path.join(AQUI, 'nombre_mapeos.json')
     if os.path.exists(ruta):
         with open(ruta, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -28,7 +35,7 @@ TURNOS = ("MAÑANA", "TARDE", "VESPERTINO")
 
 
 def conectar():
-    return sqlite3.connect('escuela.db')
+    return sqlite3.connect(DB_PATH)
 
 def crear_tablas():
     con = conectar()
@@ -130,11 +137,14 @@ def tiene_datos():
     except Exception:
         return False
 
-# Alias local: la implementación vive en texto.py (capa 0, compartida con el resto de las
-# áreas). Se conserva el nombre porque es el que se lee bien en este pipeline, y porque
-# `limpiar_profesor`/`limpiar_aula` dependen de que NO baje a minúsculas — que es justo la
-# diferencia entre `texto.sin_acentos` y `texto.norm`.
-eliminar_acentos = texto.sin_acentos
+# Vendorizada de la vieja `texto.sin_acentos` (capa 0 compartida): el paquete de horarios
+# no importa nada del dominio, y esto es lo único que usaba de `texto.py`. Saca diacríticos
+# pero NO baja a minúsculas — `limpiar_profesor`/`limpiar_aula` arman en MAYÚSCULAS.
+def eliminar_acentos(s):
+    if not s:
+        return ""
+    return "".join(c for c in unicodedata.normalize('NFD', s)
+                   if unicodedata.category(c) != 'Mn')
 
 def limpiar_profesor(nombre):
     if not nombre: return ""
@@ -570,7 +580,7 @@ def obtener_filas(tipo, valor):
                 cur.execute("SELECT * FROM clases WHERE curso = ?", (partes[0],))
         elif tipo == 'planilla':
             if '|' in valor:
-                from config import FLOOR_MAPPING
+                from .config import FLOOR_MAPPING
                 dia_pl, piso = valor.split('|')
                 aulas = FLOOR_MAPPING.get(piso, [])
                 if aulas:
@@ -593,7 +603,7 @@ def aulas_libres(dia=None, hora=None):
     Si día/hora no se especifican, usa el actual (si es un día laborable).
     Retorna dict con 'dia', 'hora', 'libres_por_piso' (dict piso -> lista de aulas),
     'total_libres' y 'nota' si aplica."""
-    from config import DIAS, FLOOR_MAPPING, ahora
+    from .config import DIAS, FLOOR_MAPPING, ahora
 
     # Resolver día
     if dia is None:
@@ -641,3 +651,25 @@ def aulas_libres(dia=None, hora=None):
         'libres_por_piso': libres_por_piso,
         'total_libres': total_libres
     }
+
+
+def init_db():
+    """Crea el schema si falta. Idempotente — la llama `app.py` al arrancar, como el
+    `init_db()` de las otras áreas. NO baja datos de Sheets (eso es `cargar_inicial`)."""
+    init_tablas()
+
+
+def cargar_inicial():
+    """Primer arranque en dev: si `escuela.db` está vacía, la reconstruye desde Sheets.
+
+    Es lo que antes vivía en el bloque `if __name__ == '__main__'` de `app.py`. Bajo
+    gunicorn/WSGI no corre (igual que antes): en un deploy nuevo la base nace vacía y se
+    puebla con el botón ACTUALIZAR (POST /horarios/api/actualizar).
+    """
+    init_tablas()
+    if not tiene_datos():
+        print("Base de horarios vacía, cargando desde Google Sheets...")
+        crear_tablas()
+        cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
+        cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
+        cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)

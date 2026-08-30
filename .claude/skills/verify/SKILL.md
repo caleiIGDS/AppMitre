@@ -11,7 +11,7 @@ description: Receta para verificar cambios de AppMitre en runtime (Flask + SPA v
 python app.py   # background; sirve en http://127.0.0.1:5000
 ```
 
-- Requiere `escuela.db` con datos en el root (si existe, NO descarga de Google Sheets al arrancar).
+- Requiere `horarios/escuela.db` con datos (si existe, NO descarga de Google Sheets al arrancar).
 - ⚠️ Usar `127.0.0.1`, no `localhost` — en Windows `localhost` puede resolver a IPv6 (`::1`) y Flask escucha solo IPv4 → "server no responde" falso.
 - El server loguea cada request en stdout — útil como evidencia.
 

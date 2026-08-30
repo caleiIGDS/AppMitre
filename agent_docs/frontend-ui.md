@@ -1,8 +1,7 @@
 # Frontend y UI — AppMitre
 
-> Complementa `CLAUDE.md`. Estilos en `static/style.css`, estructura en `templates/index.html`.
-> La excepción es `static/marca.css` (el escudo del header), que es compartido con las áreas —
-> ver "La marca del header" más abajo.
+> Complementa `CLAUDE.md`. Estilos en `static/horarios.css` (que importa `global.css`), estructura en `templates/index.html`.
+> El escudo del header está en `static/global.css` (`.marca`), compartido con todas las áreas.
 
 ---
 
@@ -149,37 +148,37 @@ Clase base: `.materia-bloque`
 
 ---
 
-## La marca del header (`static/marca.css`) — una sola definición para los dos shells
+## El escudo del header (`.marca` en `static/global.css`)
 
-El escudo y su bloque de título son **de `marca.css`**, no de `style.css` ni de `gestion.css`.
-Es capa 0 (no nombra nada del dominio) y lo cargan las **siete** pantallas con header — las seis
-del shell de áreas y el SPA de horarios —, siempre **antes** de la hoja del área.
+El escudo y su bloque de título están en **`global.css`** (capa 0 — no nombra nada del dominio).
+Es compartido por todas las **siete** pantallas con header — las seis del shell de áreas y el SPA
+de horarios. Cada área importa `global.css` (directa o indirectamente via `gestion.css`/`horarios.css`).
 
 ```html
-<link rel="stylesheet" href="…marca.css">      <!-- primero -->
-<link rel="stylesheet" href="…gestion.css">    <!-- o style.css -->
+<link rel="stylesheet" href="…global.css">    <!-- primero: paleta, reset, escudo -->
+<link rel="stylesheet" href="…gestion.css">   <!-- área específica (importa global.css) -->
 …
-<div class="marca g-brand">                     <!-- en index.html, sólo "marca" -->
+<div class="marca">
   <img class="marca-escudo" src="…" alt="Escudo">
-  <div class="g-titles">…</div>                 <!-- la tipografía sigue siendo de cada hoja -->
+  <div class="g-titles">…</div>                <!-- la tipografía sigue siendo de cada área -->
 </div>
 ```
 
-`marca.css` define dos reglas y expone **dos variables**, que son lo único que un área toca:
+`.marca` define dos reglas y expone **dos variables**, que son lo único que un área toca:
 
 | variable | qué es |
 |---|---|
 | `--escudo` | alto del escudo (88px por defecto). De ahí salen el hueco que se le reserva a la izquierda (`padding-left: calc(var(--escudo) + 8px)`) y, por defecto, el alto de la fila |
 | `--marca-alto` | alto de la fila de marca, sólo donde la barra del área es **más baja** que el escudo (celular) y por eso no puede derivarse de `--escudo` |
 
-Un breakpoint de área queda así, sin tocar `marca.css`:
+Un breakpoint de área queda así, sin tocar `global.css`:
 
 ```css
-@media (max-width: 420px) { .g-brand { --escudo: 64px; --marca-alto: 36px; } }
+@media (max-width: 420px) { .marca { --escudo: 64px; --marca-alto: 36px; } }
 ```
 
-Se overridea **por variables y no por reglas que pisen a `marca.css`**, así que funciona sin
-importar el orden de las hojas: mover un `<link>` no puede romperlo.
+Se overridea **por variables y no por reglas que pisen a `global.css`**, así que funciona sin
+importar el orden de las hojas: el CSS en cascada lo resuelve todo.
 
 Dos cosas que parecen raras y son a propósito:
 
@@ -196,17 +195,19 @@ horarios como en las áreas.
 
 ---
 
-## Menú de áreas (☰) — en las cinco páginas, sólo con sesión
+## Menú de áreas (☰) — en las cinco páginas del shell de `accesos`
 
-Todas las páginas tienen un **☰** que abre un panel lateral con las otras áreas. Cada página omite
-la suya, y cada link va por su permiso, así que el admin las ve todas y un interno de consulta ve
-sólo las que puede abrir. El `{% if acceso_actual() %}` que envuelve el panel sigue en los
-templates por las dudas, pero desde que `/horarios` pide sesión no hay ninguna pantalla del SPA que
-se vea sin login (salvo la de login misma).
+Gestión, historia, agente, salidas y accesos tienen un **☰** que abre un panel lateral con las
+otras áreas. Cada página omite la suya, y cada link va por su permiso (`{% if puede(...) %}`), así
+que el admin las ve todas y un interno de consulta ve sólo las que puede abrir. El
+`{% if acceso_actual() %}` que envuelve el panel sigue en los templates por las dudas.
 
-### Qué va dónde
+**El SPA de horarios ya no participa.** Desde que `/horarios` es un sitio aparte (login propio,
+sin `accesos`), su `index.html` no tiene ☰ ni `areas-nav.js`: sólo un botón **SALIR** →
+`url_for('horarios.salir')`. Los `‹ SISTEMA DE HORARIOS` de las otras áreas siguen apuntando a
+`/`, que redirige a `/horarios/` y cae en su login — un salto entre sitios, no un menú.
 
-El criterio, después de mover los links cruzados al ☰:
+### Qué va dónde (shell de `accesos`)
 
 | | contenido |
 |---|---|
@@ -217,35 +218,18 @@ El criterio, después de mover los links cruzados al ☰:
 `SALIR` apunta a `url_for('salir_general')` — el logout de la app, que vuelve a `/`, y no al
 `/salir` de un área, que devolvería a un login donde un interno no tiene contraseña que poner.
 
-### Dos implementaciones, porque son dos shells
+### `mobile-nav.js` (`gestion.css`)
 
-| | `mobile-nav.js` (`gestion.css`: /gestion, /historia, /agente, /accesos) | `areas-nav.js` (`style.css`: el SPA de horarios) |
-|---|---|---|
-| Panel | `.g-sidebar`, entra desde la **izquierda** | `.areas-panel`, entra desde la **derecha** |
-| Menú de áreas | `.g-areas`, server-rendered al final del `<body>`; el JS lo **mueve** al panel, a cualquier ancho | `.areas-panel-body`, ya renderizado adentro del panel |
-| Además, ≤900px | **mueve** también `.g-nav` y `.g-header-actions`, y los devuelve al header al agrandar | nada: ese header no se desborda |
-| Por qué mueve | preservar los listeners de `gestion-agente.js` (widget) | no hay nada que preservar, son links puros |
+El panel `.g-sidebar` entra desde la izquierda. `.g-areas` se renderiza server-side al final del
+`<body>` y el JS lo **mueve** al panel a cualquier ancho; ≤900px además mueve `.g-nav` y
+`.g-header-actions` y los devuelve al header al agrandar (para preservar los listeners de
+`gestion-agente.js`). El ☰ se dibuja sólo si el panel tiene algo (`.g-visible`): en la pantalla de
+login de escritorio no hay áreas que ofrecer. `.g-areas` está oculto fuera del panel
+(`display: none`, `flex` sólo bajo `.g-sidebar`) para que no se vea suelto antes de que corra el JS.
 
-En ninguno de los dos se optó por dejar los links en el header: el de horarios ya tiene logo,
-versión, tema y ACTUALIZAR, y el de gestión tiene el widget del asistente.
-
-**El ☰ aparece sólo si el panel tiene algo adentro.** Lo decide `mobile-nav.js` con la clase
-`.g-visible`: en escritorio sin sesión (la pantalla de login) no hay áreas que ofrecer y el botón
-no se dibuja; en celular siempre hay algo (el nav, las acciones).
-
-**`.g-areas` está oculto fuera del panel** (`display: none`, y `display: flex` sólo bajo
-`.g-sidebar`). Sin eso se vería suelto abajo del footer hasta que corra el JS. La contra: sin JS no
-hay salto entre áreas — queda el `‹ SISTEMA DE HORARIOS` del header, que es la salida que importa.
-
-**Clases**: en `gestion.css`, `.g-menu-btn` (+ `.g-visible`), `.g-menu-bars`, `.g-sidebar*`,
-`.g-areas` / `.g-areas-salir`; estado abierto `body.g-sidebar-abierto`. En `style.css`,
-`.tech-btn-menu` + `.tech-menu-bars` (mismo tamaño y borde que `.tech-btn-tema`), `.areas-panel` /
-`.areas-overlay` / `.areas-panel-*` / `.areas-salir`; estado abierto `body.areas-abierto`. Los dos
-bloquean el scroll de atrás mientras están abiertos.
-
-En escritorio `.g-header-actions` lleva `margin-left: auto`: el header pasó a tener tres hijos
-(marca, acciones, ☰) y con `space-between` las acciones quedarían flotando en el medio. Adentro del
-panel se resetea a `0`, o el margen las correría en el eje cruzado.
+**Clases** (`gestion.css`): `.g-menu-btn` (+ `.g-visible`), `.g-menu-bars`, `.g-sidebar*`,
+`.g-areas` / `.g-areas-salir`; estado abierto `body.g-sidebar-abierto`. En `horarios.css` quedaron
+`.tech-btn-menu` / `.areas-panel*` del ☰ viejo del SPA — **sin uso** desde que horarios se separó.
 
 ---
 

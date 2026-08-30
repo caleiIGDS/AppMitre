@@ -1,105 +1,10 @@
 /* gestion.css — Sistema de Gestión de Conocimiento (/gestion)
-   Hoja standalone: reusa la paleta blueprint de style.css pero no depende de ella,
-   para que el módulo de horarios y el de gestión no se pisen. */
+   Importa global.css para paleta, reset y header compartido.
+   Aquí solo van estilos específicos de gestión (tablas, fichas, galería, etc). */
 
-:root {
-    --g-primary: #1A365D;
-    --g-accent: #D97A34;
-    --g-alert: #DC2626;
-    --g-bg: #F1F5F9;
-    --g-surface: #ffffff;
-    --g-border: #cbd5e1;
-    --g-muted: #70757a;
-    --g-dark: #0F172A;
-    --g-grid: rgba(26, 54, 93, 0.08);
-    --g-font: 'Roboto Mono', monospace;
-}
+@import url('global.css');
 
-* { box-sizing: border-box; }
-
-body {
-    font-family: var(--g-font);
-    background-color: var(--g-bg);
-    color: var(--g-dark);
-    margin: 0;
-    padding: 0;
-}
-
-.g-bg {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    background-image:
-        linear-gradient(var(--g-grid) 1px, transparent 1px),
-        linear-gradient(90deg, var(--g-grid) 1px, transparent 1px);
-    background-size: 20px 20px;
-}
-
-.g-container {
-    max-width: 1200px;
-    width: 100%;
-    margin: 0 auto;
-    padding: 20px;
-}
-
-/* ---------- Header ---------- */
-/* La barra va ajustada al escudo: sin padding propio, y el único aire son los
-   4px de arriba y abajo de .g-header-flex. Alto total = escudo (88px) + 8. */
-.g-header {
-    background: var(--g-primary);
-    color: white;
-    padding: 0;
-    border-bottom: 4px solid var(--g-accent);
-}
-
-.g-header-flex {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 20px;
-    flex-wrap: wrap;
-    padding-top: 4px;
-    padding-bottom: 4px;
-}
-
-.g-header-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-/* El escudo NO se define acá: es de `marca.css`, que lo comparte con el SPA de
-   horarios (ver el porqué en ese archivo). Desde acá sólo se le cambia el
-   tamaño en los breakpoints de abajo, redefiniendo `--escudo` sobre `.marca`.
-   El header queda ajustado al escudo: 88px + los 4px de padding de arriba y de
-   abajo = 96px de barra. */
-
-.g-titles h1 {
-    margin: 0;
-    font-size: 24px;
-    letter-spacing: 3px;
-    font-weight: 800;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.g-serial {
-    font-size: 12px;
-    color: var(--g-accent);
-    background: rgba(0, 0, 0, 0.2);
-    padding: 2px 8px;
-    font-weight: normal;
-    border: 1px solid var(--g-accent);
-}
-
-.g-titles p {
-    margin: 2px 0 0;
-    font-size: 14px;
-    opacity: 0.9;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-}
+/* Header y estilos base: vienen de global.css */
 
 /* ---------- Botones ---------- */
 .g-btn,

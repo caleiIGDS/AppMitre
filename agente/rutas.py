@@ -932,6 +932,11 @@ def editar_ficha():
     pendiente = dict(fichas[token])
     slug = pendiente['slug']
     validos = set(_campos_validos(slug))
+    # `_lugar` no es un campo de la entidad pero sí una fila editable de la tarjeta de
+    # `recursos` (ver fichas._campos_para_editar): dejalo pasar para que la corrección de
+    # la ubicación desde el chat entre al borrador y recalcule el token.
+    if slug == 'recursos':
+        validos.add('_lugar')
     nuevos = dict(pendiente['campos'])
     for nombre, valor in campos_editados.items():
         if nombre in validos:

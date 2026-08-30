@@ -178,7 +178,7 @@ def clave_persona(nombre):
 
     El orden alfabético no es capricho: la misma persona entra como "Juan Pablo Crivari"
     desde el chat y como "CRIVARI JUAN PABLO" desde los horarios (así la deja
-    `database.limpiar_profesor`). Sin ordenar, serían dos fichas de la misma persona con
+    `horarios.datos.limpiar_profesor`). Sin ordenar, serían dos fichas de la misma persona con
     los hilos M2M repartidos. El precio es que dos nombres que son la misma bolsa de
     palabras chocan contra el UNIQUE; se prefirió ese error visible al duplicado
     silencioso (ver dev-log/DECISIONS.md 2026-08-08).

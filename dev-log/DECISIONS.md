@@ -6,14 +6,16 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
-## [2026-08-29] — El sistema de horarios dejó de ser público
+## [2026-08-29] — El sistema de horarios es un sitio aparte, no un área de `accesos`
 
-Pedido de la escuela: nada de horarios accesible sin contraseña. Pasó a ser un área más
-(`horarios_bp`, prefijo `/horarios`, permiso base `horarios.ver`), con `/` como simple
-redirect. No revertir a un `/` que sirva el SPA suelto: es a propósito, no un descuido.
-`/api/actualizar` queda dentro del muro de login pero **sin** permiso extra (no se
-reintrodujo `horarios.actualizar`): en cada deploy la DB nace vacía y el que la puebla no
-siempre es admin; el peor caso, un re-download de más, no justifica el gate fino.
+Pedido de la escuela: horarios y el resto, dos sitios sin relación. `horarios/` es un
+paquete autónomo — su `config.py`, su gate (`acceso.py`: contraseña `HORARIOS_CLAVE`, sin
+`accesos.db` ni invitaciones), sus datos. No importa `accesos`/`crud`/`config` global; la
+dependencia va sólo `agente` → `horarios.datos`. A propósito, no descuidos: el `/` que
+redirige, la config/branding/`ahora()` duplicados, que `horarios` no esté en `registrar_app`.
+Antes (misma fecha) se probó como área de `accesos` con `horarios.ver`; descartado por el
+pedido de separación total. `/horarios/api/actualizar` tras el login pero sin permiso extra
+(la DB nace vacía en cada deploy y el que la puebla no siempre es admin).
 
 ---
 

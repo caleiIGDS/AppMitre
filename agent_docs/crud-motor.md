@@ -9,9 +9,12 @@ independientes**, que siguen siéndolo: no se fusionaron ni hay FK que crucen de
 se comparte es el **código**, no los datos, y está ordenado en capas donde las dependencias van
 siempre hacia arriba:
 
+El sistema de horarios (`horarios/`) queda **fuera** de este esquema: paquete autónomo, no
+usa `crud` ni `accesos`. `agente/` lo importa para leer (`horarios.datos`); nunca al revés.
+
 ```
-capa 2   gestion.py   historia.py   database.py+app.py   agente/       ← nombran tablas reales
-              │            │                │                │
+capa 2   gestion.py   historia.py   agente/                          ← nombran tablas reales
+              │            │             │
 capa 1   crud.py + templates/crud/  ·  accesos.py + templates/accesos/
               │                                    │                   ← saben "entidad" y "permiso",
               └────────────────┬───────────────────┘                     no cuáles
@@ -48,8 +51,8 @@ pared de la escuela (`ZONA_HORARIA = "America/Argentina/Buenos_Aires"`) como **d
 
 Consumidores: `agente/llm.py` (hora del system prompt), `agente/rutas.py` (sello de hora por
 mensaje), `agente/db.py`, `gestion._ahora` y `valores_iniciales`, `historia.derivados`,
-`crud.py` (fecha de foto), `respaldos.py` (nombre del archivo), `app.py` (pie de los PDF) y
-`database.aulas_libres`.
+`crud.py` (fecha de foto) y `respaldos.py` (nombre del archivo). El sistema de horarios
+tiene su propia `ahora()` en `horarios/config.py` (no importa este `config.py`).
 
 Los archivos de capa 0 se llaman por lo que contienen (`texto.py`, `respaldos.py`) y **no `util.py`**
 a propósito: un archivo llamado "util" no tiene forma de decirte que algo no pertenece ahí, y termina
@@ -251,7 +254,7 @@ entrar al asistente, sumarla a `agente._modulo()`.
 
 **…algo compartido**: pasarlo por el filtro de la primera sección. Si nombra una tabla, no es
 compartido — es del área, y quien lo necesite lo importa de ahí (como el paquete `agente/` importa
-`database.limpiar_profesor` del área de horarios).
+`horarios.datos` del sistema de horarios).
 
 ## Qué NO está en el motor
 

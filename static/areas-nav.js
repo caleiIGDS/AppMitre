@@ -1,6 +1,6 @@
 // areas-nav.js — El ☰ del SPA de horarios: abre el panel con las áreas internas.
 //
-// Es del SPA de horarios (`style.css`), NO de las tres áreas de `gestion.css` — ésas
+// Es del SPA de horarios (`horarios.css`), NO de las áreas de `gestion.css` — ésas
 // usan `mobile-nav.js`, que hace algo distinto: MUEVE el nav y las acciones al panel
 // sólo por debajo de 900px, y las devuelve al header al agrandar. Acá el panel existe
 // a cualquier ancho y su contenido ya viene renderizado por el server, así que no hay

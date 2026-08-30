@@ -5,33 +5,63 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block titulo %}Horarios{% endblock %} — {{ escuela_nombre }}</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
-    {# Reusa la paleta y las clases g-* de gestión: crud/login.html y crud/403.html las usan. #}
-    <link rel="stylesheet" href="{{ url_for('static', filename='marca.css') }}?v=1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=37">
+    <link rel="stylesheet" href="{{ url_for('static', filename='global.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='horarios.css') }}?v=1">
+    {# Shell de login de horarios: estilos específicos de esta página #}
+    <style>
+        :root { --hz-naranja: var(--g-accent); --hz-borde: var(--g-border); }
+        .hz-header {
+            background: var(--g-primary); color: #fff; padding: 14px 20px;
+            display: flex; align-items: center; gap: 14px;
+        }
+        .hz-header .marca-escudo { height: 38px; width: auto; }
+        .hz-header h1 { font-size: 1rem; margin: 0; font-weight: 700; letter-spacing: .04em; }
+        .hz-header p { margin: 0; font-size: .7rem; opacity: .8; letter-spacing: .1em; }
+        .hz-serial { font-size: .65rem; opacity: .7; }
+        .hz-main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 32px 16px; }
+        .hz-card {
+            background: #fff; border: 2px solid var(--g-primary); max-width: 360px; width: 100%;
+            padding: 28px 24px; box-shadow: 6px 6px 0 rgba(26,54,93,.15);
+        }
+        .hz-card h2 { margin: 0 0 18px; font-size: .95rem; letter-spacing: .08em; color: var(--g-primary); }
+        .hz-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+        .hz-field label { font-size: .7rem; letter-spacing: .08em; }
+        .hz-field input {
+            font-family: inherit; font-size: 1rem; padding: 9px 10px; border: 1px solid var(--hz-borde);
+            background: #f8fafc;
+        }
+        .hz-field input:focus { outline: 2px solid var(--hz-naranja); outline-offset: 1px; }
+        .hz-btn {
+            font-family: inherit; font-size: .8rem; letter-spacing: .1em; font-weight: 700;
+            background: var(--hz-naranja); color: #fff; border: 0; padding: 11px 20px; cursor: pointer;
+            width: 100%;
+        }
+        .hz-btn:hover { filter: brightness(1.08); }
+        .hz-error {
+            background: #fde8e8; border: 1px solid #dc2626; color: #991b1b; padding: 9px 12px;
+            font-size: .78rem; margin-bottom: 16px;
+        }
+        .hz-footer { text-align: center; padding: 14px; font-size: .65rem; color: #6b7280; }
+        .hz-footer a { color: inherit; }
+    </style>
 </head>
 <body>
-    <div class="g-bg">
-        <header class="g-header">
-            <div class="g-container g-header-flex">
-                <div class="marca g-brand">
-                    <img src="{{ url_for('static', filename=escuela_logo) }}" alt="Escudo" class="marca-escudo">
-                    <div class="g-titles">
-                        <h1>{{ escuela_nombre }} <span class="g-serial">{{ escuela_version }}</span></h1>
-                        <p>Sistema de Horarios</p>
-                    </div>
-                </div>
-            </div>
-        </header>
+    <header class="hz-header">
+        <span class="marca">
+            <img src="{{ url_for('static', filename=escuela_logo) }}" alt="Escudo" class="marca-escudo">
+        </span>
+        <span>
+            <h1>{{ escuela_nombre }} <span class="hz-serial">{{ escuela_version }}</span></h1>
+            <p>Sistema de Horarios</p>
+        </span>
+    </header>
 
-        <div class="g-container g-shell">
-            <main class="g-main">
-                {% block contenido %}{% endblock %}
-            </main>
-        </div>
+    <main class="hz-main">
+        {% block contenido %}{% endblock %}
+    </main>
 
-        <footer class="g-footer">
-            <p>Programa hecho por Calei | <a href="https://github.com/caleiIGDS/AppMitre" target="_blank">Repositorio en GitHub</a></p>
-        </footer>
-    </div>
+    <footer class="hz-footer">
+        <p>Programa hecho por Calei | <a href="https://github.com/caleiIGDS/AppMitre" target="_blank">Repositorio en GitHub</a></p>
+    </footer>
 </body>
 </html>

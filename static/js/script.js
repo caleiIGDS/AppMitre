@@ -690,9 +690,11 @@ function mostrarInfoClase(json, element) {
 
     let profesorLabel = "Profesor";
     let profesorValor = c.profesor;
+    let profesorNavegar = c.profesor;
     if (c.suplente_activo === 1) {
         profesorLabel = "Suplente";
         profesorValor = `${c.prof_suplente} (desde ${c.sup_ini} hasta ${c.sup_fin})`;
+        profesorNavegar = c.prof_suplente;
     }
 
     const html = `
@@ -700,7 +702,7 @@ function mostrarInfoClase(json, element) {
             <div class="info-label">Materia</div>
             <div class="info-valor">${c.materia}</div>
             <div class="info-label">${profesorLabel}</div>
-            <div class="clickable-valor" onclick="navegarDesdeModal('profesor', '${c.profesor.replace(/'/g, "\\'")}')">${profesorValor}</div>
+            <div class="clickable-valor" onclick="navegarDesdeModal('profesor', '${profesorNavegar.replace(/'/g, "\\'")}')">${profesorValor}</div>
             <div class="info-label">Curso</div>
             <div class="clickable-valor" onclick="navegarDesdeModal('curso', '${c.curso} ${c.division}')">${cursoDisplay}</div>
             <div class="info-label">Aula</div>
@@ -716,12 +718,14 @@ function verDetalleSuperposicion(json) {
     const clases = JSON.parse(decodeURIComponent(json));
     let html = '<p style="margin-bottom:15px; color:#5f6368;">Se han detectado las siguientes clases en el mismo horario:</p>';
     clases.forEach(c => {
+        const profesorDisplay = c.suplente_activo === 1 ? `SUPLENTE: ${c.prof_suplente}` : c.profesor;
+        const profesorNavegar = c.suplente_activo === 1 ? c.prof_suplente : c.profesor;
         html += `
             <div class="info-card overlap">
                 <div class="info-label">Materia</div>
                 <div class="info-valor">${c.materia}</div>
                 <div class="info-label">Profesor</div>
-                <div class="clickable-valor" onclick="navegarDesdeModal('profesor', '${c.profesor.replace(/'/g, "\\'")}')">${c.profesor}</div>
+                <div class="clickable-valor" onclick="navegarDesdeModal('profesor', '${profesorNavegar.replace(/'/g, "\\'")}')">${profesorDisplay}</div>
                 <div class="info-label">Curso</div>
                 <div class="clickable-valor" onclick="navegarDesdeModal('curso', '${c.curso} ${c.division}')">${c.curso}° ${c.division}</div>
                 <div class="info-label">Aula</div>

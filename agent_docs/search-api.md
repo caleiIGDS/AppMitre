@@ -1,24 +1,24 @@
 # Sistema de Búsqueda y API — AppMitre
 
-> Complementa `CLAUDE.md`. Backend en `app.py`, frontend en `script.js`.
+> Complementa `CLAUDE.md`. Backend en `horarios/rutas.py`, frontend en `script.js`.
 
 ---
 
 ## ⚡ Resolución client-side (desde [2026-06-29])
 
 **Ninguna búsqueda pega al servidor** en el caso normal. Al cargar la web, `cargarDatosIniciales()` descarga **todo** a memoria con 3 requests en paralelo:
-- `GET /api/dashboard` → `_allClases` (todas las filas de `clases`, ~2.300)
-- `GET /api/personal_todos` → `_allPersonal` (todo el personal no docente)
-- `GET /api/preceptores_data` → `_horariosPreceptores` (`{nombre: [filas]}`) + `_planillaPreceptores` (lista por curso con turnos)
+- `GET /horarios/api/dashboard` → `_allClases` (todas las filas de `clases`, ~2.300)
+- `GET /horarios/api/personal_todos` → `_allPersonal` (todo el personal no docente)
+- `GET /horarios/api/preceptores_data` → `_horariosPreceptores` (`{nombre: [filas]}`) + `_planillaPreceptores` (lista por curso con turnos)
 
-A partir de ahí, profesor/aula/curso/planilla, horario individual de preceptor, preceptor-por-curso y la planilla de preceptores se resuelven **client-side**. Solo siguen yendo a la red: PDF export y `/api/actualizar`.
+A partir de ahí, profesor/aula/curso/planilla, horario individual de preceptor, preceptor-por-curso y la planilla de preceptores se resuelven **client-side**. Solo siguen yendo a la red: PDF export y `/horarios/api/actualizar`.
 
 Resolución client-side por modo:
 - `profesor`/`aula`/`curso`/`planilla` → `filtrarClasesLocal(modo, valor)`, que **replica la lógica de `obtener_filas()`** (ver queries abajo).
 - `horario_preceptor` → lookup directo `_horariosPreceptores[nombre]`.
 - preceptor-por-curso (tras buscar curso) → `obtenerPreceptorLocal(valor)`, que busca en `_planillaPreceptores`.
 
-Si los datos aún no cargaron, cada camino hace **fallback** a su endpoint `/api/*` original.
+Si los datos aún no cargaron, cada camino hace **fallback** a su endpoint `/horarios/api/*` original.
 
 ⚠️ **Dos fuentes de verdad**: `obtener_filas()` (Python) y `filtrarClasesLocal()` (JS) deben mantenerse en sync. Si cambiás el parsing/filtrado de un lado, cambialo del otro. Ver `dev-log/DECISIONS.md` [2026-06-29].
 
@@ -34,7 +34,7 @@ Las búsquedas `profesor`/`aula`/`curso`/`horario_preceptor` setean `location.ha
 
 ## Tipos de búsqueda y sus queries SQL
 
-Todos los tipos pasan por `obtener_filas(tipo, valor)` en `app.py` **cuando van al server** (fallback). En el camino normal los resuelve `filtrarClasesLocal()` con la misma lógica.
+Todos los tipos pasan por `obtener_filas(tipo, valor)` en `horarios/rutas.py` **cuando van al server** (fallback). En el camino normal los resuelve `filtrarClasesLocal()` con la misma lógica.
 
 ### `profesor`
 
@@ -44,8 +44,8 @@ SELECT * FROM clases WHERE profesor = ?
 El valor llega ya normalizado (sin acentos, mayúsculas) porque el autocompletado muestra los nombres tal como están en DB.
 
 **Caso especial en el frontend**: buscar por profesor hace **dos requests en paralelo**:
-1. `GET /api/profesor/{valor}` → clases de docentes
-2. `GET /api/personal/{valor}` → filas de personal no docente
+1. `GET /horarios/api/profesor/{valor}` → clases de docentes
+2. `GET /horarios/api/personal/{valor}` → filas de personal no docente
 
 Los resultados se fusionan en el cliente. Las filas de personal se convierten al formato de objeto de clases mediante `personalToFila()`:
 ```js
@@ -77,7 +77,7 @@ SELECT * FROM clases WHERE curso = ? AND division = ?
 SELECT * FROM clases WHERE curso = ?
 ```
 
-**Parsing del valor**: `valor.split(' ')` donde el valor viene como `"1 A"` (sin el símbolo °). La ruta `/api/<tipo>/<valor>` quita el `°` antes de llamar a `obtener_filas`:
+**Parsing del valor**: `valor.split(' ')` donde el valor viene como `"1 A"` (sin el símbolo °). La ruta `/horarios/api/<tipo>/<valor>` quita el `°` antes de llamar a `obtener_filas`:
 ```python
 if tipo == 'curso' and '°' in valor:
     search_valor = valor.replace('°', '')
@@ -103,9 +103,9 @@ cur.execute(query, [dia] + aulas)
 
 Si el piso no existe en `FLOOR_MAPPING` → `aulas = []` → la query nunca se ejecuta → devuelve `[]`.
 
-### `preceptor` (`/api/preceptor/<valor>`)
+### `preceptor` (`/horarios/api/preceptor/<valor>`)
 
-No pasa por `obtener_filas`. Consulta directa a `database.obtener_preceptores_por_curso`:
+No pasa por `obtener_filas`. Consulta directa a `horarios.datos.obtener_preceptores_por_curso`:
 ```sql
 SELECT turno, GROUP_CONCAT(DISTINCT preceptor) AS nombres
 FROM horarios_preceptores
@@ -119,7 +119,7 @@ Devuelve `{curso, division, preceptores_manana, preceptores_tarde, preceptores_v
 
 ⚠️ **Bug preexistente del campo `turno`**: la ruta hace `data['turno'] = TURNO_CURSOS.get((curso, division))` con `curso` **conservando el `°`** (ej: `"1°"`), pero las claves de `TURNO_CURSOS` NO tienen `°` (`('1','A')`) → el lookup nunca matchea y devuelve siempre `TURNO_DEFAULT` ("MAÑANA"). Desde [2026-06-29] el frontend usa `obtenerPreceptorLocal()` (deriva el turno de `_planillaPreceptores`, que sí computa el turno correcto con `curso` sin `°`), así que en el camino cacheado el "PRECEPTOR PRINCIPAL" se marca según el turno real del curso. El endpoint sigue con el bug (solo se usa como fallback).
 
-### `horario_preceptor` (`/api/horario_preceptor/<nombre>`)
+### `horario_preceptor` (`/horarios/api/horario_preceptor/<nombre>`)
 
 ```sql
 SELECT turno, preceptor, tipo, curso, dia
@@ -129,7 +129,7 @@ ORDER BY turno, tipo, curso, CASE dia WHEN 'LUNES' THEN 1 ... END
 ```
 Usa `LIKE %nombre%` (fuzzy, no exacto). El resultado se renderiza como tabla (`renderizarTablaPreceptor`), no como calendario.
 
-### `personal` (`/api/personal/<nombre>`)
+### `personal` (`/horarios/api/personal/<nombre>`)
 
 ```sql
 SELECT nombre, rol, dia, hora_inicio, hora_fin
@@ -137,22 +137,22 @@ FROM personal_no_docente WHERE nombre = ?
 ```
 Exacto. Solo se usa como **fallback** cuando el modo es `profesor` y los datos aún no se cachearon. En el camino normal, el personal sale de `_allPersonal` (cacheado).
 
-### `personal_todos` (`/api/personal_todos`)
+### `personal_todos` (`/horarios/api/personal_todos`)
 
 ```sql
 SELECT nombre, rol, dia, hora_inicio, hora_fin
 FROM personal_no_docente ORDER BY nombre, dia
 ```
-Devuelve **todo** el personal no docente (mismo formato de objeto que `/api/personal/<nombre>`). Se llama una vez al cargar la web desde `cargarDatosIniciales()` para poblar `_allPersonal`.
+Devuelve **todo** el personal no docente (mismo formato de objeto que `/horarios/api/personal/<nombre>`). Se llama una vez al cargar la web desde `cargarDatosIniciales()` para poblar `_allPersonal`.
 
-### `cursos` — PDF múltiple (`/export/pdf/cursos/<seleccion>`)
+### `cursos` — PDF múltiple (`/horarios/export/pdf/cursos/<seleccion>`)
 
 Genera **un solo PDF con una página landscape A4 por curso**. `seleccion` puede ser:
 - `todos` → todos los cursos (`SELECT DISTINCT curso, division FROM clases WHERE curso != '' ORDER BY curso, division`, misma query que `index()`).
-- Lista separada por comas de valores estilo `"1° A"` (ej: `1° A,2° B`), en el orden recibido. Cada valor pasa por el mismo camino que `/export/pdf/curso/<valor>`.
+- Lista separada por comas de valores estilo `"1° A"` (ej: `1° A,2° B`), en el orden recibido. Cada valor pasa por el mismo camino que `/horarios/export/pdf/curso/<valor>`.
 - Vacía/solo espacios → `400`.
 
-No colisiona con `/export/pdf/<tipo>/<valor>`: Werkzeug prioriza el segmento estático `cursos` sobre el convertidor `<tipo>`.
+No colisiona con `/horarios/export/pdf/<tipo>/<valor>`: Werkzeug prioriza el segmento estático `cursos` sobre el convertidor `<tipo>`.
 
 **Refactor asociado**: el dibujo de una página de calendario se extrajo de `export_pdf` a `dibujar_pagina_horario(pdf, tipo, valor)` (+ `_crear_pdf_horario()` que crea el PDF y registra las fuentes). Ambas rutas de export lo reusan.
 
@@ -231,21 +231,22 @@ Para `profesor` (modo especial):
 
 ---
 
-## `/api/actualizar` — POST, sin permiso
+## `/horarios/api/actualizar` — POST, sin permiso extra
 
 ```python
-@app.route('/api/actualizar', methods=['POST'])
+@bp.route('/api/actualizar', methods=['POST'])   # bp con url_prefix='/horarios'
 def api_actualizar():
 ```
 
-Borra y reconstruye `escuela.db` entera desde Google Sheets. Es público, como el resto del SPA de
-horarios: el botón lo ve cualquiera y no hay gate en la ruta. Lo único que la separa de un GET es
-que es **POST**, para que no la dispare un crawler ni el prefetch del navegador. El `fetch` de
-`script.js` manda `{ method: 'POST' }` y el `.then` lee la respuesta JSON (`status: success|error`).
+Borra y reconstruye `escuela.db` entera desde Google Sheets. Detrás del login de horarios
+(como todo `/horarios/*`), pero sin permiso extra: en un deploy nuevo la DB nace vacía y el
+que la puebla no siempre es admin. Lo único que la separa de un GET es que es **POST**, para
+que no la dispare un crawler ni el prefetch del navegador. El `fetch` de `script.js` manda
+`{ method: 'POST' }` y el `.then` lee la respuesta JSON (`status: success|error`).
 
 ---
 
-## Ruta `/api/planilla_preceptores`
+## Ruta `/horarios/api/planilla_preceptores`
 
 Devuelve la tabla completa de preceptores por curso para la pestaña PRECEPTORES:
 ```python
@@ -259,7 +260,7 @@ for f in filas:
 
 ## Formato de fila: objetos con claves nombradas (desde [2026-07-13])
 
-La API devuelve cada clase como **objeto JSON** cuyas claves son las columnas de la tabla `clases` (`sqlite3.Row` → `dict` en `obtener_filas()` y `/api/dashboard`):
+La API devuelve cada clase como **objeto JSON** cuyas claves son las columnas de la tabla `clases` (`sqlite3.Row` → `dict` en `obtener_filas()` y `/horarios/api/dashboard`):
 
 ```
 {curso, division, especialidad, materia, tipo_materia, profesor, dni, telefono, email,
@@ -268,6 +269,6 @@ La API devuelve cada clase como **objeto JSON** cuyas claves son las columnas de
 ```
 
 - El frontend accede por clave (`f.profesor`, `f.aula`, `f.hora_inicio`, ...). No queda ningún acceso por índice a filas de clases.
-- El código del PDF en `app.py` (`obtener_datos_calendario`, `dibujar_pagina_horario`) consume el mismo formato.
+- El código del PDF en `horarios/rutas.py` (`obtener_datos_calendario`, `dibujar_pagina_horario`) consume el mismo formato.
 - Las filas sintéticas de `personalToFila()` agregan la clave extra `tipo: 'personal'`.
 - Agregar una columna a la tabla `clases` la expone automáticamente en la API sin romper el frontend (E3 de `PLAN_ESCUELAS.md`, completado 2026-07-13).

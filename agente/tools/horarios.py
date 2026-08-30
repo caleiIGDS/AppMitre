@@ -5,10 +5,10 @@ Sheets con un botón aparte del SPA.
 """
 import sqlite3
 
-import database
 import texto
 from config import DIAS
-from database import obtener_filas
+from horarios import datos as database
+from horarios.datos import obtener_filas
 
 from ..dominio import ve_entidad
 from ..padrones import (_buscar_profesor_scored, _etiqueta_curso, _personas_conocidas,

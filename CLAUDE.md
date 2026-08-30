@@ -6,28 +6,33 @@
 
 | Área | URL | Archivo | DB | Qué es |
 |---|---|---|---|---|
-| **Horarios** | `/horarios` | `app.py` + `database.py` | `escuela.db` | Consulta de horarios por curso (1°–7°), profesor, aula y preceptor; dashboard "En Vivo" para kiosco; export a PDF. Se regenera desde Google Sheets. Área con gate propio (`horarios.ver`); `/` sólo redirige acá. |
+| **Horarios** | `/horarios` | `horarios/` (paquete) | `escuela.db` | Consulta de horarios por curso (1°–7°), profesor, aula y preceptor; dashboard "En Vivo" para kiosco; export a PDF. Se regenera desde Google Sheets. **Sitio aparte**: login propio (`HORARIOS_CLAVE`), config y datos propios, **no pasa por `accesos`**. `/` sólo redirige acá. |
 | **Gestión de recursos** | `/gestion` | `gestion.py` | `gestion.db` | Inventario técnico: recursos, con fotos y desglose por ubicación. |
 | **Historia institucional** | `/historia` | `historia.py` | `historia.db` | Línea del tiempo: hitos y las personas que hicieron la escuela. |
 | **Asistente** | `/agente` | `agente/` (paquete) | (usa las de arriba) | Chat con tool-calling. Único transversal: **lee las tres** y escribe en recursos e historia. |
 | **Salidas educativas** | `/salidas` | `salidas.py` | `salidas.db` | Legajo digital de una salida (Anexos III–IX, Res. 3871/24): formulario de carga, guardado con vigencia de 1 año y generación de PDF por anexo. |
 
-**Quién entra a qué — tres niveles** (detalle en `agent_docs/accesos.md`): **Público** ya casi no ve nada — sólo el canje de invitación y el link de familias de salidas; hasta los horarios (`/horarios`) piden sesión. **Interno** son dispositivos habilitados por un link de invitación de un solo uso, cada uno con su conjunto de permisos (`horarios.ver`, `gestion.leer`, `agente.escribir`, …). **Admin** entra con `GESTION_CLAVE` y tiene el comodín `'*'`. Un área declara sus `PERMISOS` y entra sola al catálogo y a los perfiles: agregar un área nueva **no toca el gate ni migra los accesos ya dados**.
+**Quién entra a qué.** El sistema de horarios es un **sitio aparte** con su propia contraseña (`HORARIOS_CLAVE`, ver `horarios/acceso.py`): no usa nada de lo de abajo. El resto (gestión, historia, agente, salidas, accesos) pasa por `accesos.py` — **tres niveles** (detalle en `agent_docs/accesos.md`): **Público** ya casi no ve nada, sólo el canje de invitación y el link de familias de salidas. **Interno** son dispositivos habilitados por un link de invitación de un solo uso, cada uno con su conjunto de permisos (`gestion.leer`, `agente.escribir`, …). **Admin** entra con `GESTION_CLAVE` y tiene el comodín `'*'`. Un área declara sus `PERMISOS` y entra sola al catálogo y a los perfiles: agregar un área nueva **no toca el gate ni migra los accesos ya dados**.
 
 ### Dónde va cada cosa: tres capas
 
 Las áreas **no duplican código**: comparten un motor. Las dependencias van siempre hacia arriba y **la capa 1 nunca importa un área** — las recibe como argumento.
 
 ```
-capa 2   gestion.py   historia.py   database.py+app.py   agente/       ← nombran tablas reales
+capa 2   gestion.py   historia.py   agente/                            ← nombran tablas reales
 capa 1      crud.py + templates/crud/   ·   accesos.py                 ← saben "entidad" y "permiso",
                                                                          no cuáles
 capa 0        config.py    texto.py    respaldos.py                    ← no nombran nada del dominio
 ```
 
+El sistema de horarios (`horarios/`) queda **fuera de este esquema**: es un paquete
+autónomo con su propia config, su propio gate y sus propios datos. No importa `crud`,
+`accesos` ni el `config.py` global. La dependencia va en un solo sentido: `agente/` importa
+`horarios.datos` para leer; horarios no importa nada del resto.
+
 **La pregunta para ubicar cualquier función es una sola: ¿qué nombra?** Si nombra una tabla, un slug o una ruta, es del área y quien la necesite la importa de ahí. Si no nombra nada del dominio, sube. Lo específico de un área entra al motor por **hooks declarados** (`migrar`, `seed`, `derivados`, `secciones_detalle`, …), nunca por un `if slug == '...'` dentro de `crud.py`. Detalle completo en `agent_docs/crud-motor.md`.
 
-También se comparte lo que no es lógica de dominio: `static/marca.css` (el escudo del header — **único dueño**, lo cargan las cinco áreas *y* el SPA de horarios), `static/gestion.css` (paleta), `static/gestion-agente.js`, `static/mobile-nav.js` (menú lateral de celular) y el widget del chat.
+También se comparte lo que no es lógica de dominio: `static/global.css` (paleta, reset y escudo del header), `static/gestion.css` (estilos específicos de gestión/historia/agente/salidas), `static/gestion-agente.js`, `static/mobile-nav.js` (menú lateral de celular) y el widget del chat.
 
 **Usuarios principales:** alumnos, docentes, preceptores y administración.  
 **Stack:** Flask + SQLite + Vanilla JS (sin frameworks). Sin tests, sin linter, sin build step.
@@ -40,7 +45,7 @@ También se comparte lo que no es lógica de dominio: `static/marca.css` (el esc
 pip install -r requirements.txt   # instalar dependencias
 python app.py                      # dev en http://localhost:5000
 gunicorn app:app                   # producción
-# POST /api/actualizar             # regenerar DB desde Google Sheets
+# POST /horarios/api/actualizar    # regenerar DB desde Google Sheets
 
 python actualizar.py --dry-run     # deploy: qué le falta a las DB del server (no escribe)
 python actualizar.py               # aplicarlo, antes del Reload del web app
@@ -52,9 +57,9 @@ python actualizar.py               # aplicarlo, antes del Reload del web app
 
 ```
 Google Sheets (CSV export por año: 1ro–7mo + preceptores + personal)
-  → database.py: descargar_sheet() + cargar_desde_sheets()
+  → horarios/datos.py: descargar_sheet() + cargar_desde_sheets()
   → escuela.db (SQLite: clases | horarios_preceptores | personal_no_docente)
-  → app.py: rutas /api/* y /export/*
+  → horarios/rutas.py: rutas /horarios/api/* y /horarios/export/*
   → static/js/script.js: calendario, dashboard, PDF, comparación
 ```
 
@@ -62,44 +67,46 @@ Google Sheets (CSV export por año: 1ro–7mo + preceptores + personal)
 
 | Archivo | Rol |
 |---------|-----|
-| `config.py` | SHEET_ID, GIDs por año, FLOOR_MAPPING, branding y `ahora()` — el reloj de la escuela (capa 0). Nadie llama a `datetime.now()`: el server de producción corre en UTC |
+| `config.py` | Branding, `ahora()` (el reloj de la escuela), `PRODUCCION`, `SESION_DIAS` (capa 0). Compartido por gestión/historia/agente/salidas/accesos. **No lo usa horarios** (tiene `horarios/config.py`). Nadie llama a `datetime.now()`: el server de producción corre en UTC |
 | `texto.py` | Normalización de texto y búsqueda difusa (capa 0). Único dueño de `UMBRAL_SIMILITUD` |
 | `respaldos.py` | Respaldos rotativos de SQLite, parametrizados por área (capa 0) |
 | `crud.py` | Motor CRUD genérico + rutas (capa 1). No importa ningún área |
-| `accesos.py` | Motor de accesos y permisos (capa 1), hermano de `crud.py`: gate, catálogo de permisos, perfiles, links de invitación y panel `/accesos`. DB propia `accesos.db`. No nombra ningún permiso de área |
-| `actualizar.py` | Script de consola para el deploy: pone al día una `gestion.db`/`historia.db` vieja. Hace lo que `migrar()` no puede porque cruza las dos DBs (mudanza de hitos/personas, `proyectos` → hitos) y limpia tablas y columnas que el código ya no declara. Idempotente, con `--dry-run` |
-| `database.py` | Creación de tablas, descarga CSV, normalización |
-| `app.py` | Rutas Flask |
+| `accesos.py` | Motor de accesos y permisos (capa 1), hermano de `crud.py`: gate, catálogo de permisos, perfiles, links de invitación y panel `/accesos`. DB propia `accesos.db`. No nombra ningún permiso de área. **Horarios no pasa por acá** |
+| `actualizar.py` | Script de consola para el deploy: pone al día una `gestion.db`/`historia.db` vieja. Hace lo que `migrar()` no puede porque cruza las dos DBs (mudanza de hitos/personas, `proyectos` → hitos) y limpia tablas y columnas que el código ya no declara. Idempotente, con `--dry-run`. No toca `escuela.db` |
+| `app.py` | Bootstrap Flask: crea la app, `SECRET_KEY`, config de sesión, registra los blueprints de las áreas, `/` → redirect a `/horarios/` |
+| `horarios/` | Sistema de horarios (`/horarios`): paquete autónomo. `__init__.py` (blueprint + guards), `config.py` (SHEET_ID, GIDs, FLOOR_MAPPING, branding propio), `acceso.py` (login con `HORARIOS_CLAVE`), `datos.py` (schema `escuela.db`, descarga CSV, normalización), `rutas.py` (SPA + API + PDF). Expone `bp`, `init_db`, `cargar_inicial` |
 | `templates/index.html` | Shell SPA — pasa `window.APP_DATA` al JS |
 | `static/js/script.js` | Toda la lógica frontend (~1500 líneas) |
-| `static/style.css` | Tema blueprint/industrial con CSS variables |
-| `nombre_mapeos.json` | Correcciones manuales de nombres de docentes |
+| `static/global.css` | Paleta compartida, reset base, escudo (`.marca`), header genérico (capa 0). Lo cargan todas las áreas. Importan este archivo: `gestion.css` y `horarios.css` |
+| `static/gestion.css` | Estilos específicos de gestión/historia/agente/salidas (tablas, fichas, widget del agente, galería, etc). Importa `global.css` |
+| `static/horarios.css` | Estilos específicos del sistema de horarios (calendario, dashboard, tema oscuro, etc). Importa `global.css` |
+| `horarios/nombre_mapeos.json` | Correcciones manuales de nombres de docentes (lo lee `horarios/datos.py`; opcional — si no está, no se aplica ningún mapeo) |
 | `gestion.py` | Gestión de recursos (`/gestion`): declara sus entidades y hooks + el desglose de recursos por ubicación |
 | `historia.py` | Historia institucional (`/historia`): declara sus entidades y hooks (`derivados`, `clave_persona`) |
 | `agente/` | Asistente conversacional (`/agente`): paquete con blueprint, tools, prompt y loop + templates en `templates/agente/`. Expone `bp` e `init_db`; el mapa de los módulos está en `agente/__init__.py` |
 | `templates/crud/` | `lista/form/detalle/login.html` genéricos; cada área deja un stub que los extiende |
 | `static/mobile-nav.js` | Menú lateral ocultable de celular para `/gestion`, `/historia` y `/agente` (≤900px). No toca escritorio |
-| `static/marca.css` | El escudo del header (capa 0). Único lugar donde se define: lo cargan las 7 pantallas con header, antes de `gestion.css`/`style.css`. Cada área sólo le redefine `--escudo` y `--marca-alto` sobre `.marca` |
 
 ---
 
-## API routes (app.py)
+## API routes (horarios/rutas.py)
 
-Todas cuelgan del blueprint `horarios_bp` con prefijo **`/horarios`** y detrás del permiso
-`horarios.ver` (el `fetch`/`window.open` del front usa `API_BASE = '/horarios'`). `/` (a nivel
-app) sólo redirige a `/horarios/`.
+Todas cuelgan del blueprint `horarios` (en `horarios/__init__.py`) con prefijo **`/horarios`**
+y detrás del gate propio del área (`horarios/acceso.py`: sesión con `HORARIOS_CLAVE`, sin
+relación con `accesos`). El `fetch`/`window.open` del front usa `API_BASE = '/horarios'`.
+`/` (a nivel app) sólo redirige a `/horarios/`.
 
 | Ruta | Método | Descripción |
 |------|--------|-------------|
 | `/horarios/` | GET | Sirve el SPA; pasa `datos`, `floor_mapping`, `dias`, branding |
 | `/horarios/api/<tipo>/<valor>` | GET | Horario por `tipo` = `profesor\|aula\|curso\|planilla` |
-| `/api/preceptor/<valor>` | GET | Preceptor asignado a un curso (T.M / T.T / T.N) |
-| `/api/horario_preceptor/<nombre>` | GET | Horario personal de un preceptor |
-| `/api/personal/<nombre>` | GET | Horario de personal no docente |
-| `/api/dashboard` | GET | Todas las clases (el JS filtra por hora actual) |
-| `/api/actualizar` | POST | Borra y reconstruye `escuela.db` desde Sheets |
-| `/export/pdf/<tipo>/<valor>` | GET | Genera y devuelve PDF (landscape A4, fpdf2) |
-| `/export/pdf/cursos/<seleccion>` | GET | PDF multipágina de cursos: `todos` o lista `1° A,2° B` |
+| `/horarios/api/preceptor/<valor>` | GET | Preceptor asignado a un curso (T.M / T.T / T.N) |
+| `/horarios/api/horario_preceptor/<nombre>` | GET | Horario personal de un preceptor |
+| `/horarios/api/personal/<nombre>` | GET | Horario de personal no docente |
+| `/horarios/api/dashboard` | GET | Todas las clases (el JS filtra por hora actual) |
+| `/horarios/api/actualizar` | POST | Borra y reconstruye `escuela.db` desde Sheets |
+| `/horarios/export/pdf/<tipo>/<valor>` | GET | Genera y devuelve PDF (landscape A4, fpdf2) |
+| `/horarios/export/pdf/cursos/<seleccion>` | GET | PDF multipágina de cursos: `todos` o lista `1° A,2° B` |
 
 **Lógica de búsqueda en `/api/<tipo>/<valor>`:**
 - `profesor` → `WHERE profesor = ?`
@@ -109,7 +116,7 @@ app) sólo redirige a `/horarios/`.
 
 ---
 
-## Base de datos (database.py)
+## Base de datos (horarios/datos.py)
 
 ### Tabla `clases` (columnas clave)
 
@@ -135,7 +142,7 @@ Nombre, rol, dia, hora_inicio, hora_fin. Para porteros, secretarias, etc.
 
 ---
 
-## Normalización de datos (database.py)
+## Normalización de datos (horarios/datos.py)
 
 **`limpiar_profesor(nombre)`**
 1. Quita acentos (NFD decomposition)
@@ -188,7 +195,7 @@ Completa `hora_fin` faltante buscando el patrón horario conocido más cercano; 
 
 ---
 
-## PDF (app.py + fpdf2)
+## PDF (horarios/rutas.py + fpdf2)
 
 - Landscape A4, fuente Roboto Mono embedded
 - Encabezado: nombre de búsqueda + info de preceptor (si es curso)
@@ -198,26 +205,22 @@ Completa `hora_fin` faltante buscando el patrón horario conocido más cercano; 
 
 ---
 
-## Config (config.py)
+## Config
+
+- **`config.py`** (raíz): sólo lo compartido por gestión/historia/agente/salidas/accesos —
+  branding (`ESCUELA_NOMBRE/LOGO/VERSION`), `DIAS`, `ahora()`, `PRODUCCION`, `SESION_DIAS`.
+- **`horarios/config.py`**: todo lo del sistema de horarios — `SHEET_ID`, `GIDS`,
+  `FLOOR_MAPPING`, `TURNO_CURSOS`, `TURNO_DEFAULT`, `ESPECIALIDAD_CURSOS`, `APPSCRIPT_URL/SECRET`,
+  + su copia propia de branding/`DIAS`/`ahora()`/`PRODUCCION` (no importa la global a propósito).
 
 ```python
+# horarios/config.py
 SHEET_ID = "1GJxwpxXfLosqKxgIa6zyZhwjDK-89ZDavLi6nouWTsw"
-GIDS = {
-    "1ro": "...", "2do": "...", ..., "7mo": "...",
-    "horarios_preceptores": "...", "personal_no_docente": "..."
-}
-ESCUELA_NOMBRE = "EMILIO MITRE"
-ESCUELA_LOGO   = "images/logoMitre.svg"
-ESCUELA_VERSION = "V1.16"
-DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
-FLOOR_MAPPING = {
-    "Piso 1": ["11","12",...],
-    "Talleres": ["T1","T2",...],
-    ...
-}
+GIDS = { "1ro": "...", ..., "7mo": "...", "horarios_preceptores": "...", "personal_no_docente": "..." }
+FLOOR_MAPPING = { "Piso 1": ["11","12",...], "Talleres": ["T1","T2",...], ... }
 ```
 
-Para cambiar la fuente de datos, editar `SHEET_ID` y/o los `GIDS`. No hay `.env`.
+Para cambiar la fuente de datos, editar `SHEET_ID` y/o los `GIDS` en `horarios/config.py`. No hay `.env`.
 
 ---
 
@@ -237,9 +240,9 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 ## Deployment
 
 - **Hosting:** PythonAnywhere (WSGI) + Cloudflare DNS. Antes fue Render.com — ver `dev-log/DECISIONS.md` 2026-06-25
-- **Los `.db` persisten entre deploys** y están en `.gitignore`: `git pull` nunca los pisa. `escuela.db` es la excepción que no importa (se regenera desde Sheets al iniciar o via `/api/actualizar`); `gestion.db`, `historia.db`, `accesos.db` y `salidas.db` son la fuente de verdad y sólo tienen los respaldos de `respaldos.py`. `salidas_pdfs/` (también en `.gitignore`, contiene DNI y datos de salud) no tiene respaldo propio: se regenera solo la próxima vez que se guarda esa salida, y se purga junto con su fila al año
-- **Deploy:** `git pull` → `pip install -r requirements.txt` → `python actualizar.py --dry-run` → `python actualizar.py` → Reload del web app. Las variables de entorno (`SECRET_KEY`, `GESTION_CLAVE`, `SHEETS_PROXY_URL`, `SHEETS_PROXY_SECRET`, las API keys del agente) van en el `.env` del servidor, que tampoco viaja por git
-- **`SECRET_KEY` y `GESTION_CLAVE` son obligatorias en producción**: sin ellas la app no arranca (`config.PRODUCCION` las exige cuando detecta `PYTHONANYWHERE_DOMAIN`). En local caen a un default de desarrollo con un aviso por consola. Lo mismo `SHEETS_PROXY_URL` y `SHEETS_PROXY_SECRET`: el Drive de horarios es privado y sólo se lee vía el Web App de Apps Script (`apps_script/`), firmando cada request con HMAC sobre el timestamp; sin ellas no arranca en producción y en local `descargar_sheet()` lanza `RuntimeError`. Ojo: **cambiar `GESTION_CLAVE` cierra todas las sesiones de admin** (es el botón de pánico) y **rotar `SECRET_KEY` desloguea también a todos los dispositivos**, que hay que volver a invitar
+- **Los `.db` persisten entre deploys** y están en `.gitignore`: `git pull` nunca los pisa. `horarios/escuela.db` es la excepción que no importa (se regenera desde Sheets al iniciar o via `/horarios/api/actualizar`); `gestion.db`, `historia.db`, `accesos.db` y `salidas.db` viven en la raíz, son la fuente de verdad y sólo tienen los respaldos de `respaldos.py`. `salidas_pdfs/` (también en `.gitignore`, contiene DNI y datos de salud) no tiene respaldo propio: se regenera solo la próxima vez que se guarda esa salida, y se purga junto con su fila al año
+- **Deploy:** `git pull` → `pip install -r requirements.txt` → `python actualizar.py --dry-run` → `python actualizar.py` → Reload del web app. Las variables de entorno (`SECRET_KEY`, `GESTION_CLAVE`, `HORARIOS_CLAVE`, `SHEETS_PROXY_URL`, `SHEETS_PROXY_SECRET`, las API keys del agente) van en el `.env` del servidor, que tampoco viaja por git
+- **`SECRET_KEY`, `GESTION_CLAVE` y `HORARIOS_CLAVE` son obligatorias en producción**: sin ellas la app no arranca (se exigen cuando detectan `PYTHONANYWHERE_DOMAIN`). En local caen a un default de desarrollo con un aviso por consola. `HORARIOS_CLAVE` es la contraseña del sistema de horarios (`/horarios`), independiente de `GESTION_CLAVE`. Lo mismo `SHEETS_PROXY_URL` y `SHEETS_PROXY_SECRET`: el Drive de horarios es privado y sólo se lee vía el Web App de Apps Script (`apps_script/`), firmando cada request con HMAC sobre el timestamp; sin ellas no arranca en producción y en local `descargar_sheet()` lanza `RuntimeError`. Ojo: **cambiar `GESTION_CLAVE` cierra todas las sesiones de admin** (es el botón de pánico) y **rotar `SECRET_KEY` desloguea también a todos los dispositivos**, que hay que volver a invitar
 - **La primera vez, `accesos.db` nace vacía**: no hay ningún dispositivo habilitado y el único acceso es el de administración con `GESTION_CLAVE`. Desde `/accesos` se invita al resto. La crea sola `accesos.init_db()`, tanto al arrancar como desde `actualizar.py`
 - `gunicorn app:app` para producción en hostings que no sean PythonAnywhere
 - Ver `PLAN_ESCUELAS.md` y `AGENTE_CONFIG.md` para más detalles
@@ -250,7 +253,7 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 
 1. **Consultar horario de curso:** Tab CURSOS → "1° A" → calendario semanal → click en bloque → modal con detalles
 2. **Planilla de piso:** Tab AULAS → panel lateral → Planilla General → elegir piso + día → grid de aulas
-3. **Actualizar datos:** Botón "ACTUALIZAR HORARIOS" → POST `/api/actualizar` → recarga página
+3. **Actualizar datos:** Botón "ACTUALIZAR HORARIOS" → POST `/horarios/api/actualizar` → recarga página
 4. **Comparar docentes:** Buscar docente → panel lateral → COMPARAR → buscar otro → grid multicolor
 5. **Kiosco tiempo real:** Tab TIEMPO REAL → F11 → dashboard auto-actualizado cada 1s
 
@@ -259,6 +262,7 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 ## Context Rules
 
 - Formato/contrato del Google Sheet (encabezados, layout de preceptores, plantilla para otras escuelas) → leer `PLANTILLA_SHEET.md`
+- Sistema de horarios como sitio aparte (`horarios/`: `config.py`, `acceso.py` con `HORARIOS_CLAVE`, `datos.py`, `rutas.py`) → esta sección + `dev-log/DECISIONS.md` (buscar "horarios")
 - Lógica de normalización / pipeline de datos → leer `agent_docs/data-pipeline.md`
 - Renderizado del calendario, clustering, superposición → leer `agent_docs/calendar-engine.md`
 - Sistema de búsqueda y parsing de queries → leer `agent_docs/search-api.md`

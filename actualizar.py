@@ -105,9 +105,9 @@ def diagnostico():
         finally:
             con.close()
 
-    escuela = os.path.join(RAIZ, 'escuela.db')
-    print(f"\nescuela.db: {'presente' if os.path.exists(escuela) else 'ausente'} "
-          "(se regenera desde Google Sheets con POST /api/actualizar, no se toca acá)")
+    escuela = os.path.join(RAIZ, 'horarios', 'escuela.db')
+    print(f"\nhorarios/escuela.db: {'presente' if os.path.exists(escuela) else 'ausente'} "
+          "(se regenera desde Google Sheets con POST /horarios/api/actualizar, no se toca acá)")
 
     # El único bloqueo posible: la migración destructiva de `drive_url` necesita un SQLite
     # que sepa DROP COLUMN. Avisar acá y no en medio de un traceback del servidor web.

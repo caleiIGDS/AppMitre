@@ -16,12 +16,12 @@ Vive fuera de `tools/` porque lo usan varias tools (horarios, entidades, fichas)
 """
 import difflib
 
-import config
 import crud
-import database
 import historia
 import texto
 from config import DIAS
+from horarios import datos as database
+from horarios.config import TURNO_CURSOS, TURNO_DEFAULT
 
 
 # ============================================================================
@@ -137,7 +137,7 @@ def _turno_titular(curso, division):
     titular o contraturno con este mapa. Un curso que no esté en `TURNO_CURSOS` cae al
     default, igual que allá.
     """
-    return config.TURNO_CURSOS.get((str(curso), str(division)), config.TURNO_DEFAULT)
+    return TURNO_CURSOS.get((str(curso), str(division)), TURNO_DEFAULT)
 
 
 def _filas_preceptores():

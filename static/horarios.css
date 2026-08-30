@@ -1,31 +1,29 @@
+/* style.css — Horarios (sistema autónomo)
+   Importa global.css para variables y reset compartido.
+   Aquí solo van estilos específicos del sistema de horarios (calendario, dashboard, etc). */
+
+@import url('global.css');
+
 :root {
-    --primary: #1A365D;
-    /* Acento naranja (ámbar apagado — reemplaza el naranja chillón #FF6B00).
-       Único acento de la app; --secondary es su alias. */
-    --accent: #D97A34;
-    --alert: #DC2626;
-    --tech-bg: #F1F5F9;
-    --white: #ffffff;
-    --dark: #0F172A;
-    --grid-color: rgba(26, 54, 93, 0.08);
-    /* Tokens semánticos (los temas los sobrescriben) */
-    --surface: #ffffff;
-    --border: #cbd5e1;
-    --muted: #70757a;
+    /* Aliases legacy de horarios: --secondary, --primary, etc. pasan por variables de global.css */
+    --primary: var(--g-primary);
+    --accent: var(--g-accent);
+    --alert: var(--g-alert);
+    --tech-bg: var(--g-bg);
+    --white: var(--g-surface);
+    --dark: var(--g-dark);
+    --grid-color: var(--g-grid);
+    --surface: var(--g-surface);
+    --border: var(--g-border);
+    --muted: var(--g-muted);
     --radius: 0px;
-    --font-ui: 'Roboto Mono', monospace;
+    --font-ui: var(--g-font);
 }
 
-/* --secondary y --accent-soft son derivadas de --accent, declaradas en `body`. */
+/* --secondary y --accent-soft para compatibilidad con script.js */
 body {
-    /* Alias legacy: los ~36 usos de var(--secondary) pasan por --accent */
     --secondary: var(--accent);
     --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
-    font-family: var(--font-ui);
-    background-color: var(--tech-bg);
-    color: var(--dark);
-    margin: 0;
-    padding: 0;
 }
 
 .tech-titles h1, 
@@ -38,11 +36,11 @@ body {
     font-family: var(--font-ui);
 }
 
-.blueprint-bg {
-    min-height: 100vh;
-    background-image: 
-        linear-gradient(var(--grid-color) 1px, transparent 1px),
-        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+/* Estilos base y header: vienen de global.css.
+   Aliases .tech-*, .blueprint-* para compatibilidad con script.js existente. */
+.blueprint-bg { background-image:
+    linear-gradient(var(--grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
     background-size: 20px 20px;
 }
 
@@ -52,9 +50,6 @@ body {
     padding: 20px;
 }
 
-/* Header Tech */
-/* La barra va ajustada al escudo: sin padding propio, y el único aire son los
-   4px de arriba y abajo de .header-flex. Alto total = escudo (88px) + 8. */
 .tech-header {
     background: var(--primary);
     color: white;
@@ -62,48 +57,12 @@ body {
     border-bottom: 4px solid var(--secondary);
 }
 
-/* El escudo NO se define acá: es de `marca.css`, compartido con las áreas
-   (gestion.css). Esta hoja sólo pone la tipografía de los títulos. */
-
 .tech-container.header-flex {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding-top: 4px;
     padding-bottom: 4px;
-}
-
-.tech-btn-update {
-    background: transparent;
-    border: 2px solid var(--secondary);
-    color: var(--secondary);
-    padding: 10px 20px;
-    font-family: var(--font-ui);
-    font-weight: bold;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.3s;
-    text-transform: uppercase;
-}
-
-.tech-btn-update:hover {
-    background: var(--secondary);
-    color: white;
-}
-
-.tech-btn-update:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-.tech-btn-update.loading {
-    animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
 }
 
 .tech-titles h1 {

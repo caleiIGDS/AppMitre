@@ -337,9 +337,14 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
   foto"
 
 **Escritura** — `agente.escribir` (se auditan, guardan snapshot "antes"):
-- `crear_entidad(slug, campos, foto?, sub_recursos?)` — alta **en dos pasos con ficha de
+- `crear_entidad(slug, campos, foto?, sub_recursos?, ubicacion?)` — alta **en dos pasos con ficha de
   confirmación**, ver abajo. `foto` es de qué foto del turno salió la ficha, y es lo que hace que
-  la imagen termine en el registro correcto. `sub_recursos` (solo `recursos`) convierte el alta en
+  la imagen termine en el registro correcto. `ubicacion` (solo `recursos`) es dónde se guarda: va
+  como pseudo-campo `_lugar` del borrador —entra al token, se ve y se edita en la tarjeta como
+  "Ubicación"— y al confirmar se aplica con `gestion.mover_unidades` sobre todas las unidades del
+  recurso recién creado. `fecha_revision` **ya no se muestra en la ficha de alta**: se completa
+  sola con la fecha de hoy (`CAMPOS_OCULTOS_FICHA` en `agente/tools/fichas.py`). `sub_recursos`
+  (solo `recursos`) convierte el alta en
   un KIT: lista de `{titulo, cantidad}` — nada más, sin descripción ni estado propios — que se
   escribe en `gestion.kit_items` recién al confirmar, junto con el recurso. Se muestra al final de
   la tarjeta del chat como lista de solo lectura (una línea por item); el `recurso_asignado` de
@@ -361,10 +366,10 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
   que ya existe (sin `foto` van todas, con `foto` sólo esa). Sin ficha de confirmación (es
   aditivo); las imágenes salen de `contexto_turno`, no de un parámetro
 - `vincular_entidad` / `desvincular_entidad` — gestionar M2M
-- `mover_ubicacion(recurso, destino, numeros?, cantidad?, origen?)` — la ÚNICA forma de fijar
-  dónde está un recurso: no hay un campo `ubicacion` aparte (ni en `crear_entidad` ni en
-  `editar_entidad`), la ubicación es siempre la lista de unidades en `gestion.recurso_unidades`,
-  aunque el recurso tenga una sola. Cada unidad tiene su propio número: `numeros` mueve unidades
+- `mover_ubicacion(recurso, destino, numeros?, cantidad?, origen?)` — la forma de mover un recurso
+  que **ya existe** (en el alta, la ubicación va por el parámetro `ubicacion` de `crear_entidad`).
+  No hay un campo `ubicacion` en `editar_entidad`: la ubicación es siempre la lista de unidades en
+  `gestion.recurso_unidades`, aunque el recurso tenga una sola. Cada unidad tiene su propio número: `numeros` mueve unidades
   puntuales ("el destornillador 3 y el 5"), `cantidad` mueve N unidades sin importar cuáles
   (incluida la única unidad de un recurso sin desglosar) — hace falta uno de los dos. **Nunca
   bloquea** por falta de desglose previo: números que no existen, o (con `cantidad`) un `origen`
@@ -762,7 +767,7 @@ forma en que esa tabla sirve. De 595 filas crudas (curso × turno × día) salen
 curso:
 
 - **Titular vs contraturno.** El turno en que el curso cursa sale de `config.TURNO_CURSOS`
-  (fallback `TURNO_DEFAULT`), el mismo criterio que ya usa `database.obtener_horario_preceptor()`;
+  (fallback `TURNO_DEFAULT`), el mismo criterio que ya usa `horarios.datos.obtener_horario_preceptor()`;
   todo lo que no es ese turno es contraturno. Sin esa distinción, un curso devuelve dos nombres y
   no hay forma de saber cuál contestar cuando preguntan "el preceptor" a secas.
 - **`contraturno` es una LISTA y "el otro turno" no existe.** Los turnos son tres, así que
@@ -777,7 +782,7 @@ curso:
   hay ninguno). La ficha se arma sólo con las filas que existen, así que un turno vacío no aparecía
   por ningún lado y "¿y a la mañana?" era literalmente incontestable con este payload. Distinto de
   `sin_asignar`: eso es la planilla diciendo `FALTA`, esto es no haber fila. La lista de turnos
-  válidos es `database.TURNOS`, la misma de la que salen los bloques del Sheet.
+  válidos es `horarios.datos.TURNOS`, la misma de la que salen los bloques del Sheet.
 - **`dias` solo cuando no cubre la semana entera** (hay cursos donde dos preceptores se reparten
   los días); si cubre los cinco, el detalle es ruido.
 - **`titular` vacío es un caso real** (7 de 64 cursos): la planilla tiene gente en el contraturno y
@@ -802,7 +807,7 @@ algún turno vacío, así que `turnos_sin_nadie` aparece en casi todos. Se paga 
 cambia de forma según cómo se llamó la tool es peor que una ficha grande, y el modo caro ya está
 desaconsejado en el esquema. En el modo normal (un curso) la ficha entera son ~1,6 KB.
 
-**La división pasa por `database._extraer_num_curso`, igual que el curso.** Las divisiones de 4°–7°
+**La división pasa por `horarios.datos._extraer_num_curso`, igual que el curso.** Las divisiones de 4°–7°
 son números y en castellano se escriben "6ta"/"3ra" — tal cual las tipea el usuario. Sin eso "6ta"
 quedaba `"6TA"`, no matcheaba y la tool devolvía `error` con los 64 cursos. La función devuelve el
 string tal cual si no empieza con dígito, así que `"A"`/`"B"` no se tocan.
@@ -1308,7 +1313,10 @@ que la lectura pegada tampoco se le muestra al usuario como si la hubiera escrit
 **Reglas en el system prompt** (sección "FOTOS DE DATASHEETS…"): el agente trabaja **solo con
 lo que dice la lectura**, nunca completando con lo que sabe de esa marca/modelo; la cantidad
 no sale nunca de la foto sino de lo que dice el usuario (si no la dijo, se pregunta antes de
-la ficha); la ubicación no es un campo de la ficha, se fija después con `mover_ubicacion`;
+la ficha); la ubicación de un recurso sí va en la ficha de alta (parámetro `ubicacion` de
+`crear_entidad` → pseudo-campo `_lugar` del borrador; al confirmar se aplica con `mover_unidades`
+sobre todas las unidades del recurso nuevo), pero mover un recurso que **ya existe** sigue siendo
+sólo `mover_ubicacion`;
 cinco unidades iguales son **un** recurso con `cantidad` 5,
 no cinco altas; antes de la ficha se busca por marca/modelo y por nombre genérico, porque con
 una foto lo más común es que el recurso ya exista y corresponda sumar stock con
@@ -1561,7 +1569,7 @@ como prosa no puede depender de un detalle de routing.**
   normalización y búsqueda difusa del archivo, para las tres fuentes de datos. Antes esto se le
   pedía a `gestion._norm` o a `historia._norm` según el call site, sin criterio — funcionaba sólo
   porque las dos copias eran idénticas (ver `dev-log/DECISIONS.md` 2026-08-10).
-- Reusan queries de `database.py`: `aulas_libres()` (calcula libres vs ocupadas en `clases` a
+- Reusan queries de `horarios/datos.py`: `aulas_libres()` (calcula libres vs ocupadas en `clases` a
   tiempo real, agrupadas por piso de `FLOOR_MAPPING`).
 - El agente **no tiene acceso a escribir en `escuela.db`** (horarios) — solo lectura;
   actualizar desde Sheets sigue siendo un botón aparte del SPA.

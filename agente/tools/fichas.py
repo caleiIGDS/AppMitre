@@ -35,6 +35,20 @@ PADRON_EN_AVISO = 40       # personas con ficha que se listan enteras en un avis
 # 'titulo' es el 'nombre' de los hitos (ver crud.campo_nombre).
 CAMPOS_REDACTADOS = ('nombre', 'titulo', 'tipo', 'descripcion')
 
+# Campos REALES de la entidad que NO se pintan en la ficha de alta: se completan solos y
+# el usuario no los edita ahí. `fecha_revision` de un recurso arranca siempre en la fecha
+# de hoy (dar de alta ES un control de inventario), así que mostrarlo como un campo
+# editable más era ruido. Sigue viajando en el borrador y entrando al token, sólo no se
+# muestra ni se pregunta.
+CAMPOS_OCULTOS_FICHA = {'recursos': ('fecha_revision',)}
+
+# Pseudo-campo de la ficha de `recursos`: la ubicación no es una columna (ver gestion.py,
+# es la lista de recurso_unidades), pero se muestra y edita en la tarjeta como un campo
+# más y al confirmar el alta se aplica con el mismo mecanismo que mover_ubicacion. Va con
+# guión bajo como `_sub_recursos`: sobrevive en el borrador y entra al token, pero no es
+# un campo de la entidad.
+SLUG_CON_LUGAR = 'recursos'
+
 
 def _campos_validos(slug):
     """Nombres de campo de la entidad, en el orden del formulario de /gestion o /historia."""
@@ -84,6 +98,14 @@ def _normalizar_borrador(slug, campos_dict):
     # por esta función) no lo pierda al corregir cualquier otro campo de la tarjeta.
     if slug == 'recursos' and campos_dict.get('_sub_recursos'):
         borrador['_sub_recursos'] = campos_dict['_sub_recursos']
+
+    # `_lugar` tampoco es un campo de `ENTIDADES` (misma razón y mismo mecanismo que
+    # `_sub_recursos`): tiene que sobrevivir acá para entrar al token y para que
+    # /agente/editar_ficha no lo pierda al corregir cualquier otro campo de la tarjeta.
+    if slug == SLUG_CON_LUGAR and campos_dict.get('_lugar'):
+        lugar = str(campos_dict['_lugar']).strip()
+        if lugar:
+            borrador['_lugar'] = lugar
     return borrador
 
 
@@ -235,9 +257,12 @@ def _campos_para_editar(slug, borrador):
     al dict `ficha` que recibe el modelo — no lo necesita y son tokens de más en cada vuelta.
     """
     cfg = _modulo(slug).ENTIDADES.get(slug) or {}
+    ocultos = CAMPOS_OCULTOS_FICHA.get(slug, ())
     salida = []
     for c in cfg.get('campos', []):
         nombre = c['nombre']
+        if nombre in ocultos:
+            continue
         item = {'nombre': nombre, 'label': c.get('label', nombre),
                 'tipo': c.get('tipo', 'text'), 'valor': borrador.get(nombre, '')}
         if c.get('opciones'):
@@ -245,6 +270,9 @@ def _campos_para_editar(slug, borrador):
         if nombre in CAMPOS_REDACTADOS:
             item['redactado'] = True
         salida.append(item)
+    if slug == SLUG_CON_LUGAR:
+        salida.append({'nombre': '_lugar', 'label': 'Ubicación', 'tipo': 'text',
+                       'valor': borrador.get('_lugar', '')})
     return salida
 
 
@@ -253,13 +281,20 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos, foto=No
     cfg = _modulo(slug).ENTIDADES.get(slug) or {}
     etiquetas = {c['nombre']: c.get('label', c['nombre']) for c in cfg.get('campos', [])}
     nombres = _campos_validos(slug)
+    ocultos = CAMPOS_OCULTOS_FICHA.get(slug, ())
 
     ficha, vacios = {}, []
     for nombre in nombres:
+        if nombre in ocultos:
+            continue
         label = etiquetas.get(nombre, nombre)
         ficha[label] = borrador.get(nombre, '')
         if not borrador.get(nombre):
             vacios.append(label)
+    if slug == SLUG_CON_LUGAR:
+        ficha['Ubicación'] = borrador.get('_lugar', '')
+        if not borrador.get('_lugar'):
+            vacios.append('Ubicación')
 
     # Se anota la ficha generada en este turno: sirve para rechazar una confirmación que
     # llegue sin que el usuario haya podido verla (ver _crear_entidad) y para que el
@@ -314,7 +349,7 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos, foto=No
 
 
 def _crear_entidad(slug, campos_dict, contexto_turno=None, permisos=frozenset(), foto=None,
-                   sub_recursos=None):
+                   sub_recursos=None, ubicacion=None):
     """Alta de recurso/hito/persona, en DOS PASOS.
 
     Primera llamada con un juego de campos: no toca la base, devuelve la ficha para que el
@@ -354,6 +389,13 @@ def _crear_entidad(slug, campos_dict, contexto_turno=None, permisos=frozenset(),
         campos_dict = dict(campos_dict)
         campos_dict['_sub_recursos'] = _normalizar_sub_recursos(sub_recursos)
 
+    # `ubicacion` llega aparte igual que `sub_recursos`: explícita en la primera llamada del
+    # modelo, ya adentro de `campos_dict['_lugar']` en la reconfirmación (la puso
+    # _normalizar_borrador la vez anterior).
+    if slug == SLUG_CON_LUGAR and ubicacion:
+        campos_dict = dict(campos_dict)
+        campos_dict['_lugar'] = str(ubicacion).strip()
+
     borrador = _normalizar_borrador(slug, campos_dict)
     token = _token_ficha(slug, borrador)
     previas = contexto_turno.setdefault('fichas_previas', {})
@@ -374,11 +416,23 @@ def _crear_entidad(slug, campos_dict, contexto_turno=None, permisos=frozenset(),
     if id_nuevo and sub:
         gestion.agregar_kit_items(con.cursor(), id_nuevo, sub)
         con.commit()
+
+    # La ubicación de la ficha se aplica acá, después del alta: por dentro es un
+    # mover_unidades sobre todas las unidades del recurso recién creado (que arrancan sin
+    # ubicar), el mismo camino que mover_ubicacion.
+    lugar = borrador.get('_lugar') if slug == SLUG_CON_LUGAR else None
+    if id_nuevo and lugar:
+        cur = con.cursor()
+        cantidad = len(gestion.unidades_recurso(cur, id_nuevo)) or 1
+        gestion.mover_unidades(cur, id_nuevo, lugar, cantidad=cantidad)
+        con.commit()
     con.close()
 
     if id_nuevo:
         mensaje = f'Creado {slug} id={id_nuevo}'
         if sub:
             mensaje += f' con {len(sub)} sub-recurso(s)'
+        if lugar:
+            mensaje += f' en {lugar}'
         return {'ok': True, 'id': id_nuevo, 'mensaje': mensaje}
     return {'ok': False, 'error': f'Error al crear {slug}'}

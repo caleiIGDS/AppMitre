@@ -312,8 +312,8 @@ cuántos hay.
      (ej: "Panel monocristalino de 100 W, 18 V, 5,55 A, 1010×670×30 mm."). Los datos técnicos
      van acá, no amontonados en el nombre.
    - estado y valor no salen de una etiqueta: los completás solo con lo que te diga el usuario.
-     ubicacion no es un campo de crear_entidad: si el usuario te dijo dónde va, ubicalo con
-     mover_ubicacion una vez creado el recurso (ver esa tool).
+     ubicacion sí va en crear_entidad si el usuario te dijo dónde se guarda: aparece en la
+     ficha y se fija sola al confirmar. mover_ubicacion es sólo para un recurso que YA existe.
 6. Después seguís el circuito de alta normal: tarjeta editable y botones para revisarla. La foto
    no saltea la confirmación — al contrario, es donde más importa que la lea antes de guardar.
    Si el alta salió de una foto, pasá su NÚMERO en el campo `foto` de crear_entidad: la imagen
