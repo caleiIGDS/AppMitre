@@ -113,7 +113,7 @@
 }
 
 /* ---------- Layout general ---------- */
-.g-main { flex: 1; }
+/* .g-shell y .g-footer: en global.css */
 
 .g-toolbar {
     display: flex;
@@ -400,7 +400,9 @@
     color: var(--g-primary);
 }
 
-.g-field input,
+/* Excluye radio y checkbox: con padding/border/width:100% se estiran a lo ancho del
+   campo y caen en su propia línea, lejos del texto que los nombra. */
+.g-field input:not([type="checkbox"]):not([type="radio"]),
 .g-field textarea,
 .g-field select {
     font-family: var(--g-font);
@@ -410,6 +412,14 @@
     background: var(--g-surface);
     outline: none;
     width: 100%;
+}
+
+.g-field input[type="checkbox"],
+.g-field input[type="radio"] {
+    width: auto;
+    margin: 0 8px 0 0;
+    vertical-align: middle;
+    accent-color: var(--g-accent);
 }
 
 .g-field input:focus,
@@ -1007,15 +1017,6 @@
 }
 
 /* ---------- Footer ---------- */
-.g-footer {
-    text-align: center;
-    padding: 16px;
-    font-size: 12px;
-    color: var(--g-muted);
-}
-
-.g-footer a { color: var(--g-primary); }
-
 /* ========== WIDGET ASISTENTE IA ========== */
 
 .agente-widget {

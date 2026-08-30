@@ -6,6 +6,15 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-30] — El shell de página se mudó a `global.css`
+
+**Archivos**: `static/global.css`, `static/gestion.css`, `templates/horarios/base.html`
+
+`.g-shell`, `.g-main` y `.g-footer` salieron de `gestion.css` y ahora los define `global.css`, así
+el login de horarios reusa el mismo shell sin depender de la hoja de gestión: carga `global.css`
+sola (no `horarios.css`, que es del SPA y pisa `footer`). Un área que arme su propio shell ya no
+necesita importar `gestion.css` para tener header y pie.
+
 ## [2026-08-30] — La ficha de alta del agente: sin fecha de revisión, con ubicación
 
 **Archivos**: `agente/tools/{esquemas,fichas,__init__}.py`, `agente/rutas.py`, `agente/prompt.py`

@@ -150,9 +150,12 @@ Clase base: `.materia-bloque`
 
 ## El escudo del header (`.marca` en `static/global.css`)
 
-El escudo y su bloque de título están en **`global.css`** (capa 0 — no nombra nada del dominio).
-Es compartido por todas las **siete** pantallas con header — las seis del shell de áreas y el SPA
-de horarios. Cada área importa `global.css` (directa o indirectamente via `gestion.css`/`horarios.css`).
+El escudo, su bloque de título y el shell de página (`.g-bg` → `.g-shell` → `.g-footer`) están en
+**`global.css`** (capa 0 — no nombra nada del dominio). Es compartido por todas las **siete**
+pantallas con header — las seis del shell de áreas y el SPA de horarios. Cada área importa
+`global.css` (directa o indirectamente via `gestion.css`/`horarios.css`); el login de horarios lo
+carga **solo**, sin `horarios.css`, porque esa hoja es del SPA y su regla suelta sobre `footer` le
+pisaría el pie de página.
 
 ```html
 <link rel="stylesheet" href="…global.css">    <!-- primero: paleta, reset, escudo -->

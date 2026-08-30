@@ -38,9 +38,12 @@ body {
 
 /* Estilos base y header: vienen de global.css.
    Aliases .tech-*, .blueprint-* para compatibilidad con script.js existente. */
-.blueprint-bg { background-image:
-    linear-gradient(var(--grid-color) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+/* min-height + columna: mantienen el footer abajo cuando el contenido es corto. */
+.blueprint-bg {
+    min-height: 100vh;
+    background-image:
+        linear-gradient(var(--grid-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
     background-size: 20px 20px;
 }
 
@@ -63,6 +66,44 @@ body {
     align-items: center;
     padding-top: 4px;
     padding-bottom: 4px;
+}
+
+/* Lo usan un <button> (ACTUALIZAR) y un <a> (SALIR): de ahí el inline-block y
+   el text-decoration, que en el <button> no hacen nada. */
+.tech-btn-update {
+    display: inline-block;
+    background: transparent;
+    border: 2px solid var(--secondary);
+    color: var(--secondary);
+    padding: 10px 20px;
+    font-family: var(--font-ui);
+    font-weight: bold;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-transform: uppercase;
+    text-decoration: none;
+}
+
+.tech-btn-update:hover {
+    background: var(--secondary);
+    color: white;
+}
+
+.tech-btn-update:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.tech-btn-update.loading {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
 }
 
 .tech-titles h1 {

@@ -42,6 +42,20 @@ body {
     padding: 20px;
 }
 
+/* La columna la arma .g-bg; .g-shell es el hijo que crece, y por eso el footer
+   queda abajo de todo aunque el contenido sea corto. No es flex a propósito: como
+   contenedor flex, un hijo ancho (una tabla) lo estiraría más allá del viewport. */
+.g-shell { flex: 1; }
+
+.g-footer {
+    text-align: center;
+    padding: 16px;
+    font-size: 12px;
+    color: var(--g-muted);
+}
+
+.g-footer a { color: var(--g-primary); }
+
 /* ---------- Header compartido ---------- */
 .g-header {
     background: var(--g-primary);
@@ -90,18 +104,7 @@ body {
     font-size: 14px;
     opacity: 0.9;
     letter-spacing: 1px;
-}
-
-/* Escudo (cargado desde marca.css antes de este archivo).
-   Este CSS solo redefine el tamaño en breakpoints; el SVG viene de marca.css */
-.marca {
-    display: flex;
-    align-items: center;
-}
-
-.marca-escudo {
-    height: var(--escudo, 88px);
-    width: auto;
+    text-transform: uppercase;
 }
 
 /* ---------- Escudo (marca.css consolidado) ----------
