@@ -227,7 +227,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // horario", "armando la ficha"). Si el loader ya no está —el turno terminó— no hace nada.
   function actualizarPaso(texto) {
     const etiqueta = messagesDiv.querySelector('.agente-message-loading .agente-loader-texto');
-    if (etiqueta) etiqueta.textContent = texto.charAt(0).toUpperCase() + texto.slice(1) + '...';
+    if (etiqueta) etiqueta.textContent = texto.charAt(0).toUpperCase() + texto.slice(1);
   }
 
   // Lee la respuesta de /agente/chat/stream y devuelve el payload del evento `fin`, que es
