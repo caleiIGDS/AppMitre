@@ -6,6 +6,17 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-08-29] — El sistema de horarios dejó de ser público
+
+Pedido de la escuela: nada de horarios accesible sin contraseña. Pasó a ser un área más
+(`horarios_bp`, prefijo `/horarios`, permiso base `horarios.ver`), con `/` como simple
+redirect. No revertir a un `/` que sirva el SPA suelto: es a propósito, no un descuido.
+`/api/actualizar` queda dentro del muro de login pero **sin** permiso extra (no se
+reintrodujo `horarios.actualizar`): en cada deploy la DB nace vacía y el que la puebla no
+siempre es admin; el peor caso, un re-download de más, no justifica el gate fino.
+
+---
+
 ## [2026-08-27] — Los horarios se leen por un Web App de Apps Script, no del Sheet público
 
 El Drive de la escuela pasó a privado, así que `descargar_sheet()` ya no puede usar
@@ -15,6 +26,12 @@ del documento y devuelve el mismo CSV. El endpoint queda sin auth de Google (`AN
 así que la app firma cada request con `HMAC_SHA256(secreto, timestamp_ms)` y el script exige
 que el timestamp esté dentro de ±120 s — el secreto nunca viaja, sólo su HMAC, y una URL
 capturada deja de servir en dos minutos. Código y deploy del proxy: `apps_script/`.
+
+Dentro del proxy: lee con el **Servicio Avanzado de Sheets** (`Sheets.Spreadsheets.Values.get`)
+y arma el CSV a mano (`_aCsv`). No es `UrlFetchApp` al `/export?format=csv` con bearer token
+—ese endpoint web devuelve 401 con el token de Apps Script— ni `SpreadsheetApp.openById`,
+que exige el scope `.../auth/spreadsheets` completo (incluye editar y borrar). La API de
+Sheets acepta `spreadsheets.readonly`: sólo lectura, sin Drive.
 
 ---
 

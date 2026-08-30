@@ -36,7 +36,10 @@ la app lo detecta por el prefijo y lanza excepción.
 2. Pegar `proxy_horarios.gs` como archivo de código. Si el editor muestra
    `appsscript.json` (Configuración del proyecto → "Mostrar archivo de manifiesto"),
    reemplazarlo por el de esta carpeta.
-3. **Script Properties** (Configuración del proyecto → Propiedades de la secuencia de comandos):
+3. **Servicio avanzado**: en el editor, panel izquierdo → "Servicios" (+) → **Google
+   Sheets API** → Agregar (queda como `Sheets`). Esto habilita la API en el proyecto de
+   Cloud además de declararla en el manifiesto.
+4. **Script Properties** (Configuración del proyecto → Propiedades de la secuencia de comandos):
 
    | Propiedad | Valor |
    |---|---|
@@ -45,14 +48,16 @@ la app lo detecta por el prefijo y lanza excepción.
 
    Generar el secreto: `python -c "import secrets; print(secrets.token_hex(32))"`
 
-4. **Implementar** → Nueva implementación → tipo **Aplicación web**:
+5. **Implementar** → Nueva implementación → tipo **Aplicación web**:
    - Ejecutar como: **Yo**
    - Quién tiene acceso: **Cualquier usuario**
 
-   Autorizar los permisos que pide (Sheets/Drive de sólo lectura + peticiones externas).
-5. Copiar la **URL de la aplicación web** (`.../macros/s/AKfy.../exec`) y ponerla en
+   Autorizar el único permiso que pide: *"Ver todas tus hojas de cálculo de Google"*
+   (`spreadsheets.readonly`). El script lee vía la API de Sheets — sólo lectura, sin
+   Drive ni permiso de escritura/borrado.
+6. Copiar la **URL de la aplicación web** (`.../macros/s/AKfy.../exec`) y ponerla en
    `SHEETS_PROXY_URL` (`.env` local y entorno de PythonAnywhere).
-6. **Recién ahora** pasar el documento de Google Sheets a privado.
+7. **Recién ahora** pasar el documento de Google Sheets a privado.
 
 > Al editar `proxy_horarios.gs` hay que crear una **implementación nueva** (o "Administrar
 > implementaciones" → editar → Versión: Nueva) para que los cambios tomen efecto en la

@@ -18,9 +18,9 @@ Google Sheets (privado) → Web App de Apps Script (proxy firmado con HMAC)
 
 El pipeline se dispara en dos situaciones:
 1. **Arranque directo** (`python app.py`): el bloque `__main__` llama `init_tablas()` + `tiene_datos()` + carga si está vacío.
-2. **Petición manual**: `POST /api/actualizar` (requiere el permiso `horarios.actualizar`) llama `crear_tablas()` (borra todo) + carga completa.
+2. **Petición manual**: `POST /api/actualizar` (público, sin permiso) llama `crear_tablas()` (borra todo) + carga completa.
 
-**Importante — producción (PythonAnywhere/WSGI):** el bloque `__main__` no se ejecuta cuando el servidor WSGI importa el módulo. En PythonAnywhere el `escuela.db` persiste entre reinicios, pero en un deploy nuevo la DB está vacía y todas las rutas fallan. En ese caso hay que disparar `/api/actualizar` desde el botón, logueado como administrador. Solución estructural pendiente: ver `dev-log/tasks/TODO.md` #1.
+**Importante — producción (PythonAnywhere/WSGI):** el bloque `__main__` no se ejecuta cuando el servidor WSGI importa el módulo. En PythonAnywhere el `escuela.db` persiste entre reinicios, pero en un deploy nuevo la DB está vacía y todas las rutas fallan. En ese caso hay que disparar `/api/actualizar` desde el botón. Solución estructural pendiente: ver `dev-log/tasks/TODO.md` #1.
 
 ---
 

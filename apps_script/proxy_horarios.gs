@@ -3,7 +3,9 @@
  *
  * El Drive de la escuela es privado. La app (database.descargar_sheet) ya no puede pegarle
  * a docs.google.com/.../export?format=csv. En su lugar le pega a este Web App, que corre
- * con los permisos del dueño, lee la planilla privada y devuelve el mismo CSV byte a byte.
+ * con los permisos del dueño, lee la planilla con el Servicio Avanzado de Sheets (API v4,
+ * scope spreadsheets.readonly: sólo lectura, sin Drive ni permiso de escritura) y arma el
+ * mismo CSV.
  *
  * Seguridad: cada request trae ?t=<timestamp_ms>&sig=<hex>&gid=<gid>. `sig` es
  * HMAC-SHA256(PROXY_SECRET, t) en hexadecimal. Se acepta sólo si la firma recalculada
@@ -43,18 +45,50 @@ function doGet(e) {
     return _error('firma invalida');
   }
 
-  var url = 'https://docs.google.com/spreadsheets/d/' + sheetId +
-            '/export?format=csv&gid=' + encodeURIComponent(gid);
-  var res = UrlFetchApp.fetch(url, {
-    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
-    muteHttpExceptions: true
-  });
-  if (res.getResponseCode() !== 200) {
-    return _error('sheets respondio ' + res.getResponseCode());
+  var titulo = null;
+  try {
+    var meta = Sheets.Spreadsheets.get(sheetId, { fields: 'sheets.properties(sheetId,title)' });
+    var hojas = meta.sheets || [];
+    for (var i = 0; i < hojas.length; i++) {
+      if (String(hojas[i].properties.sheetId) === String(gid)) {
+        titulo = hojas[i].properties.title;
+        break;
+      }
+    }
+  } catch (err) {
+    return _error('no se pudo leer la planilla: ' + err);
+  }
+  if (!titulo) {
+    return _error('gid inexistente en la planilla: ' + gid);
   }
 
-  return ContentService.createTextOutput(res.getContentText())
+  var resp = Sheets.Spreadsheets.Values.get(sheetId, "'" + titulo.replace(/'/g, "''") + "'", {
+    valueRenderOption: 'FORMATTED_VALUE',
+    dateTimeRenderOption: 'FORMATTED_STRING'
+  });
+  return ContentService.createTextOutput(_aCsv(resp.values || []))
                        .setMimeType(ContentService.MimeType.CSV);
+}
+
+/**
+ * Matriz de valores -> CSV con el mismo entrecomillado y ancho que el export de Google:
+ * toda fila se rellena hasta el ancho máximo (la API recorta las celdas vacías del
+ * final, el export no), y se envuelve en comillas dobles la celda que tenga coma,
+ * comilla o salto de línea, con las comillas internas duplicadas. Filas separadas por CRLF.
+ */
+function _aCsv(filas) {
+  var ancho = 0;
+  for (var i = 0; i < filas.length; i++) {
+    if (filas[i].length > ancho) ancho = filas[i].length;
+  }
+  return filas.map(function (fila) {
+    var celdas = [];
+    for (var j = 0; j < ancho; j++) {
+      var s = fila[j] == null ? '' : String(fila[j]);
+      celdas.push(/[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s);
+    }
+    return celdas.join(',');
+  }).join('\r\n');
 }
 
 /** HMAC-SHA256(key, value) en hex, con los bytes normalizados a 0..255. */

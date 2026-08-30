@@ -72,15 +72,11 @@
                     <span class="g-ficha-ubic-lugar">{{ grupo['ubicacion'] }}</span>
                     <div class="g-ficha-unidades">
                         {% for n in grupo['numeros'] %}
-                        <span class="g-ficha-unidad">
-                            #{{ n }}
-                            {% if puede(permiso_escritura) and grupo['ubicacion'] != 'Sin ubicar' %}
-                            <form method="post" action="{{ url_for('gestion.unidad_quitar', id=fila['id']) }}">
-                                <input type="hidden" name="numero" value="{{ n }}">
-                                <button type="submit" title="Marcar sin ubicar">&times;</button>
-                            </form>
-                            {% endif %}
-                        </span>
+                        {% if puede(permiso_escritura) %}
+                        <button type="button" class="g-ficha-unidad" data-numero="{{ n }}" aria-pressed="false">#{{ n }}</button>
+                        {% else %}
+                        <span class="g-ficha-unidad is-lectura">#{{ n }}</span>
+                        {% endif %}
                         {% endfor %}
                     </div>
                 </div>
@@ -92,14 +88,58 @@
         <p class="g-ficha-vacio">Todavía no hay unidades cargadas.</p>
         {% endif %}
         {% if puede(permiso_escritura) %}
-        <form method="post" class="g-ficha-mover" action="{{ url_for('gestion.unidad_mover', id=fila['id']) }}">
-            <input type="text" name="numeros" placeholder="Números (ej: 1,3,5)" required style="width:10em">
-            <input type="text" name="ubicacion" list="datalist-lugar-desglose" placeholder="Lugar" required>
+        <p class="g-ficha-mover-ayuda">Tocá los números de arriba para elegir qué unidades mover.</p>
+        <form method="post" class="g-ficha-mover" hidden
+              action="{{ url_for('gestion.unidad_mover', id=fila['id']) }}">
+            <input type="hidden" name="numeros" value="">
+            <span class="g-ficha-mover-count"></span>
+            <input type="text" name="ubicacion" list="datalist-lugar-desglose" placeholder="Lugar">
             <datalist id="datalist-lugar-desglose">
                 {% for op in lugares_recurso %}<option value="{{ op }}">{% endfor %}
             </datalist>
-            <button type="submit" class="g-btn-mini">Mover</button>
+            <button type="submit" class="g-btn-mini">Mover acá</button>
+            <button type="submit" class="g-btn-mini g-btn-outline-dark"
+                    formaction="{{ url_for('gestion.unidad_quitar', id=fila['id']) }}"
+                    formnovalidate>Marcar sin ubicar</button>
         </form>
+        <script>
+        (function () {
+            var caja = document.querySelector('.g-ficha-mover');
+            var seccion = caja && caja.closest('.g-ficha-col-main');
+            if (!caja || !seccion) return;
+            var campoNums = caja.querySelector('input[name="numeros"]');
+            var campoLugar = caja.querySelector('input[name="ubicacion"]');
+            var conteo = caja.querySelector('.g-ficha-mover-count');
+
+            function seleccionados() {
+                return Array.prototype.slice
+                    .call(seccion.querySelectorAll('.g-ficha-unidad[aria-pressed="true"]'))
+                    .map(function (b) { return b.dataset.numero; });
+            }
+            function refrescar() {
+                var nums = seleccionados();
+                campoNums.value = nums.join(',');
+                caja.hidden = nums.length === 0;
+                conteo.textContent = nums.length === 1
+                    ? '1 unidad elegida' : nums.length + ' unidades elegidas';
+            }
+            seccion.addEventListener('click', function (e) {
+                var chip = e.target.closest('button.g-ficha-unidad');
+                if (!chip || !seccion.contains(chip)) return;
+                chip.setAttribute('aria-pressed',
+                    chip.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+                refrescar();
+            });
+            caja.addEventListener('submit', function (e) {
+                if (!campoNums.value) { e.preventDefault(); return; }
+                var mover = !e.submitter || e.submitter.formAction === caja.action;
+                if (mover && !campoLugar.value.trim()) {
+                    e.preventDefault();
+                    campoLugar.focus();
+                }
+            });
+        })();
+        </script>
         {% endif %}
 
         {% elif s.get('tipo') == 'kit_items' %}

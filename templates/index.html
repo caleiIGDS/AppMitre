@@ -30,11 +30,9 @@
                 </div>
                 <div class="header-actions">
                     <button id="btn-tema" class="tech-btn-tema" onclick="toggleTheme()" title="Modo nocturno" aria-label="Cambiar tema"></button>
-                    {# El SPA de horarios es público, pero regenerar la DB desde Sheets no:
-                       el botón sólo existe para quien puede hacerlo. #}
-                    {% if puede('horarios.actualizar') %}
+                    {# Sin permiso propio: cualquier dispositivo con sesión (todos tienen
+                       horarios.ver) puede regenerar la DB desde Sheets. #}
                     <button id="btn-actualizar" class="tech-btn-update" onclick="actualizarDatos()">ACTUALIZAR HORARIOS</button>
-                    {% endif %}
                     {# Puerta a las áreas internas. Para el público esto no existe: sin
                        acceso no se renderiza ni el botón ni el panel, así que la página
                        queda exactamente como estaba y nada insinúa que haya algo más.
@@ -242,6 +240,6 @@
             dias: {{ dias | tojson | safe }},
         };
     </script>
-    <script src="{{ url_for('static', filename='js/script.js') }}?v=15"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}?v=16"></script>
 </body>
 </html>

@@ -1,12 +1,18 @@
 {
   "timeZone": "America/Argentina/Buenos_Aires",
-  "dependencies": {},
+  "dependencies": {
+    "enabledAdvancedServices": [
+      {
+        "userSymbol": "Sheets",
+        "version": "v4",
+        "serviceId": "sheets"
+      }
+    ]
+  },
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
   "oauthScopes": [
-    "https://www.googleapis.com/auth/spreadsheets.readonly",
-    "https://www.googleapis.com/auth/drive.readonly",
-    "https://www.googleapis.com/auth/script.external_request"
+    "https://www.googleapis.com/auth/spreadsheets.readonly"
   ],
   "webapp": {
     "executeAs": "USER_DEPLOYING",

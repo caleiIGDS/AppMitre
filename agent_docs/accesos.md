@@ -8,7 +8,7 @@ que declara sus `ENTIDADES`.
 
 | Nivel | Cómo entra | Qué ve |
 |---|---|---|
-| **Público** | nada | El SPA de horarios (`/`, `/api/*`, `/export/*`). Sin el botón de actualizar |
+| **Público** | nada | Casi nada: el canje de invitación (`/acceso/<token>`), el link de familias de salidas (`/salidas/completar/<token>`) y el visor `/salidas/normativa`. `/` sólo redirige a `/horarios`, que ya pide sesión |
 | **Interno** | link de invitación de un solo uso → **dispositivo habilitado** | Lo que digan sus permisos |
 | **Admin** | `GESTION_CLAVE` en `/gestion/login` (o el de cualquier área) | Todo: tiene el comodín `'*'` |
 
@@ -57,7 +57,6 @@ tienen ese permiso hasta que el admin lo tilde.
 | `agente.leer` / `agente.escribir` | leer / escribir | `agente/__init__.py` |
 | `agente.vision` | admin | `agente/__init__.py` |
 | `agente.auditar` | admin | `agente/__init__.py` |
-| `horarios.actualizar` | admin | `app.py` |
 | `accesos.admin` | admin | `accesos.py` |
 
 `accesos.admin` es la única clave que nombra este archivo, y es correcta: es el permiso de su propia
@@ -170,16 +169,17 @@ nombrar ningún permiso concreto: la clave la pone el área.
 
 ### Cómo se llega a las áreas desde la home
 
-El SPA de horarios (`/`) muestra un **☰ con las áreas internas, pero sólo si hay sesión** — para el
-público la página es idéntica a como era, sin botón, sin panel y sin el script. Cada link va por su
-permiso, así que el admin ve las cuatro áreas y un interno de consulta ve sólo las suyas. Es lo que
-evita que alguien con acceso tenga que guardarse `/agente` en favoritos: le alcanza con la dirección
-de la escuela. Detalle de implementación en `agent_docs/frontend-ui.md`.
+El SPA de horarios vive en `/horarios` y es un área con gate propio (`horarios_bp` en `app.py`,
+permiso base `horarios.ver`, verbo `leer` → entra en `interno-lectura`). `/` sólo redirige ahí, y el
+gate manda al anónimo a `/horarios/login`. Todo el que ve la página tiene sesión, así que el **☰ con
+las áreas internas** aparece siempre; cada link va por su permiso, así que el admin ve las cuatro
+áreas y un interno de consulta ve sólo las suyas. Detalle de implementación en
+`agent_docs/frontend-ui.md`.
 
-`/salir` (a nivel app) cierra la sesión y vuelve a `/`. Convive con el `/salir` de cada área, que
-devuelve al login de esa área: eso está bien para el staff que se va a volver a loguear ahí, pero
-mandar a `/gestion/login` a alguien que entró por link y no tiene ninguna contraseña sería un
-callejón.
+`/salir` (a nivel app) cierra la sesión y vuelve a `/` (que rebota a `/horarios/login`). Convive con
+el `/salir` de cada área — incluido el `/horarios/salir` que monta `registrar_acceso` —, que
+devuelve al login de esa área: bien para el staff que se va a volver a loguear ahí, pero mandar a
+`/gestion/login` a alguien que entró por link y no tiene ninguna contraseña sería un callejón.
 
 ## El agente: no tener la tool, no tenerla prohibida
 

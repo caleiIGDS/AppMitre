@@ -1,5 +1,8 @@
 // Configuración
 const HORAS_PROXIMAS = 2; // Rango en horas para la columna "Próximas"
+// El sistema de horarios vive bajo /horarios (área con gate propio). Todas las llamadas
+// a la API y a los PDF cuelgan de acá.
+const API_BASE = '/horarios';
 
 // Datos y estado global
 const rawData = window.APP_DATA ? window.APP_DATA.rawData : {};
@@ -26,9 +29,9 @@ let _datosPromise = null;         // evita descargas duplicadas
 function cargarDatosIniciales() {
     if (_datosPromise) return _datosPromise;
     _datosPromise = Promise.all([
-        fetch('/api/dashboard').then(r => r.json()),
-        fetch('/api/personal_todos').then(r => r.json()).catch(() => []),
-        fetch('/api/preceptores_data').then(r => r.json()).catch(() => ({ horarios: {}, planilla: [] }))
+        fetch(API_BASE + '/api/dashboard').then(r => r.json()),
+        fetch(API_BASE + '/api/personal_todos').then(r => r.json()).catch(() => []),
+        fetch(API_BASE + '/api/preceptores_data').then(r => r.json()).catch(() => ({ horarios: {}, planilla: [] }))
     ]).then(([clases, personal, prec]) => {
         _allClases = clases || [];
         _allPersonal = personal || [];
@@ -46,7 +49,7 @@ function cargarDatosIniciales() {
     return _datosPromise;
 }
 
-// Deriva el preceptor-por-curso desde la planilla cacheada (reemplaza /api/preceptor/<valor>).
+// Deriva el preceptor-por-curso desde la planilla cacheada (reemplaza API_BASE + /api/preceptor/<valor>).
 // Devuelve: objeto con datos | false (cargado, sin preceptor) | null (no cargado → fallback red).
 function obtenerPreceptorLocal(valorCurso) {
     if (!_planillaPreceptores) return null;
@@ -231,7 +234,7 @@ function seleccionarOpcionSlide(opcion, tabId) {
         if (allDataCache) {
             generarPlanillaGeneral();
         } else {
-            fetch('/api/dashboard').then(r => r.json()).then(d => { allDataCache = d; generarPlanillaGeneral(); });
+            fetch(API_BASE + '/api/dashboard').then(r => r.json()).then(d => { allDataCache = d; generarPlanillaGeneral(); });
         }
     }
 }
@@ -444,7 +447,7 @@ function actualizarDatos() {
     btn.classList.add('loading');
 
     // POST y no GET: reconstruye escuela.db entera, no puede dispararla un prefetch.
-    fetch('/api/actualizar', { method: 'POST' })
+    fetch(API_BASE + '/api/actualizar', { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (data.status === "success") {
@@ -834,7 +837,7 @@ function actualizarReloj() {
 }
 
 function cargarDatosDashboard() {
-    fetch('/api/dashboard')
+    fetch(API_BASE + '/api/dashboard')
         .then(res => res.json())
         .then(filas => {
             lastDashboardData = filas;
@@ -995,8 +998,8 @@ function buscarEnServidor(modo, valor) {
     // ── Fallback a red (datos aún no cargados, o caché vacía) ──
     if (modo === 'profesor' && !isComparacionMode) {
         Promise.all([
-            fetch(`/api/profesor/${valor}`).then(r => r.json()),
-            fetch(`/api/personal/${encodeURIComponent(valor)}`).then(r => r.json())
+            fetch(`${API_BASE}/api/profesor/${valor}`).then(r => r.json()),
+            fetch(`${API_BASE}/api/personal/${encodeURIComponent(valor)}`).then(r => r.json())
         ]).then(([filasClases, filasPersonal]) => {
             const filasConvertidas = (filasPersonal || []).map(p => personalToFila(p));
             procesarResultadoBusqueda(modo, valor, [...filasClases, ...filasConvertidas]);
@@ -1004,7 +1007,7 @@ function buscarEnServidor(modo, valor) {
         return;
     }
 
-    const endpoint = modo === 'horario_preceptor' ? `/api/horario_preceptor/${valor}` : `/api/${modo}/${valor}`;
+    const endpoint = modo === 'horario_preceptor' ? `${API_BASE}/api/horario_preceptor/${valor}` : `${API_BASE}/api/${modo}/${valor}`;
 
     fetch(endpoint)
         .then(res => res.json())
@@ -1035,7 +1038,7 @@ function procesarResultadoBusqueda(modo, valor, filas) {
                 if (preceptorLocal !== null) {
                     if (preceptorLocal) renderizarPreceptor(preceptorLocal);
                 } else {
-                    fetch(`/api/preceptor/${valor}`)
+                    fetch(`${API_BASE}/api/preceptor/${valor}`)
                         .then(r => r.json())
                         .then(preceptorData => {
                             if (preceptorData) renderizarPreceptor(preceptorData);
@@ -1064,7 +1067,7 @@ function mostrarPlanillaCursos() {
         renderizarPlanillaCursos(_planillaPreceptores);
         return;
     }
-    fetch('/api/planilla_preceptores')
+    fetch(API_BASE + '/api/planilla_preceptores')
         .then(r => r.json())
         .then(filas => renderizarPlanillaCursos(filas))
         .catch(() => { lista.innerHTML = '<div style="padding:20px;color:#c0392b;">Error al cargar la planilla.</div>'; });
@@ -1458,14 +1461,14 @@ function hideTooltip() {
 
 function exportarAPDF() {
     if (isPlanillaGeneral) {
-        window.open(`/export/pdf/planilla/${selectedDay}|${selectedFloor}`, '_blank');
+        window.open(`${API_BASE}/export/pdf/planilla/${selectedDay}|${selectedFloor}`, '_blank');
     } else if (currentSearch.modo && currentSearch.valor) {
-        window.open(`/export/pdf/${currentSearch.modo}/${currentSearch.valor}`, '_blank');
+        window.open(`${API_BASE}/export/pdf/${currentSearch.modo}/${currentSearch.valor}`, '_blank');
     }
 }
 
 function exportarPlanillaPreceptoresPDF() {
-    window.open('/export/pdf/planilla_preceptores', '_blank');
+    window.open(API_BASE + '/export/pdf/planilla_preceptores', '_blank');
 }
 
 /* --- Impresión múltiple de cursos --- */
@@ -1550,10 +1553,10 @@ function generarPDFCursosSeleccionados() {
     const cursos = (rawData['curso'] || []).map(c => typeof c === 'object' ? c.valor : c);
     if (cursosSeleccionadosPDF.size === 0) return;
     if (cursosSeleccionadosPDF.size === cursos.length) {
-        window.open('/export/pdf/cursos/todos', '_blank');
+        window.open(API_BASE + '/export/pdf/cursos/todos', '_blank');
     } else {
         const lista = Array.from(cursosSeleccionadosPDF);
-        window.open('/export/pdf/cursos/' + encodeURIComponent(lista.join(',')), '_blank');
+        window.open(API_BASE + '/export/pdf/cursos/' + encodeURIComponent(lista.join(',')), '_blank');
     }
     cerrarModal();
 }
@@ -1678,7 +1681,7 @@ function togglePlanillaGeneral(checkbox) {
         if (allDataCache) {
             generarPlanillaGeneral();
         } else {
-            fetch('/api/dashboard')
+            fetch(API_BASE + '/api/dashboard')
                 .then(res => res.json())
                 .then(data => {
                     allDataCache = data;

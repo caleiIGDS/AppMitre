@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, send_file
+from flask import Flask, render_template, jsonify, send_file, Blueprint, redirect, url_for
 import os
 import sqlite3
 from datetime import timedelta
@@ -16,10 +16,11 @@ import agente
 import salidas
 import sys
 
-# El SPA de horarios es público: lo único que declara es quién puede regenerar la DB
-# desde Google Sheets, que borra y reconstruye escuela.db.
+# El sistema de horarios es un área con gate propio (/horarios), igual que /gestion:
+# `horarios.ver` es el permiso base y único — hace falta para ver cualquier cosa del área,
+# incluido regenerar escuela.db desde Sheets (`/api/actualizar` no pide nada más).
 PERMISOS = [
-    ('horarios.actualizar', 'Regenerar los horarios desde Google Sheets', 'admin'),
+    ('horarios.ver', 'Ver los horarios', 'leer'),
 ]
 GRUPO_PERMISOS = 'Horarios'
 from config import SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE, FLOOR_MAPPING, ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, DIAS, TURNO_CURSOS, TURNO_DEFAULT, ESPECIALIDAD_CURSOS, ahora, PRODUCCION, SESION_DIAS, APPSCRIPT_URL, APPSCRIPT_SECRET
@@ -28,6 +29,18 @@ import io
 from database import obtener_filas
 
 app = Flask(__name__)
+
+# El SPA de horarios y su API viven bajo /horarios con gate de accesos (before_request +
+# /horarios/login + /horarios/salir los monta `accesos.registrar_acceso` más abajo). `/`
+# sólo redirige acá.
+horarios_bp = Blueprint('horarios', __name__, url_prefix='/horarios')
+
+
+@horarios_bp.context_processor
+def _branding_horarios():
+    # `horarios/base.html` (login y 403) necesita el branding; `accesos` no lo pasa.
+    return dict(escuela_nombre=ESCUELA_NOMBRE, escuela_logo=ESCUELA_LOGO,
+                escuela_version=ESCUELA_VERSION)
 
 # Firma la cookie de sesión: es lo que sostiene todo el sistema de accesos. En producción
 # se exige de verdad, porque con una clave conocida cualquiera se forja una sesión de admin.
@@ -91,7 +104,7 @@ accesos.registrar_app(app, [gestion, historia, agente, salidas, sys.modules[__na
 
 # obtener_filas se importa desde database (ver database.py)
 
-@app.route('/')
+@horarios_bp.route('/')
 def index():
     con = database.conectar()
     cur = con.cursor()
@@ -122,7 +135,7 @@ def index():
         escuela_version=ESCUELA_VERSION,
     )
 
-@app.route('/api/<tipo>/<valor>')
+@horarios_bp.route('/api/<tipo>/<valor>')
 def api(tipo, valor):
     # Remove the degree symbol from the search value if searching by course
     search_valor = valor
@@ -534,7 +547,7 @@ def dibujar_pagina_horario(pdf, tipo, valor):
                     pdf.set_xy(x, y + (h/2) - 2)
                     pdf.cell(w, 4, f"SUPERPOSICION", 0, 0, 'C')
 
-@app.route('/export/pdf/<tipo>/<valor>')
+@horarios_bp.route('/export/pdf/<tipo>/<valor>')
 def export_pdf(tipo, valor):
     pdf = _crear_pdf_horario()
     dibujar_pagina_horario(pdf, tipo, valor)
@@ -545,7 +558,7 @@ def export_pdf(tipo, valor):
     filename = f"{tipo}_{valor}.pdf".replace('|', '_')
     return send_file(output, mimetype='application/pdf', as_attachment=False, download_name=filename)
 
-@app.route('/export/pdf/cursos/<seleccion>')
+@horarios_bp.route('/export/pdf/cursos/<seleccion>')
 def export_pdf_cursos(seleccion):
     if seleccion == 'todos':
         con = database.conectar()
@@ -568,7 +581,7 @@ def export_pdf_cursos(seleccion):
     output.seek(0)
     return send_file(output, mimetype='application/pdf', as_attachment=False, download_name="horarios_cursos.pdf")
 
-@app.route('/api/preceptor/<valor>')
+@horarios_bp.route('/api/preceptor/<valor>')
 def api_preceptor(valor):
     try:
         partes = valor.strip().split(' ', 1)
@@ -582,14 +595,13 @@ def api_preceptor(valor):
         print(f"Error preceptor: {e}")
         return jsonify(None)
 
-@app.route('/api/actualizar', methods=['POST'])
-@accesos.requiere('horarios.actualizar', como_json=True)
+@horarios_bp.route('/api/actualizar', methods=['POST'])
 def api_actualizar():
     """Borra y reconstruye escuela.db desde Google Sheets.
 
-    Era GET y sin permiso: cualquier crawler, prefetch o alumno que leyera el HTML podía
-    dispararla, y si Sheets no responde la escuela se queda sin horarios en plena jornada.
-    POST + permiso de admin + botón oculto alcanza para el nivel de riesgo de una escuela.
+    No pide más que el `horarios.ver` del área: en cada deploy nuevo la DB nace vacía y el
+    que la puebla no siempre es admin. Sigue siendo POST para que no la dispare un crawler
+    ni el prefetch del navegador con un GET.
     """
     try:
         database.crear_tablas()
@@ -601,7 +613,7 @@ def api_actualizar():
         print(f"Error actualizando datos: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-@app.route('/api/dashboard')
+@horarios_bp.route('/api/dashboard')
 def api_dashboard():
     try:
         con = database.conectar()
@@ -615,15 +627,15 @@ def api_dashboard():
         print(f"Error en dashboard: {e}")
         return jsonify([])
 
-@app.route('/api/personal/<nombre>')
+@horarios_bp.route('/api/personal/<nombre>')
 def api_personal(nombre):
     return jsonify(database.obtener_personal_por_nombre(nombre))
 
-@app.route('/api/personal_todos')
+@horarios_bp.route('/api/personal_todos')
 def api_personal_todos():
     return jsonify(database.obtener_personal_todos())
 
-@app.route('/api/horario_preceptor/<nombre>')
+@horarios_bp.route('/api/horario_preceptor/<nombre>')
 def api_horario_preceptor(nombre):
     """
     Endpoint para obtener el horario individual de un preceptor.
@@ -636,11 +648,11 @@ def _planilla_preceptores_con_turnos():
         f['turno'] = TURNO_CURSOS.get((str(f['curso']), str(f['division'])), TURNO_DEFAULT)
     return filas
 
-@app.route('/api/planilla_preceptores')
+@horarios_bp.route('/api/planilla_preceptores')
 def api_planilla_preceptores():
     return jsonify(_planilla_preceptores_con_turnos())
 
-@app.route('/api/preceptores_data')
+@horarios_bp.route('/api/preceptores_data')
 def api_preceptores_data():
     # Todo lo de preceptores en una sola respuesta para cachear en el cliente:
     # - horarios: {nombre: horario individual} (reusa la lógica LIKE + estado/turno)
@@ -652,7 +664,7 @@ def api_preceptores_data():
         'planilla': _planilla_preceptores_con_turnos(),
     })
 
-@app.route('/export/pdf/planilla_preceptores')
+@horarios_bp.route('/export/pdf/planilla_preceptores')
 def export_pdf_planilla_preceptores():
     filas = _planilla_preceptores_con_turnos()
 
@@ -728,6 +740,23 @@ def normativa_visor():
 	"""Visor público de la Resolución RESOC-2024-3871-GDEBA-DGCYE con todas las páginas
 	y resaltado de frases específicas. Query params: ?pagina=N&buscar=frase (ambos opcionales)."""
 	return render_template('salidas/normativa.html')
+
+
+# El gate de /horarios se monta una vez que todas las rutas del blueprint están definidas
+# (Flask no deja sumar rutas después de register_blueprint). `registrar_acceso` agrega el
+# before_request + /horarios/login + /horarios/salir; sólo `horarios.index` redirige al
+# login, el resto (fetch de /api, PDFs) contesta 401 al anónimo.
+accesos.registrar_acceso(horarios_bp, 'horarios.ver',
+                         endpoints_pagina={'horarios.index'},
+                         endpoint_default='index')
+app.register_blueprint(horarios_bp)
+
+
+@app.route('/')
+def raiz():
+    """La raíz ya no sirve nada: manda al área de horarios, que tiene su propio gate."""
+    return redirect(url_for('horarios.index'))
+
 
 if __name__ == '__main__':
     # El arranque corre SOLO en el proceso padre. Con el reloader activo, Werkzeug levanta un

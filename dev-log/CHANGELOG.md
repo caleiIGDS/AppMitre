@@ -6,6 +6,24 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-08-29] — El sistema de horarios se movió a `/horarios` y pide sesión
+
+**Archivos**: `app.py`, `static/js/script.js`, `templates/index.html`, `templates/horarios/`
+
+El SPA y su API son un blueprint (`horarios_bp`, prefijo `/horarios`) con gate de `accesos`:
+permiso base `horarios.ver` (verbo `leer`). `/` redirige a `/horarios/`; el front usa
+`API_BASE = '/horarios'` para todo `fetch`/`window.open`. Ya no hay nada público en horarios.
+Los dispositivos ya invitados **no** tienen `horarios.ver` hasta reinvitarlos; el admin sí.
+
+## [2026-08-29] — La ubicación de un recurso se asigna clickeando los chips de unidad
+
+**Archivos**: `templates/gestion/detalle.html`, `gestion.py`, `static/gestion.css`
+
+En la ficha del recurso los `#n` de la sección "Ubicación" son botones toggle: se elige qué
+unidades mover clickeándolas y sólo se tipea el lugar (se fue el input "Números (ej: 1,3,5)";
+ahora requiere JS). `POST /gestion/recursos/<id>/unidades/quitar` acepta `numeros` (CSV) además
+del `numero` suelto de antes. `unidad_mover` sin cambios. Consumidor único = esa ficha.
+
 ## [2026-08-27] — Las planillas de horarios se bajan por un proxy firmado, no del Sheet público
 
 **Archivos**: `database.py`, `config.py`, `app.py`, `apps_script/`

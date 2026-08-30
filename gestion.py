@@ -497,11 +497,16 @@ def unidad_mover(id):
 @bp.route('/recursos/<int:id>/unidades/quitar', methods=['POST'])
 @accesos.requiere(PERMISO_ESCRITURA)
 def unidad_quitar(id):
-    numero = _int(request.form.get('numero', ''))
-    if numero:
+    # `numeros` (CSV) para la selección múltiple de la ficha; `numero` suelto sigue andando.
+    nums = [_int(n) for n in request.form.get('numeros', '').split(',') if n.strip()]
+    uno = _int(request.form.get('numero', ''))
+    if uno:
+        nums.append(uno)
+    if nums:
         con = conectar()
         cur = con.cursor()
-        cur.execute("UPDATE recurso_unidades SET ubicacion = '' WHERE recurso_id = ? AND numero = ?", (id, numero))
+        cur.executemany("UPDATE recurso_unidades SET ubicacion = '' WHERE recurso_id = ? AND numero = ?",
+                        [(id, n) for n in nums])
         con.commit()
         con.close()
     return redirect(url_for('gestion.detalle', slug='recursos', id=id))

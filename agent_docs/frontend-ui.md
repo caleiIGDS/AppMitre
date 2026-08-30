@@ -200,8 +200,9 @@ horarios como en las áreas.
 
 Todas las páginas tienen un **☰** que abre un panel lateral con las otras áreas. Cada página omite
 la suya, y cada link va por su permiso, así que el admin las ve todas y un interno de consulta ve
-sólo las que puede abrir. **Sin sesión no se renderiza nada**: la home pública es byte a byte la de
-antes.
+sólo las que puede abrir. El `{% if acceso_actual() %}` que envuelve el panel sigue en los
+templates por las dudas, pero desde que `/horarios` pide sesión no hay ninguna pantalla del SPA que
+se vea sin login (salvo la de login misma).
 
 ### Qué va dónde
 

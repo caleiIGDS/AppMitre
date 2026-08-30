@@ -6,13 +6,13 @@
 
 | Área | URL | Archivo | DB | Qué es |
 |---|---|---|---|---|
-| **Horarios** | `/` | `app.py` + `database.py` | `escuela.db` | Consulta de horarios por curso (1°–7°), profesor, aula y preceptor; dashboard "En Vivo" para kiosco; export a PDF. Se regenera desde Google Sheets. |
+| **Horarios** | `/horarios` | `app.py` + `database.py` | `escuela.db` | Consulta de horarios por curso (1°–7°), profesor, aula y preceptor; dashboard "En Vivo" para kiosco; export a PDF. Se regenera desde Google Sheets. Área con gate propio (`horarios.ver`); `/` sólo redirige acá. |
 | **Gestión de recursos** | `/gestion` | `gestion.py` | `gestion.db` | Inventario técnico: recursos, con fotos y desglose por ubicación. |
 | **Historia institucional** | `/historia` | `historia.py` | `historia.db` | Línea del tiempo: hitos y las personas que hicieron la escuela. |
 | **Asistente** | `/agente` | `agente/` (paquete) | (usa las de arriba) | Chat con tool-calling. Único transversal: **lee las tres** y escribe en recursos e historia. |
 | **Salidas educativas** | `/salidas` | `salidas.py` | `salidas.db` | Legajo digital de una salida (Anexos III–IX, Res. 3871/24): formulario de carga, guardado con vigencia de 1 año y generación de PDF por anexo. |
 
-**Quién entra a qué — tres niveles** (detalle en `agent_docs/accesos.md`): **Público** es el SPA de horarios, abierto. **Interno** son dispositivos habilitados por un link de invitación de un solo uso, cada uno con su conjunto de permisos (`gestion.leer`, `agente.escribir`, …). **Admin** entra con `GESTION_CLAVE` y tiene el comodín `'*'`. Un área declara sus `PERMISOS` y entra sola al catálogo y a los perfiles: agregar un área nueva **no toca el gate ni migra los accesos ya dados**.
+**Quién entra a qué — tres niveles** (detalle en `agent_docs/accesos.md`): **Público** ya casi no ve nada — sólo el canje de invitación y el link de familias de salidas; hasta los horarios (`/horarios`) piden sesión. **Interno** son dispositivos habilitados por un link de invitación de un solo uso, cada uno con su conjunto de permisos (`horarios.ver`, `gestion.leer`, `agente.escribir`, …). **Admin** entra con `GESTION_CLAVE` y tiene el comodín `'*'`. Un área declara sus `PERMISOS` y entra sola al catálogo y a los perfiles: agregar un área nueva **no toca el gate ni migra los accesos ya dados**.
 
 ### Dónde va cada cosa: tres capas
 
@@ -85,10 +85,14 @@ Google Sheets (CSV export por año: 1ro–7mo + preceptores + personal)
 
 ## API routes (app.py)
 
+Todas cuelgan del blueprint `horarios_bp` con prefijo **`/horarios`** y detrás del permiso
+`horarios.ver` (el `fetch`/`window.open` del front usa `API_BASE = '/horarios'`). `/` (a nivel
+app) sólo redirige a `/horarios/`.
+
 | Ruta | Método | Descripción |
 |------|--------|-------------|
-| `/` | GET | Sirve el SPA; pasa `datos`, `floor_mapping`, `dias`, branding |
-| `/api/<tipo>/<valor>` | GET | Horario por `tipo` = `profesor\|aula\|curso\|planilla` |
+| `/horarios/` | GET | Sirve el SPA; pasa `datos`, `floor_mapping`, `dias`, branding |
+| `/horarios/api/<tipo>/<valor>` | GET | Horario por `tipo` = `profesor\|aula\|curso\|planilla` |
 | `/api/preceptor/<valor>` | GET | Preceptor asignado a un curso (T.M / T.T / T.N) |
 | `/api/horario_preceptor/<nombre>` | GET | Horario personal de un preceptor |
 | `/api/personal/<nombre>` | GET | Horario de personal no docente |

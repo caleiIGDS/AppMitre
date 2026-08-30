@@ -231,22 +231,17 @@ Para `profesor` (modo especial):
 
 ---
 
-## `/api/actualizar` — POST y con permiso
+## `/api/actualizar` — POST, sin permiso
 
 ```python
 @app.route('/api/actualizar', methods=['POST'])
-@accesos.requiere('horarios.actualizar', como_json=True)
 def api_actualizar():
 ```
 
-Es lo único del SPA de horarios que no es público. Borra y reconstruye `escuela.db` entera desde
-Google Sheets, y antes era **GET sin permiso**: cualquier crawler, prefetch o alumno que leyera el
-HTML podía dispararla, y si Sheets no responde la escuela se queda sin horarios en plena jornada.
-
-Ahora: POST, permiso `horarios.actualizar` (verbo `admin`, así que sólo el administrador lo tiene
-por el comodín), y el botón envuelto en `{% if puede('horarios.actualizar') %}` en `index.html`. El
-`fetch` de `script.js` manda `{ method: 'POST' }`. El 403 vuelve en JSON, que es lo que el `.then`
-del botón sabe leer.
+Borra y reconstruye `escuela.db` entera desde Google Sheets. Es público, como el resto del SPA de
+horarios: el botón lo ve cualquiera y no hay gate en la ruta. Lo único que la separa de un GET es
+que es **POST**, para que no la dispare un crawler ni el prefetch del navegador. El `fetch` de
+`script.js` manda `{ method: 'POST' }` y el `.then` lee la respuesta JSON (`status: success|error`).
 
 ---
 
