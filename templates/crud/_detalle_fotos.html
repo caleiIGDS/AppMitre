@@ -1,7 +1,8 @@
 {# Galería de fotos de una ficha + visor (lightbox) + su JS. Se saca a un partial para que
    la ficha genérica (crud/detalle.html) y la de recursos (gestion/detalle.html, con otra
    maqueta) compartan exactamente el mismo comportamiento de fotos.
-   Contexto que necesita: fila, area_nombre, slug, puede(), permiso_escritura. #}
+   Contexto que necesita: fila, area_nombre, slug, puede(), permiso_escritura,
+   permiso_rotar_foto. #}
 <div class="g-foto-section">
     {% if fila['fotos'] %}
     <div class="g-galeria">
@@ -9,6 +10,7 @@
             {% for foto in fila['fotos'] %}
             <button type="button" class="g-foto-thumb" data-foto
                     data-eliminar-url="{{ url_for(area_nombre ~ '.eliminar_foto', slug=slug, id=fila['id'], indice=loop.index0) }}"
+                    data-rotar-url="{{ url_for(area_nombre ~ '.rotar_foto', slug=slug, id=fila['id'], indice=loop.index0) }}"
                     aria-label="Ver foto {{ loop.index }} de {{ fila['fotos'] | length }}">
                 <img src="data:{{ foto.tipo }};base64,{{ foto.b64 }}" alt="Foto {{ loop.index }}" class="g-foto">
             </button>
@@ -36,6 +38,11 @@
     <div class="g-lightbox-barra">
         <span class="g-lightbox-contador" id="g-lb-contador"></span>
         <span class="g-lightbox-acciones">
+            {# Rotar reescribe la imagen guardada: lo pide `permiso_rotar_foto`, que en
+               gestión es sólo del admin y en el resto de las áreas es el de escritura. #}
+            {% if puede(permiso_rotar_foto) %}
+            <button type="button" class="g-lightbox-btn" id="g-lb-rotar" title="Rotar 90°">⟳ ROTAR</button>
+            {% endif %}
             {% if puede(permiso_escritura) %}
             <form method="post" id="g-lb-form-eliminar"
                   onsubmit="return confirm('¿Eliminar esta foto? Esta acción no se puede deshacer.');">
@@ -92,6 +99,7 @@ document.getElementById('input-foto')?.addEventListener('change', (e) => {
     const img = document.getElementById('g-lb-img');
     const contador = document.getElementById('g-lb-contador');
     const formEliminar = document.getElementById('g-lb-form-eliminar');
+    const btnRotar = document.getElementById('g-lb-rotar');
     const navs = lb.querySelectorAll('.g-lightbox-nav');
     let actual = 0;
 
@@ -119,6 +127,51 @@ document.getElementById('input-foto')?.addEventListener('change', (e) => {
         document.body.classList.remove('g-sin-scroll');
         miniaturas[actual].focus();
     }
+
+    // Rotar: el giro lo hace un canvas acá y al server viaja la imagen ya girada (ver
+    // crud.rotar_foto). Sólo se renderiza el botón si el permiso alcanza, así que sin él
+    // esto no existe. Se actualiza la miniatura además del visor para no recargar.
+    async function rotar() {
+        const mini = miniaturas[actual];
+        const imgMini = mini.querySelector('img');
+        const origen = imgMini.src;
+        // El mime sale del propio data URL; los que un canvas no sabe escribir salen PNG.
+        const mime = (origen.match(/^data:([^;]+);/) || [])[1] || 'image/png';
+        const salida = ['image/jpeg', 'image/png', 'image/webp'].includes(mime) ? mime : 'image/png';
+
+        btnRotar.disabled = true;
+        try {
+            const bitmap = await new Promise((ok, mal) => {
+                const i = new Image();
+                i.onload = () => ok(i);
+                i.onerror = () => mal(new Error('No se pudo leer la imagen'));
+                i.src = origen;
+            });
+            const canvas = document.createElement('canvas');
+            canvas.width = bitmap.naturalHeight;
+            canvas.height = bitmap.naturalWidth;
+            const ctx = canvas.getContext('2d');
+            ctx.translate(canvas.width, 0);
+            ctx.rotate(Math.PI / 2);
+            ctx.drawImage(bitmap, 0, 0);
+            const dataUrl = canvas.toDataURL(salida, 0.92);
+
+            const res = await fetch(mini.dataset.rotarUrl, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({b64: dataUrl.split(',')[1], tipo: salida})
+            });
+            const data = await res.json();
+            if (!data.ok) { alert('Error: ' + data.error); return; }
+            imgMini.src = dataUrl;
+            img.src = dataUrl;
+        } catch (err) {
+            alert('No se pudo rotar: ' + err.message);
+        } finally {
+            btnRotar.disabled = false;
+        }
+    }
+    if (btnRotar) btnRotar.addEventListener('click', rotar);
 
     miniaturas.forEach((mini, i) => mini.addEventListener('click', () => abrir(i)));
     document.getElementById('g-lb-cerrar').addEventListener('click', cerrar);

@@ -40,12 +40,19 @@ PERMISOS = [
     # inventario (qué está vencido de revisión, qué está dado de baja), no algo que un
     # interno de lectura/escritura necesite para su tarea del día a día.
     ('gestion.auditoria', 'Ver los filtros de auditoría del listado (vencidos y dados de baja)', 'admin'),
+    # Mismo verbo 'admin', mismo motivo: girar una foto reescribe la imagen guardada (se
+    # re-codifica), así que es una operación de mantenimiento del inventario y no parte de
+    # cargar un recurso. Subir y borrar fotos siguen siendo de `gestion.editar`.
+    ('gestion.rotar', 'Rotar las fotos de un recurso', 'admin'),
 ]
 GRUPO_PERMISOS = 'Gestión de recursos'
 PERMISO_LECTURA = 'gestion.leer'
 PERMISO_ESCRITURA = 'gestion.editar'
 PERMISO_ALIAS = 'gestion.alias'
 PERMISO_AUDITORIA = 'gestion.auditoria'
+# Hook opcional que lee crud.py: quién puede girar una foto ya cargada. Si un área no lo
+# declara (historia), el botón pide el permiso de escritura de siempre.
+PERMISO_ROTAR_FOTO = 'gestion.rotar'
 
 # Respaldos rotativos: la maquinaria vive en respaldos.py (capa 0). Acá sólo se declara
 # con qué prefijo se guardan y qué tabla mirar para saber si la DB tiene datos de verdad

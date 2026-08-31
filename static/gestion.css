@@ -821,6 +821,24 @@
 }
 .g-ficha-seccion .g-ficha-vacio { padding: 0; }
 
+/* Sección opcional todavía vacía (sub-recursos de un kit): al entrar a la ficha no ocupa
+   lugar, sólo queda el desplegable para empezar a cargarla. */
+.g-ficha-agregar { margin: 10px 0 0; }
+.g-ficha-agregar > summary {
+    cursor: pointer;
+    list-style: none;
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--g-muted);
+}
+.g-ficha-agregar > summary::-webkit-details-marker { display: none; }
+.g-ficha-agregar > summary::marker { content: ''; }
+.g-ficha-agregar > summary:hover { color: var(--g-primary); }
+.g-ficha-agregar[open] > summary { color: var(--g-primary); margin-bottom: 8px; }
+
 /* Dónde está: una fila por lugar. Los números de unidad ganan su columna (cada chip
    se puede quitar) y el total va en su propia celda con borde a la izquierda. */
 .g-ficha-ubic-row {

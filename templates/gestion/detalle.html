@@ -56,8 +56,8 @@
 
     <div class="g-ficha-col-main">
         {% for s in secciones %}
-        {# `oculto_si_vacio`: sección opcional (sub-recursos de un kit) que no debe llamar la
-           atención de quien no puede escribir si no hay nada cargado. #}
+        {# `oculto_si_vacio`: sección opcional (sub-recursos de un kit) que sin nada cargado
+           no se muestra a quien no puede escribir. #}
         {% if not (s.get('oculto_si_vacio') and not s['items'] and not puede(permiso_escritura)) %}
 
         {% if s.get('tipo') == 'ubicaciones' %}
@@ -143,9 +143,12 @@
         {% endif %}
 
         {% elif s.get('tipo') == 'kit_items' %}
+        {# Un recurso sin sub-recursos cargados no es un kit: la sección entera no aparece
+           al entrar a la ficha (ni la barra ni el formulario vacío). Quien puede escribir
+           sólo ve un desplegable chico para empezar a cargarlos. #}
+        {% if s['items'] %}
         <div class="g-ficha-bar"><span>{{ s.titulo | upper }}</span></div>
         <div class="g-ficha-seccion">
-            {% if s['items'] %}
             <div class="g-table-wrap">
                 <table class="g-table">
                     <thead>
@@ -185,9 +188,6 @@
                     </tbody>
                 </table>
             </div>
-            {% else %}
-            <p class="g-ficha-vacio">Todavía no hay sub-recursos cargados.</p>
-            {% endif %}
             {% if puede(permiso_escritura) %}
             <form method="post" class="g-inline-form" action="{{ url_for('gestion.kit_item_agregar', id=fila['id']) }}">
                 <input type="text" name="titulo" placeholder="Título" required>
@@ -197,6 +197,17 @@
             </form>
             {% endif %}
         </div>
+        {% elif puede(permiso_escritura) %}
+        <details class="g-ficha-agregar">
+            <summary>+ {{ s.titulo }}</summary>
+            <form method="post" class="g-inline-form" action="{{ url_for('gestion.kit_item_agregar', id=fila['id']) }}">
+                <input type="text" name="titulo" placeholder="Título" required>
+                <input type="text" name="cantidad" placeholder="Cantidad" style="width:6em">
+                <input type="text" name="recurso_asignado" placeholder="Recurso asignado">
+                <button type="submit" class="g-btn-mini">Agregar</button>
+            </form>
+        </details>
+        {% endif %}
 
         {% else %}
         <div class="g-ficha-bar"><span>{{ s.titulo | upper }}</span></div>

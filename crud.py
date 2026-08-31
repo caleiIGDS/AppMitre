@@ -480,6 +480,11 @@ def contexto_base(bp, area):
         # Para que `lista.html`/`detalle.html` escondan los botones de escritura sin que
         # este archivo nombre ningún permiso: la clave la pone el área.
         'permiso_escritura': _hook(area, 'PERMISO_ESCRITURA'),
+        # Girar una foto puede pedir un permiso más alto que el resto de la escritura
+        # (en gestión lo pide: `PERMISO_ROTAR_FOTO`). El área que no lo declara cae en
+        # el de escritura y no cambia nada.
+        'permiso_rotar_foto': _hook(area, 'PERMISO_ROTAR_FOTO')
+                              or _hook(area, 'PERMISO_ESCRITURA'),
     }
     extra = _hook(area, 'contexto_extra')
     if extra:
@@ -497,6 +502,7 @@ def registrar_rutas(bp, area):
     # Qué permiso pide una ruta que escribe. Lo nombra el área; este archivo sólo lo
     # pasa, igual que hace con `campo_nombre`.
     escritura = _hook(area, 'PERMISO_ESCRITURA')
+    rotar = _hook(area, 'PERMISO_ROTAR_FOTO') or escritura
 
     def _extras(vista, slug):
         hook = _hook(area, 'extras_template')
@@ -738,3 +744,44 @@ def registrar_rutas(bp, area):
             con.commit()
         con.close()
         return redirect(url_for(f'{nombre}.detalle', slug=slug, id=id))
+
+    @bp.route('/<slug>/<int:id>/foto/<int:indice>/rotar', methods=['POST'])
+    @accesos.requiere(rotar)
+    def rotar_foto(slug, id, indice):
+        """Reemplaza una foto por la misma imagen girada.
+
+        El giro lo hace el navegador (un canvas en `crud/_detalle_fotos.html`) y acá sólo
+        llega el resultado ya en base64: así no hace falta Pillow ni ninguna dependencia
+        nueva en el server. Como la ruta acepta el contenido que le mandan, pide el
+        permiso que declaró el área (`PERMISO_ROTAR_FOTO`), que puede ser más alto que el
+        de escritura.
+        """
+        cfg_ent = cfg(area, slug)
+        datos = request.get_json(silent=True) or {}
+        b64 = datos.get('b64') or ''
+        tipo = datos.get('tipo') or ''
+        if not tipo.startswith('image/'):
+            return jsonify({'ok': False, 'error': 'Tipo de imagen inválido'}), 400
+        if len(b64) > 16 * 1024 * 1024:
+            return jsonify({'ok': False, 'error': 'Imagen demasiado grande'}), 400
+        try:
+            base64.b64decode(b64, validate=True)
+        except Exception:
+            return jsonify({'ok': False, 'error': 'Imagen ilegible'}), 400
+
+        con = conectar(area)
+        cur = con.cursor()
+        fila = cur.execute(f"SELECT fotos FROM {cfg_ent['tabla']} WHERE id = ?", (id,)).fetchone()
+        if fila is None:
+            con.close()
+            abort(404)
+        fotos = json.loads(fila['fotos'] or '[]')
+        if not (0 <= indice < len(fotos)):
+            con.close()
+            return jsonify({'ok': False, 'error': 'No existe esa foto'}), 404
+        fotos[indice] = dict(fotos[indice], b64=b64, tipo=tipo)
+        cur.execute(f"UPDATE {cfg_ent['tabla']} SET fotos = ? WHERE id = ?",
+                    (json.dumps(fotos), id))
+        con.commit()
+        con.close()
+        return jsonify({'ok': True})

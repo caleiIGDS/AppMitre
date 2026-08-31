@@ -86,6 +86,7 @@ acá, nunca por un `if slug == '...'` dentro de `crud.py`.
 
 | hook | cuándo se llama | quién lo usa hoy |
 |---|---|---|
+| `PERMISO_ROTAR_FOTO` | atributo, no función: quién puede girar una foto ya cargada (`rotar_foto` y el botón del visor). Si el área no lo declara, es `PERMISO_ESCRITURA` | `gestion` (`gestion.rotar`, solo admin) |
 | `migrar(cur)` | en cada `init_db`, después del SCHEMA | los dos |
 | `seed(cur)` | sólo si la DB arranca vacía | `gestion` (historia arranca vacía a propósito) |
 | `secciones_detalle(slug, id, cur)` | al armar la ficha de detalle | los dos |
@@ -176,12 +177,13 @@ accesos.registrar_acceso(bp, PERMISO_LECTURA)
 crud.registrar_rutas(bp, sys.modules[__name__])
 ```
 
-`registrar_rutas` monta `home`, `lista`, `nuevo`, `detalle`, `editar`, `eliminar`, `subir_foto` y
-`eliminar_foto`, más el context processor. **Los endpoints y las carpetas de templates salen de
+`registrar_rutas` monta `home`, `lista`, `nuevo`, `detalle`, `editar`, `eliminar`, `subir_foto`,
+`eliminar_foto` y `rotar_foto`, más el context processor. **Los endpoints y las carpetas de templates salen de
 `bp.name`** (`url_for(f'{bp.name}.detalle')`, `render_template(f'{bp.name}/lista.html')`), que ya
-coincide con el nombre de la carpeta en `templates/` — no hay nada que configurar. Las cinco rutas
-que escriben las decora con `accesos.requiere(area.PERMISO_ESCRITURA)`: el motor no nombra ningún
-permiso, lee la clave que declaró el área (mismo criterio que `campo_nombre`).
+coincide con el nombre de la carpeta en `templates/` — no hay nada que configurar. Las rutas
+que escriben las decora con `accesos.requiere(area.PERMISO_ESCRITURA)` (salvo `rotar_foto`, que usa
+`PERMISO_ROTAR_FOTO`): el motor no nombra ningún permiso, lee la clave que declaró el área (mismo
+criterio que `campo_nombre`).
 
 `registrar_acceso` vive en **`accesos.py`**, no acá: el gate dejó de ser "una clave y un booleano" y
 es un motor aparte, con catálogo de permisos, perfiles, dispositivos y panel. Ver

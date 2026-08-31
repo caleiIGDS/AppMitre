@@ -141,10 +141,15 @@ sale de `detalle_entidad`. Las tres escriben directo, sin ficha de confirmación
 - **Visor**: click en una miniatura abre un lightbox a pantalla completa (`.g-lightbox`, CSS en
   `gestion.css`, JS inline en el partial `templates/crud/_detalle_fotos.html`) con la foto
   entera, contador `n / total`, flechas
-  ‹ › (y ← → del teclado), cierre con Esc o click en el fondo, y el botón **ELIMINAR**
+  ‹ › (y ← → del teclado), cierre con Esc o click en el fondo, y los botones **ROTAR** y
+  **ELIMINAR**
 - Borrado: `POST /<slug>/<id>/foto/<indice>/eliminar` (con `confirm()`) → saca la foto del array
   y redirige a la ficha. **La referencia es la posición en el array**: las fotos no tienen id
   propio. Un índice fuera de rango no es error, se ignora (dos pestañas borrando a la vez)
+- Rotación: `POST /<slug>/<id>/foto/<indice>/rotar` con `{b64, tipo}` en JSON. El giro de 90°
+  lo hace un `<canvas>` en el navegador y al server llega la imagen ya girada (así no hace
+  falta Pillow ni ninguna dependencia nueva); reemplaza `b64`/`tipo` de esa posición y
+  conserva `fecha`. Pide `gestion.rotar` — **solo admin**, a diferencia de subir y borrar
 - Las miniaturas son `<button>` (no `<img>` suelta) para que el visor se abra también con teclado
 
 Estados: recursos = Disponible / Retirado / En uso / En reparación / De baja / Sin revisar.
@@ -216,6 +221,7 @@ unidad y los sub-recursos de un kit, pero el mecanismo de limpieza es idéntico)
 | `/gestion/<slug>/<id>/eliminar` | POST | Borra fila + sus filas de `LIMPIEZA_M2M` (confirm en el browser) |
 | `/gestion/<slug>/<id>/foto` | POST | Sube una imagen a la galería (multipart → base64). Devuelve JSON |
 | `/gestion/<slug>/<id>/foto/<indice>/eliminar` | POST | Borra la foto de esa posición y vuelve a la ficha |
+| `/gestion/<slug>/<id>/foto/<indice>/rotar` | POST | Reemplaza esa foto por la versión girada que manda el navegador (JSON `{b64, tipo}`). Solo admin (`gestion.rotar`) |
 | `/gestion/alias` | GET | Solo lectura, solo admin (`gestion.alias`): tabla NOMBRE / ALIAS de todos los recursos. Único lugar de la web donde se ve el alias oculto — no hay edición acá |
 | `/gestion/recursos/<id>/unidades/mover` | POST | Fija un lugar para unidades puntuales (`numeros`) o una cantidad de ellas |
 | `/gestion/recursos/<id>/unidades/quitar` | POST | Marca una unidad puntual como "sin ubicar" |
@@ -309,13 +315,15 @@ PythonAnywhere) no hay respaldos, así que el primer arranque siembra normalment
 
 ## Permisos
 
-El área declara tres, y el verbo es lo que los hace entrar solos en los perfiles:
+El área declara cinco, y el verbo es lo que los hace entrar solos en los perfiles:
 
 | clave | verbo | qué habilita |
 |---|---|---|
 | `gestion.leer` | leer | ver el inventario. Es el permiso base del blueprint |
 | `gestion.editar` | escribir | `nuevo`/`editar`/`eliminar`/fotos/desglose por ubicación |
 | `gestion.alias` | admin | `/gestion/alias` (tabla de solo lectura) y la tool del agente `listar_alias`. Verbo `admin`: no entra en ningún preset de interno, solo lo tiene el comodín `'*'` (mismo criterio que `historia.personas`) |
+| `gestion.auditoria` | admin | los chips de auditoría del listado (vencidos de revisión, dados de baja) |
+| `gestion.rotar` | admin | el botón ROTAR del visor de fotos y su ruta. `crud.py` lo lee del hook opcional `PERMISO_ROTAR_FOTO`; el área que no lo declara (historia) cae en su permiso de escritura |
 
 `PERMISO_ESCRITURA` lo aplica `crud.registrar_rutas` a sus cinco rutas genéricas, y las dos
 rutas propias del desglose por ubicación lo piden a mano con `@accesos.requiere(...)`.
