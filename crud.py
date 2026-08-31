@@ -750,24 +750,23 @@ def registrar_rutas(bp, area):
     def rotar_foto(slug, id, indice):
         """Reemplaza una foto por la misma imagen girada.
 
-        El giro lo hace el navegador (un canvas en `crud/_detalle_fotos.html`) y acá sólo
-        llega el resultado ya en base64: así no hace falta Pillow ni ninguna dependencia
-        nueva en el server. Como la ruta acepta el contenido que le mandan, pide el
-        permiso que declaró el área (`PERMISO_ROTAR_FOTO`), que puede ser más alto que el
-        de escritura.
+        El giro lo hace el navegador (un canvas en `crud/_detalle_fotos.html`) y acá llega
+        la imagen ya girada, cruda en el body con su `Content-Type`: así no hace falta
+        Pillow ni ninguna dependencia nueva en el server, y no se pagan ni el 33% de más
+        de base64 ni el string gigante de un JSON. Como la ruta acepta el contenido que le
+        mandan, pide el permiso que declaró el área (`PERMISO_ROTAR_FOTO`), que puede ser
+        más alto que el de escritura.
         """
         cfg_ent = cfg(area, slug)
-        datos = request.get_json(silent=True) or {}
-        b64 = datos.get('b64') or ''
-        tipo = datos.get('tipo') or ''
+        tipo = (request.content_type or '').split(';')[0].strip()
+        crudo = request.get_data()
         if not tipo.startswith('image/'):
             return jsonify({'ok': False, 'error': 'Tipo de imagen inválido'}), 400
-        if len(b64) > 16 * 1024 * 1024:
+        if not crudo:
+            return jsonify({'ok': False, 'error': 'Imagen vacía'}), 400
+        if len(crudo) > 24 * 1024 * 1024:
             return jsonify({'ok': False, 'error': 'Imagen demasiado grande'}), 400
-        try:
-            base64.b64decode(b64, validate=True)
-        except Exception:
-            return jsonify({'ok': False, 'error': 'Imagen ilegible'}), 400
+        b64 = base64.b64encode(crudo).decode('utf-8')
 
         con = conectar(area)
         cur = con.cursor()

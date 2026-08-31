@@ -37,19 +37,9 @@
             </div>
         </div>
         {% if puede(permiso_escritura) %}
+        {# La ficha no ofrece ELIMINAR: la baja vive dentro de EDITAR (gestion/form.html). #}
         <div class="g-ficha-actions">
             <a class="g-btn" href="{{ url_for(area_nombre ~ '.editar', slug=slug, id=fila['id']) }}">EDITAR</a>
-            {# ELIMINAR sale de la barra: va en el "⋯", lejos del botón que se usa siempre.
-               <details> puro, sin JS. #}
-            <details class="g-ficha-menu">
-                <summary aria-label="Más acciones">⋯</summary>
-                <div class="g-ficha-menu-pop">
-                    <form method="post" action="{{ url_for(area_nombre ~ '.eliminar', slug=slug, id=fila['id']) }}"
-                          onsubmit="return confirm('¿Eliminar este recurso? Esta acción no se puede deshacer.');">
-                        <button type="submit" class="g-btn-danger">ELIMINAR</button>
-                    </form>
-                </div>
-            </details>
         </div>
         {% endif %}
     </header>

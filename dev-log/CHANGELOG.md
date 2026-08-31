@@ -10,7 +10,7 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 **Archivos**: `crud.py`, `gestion.py`, `templates/crud/_detalle_fotos.html`
 
-`crud.registrar_rutas` monta `POST /<slug>/<id>/foto/<indice>/rotar` (JSON `{b64, tipo}`: el giro lo hace un canvas en el navegador). La pide el permiso del hook opcional `PERMISO_ROTAR_FOTO`, que también llega a los templates como `permiso_rotar_foto`; el área que no lo declara cae en `PERMISO_ESCRITURA`. Gestión declara `gestion.rotar` (verbo `admin`): un interno con escritura sube y borra fotos pero no las gira.
+`crud.registrar_rutas` monta `POST /<slug>/<id>/foto/<indice>/rotar` (el giro lo hace un canvas en el navegador y manda la imagen cruda en el body con su `Content-Type`). La pide el permiso del hook opcional `PERMISO_ROTAR_FOTO`, que también llega a los templates como `permiso_rotar_foto`; el área que no lo declara cae en `PERMISO_ESCRITURA`. Gestión declara `gestion.rotar` (verbo `admin`): un interno con escritura sube y borra fotos pero no las gira.
 
 ## [2026-08-30] — El shell de página se mudó a `global.css`
 

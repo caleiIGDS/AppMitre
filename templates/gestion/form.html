@@ -1,2 +1,18 @@
-{# Gestión usa el formulario genérico tal cual — ver templates/crud/form.html #}
+{# Gestión usa el formulario genérico (ver templates/crud/form.html) y le agrega abajo
+   el ELIMINAR: la baja de un recurso sólo se ofrece acá adentro, no en la ficha. #}
 {% extends 'crud/form.html' %}
+
+{% block form_extra %}
+{% if fila and puede(permiso_escritura) %}
+<div class="g-form-peligro">
+    <div>
+        <strong>ELIMINAR {{ cfg.singular | upper }}</strong>
+        <span class="g-help">Se borra junto con sus fotos y sus vínculos. No se puede deshacer.</span>
+    </div>
+    <form method="post" action="{{ url_for(area_nombre ~ '.eliminar', slug=slug, id=fila['id']) }}"
+          onsubmit="return confirm('¿Eliminar este recurso? Esta acción no se puede deshacer.');">
+        <button type="submit" class="g-btn-danger">ELIMINAR</button>
+    </form>
+</div>
+{% endif %}
+{% endblock %}

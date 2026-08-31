@@ -128,46 +128,71 @@ document.getElementById('input-foto')?.addEventListener('change', (e) => {
         miniaturas[actual].focus();
     }
 
-    // Rotar: el giro lo hace un canvas acá y al server viaja la imagen ya girada (ver
-    // crud.rotar_foto). Sólo se renderiza el botón si el permiso alcanza, así que sin él
-    // esto no existe. Se actualiza la miniatura además del visor para no recargar.
-    async function rotar() {
-        const mini = miniaturas[actual];
-        const imgMini = mini.querySelector('img');
-        const origen = imgMini.src;
-        // El mime sale del propio data URL; los que un canvas no sabe escribir salen PNG.
-        const mime = (origen.match(/^data:([^;]+);/) || [])[1] || 'image/png';
-        const salida = ['image/jpeg', 'image/png', 'image/webp'].includes(mime) ? mime : 'image/png';
+    // Rotar: el giro lo hace un canvas acá y al server se le manda la imagen ya girada
+    // (ver crud.rotar_foto). La foto se muestra girada apenas termina de codificarse, y la
+    // subida sigue en segundo plano: esperar el round-trip para recién ahí mostrarla hacía
+    // que una foto de celular tardara varios segundos en verse. Sólo se renderiza el botón
+    // si el permiso alcanza, así que sin él esto no existe.
+    const urlsTemporales = new Map();   // índice → objectURL a liberar cuando se reemplaza
 
+    function ponerFoto(i, url) {
+        miniaturas[i].querySelector('img').src = url;
+        if (i === actual) img.src = url;
+        const previa = urlsTemporales.get(i);
+        if (previa && previa !== url) URL.revokeObjectURL(previa);
+        if (url.startsWith('blob:')) urlsTemporales.set(i, url);
+        else urlsTemporales.delete(i);
+    }
+
+    async function rotar() {
+        const i = actual;
+        const mini = miniaturas[i];
+        const origen = mini.querySelector('img').src;
+        const etiqueta = btnRotar.textContent;
         btnRotar.disabled = true;
         try {
-            const bitmap = await new Promise((ok, mal) => {
-                const i = new Image();
-                i.onload = () => ok(i);
-                i.onerror = () => mal(new Error('No se pudo leer la imagen'));
-                i.src = origen;
-            });
+            // fetch sobre el propio src (data: o blob:) da los bytes y el mime de una,
+            // y createImageBitmap decodifica fuera del hilo principal.
+            const original = await (await fetch(origen)).blob();
+            const salida = ['image/jpeg', 'image/png', 'image/webp'].includes(original.type)
+                ? original.type : 'image/png';
+            const bitmap = window.createImageBitmap
+                ? await createImageBitmap(original)
+                : await new Promise((ok, mal) => {
+                    const im = new Image();
+                    im.onload = () => ok(im);
+                    im.onerror = () => mal(new Error('No se pudo leer la imagen'));
+                    im.src = origen;
+                });
+
             const canvas = document.createElement('canvas');
-            canvas.width = bitmap.naturalHeight;
-            canvas.height = bitmap.naturalWidth;
+            canvas.width = bitmap.height;
+            canvas.height = bitmap.width;
             const ctx = canvas.getContext('2d');
             ctx.translate(canvas.width, 0);
             ctx.rotate(Math.PI / 2);
             ctx.drawImage(bitmap, 0, 0);
-            const dataUrl = canvas.toDataURL(salida, 0.92);
+            if (bitmap.close) bitmap.close();
+            const girada = await new Promise(ok => canvas.toBlob(ok, salida, 0.92));
+            if (!girada) throw new Error('No se pudo generar la imagen girada');
 
+            // Ya se ve girada; lo que falta es guardarla.
+            ponerFoto(i, URL.createObjectURL(girada));
+            btnRotar.textContent = 'GUARDANDO…';
             const res = await fetch(mini.dataset.rotarUrl, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({b64: dataUrl.split(',')[1], tipo: salida})
+                headers: {'Content-Type': salida},
+                body: girada
             });
-            const data = await res.json();
-            if (!data.ok) { alert('Error: ' + data.error); return; }
-            imgMini.src = dataUrl;
-            img.src = dataUrl;
+            const data = await res.json().catch(() => ({ok: false, error: 'Respuesta inesperada'}));
+            if (!data.ok) {
+                ponerFoto(i, origen);   // volver a lo que sigue guardado en la DB
+                alert('No se pudo guardar: ' + data.error);
+            }
         } catch (err) {
             alert('No se pudo rotar: ' + err.message);
         } finally {
+            btnRotar.textContent = etiqueta;
             btnRotar.disabled = false;
         }
     }

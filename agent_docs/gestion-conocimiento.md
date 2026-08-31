@@ -146,10 +146,13 @@ sale de `detalle_entidad`. Las tres escriben directo, sin ficha de confirmación
 - Borrado: `POST /<slug>/<id>/foto/<indice>/eliminar` (con `confirm()`) → saca la foto del array
   y redirige a la ficha. **La referencia es la posición en el array**: las fotos no tienen id
   propio. Un índice fuera de rango no es error, se ignora (dos pestañas borrando a la vez)
-- Rotación: `POST /<slug>/<id>/foto/<indice>/rotar` con `{b64, tipo}` en JSON. El giro de 90°
-  lo hace un `<canvas>` en el navegador y al server llega la imagen ya girada (así no hace
-  falta Pillow ni ninguna dependencia nueva); reemplaza `b64`/`tipo` de esa posición y
-  conserva `fecha`. Pide `gestion.rotar` — **solo admin**, a diferencia de subir y borrar
+- Rotación: `POST /<slug>/<id>/foto/<indice>/rotar` con la imagen **cruda en el body** y su
+  `Content-Type`. El giro de 90° lo hace un `<canvas>` en el navegador y al server llega la
+  imagen ya girada (así no hace falta Pillow ni ninguna dependencia nueva); reemplaza
+  `b64`/`tipo` de esa posición y conserva `fecha`. El visor muestra la foto girada apenas
+  termina de codificarla y **guarda en segundo plano** (botón en `GUARDANDO…`): si el POST
+  falla vuelve a la imagen que sigue en la DB. Pide `gestion.rotar` — **solo admin**, a
+  diferencia de subir y borrar
 - Las miniaturas son `<button>` (no `<img>` suelta) para que el visor se abra también con teclado
 
 Estados: recursos = Disponible / Retirado / En uso / En reparación / De baja / Sin revisar.
@@ -221,7 +224,7 @@ unidad y los sub-recursos de un kit, pero el mecanismo de limpieza es idéntico)
 | `/gestion/<slug>/<id>/eliminar` | POST | Borra fila + sus filas de `LIMPIEZA_M2M` (confirm en el browser) |
 | `/gestion/<slug>/<id>/foto` | POST | Sube una imagen a la galería (multipart → base64). Devuelve JSON |
 | `/gestion/<slug>/<id>/foto/<indice>/eliminar` | POST | Borra la foto de esa posición y vuelve a la ficha |
-| `/gestion/<slug>/<id>/foto/<indice>/rotar` | POST | Reemplaza esa foto por la versión girada que manda el navegador (JSON `{b64, tipo}`). Solo admin (`gestion.rotar`) |
+| `/gestion/<slug>/<id>/foto/<indice>/rotar` | POST | Reemplaza esa foto por la versión girada que manda el navegador (imagen cruda en el body). Solo admin (`gestion.rotar`) |
 | `/gestion/alias` | GET | Solo lectura, solo admin (`gestion.alias`): tabla NOMBRE / ALIAS de todos los recursos. Único lugar de la web donde se ve el alias oculto — no hay edición acá |
 | `/gestion/recursos/<id>/unidades/mover` | POST | Fija un lugar para unidades puntuales (`numeros`) o una cantidad de ellas |
 | `/gestion/recursos/<id>/unidades/quitar` | POST | Marca una unidad puntual como "sin ubicar" |

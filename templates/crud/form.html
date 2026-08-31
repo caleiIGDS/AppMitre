@@ -68,4 +68,8 @@
         {% endif %}
     </div>
 </form>
+
+{# Acciones que no son "guardar" y no pueden ir dentro del <form> de arriba (un form
+   no anida): gestión mete acá el ELIMINAR. El área que no lo usa no ve nada. #}
+{% block form_extra %}{% endblock %}
 {% endblock %}
