@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block titulo %}Horarios{% endblock %} — {{ escuela_nombre }}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename=escuela_logo) }}">
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
     {# Sólo global.css: `horarios.css` es del SPA (calendario, tema oscuro) y su regla
        suelta sobre `footer` le pisa el pie de página a esta pantalla. #}
