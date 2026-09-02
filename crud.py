@@ -11,7 +11,8 @@ Un "área" es simplemente un módulo que expone lo de abajo. Todo lo que nombre 
 concreta entra por un **hook opcional**, nunca por un `if slug == '...'` acá adentro.
 
     OBLIGATORIO
-      DB_PATH          ruta al archivo .db
+      DB_PATH          ruta al archivo .db (o el hook `db_path()`, si el área tiene más
+                       de una y elige por request — ver `db_path`)
       PREFIJO_BACKUP   prefijo de sus respaldos ('gestion' -> backups/gestion-*.db)
       TABLA_TESTIGO    tabla que se mira para saber si la DB "tiene datos"
       ENTIDADES        {slug: cfg}  — ver abajo
@@ -23,6 +24,8 @@ concreta entra por un **hook opcional**, nunca por un `if slug == '...'` acá ad
       PERMISO_ESCRITURA  el que piden nuevo/editar/eliminar/fotos
 
     HOOKS OPCIONALES (se leen con getattr; si no están, no pasa nada)
+      db_path()                       la .db de ESTE request, si no es una sola fija
+      prefijo_backup()                el prefijo de respaldo que le corresponde
       migrar(cur)                     ALTERs aditivos para DBs viejas
       seed(cur)                       datos de ejemplo en instalación nueva
       secciones_detalle(slug, id, cur)  relaciones a mostrar en el detalle
@@ -59,8 +62,24 @@ from config import ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, ahora
 # Conexión y config declarativa
 # ---------------------------------------------------------------------------
 
+def db_path(area):
+    """El archivo .db del área. Casi siempre es una constante (`DB_PATH`), pero un área
+    puede tener MÁS DE UNA base y elegir por request: gestión declara `db_path()` porque
+    cada inventario es un archivo aparte. Capa 1 no sabe cuál ni por qué — nada más
+    pregunta."""
+    dinamico = _hook(area, 'db_path')
+    return dinamico() if dinamico else area.DB_PATH
+
+
+def prefijo_backup(area):
+    """Ídem para el prefijo de sus respaldos: si la DB cambia por request, la rotación de
+    respaldos tiene que cambiar con ella o cada base se comería la del resto."""
+    dinamico = _hook(area, 'prefijo_backup')
+    return dinamico() if dinamico else area.PREFIJO_BACKUP
+
+
 def conectar(area):
-    con = sqlite3.connect(area.DB_PATH)
+    con = sqlite3.connect(db_path(area))
     con.row_factory = sqlite3.Row
     return con
 
@@ -149,7 +168,8 @@ def init_db(area):
 
     Respalda antes de tocar nada (ver `respaldos.respaldar`).
     """
-    respaldos.respaldar(area.DB_PATH, area.PREFIJO_BACKUP, area.TABLA_TESTIGO)
+    ruta, prefijo = db_path(area), prefijo_backup(area)
+    respaldos.respaldar(ruta, prefijo, area.TABLA_TESTIGO)
 
     con = conectar(area)
     cur = con.cursor()
@@ -165,9 +185,9 @@ def init_db(area):
         # Los respaldos desempatan — si existen, esto ya estuvo cargado alguna vez y
         # seguir de largo taparía la pérdida en silencio (que es exactamente lo que pasó
         # el 2026-08-08). Ante la duda, fallar ruidoso.
-        previos = respaldos.listar(area.PREFIJO_BACKUP)
+        previos = respaldos.listar(prefijo)
         if previos and os.environ.get('GESTION_SEED') != '1':
-            nombre_db = os.path.basename(area.DB_PATH)
+            nombre_db = os.path.basename(ruta)
             ultimo = previos[-1]
             con.close()
             aviso = ("NO se cargaron los datos de ejemplo." if sembrar
@@ -177,7 +197,7 @@ def init_db(area):
                 f"{respaldos.BACKUP_DIR}.\n"
                 f"Probablemente se perdió el archivo — {aviso}\n\n"
                 f"Para restaurar el más reciente:\n"
-                f"    copy \"{ultimo}\" \"{area.DB_PATH}\"\n\n"
+                f"    copy \"{ultimo}\" \"{ruta}\"\n\n"
                 f"Si de verdad querés empezar de cero:\n"
                 f"    GESTION_SEED=1 python app.py"
             )

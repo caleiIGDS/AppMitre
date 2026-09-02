@@ -25,6 +25,19 @@ QUÉ VA EN LA COOKIE
     Los permisos NO viajan en la cookie por dos razones: revocar tiene que cortar en el
     request siguiente (si viajaran, revocar no haría nada hasta que expire), y el
     presupuesto de ~4KB de la cookie ya está compartido con `agente_sid`.
+
+ÁMBITOS: EL MISMO PERMISO, PERO SÓLO ACÁ
+    Un permiso puede guardarse prefijado, `'<ambito>/<clave>'`, y entonces sólo vale
+    mientras ese ámbito sea el activo del request. Sirve para que un área se divida en
+    compartimentos estancos sin duplicar ninguna clave: gestión lo usa para sus
+    inventarios (`'inv:taller/gestion.editar'`), y el resto del sistema —`crud.py`, los
+    templates, las tools del agente— sigue preguntando por `gestion.editar` a secas.
+
+    Este archivo no sabe qué es un inventario: sólo que hay un separador '/', que alguien
+    dice cuál es el ámbito activo (`registrar_ambito`) y que hay claves a las que el
+    comodín '*' NO llega (`PERMISOS_AMBITO`, que declara el área). Eso último es lo que
+    hace que el admin general administre la lista de inventarios sin poder entrar a
+    ninguno.
 """
 
 import functools
@@ -131,6 +144,17 @@ def init_db():
 # funcionalidad, no de un área).
 CATALOGO = []
 
+# El mismo formato, pero para las claves CON ÁMBITO: las que sólo valen dentro de un
+# compartimento (hoy, un inventario de gestión). No entran al catálogo global a propósito
+# — no son algo que el panel `/accesos` pueda repartir, porque quien las reparte es el
+# encargado de cada compartimento desde su propio panel.
+CATALOGO_AMBITO = []
+
+# Claves a las que el comodín '*' NO llega. Las declara el área con `PERMISOS_AMBITO` y es
+# lo que hace que el admin general pueda administrar la LISTA de inventarios sin poder
+# entrar a ninguno: el comodín sigue siendo el break-glass de todo lo demás.
+SIN_COMODIN = set()
+
 PERMISOS = [
     ('accesos.admin', 'Administrar accesos: invitar y revocar dispositivos', 'admin'),
 ]
@@ -153,28 +177,44 @@ ETIQUETA_PERFIL = {
 }
 
 
-def declarar(grupo, permisos):
-    """Suma los permisos de un área al catálogo. Idempotente por clave."""
-    ya = {c for c, _e, _v, _g in CATALOGO}
+def declarar(grupo, permisos, con_ambito=()):
+    """Suma los permisos de un área al catálogo. Idempotente por clave.
+
+    `con_ambito` son las claves que sólo valen dentro de un compartimento: van al catálogo
+    aparte (`CATALOGO_AMBITO`, el que pinta el panel del encargado) y quedan fuera del
+    alcance del comodín.
+    """
+    con_ambito = set(con_ambito)
+    ya = {c for c, _e, _v, _g in CATALOGO} | {c for c, _e, _v, _g in CATALOGO_AMBITO}
     for clave, etiqueta, verbo in permisos:
-        if clave not in ya:
+        if clave in ya:
+            continue
+        if clave in con_ambito:
+            CATALOGO_AMBITO.append((clave, etiqueta, verbo, grupo))
+            SIN_COMODIN.add(clave)
+        else:
             CATALOGO.append((clave, etiqueta, verbo, grupo))
 
 
-def permisos_de_perfil(perfil):
-    """Las claves que le tocan a un perfil, resueltas contra el catálogo del momento."""
+def permisos_de_perfil(perfil, catalogo=None):
+    """Las claves que le tocan a un perfil, resueltas contra el catálogo del momento.
+
+    `catalogo` permite resolver el mismo preset sobre el catálogo con ámbito, que es lo que
+    necesita el panel de un encargado: su "Consulta" es la lectura de SU compartimento.
+    """
     if perfil not in PERFILES:
         return []
     if PERFILES[perfil] is None:
         return ['*']
     verbos = PERFILES[perfil]
-    return [clave for clave, _e, verbo, _g in CATALOGO if verbo in verbos]
+    return [clave for clave, _e, verbo, _g in (CATALOGO if catalogo is None else catalogo)
+            if verbo in verbos]
 
 
-def catalogo_por_grupo():
+def catalogo_por_grupo(catalogo=None):
     """El catálogo agrupado, para pintar los checkboxes del panel."""
     grupos = {}
-    for clave, etiqueta, verbo, grupo in CATALOGO:
+    for clave, etiqueta, verbo, grupo in (CATALOGO if catalogo is None else catalogo):
         grupos.setdefault(grupo, []).append((clave, etiqueta, verbo))
     return grupos
 
@@ -184,8 +224,67 @@ def tiene(permisos, permiso):
 
     Se expone aparte de `puede()` porque el agente la necesita con un conjunto que recibe
     por parámetro, fuera del ciclo request/response de Flask.
+
+    El comodín '*' alcanza todo MENOS las claves con ámbito (`SIN_COMODIN`). Ésas hay que
+    tenerlas de verdad, y se tienen por haber entrado al compartimento: es lo que mantiene
+    a los inventarios estancos incluso frente al admin general.
     """
-    return '*' in permisos or permiso in permisos
+    if permiso in permisos:
+        return True
+    return '*' in permisos and permiso not in SIN_COMODIN
+
+
+# --- Ámbito activo y accesos que aporta un área -----------------------------
+# Dos ganchos, y ninguno nombra nada del dominio. `registrar_ambito` es "en qué
+# compartimento estamos en este request"; `registrar_acceso_extra` es "además del
+# dispositivo o el admin, esta sesión trae este acceso" — que puede ser el ÚNICO que
+# tenga (el encargado de un inventario no es necesariamente un dispositivo invitado).
+
+_AMBITO = []
+_EXTRA = []
+
+
+def registrar_ambito(fn):
+    """`fn() -> str | None`: el ámbito activo del request. La registra el área."""
+    _AMBITO.append(fn)
+
+
+def registrar_acceso_extra(fn):
+    """`fn() -> {'tipo','nombre','permisos'} | None`: un acceso que el área suma a este
+    request (permisos YA sin prefijo, porque son del ámbito activo)."""
+    _EXTRA.append(fn)
+
+
+def ambito_actual():
+    for fn in _AMBITO:
+        valor = fn()
+        if valor:
+            return valor
+    return None
+
+
+def con_ambito(clave, ambito):
+    """`'gestion.editar'` + `'inv:taller'` -> `'inv:taller/gestion.editar'`."""
+    return f'{ambito}/{clave}' if ambito else clave
+
+
+def sin_ambito(clave):
+    """La clave y su ámbito: `('inv:taller', 'gestion.editar')` o `(None, 'agente.leer')`."""
+    ambito, sep, resto = clave.partition('/')
+    return (ambito, resto) if sep else (None, clave)
+
+
+def _efectivos(guardados, ambito):
+    """De lo que hay en la DB al conjunto que vale ACÁ: las claves sin ámbito pasan tal
+    cual, y las del ámbito activo pasan sin su prefijo. Las de otro ámbito no existen."""
+    salida = set()
+    for clave in guardados:
+        amb, base = sin_ambito(clave)
+        if amb is None:
+            salida.add(clave)
+        elif amb == ambito:
+            salida.add(base)
+    return salida
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +345,8 @@ def _tocar(fila):
     con.close()
 
 
-def _resolver():
+def _resolver_sesion():
+    """Lo que dice la cookie: el dispositivo o el admin. Permisos crudos, con prefijo."""
     dato = session.get('acceso')
     if not isinstance(dato, dict):
         return None
@@ -255,7 +355,7 @@ def _resolver():
         if dato.get('clave') != huella_clave():
             return None
         return {'tipo': 'admin', 'id': None, 'nombre': 'Administración',
-                'permisos': frozenset(['*'])}
+                'permisos': ['*']}
 
     if dato.get('tipo') == 'dispositivo':
         fila = _dispositivo(dato.get('id'))
@@ -265,9 +365,36 @@ def _resolver():
             return None
         _tocar(fila)
         return {'tipo': 'dispositivo', 'id': fila['id'], 'nombre': fila['nombre'],
-                'permisos': frozenset(json.loads(fila['permisos']))}
+                'permisos': json.loads(fila['permisos'])}
 
     return None
+
+
+def _resolver():
+    """El acceso de este request: la sesión (acotada al ámbito activo) MÁS lo que aporten
+    las áreas por `registrar_acceso_extra`.
+
+    Se suman y no se eligen: alguien puede ser el encargado de un inventario (por su clave)
+    y a la vez un dispositivo invitado en otro lado. Y puede haber extra sin sesión — el
+    encargado que no es dispositivo de nada entra igual, con lo que le da su clave y nada
+    más.
+    """
+    base = _resolver_sesion()
+    ambito = ambito_actual()
+    permisos_efectivos = set(_efectivos(base['permisos'], ambito)) if base else set()
+
+    extras = [fn() for fn in _EXTRA]
+    extras = [e for e in extras if e]
+    for e in extras:
+        permisos_efectivos |= set(e['permisos'])
+
+    if base is None and not extras:
+        return None
+    if base is not None:
+        return dict(base, permisos=frozenset(permisos_efectivos))
+    e = extras[0]
+    return {'tipo': e.get('tipo', 'extra'), 'id': None, 'nombre': e['nombre'],
+            'permisos': frozenset(permisos_efectivos)}
 
 
 def actual():
@@ -331,7 +458,8 @@ def denegar(permiso, como_json=False):
                            base_template=f'{request.blueprint}/base.html'), codigo
 
 
-def registrar_acceso(bp, permiso, endpoints_pagina=None, endpoint_default='home'):
+def registrar_acceso(bp, permiso, endpoints_pagina=None, endpoint_default='home',
+                     entrar=None, al_salir=None, contexto_login=None):
     """Monta el gate de un blueprint: before_request + /login + /salir.
 
     `permiso` es el permiso BASE, el que hace falta para ver cualquier cosa del área — lo
@@ -344,9 +472,37 @@ def registrar_acceso(bp, permiso, endpoints_pagina=None, endpoint_default='home'
     una respuesta 200 sin sentido. Si es None, todo redirige (áreas 100% server-rendered).
 
     `endpoint_default`: a dónde volver después de loguearse si no hay `next` válido.
+
+    `entrar(clave)` -> bool: cómo se valida la clave de ESTA área y qué deja en la sesión.
+    El default es el de siempre (`GESTION_CLAVE` -> admin con el comodín). Lo cambia quien
+    tiene una clave por compartimento y no una sola para el área entera, que además no
+    puede hacer `session.clear()`: entrar a un inventario no tiene por qué echarte de los
+    otros ni del agente.
+
+    `al_salir()`: qué hace `/salir` en vez de vaciar la sesión entera, por lo mismo.
+
+    `contexto_login()` -> dict: claves extra para el template del login (el nombre del
+    compartimento al que se está entrando, por ejemplo).
     """
-    prefijo = bp.url_prefix or f'/{bp.name}'
     _PAGINAS[bp.name] = endpoints_pagina
+
+    def _raiz():
+        """El prefijo REAL de este request. No se puede usar `bp.url_prefix`: un blueprint
+        montado en `/gestion/<inv>` lo tiene con el `<inv>` literal adentro."""
+        destino = url_for(f'{bp.name}.login')
+        return destino[:-len('/login')] or '/'
+
+    def _entrar_admin(clave):
+        if clave != _clave():
+            return False
+        # clear() antes de escribir: si el navegador traía una conversación del agente o
+        # una sesión de dispositivo, se arranca limpio.
+        session.clear()
+        session.permanent = True
+        session['acceso'] = {'tipo': 'admin', 'clave': huella_clave()}
+        return True
+
+    entrar = entrar or _entrar_admin
 
     @bp.before_request
     def _gate():
@@ -365,15 +521,10 @@ def registrar_acceso(bp, permiso, endpoints_pagina=None, endpoint_default='home'
     def login():
         error = None
         if request.method == 'POST':
-            if request.form.get('clave', '') == _clave():
-                # clear() antes de escribir: si el navegador traía una conversación del
-                # agente o una sesión de dispositivo, se arranca limpio.
-                session.clear()
-                session.permanent = True
-                session['acceso'] = {'tipo': 'admin', 'clave': huella_clave()}
+            if entrar(request.form.get('clave', '')):
                 volver = request.form.get('next', '')
                 # Solo volver a rutas del propio blueprint (evita open redirect).
-                if not volver.startswith(prefijo):
+                if not volver.startswith(_raiz()):
                     volver = url_for(f'{bp.name}.{endpoint_default}')
                 return redirect(volver)
             error = 'Contraseña incorrecta.'
@@ -382,11 +533,15 @@ def registrar_acceso(bp, permiso, endpoints_pagina=None, endpoint_default='home'
         # tanto no tiene el context processor de `registrar_rutas`.
         return render_template(f'{bp.name}/login.html', error=error,
                                next=request.values.get('next', ''), activo=None,
-                               area_nombre=bp.name, base_template=f'{bp.name}/base.html')
+                               area_nombre=bp.name, base_template=f'{bp.name}/base.html',
+                               **(contexto_login() if contexto_login else {}))
 
     @bp.route('/salir')
     def salir():
-        session.clear()
+        if al_salir:
+            al_salir()
+        else:
+            session.clear()
         return redirect(url_for(f'{bp.name}.login'))
 
 
@@ -416,13 +571,18 @@ def _ahora_txt():
     return ahora().strftime('%Y-%m-%d %H:%M:%S')
 
 
-def crear_invitacion(etiqueta, perfil, permisos_lista, multiuso=False):
+def crear_invitacion(etiqueta, perfil, permisos_lista, multiuso=False, ambito=None):
     """Un link, de un solo uso o público. Devuelve el token.
 
     Los permisos se congelan acá: si mañana cambia el preset del perfil, este link sigue
     dando lo que el admin vio cuando lo generó. `multiuso` cambia sólo el vencimiento (ver
     `INVITACION_DIAS_MULTIUSO`) y queda grabado para que `canjear()` sepa si quemarlo.
+
+    Con `ambito`, las claves se guardan prefijadas: el link da acceso a ESE compartimento
+    y a ninguno más, aunque quien lo genera sea el encargado del de al lado.
     """
+    if ambito:
+        permisos_lista = [con_ambito(c, ambito) for c in permisos_lista]
     token = secrets.token_urlsafe(32)
     creada = ahora()
     dias = INVITACION_DIAS_MULTIUSO if multiuso else INVITACION_DIAS
@@ -511,7 +671,10 @@ def _dispositivo_legible(user_agent):
     return f'{sistema} · {navegador}' if navegador else sistema
 
 
-def listar_dispositivos():
+def listar_dispositivos(ambito=None):
+    """Los dispositivos, o sólo los que tienen alguna clave de `ambito` (y entonces sus
+    permisos se muestran ya sin el prefijo: el encargado ve `gestion.editar`, que es lo
+    que la clave significa dentro de su inventario)."""
     con = conectar()
     filas = con.execute(
         "SELECT * FROM dispositivos ORDER BY revocado IS NOT NULL, id DESC").fetchall()
@@ -519,14 +682,21 @@ def listar_dispositivos():
     salida = []
     for fila in filas:
         d = dict(fila)
-        d['permisos_lista'] = json.loads(d['permisos'])
+        guardados = json.loads(d['permisos'])
+        if ambito:
+            propios = sorted(_efectivos(guardados, ambito))
+            if not propios:
+                continue
+            d['permisos_lista'] = propios
+        else:
+            d['permisos_lista'] = guardados
         d['dispositivo'] = _dispositivo_legible(d['user_agent'])
         d['perfil_etiqueta'] = ETIQUETA_PERFIL.get(d['perfil'], d['perfil'])
         salida.append(d)
     return salida
 
 
-def listar_invitaciones():
+def listar_invitaciones(ambito=None):
     """Sólo las que todavía sirven: las usadas ya figuran como dispositivo.
 
     Un link `multiuso` nunca queda "usada" (ver `canjear`), así que sigue apareciendo acá
@@ -540,6 +710,8 @@ def listar_invitaciones():
     salida = []
     for fila in filas:
         d = dict(fila)
+        if ambito and not _efectivos(json.loads(d['permisos']), ambito):
+            continue
         d['perfil_etiqueta'] = ETIQUETA_PERFIL.get(d['perfil'], d['perfil'])
         if d['multiuso']:
             d['usos'] = con.execute(
@@ -558,11 +730,43 @@ def revocar(disp_id, revocar_ahora=True):
     con.close()
 
 
-def borrar_invitacion(inv_id):
+def borrar_invitacion(inv_id, ambito=None):
+    """Anula un link sin usar. Con `ambito`, sólo si el link es de ese compartimento: un
+    encargado no puede anular una invitación del inventario de al lado por adivinar un id."""
     con = conectar()
+    if ambito:
+        fila = con.execute("SELECT permisos FROM invitaciones WHERE id = ?", (inv_id,)).fetchone()
+        if fila is None or not _efectivos(json.loads(fila['permisos']), ambito):
+            con.close()
+            return False
     con.execute("DELETE FROM invitaciones WHERE id = ? AND usada IS NULL", (inv_id,))
     con.commit()
     con.close()
+    return True
+
+
+def quitar_ambito(disp_id, ambito):
+    """Le saca a un dispositivo TODAS las claves de un compartimento, y nada más.
+
+    Es el "revocar" del panel de un encargado, y no puede ser el revocar de siempre: quien
+    administra el taller no tiene por qué poder cortarle a alguien el acceso al agente ni
+    al laboratorio. Si al dispositivo no le queda ninguna clave, ahí sí se revoca la fila
+    entera — un acceso sin permisos no es un acceso.
+    """
+    con = conectar()
+    fila = con.execute("SELECT permisos FROM dispositivos WHERE id = ?", (disp_id,)).fetchone()
+    if fila is None:
+        con.close()
+        return False
+    quedan = [c for c in json.loads(fila['permisos']) if sin_ambito(c)[0] != ambito]
+    con.execute("UPDATE dispositivos SET permisos = ?, perfil = ? WHERE id = ?",
+                (json.dumps(sorted(set(quedan))), 'custom', disp_id))
+    if not quedan:
+        con.execute("UPDATE dispositivos SET revocado = ? WHERE id = ?",
+                    (_ahora_txt(), disp_id))
+    con.commit()
+    con.close()
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -677,7 +881,8 @@ def registrar_app(app, modulos):
     for modulo in montados:
         declarados = getattr(modulo, 'PERMISOS', None)
         if declarados:
-            declarar(getattr(modulo, 'GRUPO_PERMISOS', modulo.__name__), declarados)
+            declarar(getattr(modulo, 'GRUPO_PERMISOS', modulo.__name__), declarados,
+                     getattr(modulo, 'PERMISOS_AMBITO', ()))
 
     # `puede`/`actual` como globals de Jinja: los templates preguntan por permiso en vez
     # de por la vieja marca binaria `session.gestion_ok`.
@@ -690,6 +895,9 @@ def registrar_app(app, modulos):
     # el `url_for` de un blueprint que nadie registró reventaría la página entera.
     app.jinja_env.globals['areas'] = frozenset(
         m.bp.name for m in montados if getattr(m, 'bp', None) is not None)
+    # También el ámbito activo, para que un header pueda preguntar si está adentro de un
+    # compartimento sin que el template tenga que saber cómo se resuelve.
+    app.jinja_env.globals['ambito_actual'] = ambito_actual
 
     app.register_blueprint(bp)
 

@@ -687,13 +687,17 @@ def aulas_libres(dia=None, hora=None):
 # Ocupación: cuándo está ocupada una entidad, en minutos y con el día canónico.
 #
 # Es la materia prima de la tool `coincidencias` del agente. Todas devuelven la misma forma
-# —{dia: [(inicio_min, fin_min, etiqueta), ...]}— para que quien las cruza no tenga que saber
-# de qué tabla salió cada una. La limpieza (días torcidos, horas rotas, filas vacías) pasa acá
-# y una sola vez: arriba ya llega sano.
+# —{dia: [(inicio_min, fin_min, etiqueta, grupo), ...]}— para que quien las cruza no tenga que
+# saber de qué tabla salió cada una. La limpieza (días torcidos, horas rotas, filas vacías)
+# pasa acá y una sola vez: arriba ya llega sano.
+#
+# `grupo` ("A"/"B") sólo lo llena `ocupacion_curso`: ahí significa que en esa clase está media
+# división y no el curso entero, que es lo que hay que avisar al cruzar horarios. Para un
+# docente o un preceptor el dato no dice nada —está entero igual— y va vacío.
 # ---------------------------------------------------------------------------
 
-def _ocupacion_desde_clases(where, params, etiqueta):
-    """Filas de `clases` → {dia: [(ini, fin, etiqueta)]}. `etiqueta` recibe la fila."""
+def _ocupacion_desde_clases(where, params, etiqueta, con_grupo=False):
+    """Filas de `clases` → {dia: [(ini, fin, etiqueta, grupo)]}. `etiqueta` recibe la fila."""
     con = conectar()
     con.row_factory = sqlite3.Row
     cur = con.cursor()
@@ -709,7 +713,8 @@ def _ocupacion_desde_clases(where, params, etiqueta):
         # y cualquier hora ilegible. Sin esto un bloque roto se planta en el minuto 0.
         if not dia or ini is None or fin is None or fin <= ini:
             continue
-        ocup.setdefault(dia, []).append((ini, fin, etiqueta(f)))
+        grupo = (f.get('grupo') or '').strip().upper() if con_grupo else ''
+        ocup.setdefault(dia, []).append((ini, fin, etiqueta(f), grupo))
     for dia in ocup:
         ocup[dia].sort()
     return ocup
@@ -717,7 +722,7 @@ def _ocupacion_desde_clases(where, params, etiqueta):
 def ocupacion_curso(curso, division):
     return _ocupacion_desde_clases(
         "curso = ? AND division = ?", (curso, division),
-        lambda f: f['materia'] or 'CLASE')
+        lambda f: f['materia'] or 'CLASE', con_grupo=True)
 
 def ocupacion_profesor(nombre):
     # Mismo WHERE que `obtener_filas('profesor', ...)`: cuando hay suplencia activa la clase
@@ -740,7 +745,7 @@ def ocupacion_no_docente(nombre):
         ini, fin = _a_minutos(hi), _a_minutos(hf)
         if not dia or ini is None or fin is None or fin <= ini:
             continue
-        ocup.setdefault(dia, []).append((ini, fin, rol or 'EN LA ESCUELA'))
+        ocup.setdefault(dia, []).append((ini, fin, rol or 'EN LA ESCUELA', ''))
     for dia in ocup:
         ocup[dia].sort()
     return ocup
@@ -790,7 +795,7 @@ def ocupacion_preceptor(nombres):
             ini, fin = _a_minutos(hi), _a_minutos(hf)
             if not dia or dia not in dias or ini is None or fin is None or fin <= ini:
                 continue
-            entrada = (ini, fin, f'{curso}°{division}')
+            entrada = (ini, fin, f'{curso}°{division}', '')
             if entrada not in ocup.setdefault(dia, []):
                 ocup[dia].append(entrada)
     con.close()

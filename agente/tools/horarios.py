@@ -31,6 +31,12 @@ LIMITE_PADRON = 400
 # 62.000 tokens al historial para que el modelo lea "no coinciden nunca".
 LIMITE_GRILLA_CHARS = 20000
 
+# Hasta acá un pozo entre dos clases es un recreo o un cambio de hora y la entidad sigue en la
+# escuela; más que eso ya es un hueco en el que se pudo ir a la casa y no se cuenta como
+# presente. El umbral existe para poder dar UNA sola respuesta: mientras hubo dos resúmenes
+# —"todos con clase" y "todos en el edificio"— el modelo daba los dos y el usuario elegía.
+HUECO_MAXIMO_MIN = 40
+
 # Explicación de titular/contraturno que acompaña a todas las respuestas de preceptores:
 # sin esto el modelo lee dos nombres y no sabe cuál dar cuando le preguntan "el preceptor"
 # de un curso a secas.
@@ -613,31 +619,38 @@ def _aulas_libres_fmt():
 # ---------------------------------------------------------------------------
 
 INSTRUCCION_GRILLA = (
-    'Cada tramo dice qué hace cada entidad en esa franja: el nombre de una materia (o de un '
-    'curso, para un preceptor) es que está EN CLASE; "hueco" es que está en la escuela ese día '
-    'pero sin clase en ese rato; "fuera" es que todavía no llegó o ya se fue. Coinciden en los '
-    'tramos marcados `todos: true`, que son los que no tienen ningún "fuera" — ya están '
-    'calculados: leelos, NO los recalcules. '
-    'Hay dos resúmenes por día y conviene dar el que corresponda: `tramos_todos_en_clase` es '
-    'cuándo están todos con clase (el dato firme, el que sirve para "cuándo los junto"), y '
-    '`tramos_con_todos` es cuándo están todos en el edificio aunque alguno tenga un hueco (más '
-    'amplio, pero si el hueco es largo puede que se hayan ido a la casa y vuelto: el dato no '
-    'dice si se quedaron, así que no lo afirmes). '
-    'Coincidir NO es tener clase juntos ni estar libres: es estar ahí a la vez. Si no coinciden, '
-    'mirá la grilla y explicá por qué (quién se va antes, quién llega después).')
+    'La respuesta es `tramos_coincidentes`: los días y horarios en que están todos a la vez, ya '
+    'calculados. Leelos y contestá con eso, NO los recalcules. '
+    'La grilla es el respaldo: cada tramo dice qué hace cada entidad en esa franja. El nombre de '
+    'una materia (o de un curso, para un preceptor) es que está EN CLASE; "hueco" es un pozo '
+    f'corto (hasta {HUECO_MAXIMO_MIN} min) entre dos clases, que cuenta como que sigue en la '
+    'escuela; "hueco largo" es un pozo grande, que NO cuenta; "fuera" es que todavía no llegó o '
+    'ya se fue. Los tramos coincidentes son los marcados `todos: true`. '
+    'NO expliques nada de esto en la respuesta: no definas qué es coincidir, no cuentes cómo se '
+    'calculó ni con qué criterio, no aclares que el dato no dice si se quedaron. Los horarios y '
+    'listo. '
+    'Si no coinciden, mirá la grilla y explicá por qué (quién se va antes, quién llega después).')
 
 # La que va cuando la grilla no viajó. `INSTRUCCION_GRILLA` termina mandando a "mirar la
 # grilla": con el detalle omitido eso es mandarlo a mirar algo que no está, que es pedirle que
 # lo invente. Los tramos siguen siendo exactos —se calcularon sobre la grilla completa, antes
 # de descartarla—; lo único que falta es el desglose entidad por entidad.
 INSTRUCCION_SIN_GRILLA = (
-    'Son muchas entidades y el detalle tramo por tramo se omitió por tamaño; te quedan los dos '
-    'resúmenes por día. Los tramos que traen SON EXACTOS: se calcularon con todos los datos, no '
-    'son una aproximación. `tramos_todos_en_clase` es cuándo están todas con clase y '
-    '`tramos_con_todos` cuándo están todas en el edificio aunque alguna tenga un hueco. '
-    'Contestá con eso. NO expliques quién entra o se va a cada hora ni armes un desglose por '
-    'entidad: ese dato no te llegó y no lo podés deducir. Si el usuario quiere el detalle, '
-    'pedile menos cursos o un día concreto y volvé a llamar la tool.')
+    'Son muchas entidades y el detalle tramo por tramo se omitió por tamaño; te queda '
+    '`tramos_coincidentes`, que son los días y horarios en que están todas a la vez. SON '
+    'EXACTOS: se calcularon con todos los datos, no son una aproximación. Contestá con eso. '
+    'NO expliques quién entra o se va a cada hora ni armes un desglose por entidad: ese dato no '
+    'te llegó y no lo podés deducir. Tampoco cuentes cómo se calculó ni definas qué es '
+    'coincidir. Si el usuario quiere el detalle, pedile menos cursos o un día concreto y volvé '
+    'a llamar la tool.')
+
+# El aviso que faltaba: un curso puede coincidir con alguien sólo porque tiene taller, y al
+# taller va media división. Decir "está 7° 6ta" cuando está el Grupo A es contar el doble de
+# gente de la que hay. Va con `medio_curso`, que trae los tramos exactos ya calculados.
+NOTA_MEDIO_CURSO = (
+    'OJO con `medio_curso`: en esos tramos el curso NO está entero, está sólo el grupo que dice '
+    '(taller, media división). Avisalo en la respuesta, aclarando qué grupo es. Donde no figura '
+    'en `medio_curso` está el curso completo: ahí no aclares nada.')
 
 NOTA_PRECEPTORES_COINCIDENCIA = (
     'La ocupación de un preceptor es APROXIMADA y va por arriba: `horarios_preceptores` no '
@@ -686,7 +699,7 @@ def _cursos_disponibles():
 
 
 def _unir_ocupaciones(a, b):
-    """Dos {dia: [(ini, fin, etiqueta)]} en uno. Para quien está en dos padrones a la vez."""
+    """Dos {dia: [(ini, fin, etiqueta, grupo)]} en uno. Para quien está en dos padrones a la vez."""
     unida = {dia: list(tramos) for dia, tramos in a.items()}
     for dia, tramos in b.items():
         ya = unida.setdefault(dia, [])
@@ -766,34 +779,63 @@ def _resolver_persona(nombre, permisos=frozenset()):
             'comparable': da_clases, 'nota': nota}
 
 
-def _grilla(ocupaciones, dias):
-    """{etiqueta: ocupacion} → {dia: [tramo, ...]}, todas alineadas en el mismo eje.
+def _presencia(del_dia):
+    """Las clases de un día → los bloques en que la entidad está EN LA ESCUELA.
 
-    Se corta el día en cada frontera horaria de CUALQUIER entidad y se mira tramo por tramo.
-    No hay bandas de presencia de la primera a la última clase: el 32% de los días-curso tienen
-    un pozo en el medio (mediana 90 min, máximo 480), así que una banda contigua inventa
-    presencia que no existe — y ningún umbral de corte los separa bien, porque hay huecos
-    legítimos de más de 3 horas. Cortando por tramos los huecos no hay que modelarlos: se ven.
+    Dos clases separadas por `HUECO_MAXIMO_MIN` o menos son un mismo bloque: entre medio hay un
+    recreo o un cambio de hora, no un viaje a la casa. No es una banda de la primera a la última
+    clase: el 32% de los días-curso tienen un pozo en el medio (mediana 90 min, máximo 480), y
+    esos pozos son irse y volver.
+    """
+    bloques = []
+    for ini, fin, _lab, _g in sorted(del_dia):
+        if bloques and ini - bloques[-1][1] <= HUECO_MAXIMO_MIN:
+            bloques[-1][1] = max(bloques[-1][1], fin)
+        else:
+            bloques.append([ini, fin])
+    return bloques
+
+
+def _grilla(ocupaciones, dias):
+    """{etiqueta: ocupacion} → ({dia: [tramo, ...]}, medio_curso), alineadas en el mismo eje.
+
+    Se corta el día en cada frontera horaria de CUALQUIER entidad y se mira tramo por tramo, así
+    los huecos no hay que modelarlos: se ven. Cada tramo dice, por entidad, la materia (está en
+    clase), `hueco` / `hueco largo` (sin clase, dentro o fuera de su bloque de presencia) o
+    `fuera` (no llegó todavía o ya se fue). `todos: true` es que ninguna está afuera ni en un
+    hueco largo.
+
+    `medio_curso` sale de la misma pasada: {etiqueta: {dia: [(de, a, grupo)]}} con los tramos
+    coincidentes en que un curso entra con una sola de sus mitades (taller).
     """
     etiquetas = list(ocupaciones)
     grilla = {}
+    medio_curso = {}
 
     for dia in dias:
         bordes = sorted({t for ocup in ocupaciones.values()
-                         for ini, fin, _ in ocup.get(dia, []) for t in (ini, fin)})
+                         for ini, fin, _lab, _g in ocup.get(dia, []) for t in (ini, fin)})
+        presencias = {e: _presencia(ocupaciones[e].get(dia, [])) for e in etiquetas}
         tramos = []
         for inicio, fin in zip(bordes, bordes[1:]):
-            estados = {}
+            estados, mitades = {}, {}
             for etiqueta in etiquetas:
                 del_dia = ocupaciones[etiqueta].get(dia, [])
-                encima = sorted({lab for a, b, lab in del_dia if a <= inicio and b >= fin})
+                bloques = presencias[etiqueta]
+                encima = sorted({(lab, g) for a, b, lab, g in del_dia if a <= inicio and b >= fin})
                 if encima:
                     # Puede haber más de uno: media división en talleres (Grupo A y B), o un
                     # preceptor con dos cursos a cargo en la misma franja.
-                    estados[etiqueta] = ' + '.join(encima)
-                elif del_dia and min(a for a, _, _ in del_dia) <= inicio \
-                        and max(b for _, b, _ in del_dia) >= fin:
+                    estados[etiqueta] = ' + '.join(f'{lab} · Grupo {g}' if g else lab
+                                                   for lab, g in encima)
+                    grupos = {g for _lab, g in encima}
+                    if len(grupos) == 1 and '' not in grupos:
+                        # Todo lo que cubre el tramo es del mismo grupo: está media división.
+                        mitades[etiqueta] = grupos.pop()
+                elif any(a <= inicio and b >= fin for a, b in bloques):
                     estados[etiqueta] = 'hueco'
+                elif bloques and bloques[0][0] <= inicio and bloques[-1][1] >= fin:
+                    estados[etiqueta] = 'hueco largo'
                 else:
                     estados[etiqueta] = 'fuera'
 
@@ -801,22 +843,26 @@ def _grilla(ocupaciones, dias):
                 continue
             tramo = {'de': database.a_hhmm(inicio), 'a': database.a_hhmm(fin)}
             tramo.update(estados)
-            if not any(e == 'fuera' for e in estados.values()):
+            if not any(e in ('fuera', 'hueco largo') for e in estados.values()):
                 tramo['todos'] = True
+                for etiqueta, grupo in mitades.items():
+                    franjas = medio_curso.setdefault(etiqueta, {}).setdefault(dia, [])
+                    if franjas and franjas[-1][1] == tramo['de'] and franjas[-1][2] == grupo:
+                        franjas[-1][1] = tramo['a']
+                    else:
+                        franjas.append([tramo['de'], tramo['a'], grupo])
             tramos.append(tramo)
 
         if tramos:
             grilla[dia] = tramos
-    return grilla
+    return grilla, medio_curso
 
 
-def _resumir(tramos, entidades, solo_en_clase=False):
-    """Franjas de un día que cumplen la condición, pegando las contiguas: ['10:00–13:00', …]."""
+def _resumir(tramos):
+    """Franjas de un día en que están todos, pegando las contiguas: ['10:00–13:00', …]."""
     juntos = []
     for tramo in tramos:
         if not tramo.get('todos'):
-            continue
-        if solo_en_clase and any(tramo[e] == 'hueco' for e in entidades):
             continue
         if juntos and juntos[-1][1] == tramo['de']:
             juntos[-1][1] = tramo['a']
@@ -899,20 +945,22 @@ def _coincidencias_fmt(cursos=None, personas=None, dia=None, contexto_turno=None
         dias = list(DIAS)
 
     entidades = list(ocupaciones)
-    grilla = _grilla(ocupaciones, dias)
-    # Dos resúmenes, porque son dos preguntas distintas y la diferencia entre ellas es
-    # justamente el hueco: 6°5 los miércoles tiene clase 07:40-09:40 y vuelve 13:30, así que
-    # "están todos" hasta las 12:00 sólo vale si no se fueron a la casa en el medio. Con uno
-    # solo, cualquiera de los dos criterios miente en la mitad de los casos.
-    tramos_con_todos = {d: _resumir(t, entidades) for d, t in grilla.items()}
-    tramos_todos_en_clase = {d: _resumir(t, entidades, solo_en_clase=True)
-                             for d, t in grilla.items()}
+    grilla, medio_curso = _grilla(ocupaciones, dias)
+    # Un solo resumen, y el hueco decide qué entra: 6°5 los miércoles tiene clase 07:40-09:40 y
+    # vuelve 13:30, así que ahí no está aunque el día siga. Hasta `HUECO_MAXIMO_MIN` se cuenta
+    # como que se quedó; más que eso, no.
+    tramos_coincidentes = {d: _resumir(t) for d, t in grilla.items()}
 
     resultado = {
         'entidades': entidades,
-        'tramos_todos_en_clase': tramos_todos_en_clase,
-        'tramos_con_todos': tramos_con_todos,
+        'tramos_coincidentes': tramos_coincidentes,
     }
+    if medio_curso:
+        resultado['medio_curso'] = {
+            etiqueta: {dia: [f'{de}–{a} · Grupo {g}' for de, a, g in franjas]
+                       for dia, franjas in por_dia.items()}
+            for etiqueta, por_dia in medio_curso.items()}
+        resultado['nota_grupos'] = NOTA_MEDIO_CURSO
     # La grilla se calcula siempre —los resúmenes salen de ella— pero no siempre viaja. Es el
     # 86% del payload con cuatro cursos y el 99% con sesenta, y ahí ya no explica nada: nadie
     # lee una tabla de 62 columnas para que le confirmen que no coinciden nunca. Los resúmenes
@@ -923,7 +971,7 @@ def _coincidencias_fmt(cursos=None, personas=None, dia=None, contexto_turno=None
     else:
         resultado['grilla_omitida'] = True
     resultado['instruccion'] = INSTRUCCION_GRILLA if cabe else INSTRUCCION_SIN_GRILLA
-    if not any(tramos_con_todos.values()):
+    if not any(tramos_coincidentes.values()):
         resultado['sin_coincidencias'] = True
         resultado['aviso'] = ('No hay ni un tramo con todos a la vez en los días consultados. '
                               'Es un resultado válido, no un error: '

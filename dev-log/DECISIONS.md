@@ -32,9 +32,11 @@ puede hacerlo, pero medido sobre tres casos con `horario_curso` sueltos acertó 
 sin escribir nada las dos veces (el usuario lee "me quedé sin espacio"). Cuando falla, omite un
 día entero. Con la grilla ya calculada: 3/3 en 15–28 s y ~1.100 tokens.
 La presencia tampoco se modela como banda de la primera a la última clase: el 32% de los
-días-curso tienen un pozo en el medio (máximo 480 min), y ningún umbral de corte los separa
-de un cambio de turno porque hay huecos legítimos de más de 3 h. Por eso se corta el día en
-cada frontera y cada tramo dice `materia` / `hueco` / `fuera`: el hueco no se modela, se ve.
+días-curso tienen un pozo en el medio (máximo 480 min) y eso es irse y volver. Se corta el día
+en cada frontera y un pozo de hasta 40 min (`HUECO_MAXIMO_MIN`) cuenta como que se quedó —es un
+recreo o un cambio de hora—; más largo, no. [2026-09-02] El umbral entró para poder dar UNA
+respuesta: antes había dos resúmenes ("todos con clase" y "todos en el edificio") y el modelo
+daba los dos, dejándole al usuario la pregunta que había venido a hacer.
 
 ## [2026-08-29] — El sistema de horarios es un sitio aparte, no un área de `accesos`
 

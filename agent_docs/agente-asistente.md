@@ -338,12 +338,17 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
 - `aulas_libres()` — aulas desocupadas ahora, agrupadas por piso
 - `coincidencias(cursos?, personas?, dia?)` — cuándo dos o más entidades están en la escuela
   a la vez, mezclando cursos con docentes, preceptores y no docentes. Corta el día en cada
-  frontera horaria y devuelve los tramos coincidentes ya calculados en
-  `tramos_todos_en_clase` (todos con clase) y `tramos_con_todos` (todos presentes, alguno
-  quizá en un hueco), más —si entra en `LIMITE_GRILLA_CHARS`— una `grilla` alineada donde cada
-  tramo dice, por entidad, la materia / `hueco` / `fuera`. Con muchas entidades la grilla es
-  el 99% del payload y no explica nada, así que se omite: llega `grilla_omitida: true` y otra
-  `instruccion`, y los tramos siguen siendo exactos porque se calculan antes de descartarla.
+  frontera horaria y devuelve **una sola** lista de tramos ya calculados,
+  `tramos_coincidentes`, más —si entra en `LIMITE_GRILLA_CHARS`— una `grilla` alineada donde
+  cada tramo dice, por entidad, la materia / `hueco` / `hueco largo` / `fuera`. Un pozo de
+  hasta `HUECO_MAXIMO_MIN` (40 min) entre dos clases cuenta como que la entidad sigue en la
+  escuela; más largo que eso es `hueco largo` y ahí no coincide. Cuando un curso entra a un
+  tramo coincidente con una sola de sus mitades (taller) eso va en `medio_curso`, con la
+  `nota_grupos` que le pide avisar que está media división. La `instruccion` le prohíbe
+  explicar el criterio: la respuesta son los horarios, no cómo se calcularon. Con muchas
+  entidades la grilla es el 99% del payload y no explica nada, así que se omite: llega
+  `grilla_omitida: true` y otra `instruccion`, y los tramos siguen siendo exactos porque se
+  calculan antes de descartarla.
   La cuenta la hace Python a propósito: ver `dev-log/DECISIONS.md`.
   Además deja en `contexto_turno['comparacion']` las entidades que el modo comparación del
   calendario sabe dibujar —cursos y docentes con clases; preceptores y no docentes puros
@@ -1722,7 +1727,9 @@ como prosa no puede depender de un detalle de routing.**
 - Reusan queries de `horarios/datos.py`: `aulas_libres()` (calcula libres vs ocupadas en `clases` a
   tiempo real, agrupadas por piso de `FLOOR_MAPPING`) y la familia `ocupacion_curso` /
   `ocupacion_profesor` / `ocupacion_no_docente` / `ocupacion_preceptor`, que devuelven todas
-  `{dia: [(inicio_min, fin_min, etiqueta)]}` — mismo shape para las tres tablas, ya limpio de días
-  torcidos y horas rotas, para que `coincidencias` las cruce sin saber de dónde salió cada una.
+  `{dia: [(inicio_min, fin_min, etiqueta, grupo)]}` — mismo shape para las tres tablas, ya limpio
+  de días torcidos y horas rotas, para que `coincidencias` las cruce sin saber de dónde salió
+  cada una. `grupo` sólo lo llena `ocupacion_curso`: ahí es media división, y para un docente o
+  un preceptor no significa nada.
 - El agente **no tiene acceso a escribir en `escuela.db`** (horarios) — solo lectura;
   actualizar desde Sheets sigue siendo un botón aparte del SPA.
