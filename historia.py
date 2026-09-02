@@ -25,6 +25,13 @@ import texto
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'historia.db')
 
+# Interruptor del área, hoy APAGADA. En False el área entera no existe: `app.py` no
+# registra el blueprint ni la pasa a `accesos.registrar_app` (sus permisos no entran al
+# catálogo), el menú se queda sin el link y el agente no ve la tool de hitos, ni los slugs
+# `hitos`/`personas`, ni un solo renglón del prompt que los nombre. La DB no se toca:
+# apagar el área es dejar de mostrarla, no perder nada. Para volver a prenderla, True acá.
+ACTIVA = False
+
 # Permisos que declara el área al catálogo de `accesos`. Ver gestion.py para el criterio
 # del verbo.
 PERMISOS = [

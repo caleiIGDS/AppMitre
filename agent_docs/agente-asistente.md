@@ -1,10 +1,18 @@
 # Asistente conversacional con tool-calling (`/agente`)
 
 Cuarta área de la app, al mismo nivel que horarios, `/gestion` (recursos) e `/historia`
-(línea del tiempo institucional) — y la única transversal: **lee las tres y escribe en dos**
-(recursos e historia institucional; los horarios son solo de consulta). Vive en su propio
+(línea del tiempo institucional) — y la única transversal: lee las demás y escribe en las
+que se dejan escribir (los horarios son solo de consulta). Vive en su propio
 paquete (`agente/`), su propio prefijo (`/agente`) y su propia carpeta de templates
 (`templates/agente/`).
+
+> **`/historia` está apagada** (`historia.ACTIVA = False`). Lo que este documento cuenta de
+> `hitos` y `personas` sigue siendo cierto del código, pero hoy no llega al modelo: sin esos
+> slugs no viajan `buscar_hitos`, `vincular_entidad`, `desvincular_entidad` ni
+> `eliminar_entidad` (su único blanco eran hitos y personas: un recurso se da de baja, no se
+> borra), los campos de hito salen de `crear_entidad`/`editar_entidad` y el prompt pasa de
+> cinco áreas a tres. El interruptor está en `historia.py`; lo condicional del agente cuelga
+> de `esquemas.HISTORIA` y de `historia.ACTIVA` en `prompt.py`.
 
 Es **un solo asistente** para todas las áreas, no uno por área: en la misma conversación se
 pregunta un horario, se da de alta un recurso y se carga un hito. Separarlo en varios
@@ -57,7 +65,9 @@ El agente cruza **dos DBs de dominio** más los horarios:
   `dominio.ve_entidad(slug, permisos)` — ver "El segundo eje" más abajo.
 - **`agente.DB_PATH` sigue siendo `gestion.db`**: las tablas propias del agente
   (`agente_log`, `agente_conversaciones`, `agente_fotos_pendientes`) viven ahí — son
-  auditoría y sesión, no datos de dominio.
+  auditoría y sesión, no datos de dominio. La excepción es el **registro de uso**, que
+  sí tiene DB propia (`agente.db`, `registro.py`) porque crece sin techo y no puede
+  viajar en los respaldos rotativos de gestión.
 
 ### Arquitectura
 
@@ -71,12 +81,14 @@ toda la superficie pública.
 | `dominio.py` | `RAIZ` del proyecto + `_modulo(slug)` y `SLUGS_ENTIDAD`. Lo importa casi todo. |
 | `proveedores.py` | Config del LLM del chat **y** del lector de imágenes, que son independientes. Se llama así y no `config` para no confundirse con el `config.py` de la raíz. |
 | `db.py` | Las tres tablas propias en `gestion.db`: auditoría, conversación, fotos pendientes. |
+| `registro.py` | El registro de uso y de chats, en `agente.db` (DB propia). Un INSERT por turno + las consultas del panel `/agente/uso`. |
 | `padrones.py` | Los dos padrones de personas y el cruce entre ellos. Fuera de `tools/` porque lo usan las tools **y** el system prompt. |
 | `lore.py` | La historia de la escuela y la voz de Emilio (`QUIEN_ES_EMILIO`, `COMO_CUENTA_EMILIO`, `EXCUSA_SIN_HISTORIA`). |
 | `vision.py` | El lector de etiquetas y listas: una llamada suelta, sin tools. |
 | `prompt.py` | `construir_system_prompt()` — ~280 líneas de contenido, aparte del motor. Lo que cambia en cada turno va al **final** (ver "El orden de los bloques es el cache"). |
 | `llm.py` | Clientes por proveedor y los **dos** loops de tool-calling. `chat_with_tools_stream()` es un **generador**: larga el progreso y devuelve la respuesta. |
 | `filtros.py` | `_ocultar_ids`, `_quitar_acotaciones` y las utilidades de contexto. |
+| `enlaces.py` | Convierte en link al calendario los docentes, preceptores y cursos que la respuesta nombra, y le pega el link de la comparación cuando corrió `coincidencias`. Es filtro de **presentación**: se aplica al salir por la API (payload del turno + historial repintado), nunca a lo que se guarda. El de la comparación es el único que no vuelve al repintar: se arma con lo que cruzó la tool en ese turno. |
 | `rutas.py` | Los endpoints Flask + el gate de acceso + el context processor. |
 | `tools/` | Lo que el agente sabe hacer: `esquemas.py` (lo único que el modelo ve) y un módulo por área con los ejecutores. `tools/__init__.py` tiene `ejecutar_tool`, el dispatch. |
 
@@ -141,6 +153,8 @@ Las dependencias van en una sola dirección y **no hay ciclos**:
   (`templates/agente/agente_chat.html`, extiende `base.html`).
 - **`GET /agente/log`** — tabla de auditoría (últimas 50 escrituras), con snapshot
   "antes" visible para poder restaurar manualmente si el agente cometió un error.
+- **`GET /agente/uso`** — panel de consumo y de chats: quién, cuándo, cuántos tokens,
+  cuánta plata y qué se preguntó. `?sid=` lee una conversación entera.
 
 **Gate de sesión**: lo monta el motor compartido, en una línea al final del módulo —
 
@@ -158,7 +172,7 @@ caso normal y un 401 pelado ahí es un callejón sin salida.
 
 Mismo motor de accesos y mismo `next` scopeado al prefijo propio (contra open redirect) que
 `/gestion` e `/historia`. Con acceso pero **sin** el permiso de la ruta la respuesta es **403**, no
-el login. Seis casos piden más que el permiso base:
+el login. Siete casos piden más que el permiso base:
 
 | ruta | permiso | por qué |
 |---|---|---|
@@ -167,6 +181,7 @@ el login. Seis casos piden más que el permiso base:
 | `/agente/revisar` | `agente.escribir` | no toca el dominio, pero es el circuito de alta: quien no puede escribir no tiene fichas que revisar |
 | `/agente/editar_ficha` | `agente.escribir` | ídem: tampoco toca el dominio, pero es el circuito de alta |
 | `/agente/log` | `agente.auditar` | la auditoría es de administración |
+| `/agente/uso` | `agente.auditar` | ídem, y además se lee el texto de lo que escribió cada persona |
 | `/agente/chat` y `/agente/chat/stream` **con `imagenes`** | `agente.vision` | gasta la API de visión; sin el permiso devuelve `403` |
 
 El de `/chat` es un chequeo dentro de la vista y no un decorador porque la ruta **sí** está
@@ -251,8 +266,10 @@ de la pestaña) no lo incluye. Si se agrega otra vista del chat, mantener esa in
 
 Progressive enhancement: con JS es fluido, sin JS el chat no funciona pero el resto del
 servidor sigue andando. Las respuestas se renderizan como markdown liviano
-(`renderMarkdown()` en `gestion-agente.js`: negrita, listas, tablas) — el modelo devuelve
-Markdown y sin esto se veía como un bloque de texto con `**`/`|` crudos.
+(`renderMarkdown()` en `gestion-agente.js`: negrita, listas, tablas y links) — el modelo
+devuelve Markdown y sin esto se veía como un bloque de texto con `**`/`|` crudos. Los
+links son los que pone `enlaces.py` sobre los nombres del calendario, y el renderer solo
+acepta destinos internos (los que arrancan con `/`): el href viene de texto de un LLM.
 
 ### Diseño para celular
 
@@ -314,13 +331,31 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
   matchea también devuelve `padron_completo`
 - `horario_profesor(nombre)` / `horario_curso(curso, division)` / `horario_aula(aula)`
   — horarios agrupados por día. `horario_profesor` cubre también al personal no docente, y
-  devuelve `padron_completo` cuando no encuentra a nadie
+  devuelve `padron_completo` cuando no encuentra a nadie. Las clases de media división llevan
+  ` · Grupo A`/` · Grupo B` al final de la línea y las tres suman `nota_grupos` cuando aparece
+  alguna: sin eso el modelo leía las dos mitades de un taller como una superposición. La nota
+  aclara que lo habitual —no la regla— es que ambas mitades vayan a la misma hora
 - `aulas_libres()` — aulas desocupadas ahora, agrupadas por piso
+- `coincidencias(cursos?, personas?, dia?)` — cuándo dos o más entidades están en la escuela
+  a la vez, mezclando cursos con docentes, preceptores y no docentes. Corta el día en cada
+  frontera horaria y devuelve los tramos coincidentes ya calculados en
+  `tramos_todos_en_clase` (todos con clase) y `tramos_con_todos` (todos presentes, alguno
+  quizá en un hueco), más —si entra en `LIMITE_GRILLA_CHARS`— una `grilla` alineada donde cada
+  tramo dice, por entidad, la materia / `hueco` / `fuera`. Con muchas entidades la grilla es
+  el 99% del payload y no explica nada, así que se omite: llega `grilla_omitida: true` y otra
+  `instruccion`, y los tramos siguen siendo exactos porque se calculan antes de descartarla.
+  La cuenta la hace Python a propósito: ver `dev-log/DECISIONS.md`.
+  Además deja en `contexto_turno['comparacion']` las entidades que el modo comparación del
+  calendario sabe dibujar —cursos y docentes con clases; preceptores y no docentes puros
+  quedan afuera y se aclaran en el texto—, y con eso `enlaces.enlace_comparacion` le pega a
+  la respuesta el link que las abre superpuestas en `/horarios`
 - `buscar_entidad(slug, query)` — búsqueda de recursos (gestion.db) y
   de hitos/personas (historia.db); el módulo lo resuelve `_modulo(slug)`
   (calidad del match explícita, ver abajo)
-- `listar_todos(slug)` — lista completa de nombres + id; **fallback** de `buscar_entidad`
-  cuando no hay ningún match `exacto`, ver abajo
+- `listar_todos(slug, con_descripcion?)` — lista completa de nombres + id, y en `recursos`
+  también `ubicacion` (cada lugar con cuántas unidades hay ahí). **Fallback** de
+  `buscar_entidad` cuando no hay ningún match `exacto`, y la **única** entrada por ubicación
+  que tiene el agente, ver abajo
 - `detalle_entidad(slug, id)` — detalle completo + relaciones (ver "Claves de `relaciones`")
 - `listar_alias(slug)` — **solo admin** (`gestion.alias`, igual que `/gestion/alias`): todos los
   recursos con su alias en texto, para que el asistente los audite/mejore. Es la única tool que
@@ -457,6 +492,10 @@ no van `_FOTOS`, `_ETIQUETA`, `_FOTOS_SOLO_LECTURA` ni `_REGLA_FOTO`. No es sól
 explicarle qué hacer con una foto a un acceso que **no tiene el botón para mandarla** lo llevaría a
 ofrecer algo imposible. Las reglas se renumeran solas también acá.
 
+`ve_notas` es el cuarto, y sale de `TOOLS_NOTAS & {las tools que se mandaron}`: sin
+`agente.notas` el prompt no nombra el archivo de notas ni muestra una sola línea (ver
+"`agente.md`").
+
 Esto también apaga un problema conocido: `_escritura_no_ejecutada` (`filtros.py`) marca cualquier
 "✅" sin escritura exitosa. Para un acceso de consulta **ninguna** escritura corre nunca, así que
 cualquier ✅ decorativo dispararía el banner — por eso el bloque le prohíbe el símbolo de entrada.
@@ -474,17 +513,63 @@ Movido al fondo, el prefijo estable de un acceso de escritura pasa de ~3.000 a *
 el modelo lee: la hora que manda es el sello `[Hora de este mensaje: ...]` que lleva cada mensaje
 del usuario, y el propio bloque lo dice.
 
-Hoy no queda ningún bloque intermedio que interpole datos del turno — `_fecha()` es el único, y
-va al fondo. Para una misma combinación de `escribe`/`ve_personas`/`ve_fotos`, el prompt entero
-salvo ese bloque final es idéntico byte a byte entre turnos. **La regla para cualquier bloque
-nuevo que interpole algo del turno es la misma: al final**, o rompe el cache de todo lo que
-tenga debajo.
+Hoy no queda ningún bloque intermedio que interpole datos del turno: los dos que interpolan van
+al fondo, y en ese orden — primero `_notas()`, que cambia sólo cuando alguien anota o borra algo,
+y último `_fecha()`, que cambia a cada minuto. Para una misma combinación de
+`escribe`/`ve_personas`/`ve_fotos`/`ve_notas`, todo lo que va antes de las notas es idéntico byte
+a byte entre turnos. **La regla para cualquier bloque nuevo que interpole algo del turno es la
+misma: al final**, o rompe el cache de todo lo que tenga debajo.
 
 La otra mitad del mismo problema es la **cantidad de vueltas**, y esa se ataca en el contenido:
 `_COMO_TRABAJAS` le pide explícitamente que mande juntas todas las tools que no dependan una de
 otra (tres horarios son tres `horario_profesor` en la misma vuelta, ocho fichas son ocho
 `crear_entidad` juntas) y que encadene sólo cuando el segundo llamado necesita el resultado del
 primero. Cada vuelta que se ahorra es todo el razonamiento de esa vuelta.
+
+### `agente.md`: las notas del asistente (`notas.py`, `/agente/notas`)
+
+El CLAUDE.md de Emilio: un markdown suelto en la raíz del proyecto con lo que tiene que saber
+**estos días** — "el pañol está en el aula 12 hasta que arreglen el techo", "las salidas de este
+año las coordina Vanesa", "no cargues la máquina de café como recurso", la lista que la
+administración quiere tener a mano un par de semanas. Si viviera en `prompt.py`, cada aviso
+costaría un deploy.
+
+**Qué entra lo decide quien escribe, no el modelo.** Es la libreta del administrador: si le
+piden anotar algo, Emilio lo anota y no discute si "corresponde" que vaya a una ficha; si el
+dato además tendría lugar en el inventario, lo ofrece después y en una línea. Lo único que no
+hace es anotar por su cuenta lo que nadie le pidió. La regla vive en la descripción de
+`escribir_notas` y en `_NOTAS_VACIA` / `_notas()` de `prompt.py`.
+
+**No va en git** (`.gitignore`, como los `.db`), y eso es lo que hace que la idea funcione: el
+agente lo escribe, así que la copia del servidor se separa de la del repo desde la primera nota.
+Un archivo que escriben git y la app a la vez no tiene arreglo bueno — el próximo `git pull` lo
+pisa o deja un conflicto en producción. Suelto en el disco del server, sobrevive a todos los
+deploys sin que nadie lo toque.
+
+**Se edita entero**, igual que un CLAUDE.md: desde `/agente/notas` (un textarea con el archivo) o
+por chat con `escribir_notas`, donde el modelo manda el contenido COMPLETO — lo tiene a la vista en
+su propio prompt — con el renglón agregado, sacado o corregido. No hay ids ni renglones numerados:
+es texto. Lo que no copia, se pierde, y por eso el esquema de la tool insiste en eso más que en
+ninguna otra cosa.
+
+**La red de seguridad es `agente.md.bak`.** Cada escritura guarda antes la versión anterior y la
+página ofrece DESHACER (de una sola vez, el `.bak` se consume). El segundo camino de vuelta es
+`agente_log`: `escribir_notas` está en `TOOLS_AUDITADAS` aunque no sea `agente.escribir`, y su
+`antes` es el archivo completo previo. Meterla en `TOOLS_ESCRITURA` habría sido más corto y estaba
+mal: ese conjunto es lo que enciende `escribe` en el system prompt, y un acceso con notas y sin
+carga se habría llevado el circuito de alta entero.
+
+`LARGO_MAX` (4.000 caracteres, ~1.000 tokens) es lo único que lo mantiene barato: el archivo entero
+viaja en **cada turno** de quien tenga el permiso, así que son tokens que se pagan siempre. Pasado
+ese tope no se guarda y hay que sacar lo que ya no corre — no vence nada solo, a propósito: una
+nota no sabe cuándo dejó de ser cierta.
+
+Quién lo ve: sólo los accesos con `agente.notas`, verbo `admin` (ver `agent_docs/accesos.md`). El
+bloque `_notas()` va anteúltimo en el prompt, justo antes de la fecha, con el contenido entre
+delimitadores explícitos (`--- empieza agente.md ---`) para que el modelo sepa exactamente qué
+copiar al reescribirlo. Le dice además dos cosas que no son obvias: que **no lo recite** si no
+viene al caso, y que una nota **no es un dato de la base** — si contradice lo que devolvió una
+tool, dice las dos cosas y no corrige nada.
 
 ### Alta con ficha de confirmación (`crear_entidad`)
 
@@ -967,10 +1052,23 @@ con el nombre vacío, las cuenta aparte en `sin_nombre` (esconderlas sin avisar 
 afirmación "estos son todos"). Tope `LIMITE_LISTADO_COMPLETO` (400): arriba de eso devuelve
 `error` pidiendo afinar la búsqueda, en vez de reventar el contexto en silencio.
 
-**Costo medido** (91 recursos): el listado completo son ~1.190 tokens. El piso que se
-re-procesa en **cada** round-trip de tool es ~6.420 (los esquemas de las 20 tools, sin contar
-system prompt ni historial), así que un intento extra de búsqueda cuesta ~5,4x lo que cuesta
-mandar el inventario entero. Por eso se eligió esto sobre
+En `recursos` cada item trae además `ubicacion`, una línea con cada lugar y cuántas unidades
+hay ahí (`"Taller (4), Sin ubicar (1)"`), que sale de `gestion.lugares_por_recurso`. Es la
+**segunda razón de existir de esta tool**: ninguna lectura entra por lugar (`buscar_entidad`
+busca por nombre), así que "qué hay en el taller" o "movés todo lo que está en A" se contestan
+leyendo esta lista — el nombre del lugar y el número entre paréntesis son el `origen` y la
+`cantidad` de `mover_ubicacion`, uno por recurso y todos en la misma vuelta. La `descripcion`
+de cada fila, en cambio, sólo viaja con `con_descripcion: true`: es la parte que multiplica el
+costo y casi nunca hace falta. Ojo con el efecto de borde: `lugares_por_recurso` crea las
+unidades que faltaban (`_asegurar_unidades`), así que esta tool de lectura **commitea** ese
+backfill, igual que el listado web.
+
+**Costo medido** (91 recursos): el listado completo son ~1.190 tokens de nombres. Sumarle la
+ubicación de cada uno lo multiplica por 1,8, y pedirlo con `con_descripcion` por 2,4 (medido
+en caracteres del JSON, no en tokens). El piso
+que se re-procesa en **cada** round-trip de tool es ~6.420 (los esquemas de las 20 tools, sin
+contar system prompt ni historial), así que un intento extra de búsqueda sigue costando
+bastante más que mandar el inventario entero. Por eso se eligió esto sobre
 un diccionario de sinónimos o un tier intermedio de reintentos — ver `dev-log/DECISIONS.md`
 2026-08-08, que además documenta cuándo esta decisión se da vuelta (si el inventario supera
 el tope).
@@ -1452,6 +1550,58 @@ está vencida, `_conv_cargar`/`_foto_lote_tomar` la tratan como si no existiera)
 misma escritura que las usa — no en `init_db()`, porque el server puede estar meses sin
 reiniciar.
 
+### Registro de uso y de chats (`agente.db`)
+
+`registro.py`, DB **propia** — no `gestion.db`, porque las tablas de arriba son efímeras y
+ésta crece sin techo: dentro de `gestion.db` se la llevarían los 20 respaldos rotativos.
+No tiene respaldo propio (es telemetría); `actualizar.py` sí le hace la copia del deploy.
+
+```sql
+agente_turnos (
+  id, fecha, sid, acceso_tipo, acceso_id, acceso_nombre, origen,
+  provider, modelo, vueltas, tokens_entrada, tokens_salida, tokens_cache,
+  vision_llamadas, vision_modelo, vision_entrada, vision_salida,
+  ms, pico, fotos, tools JSON, estado, detalle_error, escritura_fantasma,
+  pregunta, respuesta
+)
+```
+
+Una fila por turno, **para siempre**, con el texto completo de la pregunta y la respuesta:
+el material para corregir el prompt y las tools es el histórico. `sid` es el mismo de
+`agente_conversaciones`, así que un chat se reconstruye con `WHERE sid=? ORDER BY id` aunque
+la conversación ya se haya barrido. `acceso_id` apunta a `dispositivos.id` de `accesos.db`
+pero es un entero suelto, **sin FK** (ninguna cruza de una DB a otra); por eso se copia
+`acceso_nombre`, que el dispositivo se renombra o se revoca y el registro tiene que seguir
+diciendo quién era.
+
+Se escribe en `_turno_stream`, pegado a `_conv_guardar`: es el embudo por el que pasan
+`/chat`, `/chat/stream` y `/lote` (`origen` los distingue), y el único punto donde el turno
+está cerrado y todavía hay request context. Todo el registro va bajo `try`, dos veces
+(`_registrar_uso` y `registrar_turno`): **medir no puede voltear el chat**.
+
+Los tokens salen por `contexto_turno['uso']`, que `llm._uso` llena con **una entrada por
+vuelta** del loop de tool-calling — hay que sumarlas, no quedarse con la última. `_uso`
+normaliza las tres formas de `usage` que existen (DeepSeek pone la cache suelta, OpenAI la
+anida en `prompt_tokens_details`, Anthropic tiene la suya) y devuelve ceros si el proveedor
+no la manda. El lector de fotos se mide aparte, por `contexto_turno['uso_vision']`
+(`vision._leer_imagen(uso=...)`): es otra API, con otra cuenta y otro precio.
+
+`estado` distingue los finales del loop —`ok`, `error`, `sin_tokens`, `tope_iteraciones`,
+`tope_salida`, `sin_respuesta`— y lo setea `llm.py` en cada `return`. Sin eso, el turno que
+muere por cuota (el que más interesa contar) no dejaba rastro.
+
+**Precios y costo.** `proveedores.PRECIOS` (USD por millón de tokens) + `costo()`. Se aplica
+**al mostrar**, nunca se guarda: corregir un precio arregla el histórico entero. Un modelo
+que no está en la tabla no inventa un número — suma aparte y el panel lo muestra como
+"+N sin tarifa". `cache` se cobra a su tarifa (en DeepSeek, 30× más barata), y `pico` se
+guarda **en la fila** porque DeepSeek cobra el doble en su franja pico (01-04 y 06-10 UTC,
+lun-vie) y en un total agrupado por día ya no hay hora que mirar.
+
+**`GET /agente/uso`** (`agente.auditar`, verbo `admin` → sólo administración): totales de
+hoy / últimos 30 días / histórico, desglose por día, por dispositivo y por modelo, la lista
+de conversaciones y los últimos 60 turnos con su texto. `?sid=` muestra una conversación
+entera en orden — es cómo se pasa de "este turno salió mal" a "qué venía pasando antes".
+
 ### Guardias de seguridad / guardrails de prompt
 
 - **Confirmación en dos turnos para eliminar**: el *system prompt* instruye a Claude a nunca
@@ -1570,6 +1720,9 @@ como prosa no puede depender de un detalle de routing.**
   pedía a `gestion._norm` o a `historia._norm` según el call site, sin criterio — funcionaba sólo
   porque las dos copias eran idénticas (ver `dev-log/DECISIONS.md` 2026-08-10).
 - Reusan queries de `horarios/datos.py`: `aulas_libres()` (calcula libres vs ocupadas en `clases` a
-  tiempo real, agrupadas por piso de `FLOOR_MAPPING`).
+  tiempo real, agrupadas por piso de `FLOOR_MAPPING`) y la familia `ocupacion_curso` /
+  `ocupacion_profesor` / `ocupacion_no_docente` / `ocupacion_preceptor`, que devuelven todas
+  `{dia: [(inicio_min, fin_min, etiqueta)]}` — mismo shape para las tres tablas, ya limpio de días
+  torcidos y horas rotas, para que `coincidencias` las cruce sin saber de dónde salió cada una.
 - El agente **no tiene acceso a escribir en `escuela.db`** (horarios) — solo lectura;
   actualizar desde Sheets sigue siendo un botón aparte del SPA.

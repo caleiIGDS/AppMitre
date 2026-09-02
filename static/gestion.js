@@ -10,7 +10,9 @@
 // normalizado siempre gana, y perdona typos por similitud a partir de 3 caracteres —
 // con JS activo, Enter no recarga y el botón BUSCAR se oculta (ver más abajo), así que
 // éste es el único camino de búsqueda que un usuario real recorre. No se filtra al
-// cargar, para no pisar un aterrizaje con ?q= difuso.
+// cargar, para no pisar un aterrizaje con ?q= difuso. También reordena: las filas que
+// coinciden por nombre/descripción (data-buscar) primero, y las que sólo coinciden por el
+// alias oculto (data-alias) al final, misma jerarquía que la segunda pasada de crud.py.
 (function () {
     'use strict';
 
@@ -19,7 +21,10 @@
     if (!input || !tabla) return;  // no es una página de listado
 
     var form = input.closest('form');
-    var filas = Array.prototype.slice.call(tabla.querySelectorAll('tbody tr'));
+    var cuerpo = tabla.querySelector('tbody');
+    // Orden original de las filas (el `ORDER BY nombre` del servidor). Se captura una sola
+    // vez: `filtrar()` reordena el DOM, así que este array es la única referencia estable.
+    var filas = Array.prototype.slice.call(cuerpo.querySelectorAll('tr'));
     var contador = document.querySelector('.g-toolbar .g-count, .g-toolbar .g-fichas-count');
     var boton = form ? form.querySelector('button[type="submit"]') : null;
 
@@ -91,6 +96,7 @@
     }
 
     // Mensaje de "sin resultados", oculto hasta que la búsqueda no encuentre nada.
+    var etiquetasFuera = false;
     var vacio = document.createElement('p');
     vacio.className = 'g-help g-sin-resultados';
     vacio.hidden = true;
@@ -103,10 +109,18 @@
         var soloVencidos = !!(chipVencidos && chipVencidos.getAttribute('aria-pressed') === 'true');
         var mostrarBaja = !!(chipBaja && chipBaja.getAttribute('aria-pressed') === 'true');
         var visibles = 0;
+        var porNombre = [], porAlias = [], ocultas = [];
         for (var i = 0; i < filas.length; i++) {
             var fila = filas[i];
             var texto = fila.getAttribute('data-buscar') || '';
+            var alias = fila.getAttribute('data-alias') || '';
             var coincide = coincideTexto(q, texto);
+            // Segunda pasada por el alias oculto, igual que crud.py::lista(): solo si NO
+            // matcheó por nombre/descripción, y a un grupo aparte que va al final. Sin esto
+            // buscar "pinza" dejaba "Alicate" (alias "pinza universal") arriba de "Pinza de
+            // fuerza", porque el filtro sólo ocultaba filas y respetaba el orden alfabético.
+            var esAlias = false;
+            if (!coincide && alias && coincideTexto(q, alias)) { coincide = true; esAlias = true; }
             // data-ubicacion trae TODOS los lugares del recurso, delimitados por "|"
             // (un recurso puede estar repartido en más de uno): substring, no igualdad.
             if (coincide && ubicacion) coincide = (fila.getAttribute('data-ubicacion') || '').indexOf('|' + ubicacion + '|') !== -1;
@@ -115,8 +129,22 @@
             // (arrancan con `hidden` puesto por el propio servidor, ver lista.html).
             if (coincide && !mostrarBaja && fila.classList.contains('g-recurso-baja')) coincide = false;
             fila.hidden = !coincide;
-            if (coincide) visibles++;
+            if (!coincide) ocultas.push(fila);
+            else { visibles++; (esAlias ? porAlias : porNombre).push(fila); }
         }
+        // El "· por alias" que pudo dejar el render server-side (aterrizaje con ?q=) queda
+        // mintiendo apenas el JS decide el orden, y acá el alias no se muestra: se saca.
+        if (!etiquetasFuera) {
+            var tags = tabla.querySelectorAll('.g-tag-alias');
+            for (var t = 0; t < tags.length; t++) tags[t].hidden = true;
+            etiquetasFuera = true;
+        }
+        // Un solo appendChild del fragment = un solo reflow. Las ocultas van al final para
+        // no dejar huecos en el medio del orden visible.
+        var frag = document.createDocumentFragment();
+        var orden = porNombre.concat(porAlias, ocultas);
+        for (var j = 0; j < orden.length; j++) frag.appendChild(orden[j]);
+        cuerpo.appendChild(frag);
         if (contador) contador.textContent = esFichas ? (visibles + ' FICHAS') : visibles;
         if ((q !== '' || ubicacion || soloVencidos) && visibles === 0) {
             vacio.textContent = q !== ''

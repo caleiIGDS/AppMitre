@@ -47,7 +47,7 @@
         {% if puede('gestion.leer') %}
         <a href="{{ url_for('gestion.home') }}">GESTIÓN DE RECURSOS</a>
         {% endif %}
-        {% if puede('historia.leer') %}
+        {% if 'historia' in areas and puede('historia.leer') %}
         <a href="{{ url_for('historia.home') }}">HISTORIA INSTITUCIONAL</a>
         {% endif %}
         {% if puede('agente.leer') %}

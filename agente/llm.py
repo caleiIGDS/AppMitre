@@ -8,9 +8,10 @@ import json
 
 from config import DIAS, ahora
 
+from .notas import leer as _notas_del_admin
 from .prompt import construir_system_prompt
 from .proveedores import _get_config
-from .tools import (TOOLS_ESCRITURA, TOOLS_FOTO, ejecutar_tool, slug_visible,
+from .tools import (TOOLS_ESCRITURA, TOOLS_FOTO, TOOLS_NOTAS, ejecutar_tool, slug_visible,
                     tools_permitidas)
 
 
@@ -95,6 +96,46 @@ def _es_error_sin_tokens(e):
 MAX_TOKENS_SALIDA = 16000
 
 
+def _uso(response, provider, modelo):
+    """Tokens de UNA llamada al modelo, normalizados. Nunca lanza.
+
+    Cada API los nombra distinto y ninguna garantiza que vengan: un Ollama local no manda
+    `usage` en absoluto, y los nombres de la cache son de cada proveedor —DeepSeek los pone
+    sueltos en `usage`, OpenAI los anida en `prompt_tokens_details`, Anthropic tiene los
+    suyos—. Un proveedor que no los mande da ceros; medir mal no puede costar el turno.
+
+    `cache` son tokens de ENTRADA que ya estaban cacheados: no se suman aparte (ya están
+    dentro de `entrada`), se guardan para poder cobrarlos a su precio, que es más barato.
+    """
+    vacio = {'provider': provider, 'modelo': modelo,
+             'entrada': 0, 'salida': 0, 'cache': 0}
+    try:
+        u = getattr(response, 'usage', None)
+        if u is None:
+            return vacio
+
+        # Anthropic
+        if getattr(u, 'input_tokens', None) is not None:
+            return {'provider': provider, 'modelo': modelo,
+                    'entrada': (getattr(u, 'input_tokens', 0) or 0)
+                               + (getattr(u, 'cache_read_input_tokens', 0) or 0)
+                               + (getattr(u, 'cache_creation_input_tokens', 0) or 0),
+                    'salida': getattr(u, 'output_tokens', 0) or 0,
+                    'cache': getattr(u, 'cache_read_input_tokens', 0) or 0}
+
+        # OpenAI y compatibles (DeepSeek, Groq, Ollama)
+        detalle = getattr(u, 'prompt_tokens_details', None)
+        cache = (getattr(u, 'prompt_cache_hit_tokens', None)          # DeepSeek
+                 or getattr(detalle, 'cached_tokens', None)           # OpenAI
+                 or 0)
+        return {'provider': provider, 'modelo': modelo,
+                'entrada': getattr(u, 'prompt_tokens', 0) or 0,
+                'salida': getattr(u, 'completion_tokens', 0) or 0,
+                'cache': cache}
+    except Exception:
+        return vacio
+
+
 def _tools_openai(tools):
     """Esquemas (formato Anthropic) → formato de function calling de OpenAI.
 
@@ -176,6 +217,12 @@ def _loop_openai(client, model, system_prompt, mensajes_usuario, trazas, max_ite
     Es un GENERADOR: va largando eventos de progreso (ver `chat_with_tools_stream`) y
     devuelve la respuesta final como valor de retorno.
     """
+    # `contexto_turno` es también por dónde sale la medición del turno (ver `_uso`): el
+    # default None existe para llamarlo suelto desde una consola, no en el camino normal.
+    if contexto_turno is None:
+        contexto_turno = {}
+    provider = _get_config()['provider']
+
     msgs = ([{'role': 'system', 'content': system_prompt}]
             + _mensajes_openai(mensajes_usuario, vision=_get_config()['vision']))
     tools = _tools_openai(tools_disponibles)
@@ -190,9 +237,18 @@ def _loop_openai(client, model, system_prompt, mensajes_usuario, trazas, max_ite
                 tools=tools,
             )
         except Exception as e:
-            if _es_error_sin_tokens(e):
+            # El turno que muere por cuota es justo el que más interesa contar, y es el que
+            # no deja ni una vuelta medida: el estado es todo lo que queda de él.
+            sin_tokens = _es_error_sin_tokens(e)
+            contexto_turno['estado'] = 'sin_tokens' if sin_tokens else 'error'
+            contexto_turno['detalle_error'] = f'{type(e).__name__}: {e}'
+            if sin_tokens:
                 return MSG_SIN_TOKENS
             return f"Error llamando al LLM: {str(e)}"
+
+        # Una entrada por VUELTA, no por turno: el loop llama al modelo hasta
+        # `max_iterations` veces y cada llamada se cobra aparte.
+        contexto_turno.setdefault('uso', []).append(_uso(response, provider, model))
 
         choice = response.choices[0]
         msg = choice.message
@@ -207,8 +263,10 @@ def _loop_openai(client, model, system_prompt, mensajes_usuario, trazas, max_ite
             # a secas mandaba al usuario a adivinar —y encima quedaba guardado en el
             # historial, envenenando los turnos siguientes—, así que se distingue.
             if choice.finish_reason == 'length':
+                contexto_turno['estado'] = 'tope_salida'
                 return ('Me quedé sin espacio para responder a mitad de camino. '
                         'Probá de nuevo, o pedímelo en dos partes más chicas.')
+            contexto_turno['estado'] = 'sin_respuesta'
             return 'Sin respuesta'
 
         # El mensaje del asistente tiene que volver con sus tool_calls intactos, si no
@@ -247,6 +305,7 @@ def _loop_openai(client, model, system_prompt, mensajes_usuario, trazas, max_ite
                 'content': json.dumps(resultado, default=str, ensure_ascii=False),
             })
 
+    contexto_turno['estado'] = 'tope_iteraciones'
     return 'Máximo de iteraciones alcanzado'
 
 
@@ -281,10 +340,17 @@ def chat_with_tools_stream(mensajes_usuario, trazas=None, contexto_turno=None,
     """
     if trazas is None:
         trazas = []
+    # Estado compartido por todas las tools de ESTE turno (ver ejecutar_tool) y, de paso,
+    # por donde sale la medición de tokens. Se resuelve acá arriba y no más abajo porque el
+    # error de configuración de las próximas líneas también tiene que quedar registrado.
+    if contexto_turno is None:
+        contexto_turno = {}
 
     try:
         client = _crear_cliente_llm()
     except ValueError as e:
+        contexto_turno['estado'] = 'error'
+        contexto_turno['detalle_error'] = f'{type(e).__name__}: {e}'
         return str(e)
 
     # La hora se resuelve acá, al empezar el turno, y no una vez al arrancar el server:
@@ -304,20 +370,20 @@ def chat_with_tools_stream(mensajes_usuario, trazas=None, contexto_turno=None,
     # Y para las fotos: sin `agente.vision` no viajan `leer_foto` ni `adjuntar_foto`, así que
     # el prompt tampoco explica qué hacer con una foto — que además el usuario no puede mandar.
     ve_fotos = bool(TOOLS_FOTO & nombres)
+    # Y para `agente.md`: sin `agente.notas` no viaja `escribir_notas`, así que el prompt no
+    # nombra el archivo y este acceso no lee una sola línea. Se lee del disco una vez por
+    # turno — es la única parte del prompt que no está en el código.
+    ve_notas = bool(TOOLS_NOTAS & nombres)
     system_prompt = construir_system_prompt(hoy, dia_semana,
                                             escribe=escribe, ve_personas=ve_personas,
-                                            ve_fotos=ve_fotos)
+                                            ve_fotos=ve_fotos, ve_notas=ve_notas,
+                                            notas=_notas_del_admin() if ve_notas else '')
 
     # Una tanda de fotos es el turno más largo que existe: leer todas (1 vuelta) + una
     # `crear_entidad` por foto. Si el modelo no las paraleliza, diez fichas (FOTOS_MAX) son
     # diez vueltas, y con el tope corto el turno se cortaba en "Máximo de iteraciones
     # alcanzado" — con las fichas a medio armar y el usuario sin nada que revisar.
     max_iterations = 16
-
-    # Estado compartido por todas las tools de ESTE turno (ver ejecutar_tool). Lo puede
-    # sembrar el endpoint de chat con lo que venga de la sesión (fichas ya mostradas).
-    if contexto_turno is None:
-        contexto_turno = {}
 
     if _get_config()['provider'] in PROVIDERS_OPENAI:
         return (yield from _loop_openai(
@@ -344,9 +410,16 @@ def chat_with_tools_stream(mensajes_usuario, trazas=None, contexto_turno=None,
                 messages=messages
             )
         except Exception as e:
-            if _es_error_sin_tokens(e):
+            sin_tokens = _es_error_sin_tokens(e)
+            contexto_turno['estado'] = 'sin_tokens' if sin_tokens else 'error'
+            contexto_turno['detalle_error'] = f'{type(e).__name__}: {e}'
+            if sin_tokens:
                 return MSG_SIN_TOKENS
             return f"Error llamando al LLM: {str(e)}"
+
+        # Una entrada por vuelta del while, igual que en `_loop_openai`.
+        contexto_turno.setdefault('uso', []).append(
+            _uso(response, _get_config()['provider'], _get_config()['model']))
 
         # Determinar stop reason (compatible con Anthropic, Groq, OpenAI, Ollama)
         stop_reason = getattr(response, 'stop_reason', None)
@@ -367,6 +440,8 @@ def chat_with_tools_stream(mensajes_usuario, trazas=None, contexto_turno=None,
             elif hasattr(response, 'choices') and response.choices:
                 # OpenAI/Groq/Ollama
                 texto_final = response.choices[0].message.content or ''
+            if not texto_final:
+                contexto_turno['estado'] = 'sin_respuesta'
             return texto_final or 'Sin respuesta'
 
         # Si quiere usar tools (Anthropic: 'tool_use')
@@ -443,6 +518,9 @@ def chat_with_tools_stream(mensajes_usuario, trazas=None, contexto_turno=None,
             elif hasattr(response, 'choices') and response.choices:
                 # OpenAI/Groq/Ollama
                 texto_final = response.choices[0].message.content or ''
+            if not texto_final:
+                contexto_turno['estado'] = 'sin_respuesta'
             return texto_final or 'Sin respuesta'
 
+    contexto_turno['estado'] = 'tope_iteraciones'
     return 'Máximo de iteraciones alcanzado'

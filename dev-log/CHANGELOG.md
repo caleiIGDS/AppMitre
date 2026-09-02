@@ -6,6 +6,45 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-09-02] — `listar_todos` trae la ubicación de cada recurso
+
+**Archivos**: `agente/tools/entidades.py`, `agente/tools/esquemas.py`, `agente/tools/__init__.py`, `agente/prompt.py`
+
+Cada item de `listar_todos('recursos')` suma **`ubicacion`**: cada lugar del recurso con cuántas unidades tiene ahí (`"Taller (4), Sin ubicar (1)"`), vía `gestion.lugares_por_recurso`. Parámetro nuevo opcional **`con_descripcion`** (default `false`) para la descripción de cada fila. El motivo: ninguna tool de lectura entraba por lugar, así que el agente no podía contestar "qué hay en A" ni mover en lote sin que el usuario le dictara la lista — ahora el lugar y el número son el `origen` y la `cantidad` de `mover_ubicacion`.
+Efecto de borde a saber: `lugares_por_recurso` corre `_asegurar_unidades`, así que esta tool de LECTURA commitea ese backfill en `gestion.db`.
+
+## [2026-09-02] — `ACTIVA` en un área, y `/historia` apagada
+
+**Archivos**: `historia.py`, `app.py`, `accesos.py`, `agente/dominio.py`, `agente/prompt.py`, `agente/tools/esquemas.py`, los cuatro `templates/*/base.html`
+
+Clave nueva del contrato de área: `ACTIVA` (default `True` si no está). En `False`, `app.py` no registra el blueprint ni la pasa a `accesos.registrar_app`, así que sus permisos no entran al catálogo. `registrar_app` deja un global de Jinja **`areas`** (nombres de blueprint montados) porque `puede()` sola no alcanza: el admin tiene `'*'` y el `url_for` de un blueprint ausente revienta. En el agente, `dominio.SLUGS_ENTIDAD` deja fuera los slugs del área apagada y **`ve_entidad` devuelve `False` para cualquier slug que no esté en esa lista** (antes un slug desconocido no pedía permiso). Hoy `historia.ACTIVA = False`: se caen las tools `buscar_hitos`, `vincular_entidad`, `desvincular_entidad` y `eliminar_entidad`, y los campos `titulo`/`fecha`/`nivel`/`etiquetas`/`protagonistas` de `crear_entidad`/`editar_entidad`.
+
+---
+
+## [2026-09-02] — `agente.md`: archivo de notas del asistente
+
+**Archivos**: `agente/notas.py` (nuevo), `agente/__init__.py`, `agente/llm.py`, `agente/prompt.py`, `agente/rutas.py`, `agente/tools/esquemas.py`, `agente/tools/__init__.py`, `templates/agente/agente_notas.html` (nuevo), `templates/agente/base.html`, `.gitignore`, `agent_docs/agente-asistente.md`, `agent_docs/accesos.md`
+
+Archivo nuevo `agente.md` en la raíz, **gitignoreado** (lo escribe la app y el propio agente; en git se pisaría en cada deploy) con su `.bak` de una versión. **No hay tabla ni DB nueva.** Permiso nuevo `agente.notas` (verbo `admin`, `agente.PERMISO_NOTAS`), tool nueva `escribir_notas` (reescribe el archivo entero) y rutas `/agente/notas[/guardar|/deshacer]`. `construir_system_prompt` suma `ve_notas=False, notas=''` (defaults compatibles): con `ve_notas` el contenido va anteúltimo, antes de la fecha. `esquemas.TOOLS_AUDITADAS` (nuevo) reemplaza a `TOOLS_ESCRITURA` como criterio de qué se audita en `agente_log`; `TOOLS_ESCRITURA` sigue siendo lo que enciende `escribe` en el prompt.
+
+## [2026-09-02] — `sin_eliminar` en `ENTIDADES`, y los recursos ya no se borran
+
+**Archivos**: `crud.py`, `gestion.py`, `agente/tools/entidades.py`, `agente/tools/esquemas.py`, `templates/crud/detalle.html`, `templates/crud/form.html`, `templates/gestion/form.html`
+
+Clave opcional nueva del cfg de entidad: con `'sin_eliminar': True` la ruta `POST /<slug>/<id>/eliminar` devuelve 404, los templates no muestran el botón y `_eliminar_entidad` (agente) rechaza. La declara `gestion.recursos`, que ahora se **da de baja** (`POST /gestion/recursos/<id>/baja`, tabla `recurso_bajas`, registro en `/gestion/bajas`). **`gestion.ESTADOS_RECURSO` ya no incluye `"Dado de baja"`** — es el enum de `crear_entidad`/`editar_entidad`, así que el chat dejó de poder ponerlo. Un `select` cuyo valor guardado no está entre las opciones ahora se renderiza como texto + hidden en vez de pisarse solo.
+
+## [2026-09-01] — Tool `coincidencias` y `horario_curso` ahora normaliza la división
+
+**Archivos**: `agente/tools/horarios.py`, `agente/tools/esquemas.py`, `agente/tools/__init__.py`, `agente/prompt.py`, `horarios/datos.py`
+
+Tool nueva `coincidencias(cursos?, personas?, dia?)`: cruza horarios de cursos y personas y devuelve la grilla alineada con los tramos comunes ya calculados. Se apoya en la familia `ocupacion_*` nueva de `horarios/datos.py`. **`horario_curso` cambia de comportamiento**: antes `division="5ta"` devolvía `clases: {}` con "no se encontraron clases"; ahora normaliza y resuelve. Si algo dependía de ese vacío, dejó de pasar.
+
+## [2026-09-01] — `extras_template` recibe el id, y `crud/form.html` tiene bloque `form_extra`
+
+**Archivos**: `crud.py`, `gestion.py`, `templates/crud/form.html`, `templates/gestion/form.html`, `templates/gestion/detalle.html`
+
+El hook pasó a `extras_template(vista, slug, id)` — `id` sólo en `detalle` y `editar`, si no `None`: un área que lo declare con dos parámetros ahora revienta con `TypeError`. El formulario genérico expone `{% block form_extra %}` **después** de `</form>`, para POSTs propios que no pueden anidarse. Gestión lo usa para mudar ahí el ELIMINAR del recurso y el ABM de sub-recursos del kit, que salieron de la ficha (ahora sólo de lectura); las tres rutas `/kit/*` redirigen a `editar`.
+
 ## [2026-08-31] — Rotar fotos: ruta nueva y hook `PERMISO_ROTAR_FOTO`
 
 **Archivos**: `crud.py`, `gestion.py`, `templates/crud/_detalle_fotos.html`

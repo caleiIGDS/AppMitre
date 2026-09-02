@@ -16,8 +16,19 @@ import crud
 import gestion
 import historia
 
-from .. import PERMISO_VISION
+from .. import PERMISO_NOTAS, PERMISO_VISION
 from ..dominio import SLUGS_ENTIDAD, _modulo
+
+# El área de historia puede estar apagada (`historia.ACTIVA`, hoy False) y entonces el
+# modelo no se tiene que enterar de que existió: ni la tool de la línea del tiempo, ni los
+# slugs `hitos`/`personas` en los enum, ni los campos que eran sólo de un hito, ni las
+# frases que los nombran de paso. Todo lo condicional de este archivo cuelga de acá, y
+# `_h()` es lo que envuelve esas frases: devuelve el texto o nada.
+HISTORIA = historia.ACTIVA
+
+
+def _h(texto):
+    return texto if HISTORIA else ''
 
 # Slugs cuya entidad declaró `campo_alias` (hoy sólo `recursos`, ver gestion.py). Calculado
 # y no a mano, mismo criterio que SLUGS_ENTIDAD: una entidad nueva con alias entra sola.
@@ -37,12 +48,14 @@ TOOLS_SCHEMA = [
                         'tipeo, falta de tildes y nombre invertido ("andrea alvares" encuentra '
                         '"ALVAREZ ANDREA"). Usala cuando el usuario da un nombre incompleto o dudoso '
                         'y querés ofrecerle opciones. Si ya tenés el nombre, no hace falta: '
-                        'horario_profesor también busca difuso. OJO: es el padrón de los HORARIOS, '
-                        'no el de las personas con ficha (alumnos, ex docentes, gente de la memoria '
-                        'institucional). Si el tema es un hito o la semblanza de '
-                        "alguien, la persona se busca con buscar_entidad('personas', ...). Cuando el "
-                        'nombre coincide con las dos cosas, esta tool te devuelve además '
-                        '`personas_con_ficha` y un `aviso`: hacele caso. Los que tienen cargo no '
+                        'horario_profesor también busca difuso. '
+                        + _h('OJO: es el padrón de los HORARIOS, '
+                             'no el de las personas con ficha (alumnos, ex docentes, gente de la '
+                             'memoria institucional). Si el tema es un hito o la semblanza de '
+                             "alguien, la persona se busca con buscar_entidad('personas', ...). "
+                             'Cuando el nombre coincide con las dos cosas, esta tool te devuelve '
+                             'además `personas_con_ficha` y un `aviso`: hacele caso. ') +
+                        'Los que tienen cargo no '
                         'docente vienen con su `rol` al lado del nombre. Los PRECEPTORES no están '
                         'en este padrón: si el nombre coincide con alguno, te lo devuelve aparte '
                         'en `preceptores` y ahí seguís con la tool `preceptores`. '
@@ -132,7 +145,8 @@ TOOLS_SCHEMA = [
                         'horarios cuando no coincide nadie — revisalo vos ahí mismo antes de decirle '
                         'al usuario que la persona no está. Que devuelva '
                         'una sola clase, o ninguna, es un resultado válido y frecuente: informalo tal '
-                        'cual, no lo rellenes.'),
+                        'cual, no lo rellenes. Las líneas que terminan en "Grupo A"/"Grupo B" son '
+                        'clases de media división (talleres): el docente tiene a la mitad del curso.'),
         'input_schema': {
             'type': 'object',
             'properties': {
@@ -145,7 +159,11 @@ TOOLS_SCHEMA = [
         'name': 'horario_curso',
         'description': ('Horario semanal de un curso (todas las materias que recibe esa división). '
                         'El curso y la división van SEPARADOS: "3° B" es curso="3", division="B". '
-                        'Es la única fuente del horario de un curso, no lo deduzcas.'),
+                        'Es la única fuente del horario de un curso, no lo deduzcas. Las líneas que '
+                        'terminan en "Grupo A"/"Grupo B" son de media división: en talleres el curso '
+                        'se parte en dos mitades con distinto docente y taller. Casi siempre van a la '
+                        'misma hora (dos clases simultáneas con grupos distintos son correctas), pero '
+                        'no siempre: a veces en ese horario hay un solo grupo.'),
         'input_schema': {
             'type': 'object',
             'properties': {
@@ -159,13 +177,37 @@ TOOLS_SCHEMA = [
         'name': 'horario_aula',
         'description': ('Horario semanal de un aula o taller: qué se dicta ahí, cuándo, con qué curso y '
                         'qué docente. Sirve para "¿quién da clase en el aula 21 los martes a las 10?" — '
-                        'traé la semana y filtrá vos el día y la hora. Única fuente, no la deduzcas.'),
+                        'traé la semana y filtrá vos el día y la hora. Única fuente, no la deduzcas. '
+                        'Si una línea dice "Grupo A"/"Grupo B", ese taller lo cursa media división.'),
         'input_schema': {
             'type': 'object',
             'properties': {
                 'aula': {'type': 'string', 'description': 'Código tal como está en la base: "21", "T3", "PATIO", "GYM". Los talleres van sin espacio ("T2", no "Taller 2")'}
             },
             'required': ['aula']
+        }
+    },
+    {
+        'name': 'coincidencias',
+        'description': ('Cuándo varias entidades coinciden en la escuela: la ÚNICA fuente para '
+                        '"en qué horario coinciden", "cuándo están juntos", "cuándo se cruzan", '
+                        '"comparar los horarios de". Mezcla cursos y personas (docentes, '
+                        'preceptores, no docentes) en la misma consulta, desde DOS entidades en '
+                        'adelante. Devuelve una grilla con todos los horarios alineados en el '
+                        'mismo eje y los tramos coincidentes YA CALCULADOS: no cruces vos los '
+                        'horarios sacando dos o tres `horario_curso` sueltos, que es lo que hay '
+                        'que evitar. Si te preguntan por una sola entidad, esa va por '
+                        '`horario_curso` o `horario_profesor`.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'cursos': {'type': 'array', 'items': {'type': 'string'},
+                           'description': 'Cursos como los dijo el usuario: "2do C", "6to 5ta", "4to 9na", "1° A". Tolera ordinales, no hace falta traducirlos'},
+                'personas': {'type': 'array', 'items': {'type': 'string'},
+                             'description': 'Docentes, preceptores o personal no docente. Tolera aproximados y el nombre dado vuelta'},
+                'dia': {'type': 'string', 'description': 'Opcional: limitar a un día ("Martes"). Sin esto trae la semana entera'}
+            },
+            'required': []
         }
     },
     {
@@ -181,14 +223,15 @@ TOOLS_SCHEMA = [
     },
     {
         'name': 'buscar_entidad',
-        'description': ('Busca en el inventario o en la línea del tiempo institucional por nombre '
+        'description': ('Busca en el inventario'
+                        + _h(' o en la línea del tiempo institucional') + ' por nombre '
                         'aproximado y devuelve id + nombre + datos básicos. Es la forma correcta de '
-                        'conseguir un id: NUNCA inventes uno ni lo recuerdes de otra conversación. Los '
-                        'tipos son distintos: "recursos" son cosas físicas sueltas del inventario '
-                        '(una herramienta, un instrumento, un material); "hitos" son eventos de la '
-                        'línea del tiempo institucional (incluye lo que antes se llamaba "proyecto": '
-                        'hoy es un hito con "Proyecto" en sus etiquetas); "personas" son fichas de '
-                        'quién hizo la escuela. '
+                        'conseguir un id: NUNCA inventes uno ni lo recuerdes de otra conversación. '
+                        + _h('Los tipos son distintos: "recursos" son cosas físicas sueltas del '
+                             'inventario (una herramienta, un instrumento, un material); "hitos" '
+                             'son eventos de la línea del tiempo institucional (incluye lo que '
+                             'antes se llamaba "proyecto": hoy es un hito con "Proyecto" en sus '
+                             'etiquetas); "personas" son fichas de quién hizo la escuela. ') +
                         'CADA RESULTADO TRAE UN CAMPO "match" QUE DICE CUÁNTO CONFIAR: '
                         '"exacto" = el nombre contiene lo que buscaste; "descripcion" = no está en el '
                         'nombre pero sí en la descripción (que viene incluida, leela para ver si sirve); '
@@ -199,11 +242,11 @@ TOOLS_SCHEMA = [
                         'búsqueda compara letras, no significados, así que no encuentra el '
                         'Multímetro si te pidieron un "tester". En ese caso llamá a '
                         'listar_todos con el mismo slug y decidí mirando la lista completa. '
-                        'CON slug="personas" mira TAMBIÉN el padrón de los horarios: si hay '
-                        'gente que coincide te la devuelve en `en_horarios` (con su `rol` si es '
-                        'personal no docente) y un `aviso_horarios`. Que no haya ficha NO '
-                        'significa que la persona no exista en la escuela — puede estar dando '
-                        'clases o tener un cargo y no tener ficha todavía.'),
+                        + _h('CON slug="personas" mira TAMBIÉN el padrón de los horarios: si hay '
+                             'gente que coincide te la devuelve en `en_horarios` (con su `rol` si '
+                             'es personal no docente) y un `aviso_horarios`. Que no haya ficha NO '
+                             'significa que la persona no exista en la escuela — puede estar dando '
+                             'clases o tener un cargo y no tener ficha todavía.')),
         'input_schema': {
             'type': 'object',
             'properties': {
@@ -216,22 +259,37 @@ TOOLS_SCHEMA = [
     },
     {
         'name': 'listar_todos',
-        'description': ('Devuelve la lista COMPLETA de nombres + id de un tipo de entidad. Es el '
-                        'respaldo de buscar_entidad, no un reemplazo: usala SOLO cuando '
-                        'buscar_entidad no trajo ningún resultado con match "exacto". '
-                        'Para qué sirve: la búsqueda compara letras, no significados, así que no '
+        'description': ('Devuelve la lista COMPLETA de un tipo de entidad: nombre + id, y en '
+                        'recursos también DÓNDE ESTÁ cada uno. Tiene dos usos. '
+                        'UNO, el respaldo de buscar_entidad cuando no trajo ningún resultado con '
+                        'match "exacto": la búsqueda compara letras, no significados, así que no '
                         'encuentra el "Multímetro" si el usuario pidió un "tester", ni la '
                         '"Agujereadora de banco" si pidió un "taladro". Vos sí sabés que son lo '
-                        'mismo, pero necesitás ver los nombres para darte cuenta. '
-                        'Úsala también antes de decirle a alguien que algo no está cargado: así '
-                        'esa afirmación la hacés habiendo mirado todo, no porque una búsqueda '
-                        'falló. Si la lista es demasiado larga devuelve un error pidiendo que '
+                        'mismo, pero necesitás ver los nombres para darte cuenta. Úsala también '
+                        'antes de decirle a alguien que algo no está cargado: así esa afirmación '
+                        'la hacés habiendo mirado todo, no porque una búsqueda falló. '
+                        'DOS, y para esto es la ÚNICA tool que tenés: cualquier pregunta por '
+                        'UBICACIÓN. No existe una búsqueda por lugar — "qué hay en el taller", '
+                        '"todo lo que está en el armario 2", "qué quedó sin ubicar" se contestan '
+                        'pidiendo esta lista y leyendo el campo `ubicacion`, que trae cada lugar '
+                        'con cuántas unidades hay ahí ("Taller (4), Sin ubicar (1)"). Ese lugar y '
+                        'ese número son el `origen` y la `cantidad` de mover_ubicacion, así que '
+                        'con esta lista podés mover de una todo lo que está en un sitio, sin '
+                        'pedirle a nadie que te dicte qué hay. '
+                        'Si la lista es demasiado larga devuelve un error pidiendo que '
                         'busques con un término más específico.'),
         'input_schema': {
             'type': 'object',
             'properties': {
                 'slug': {'type': 'string', 'enum': SLUGS_ENTIDAD,
-                         'description': 'Qué tipo de entidad listar (el mismo que usaste en buscar_entidad)'}
+                         'description': 'Qué tipo de entidad listar (el mismo que usaste en buscar_entidad)'},
+                'con_descripcion': {'type': 'boolean',
+                                    'description': 'Suma la descripción de cada fila. Por defecto '
+                                                   'false, y así está bien casi siempre: pedila sólo '
+                                                   'cuando los nombres solos no te alcanzan para '
+                                                   'decidir cuál es (varios parecidos, o un pedido '
+                                                   'por una característica técnica que el nombre no '
+                                                   'dice). Encarece bastante la lista'}
             },
             'required': ['slug']
         }
@@ -260,8 +318,9 @@ TOOLS_SCHEMA = [
     },
     {
         'name': 'detalle_entidad',
-        'description': ('Ficha completa de una entidad: todos sus campos más las relaciones (qué '
-                        'personas aparecen si es un hito, y si es un recurso, cómo está desglosado '
+        'description': ('Ficha completa de una entidad: todos sus campos más las relaciones ('
+                        + _h('qué personas aparecen si es un hito, y ') +
+                        'si es un recurso, cómo está desglosado '
                         'por ubicación). Necesitás el id: sacalo de buscar_entidad. '
                         'Un campo vacío significa que nadie lo cargó — decilo así, no lo completes con '
                         'un valor plausible.'),
@@ -388,10 +447,12 @@ TOOLS_SCHEMA = [
                                         'porque el usuario pidió un cambio, volvé a mandar el '
                                         'MISMO número — si no, la foto se pierde. Para un alta '
                                         'que no salió de ninguna foto, omitilo'},
-                'nombre': {'type': 'string', 'description': 'Nombre, redactado por VOS con lo que dijo el usuario: corto y reconocible para quien lo busque en el pañol (ej: "Taladro percutor Bosch GSB 550"). OBLIGATORIO en todos los slugs MENOS hitos, que usa `titulo` en su lugar'},
+                'nombre': {'type': 'string', 'description': 'Nombre, redactado por VOS con lo que dijo el usuario: corto y reconocible para quien lo busque en el pañol (ej: "Taladro percutor Bosch GSB 550"). OBLIGATORIO'
+                                                            + _h(' en todos los slugs MENOS hitos, que usa `titulo` en su lugar')},
                 'titulo': {'type': 'string', 'description': 'Título del hito, redactado por VOS: qué pasó, corto y reconocible en una línea de tiempo (ej: "Olimpiada Matemática Argentina — Certamen Nacional"). OBLIGATORIO en hitos, y solo aplica a hitos: es el campo que en el resto de los slugs se llama `nombre`'},
-                'tipo': {'type': 'string', 'description': ('RECURSOS: categoría que proponés VOS, texto libre, pero REUSÁ una de las que ya están en uso — la ficha del paso 1 te las devuelve en `tipos_en_uso` — antes de inventar una nueva; si no, el campo se llena de sinónimos y deja de servir para agrupar. HITOS: elegí uno de estos valores cerrados (si lo que estás cargando es lo que antes se llamaba "proyecto", va como hito con "Proyecto" en `etiquetas`, no acá): '
-                                                          + ', '.join(historia.TIPOS_HITO))},
+                'tipo': {'type': 'string', 'description': ('RECURSOS: categoría que proponés VOS, texto libre, pero REUSÁ una de las que ya están en uso — la ficha del paso 1 te las devuelve en `tipos_en_uso` — antes de inventar una nueva; si no, el campo se llena de sinónimos y deja de servir para agrupar.'
+                                                          + _h(' HITOS: elegí uno de estos valores cerrados (si lo que estás cargando es lo que antes se llamaba "proyecto", va como hito con "Proyecto" en `etiquetas`, no acá): '
+                                                               + ', '.join(historia.TIPOS_HITO)))},
                 'cantidad': {'type': 'integer', 'description': 'Stock disponible. Solo recursos'},
                 'descripcion': {'type': 'string', 'description': 'Descripción redactada por VOS con lo que contó el usuario: para qué sirve, medidas, marca y modelo, en qué estado está. Una o dos frases, sin inventar lo que no te dijeron. Aplica a todos los slugs'},
                 'estado': {'type': 'string',
@@ -442,10 +503,12 @@ TOOLS_SCHEMA = [
             'properties': {
                 'slug': {'type': 'string', 'enum': SLUGS_ENTIDAD},
                 'id': {'type': 'integer', 'description': 'ID de la entidad a editar, obtenido de buscar_entidad'},
-                'nombre': {'type': 'string', 'description': 'Nombre. Todos los slugs MENOS hitos, que usa `titulo`: mandar `nombre` en un hito no cambia nada'},
+                'nombre': {'type': 'string', 'description': 'Nombre'
+                                                            + _h('. Todos los slugs MENOS hitos, que usa `titulo`: mandar `nombre` en un hito no cambia nada')},
                 'titulo': {'type': 'string', 'description': 'Título del hito. Es el campo que en el resto de los slugs se llama `nombre`. Solo hitos'},
-                'tipo': {'type': 'string', 'description': ('RECURSOS: categoría, texto libre sin lista fija (ej: Instrumento, Equipo, Estructura, Material). OJO: hoy está vacío en casi todo el inventario, así que no lo uses para filtrar ni asumas que tiene valor. HITOS: valores cerrados: '
-                                                          + ', '.join(historia.TIPOS_HITO))},
+                'tipo': {'type': 'string', 'description': ('RECURSOS: categoría, texto libre sin lista fija (ej: Instrumento, Equipo, Estructura, Material). OJO: hoy está vacío en casi todo el inventario, así que no lo uses para filtrar ni asumas que tiene valor.'
+                                                          + _h(' HITOS: valores cerrados: '
+                                                               + ', '.join(historia.TIPOS_HITO)))},
                 'cantidad': {'type': 'integer', 'description': 'Stock disponible. Solo recursos'},
                 'descripcion': {'type': 'string', 'description': 'Descripción libre. Aplica a todos los slugs'},
                 'estado': {'type': 'string',
@@ -552,8 +615,9 @@ TOOLS_SCHEMA = [
         'name': 'adjuntar_foto',
         'description': ('Guarda las fotos que el usuario adjuntó EN ESTE TURNO en la galería de un '
                         'registro que YA existe. Es lo que hay que usar cuando mandan una foto para '
-                        'que quede en la ficha de algo ("guardá esta foto en el taladro", "estas son '
-                        'las fotos del hito"). Sin el parámetro `foto` van TODAS las del turno al '
+                        'que quede en la ficha de algo ("guardá esta foto en el taladro"'
+                        + _h(', "estas son las fotos del hito"') + '). Sin el parámetro `foto` '
+                        'van TODAS las del turno al '
                         'mismo registro, que es el caso normal cuando mandan varias de la misma '
                         'cosa; si cada foto va a un registro distinto, llamala una vez por cada una '
                         'con su número. '
@@ -665,7 +729,10 @@ TOOLS_SCHEMA = [
     },
     {
         'name': 'eliminar_entidad',
-        'description': ('Elimina un recurso, hito o persona. Requiere confirmación del '
+        'description': ('Elimina un hito o una persona. Los RECURSOS no se eliminan nunca: '
+                        'salen del inventario dándolos de baja desde la web (EDITAR el recurso → '
+                        'DAR DE BAJA), que pide indicar qué le pasó; si te piden borrar un recurso, '
+                        'explicá eso en vez de llamar a esta tool. Requiere confirmación del '
                         'usuario en un turno previo Y el nombre exacto en nombre_confirmacion: el servidor '
                         'verifica que ese nombre coincida con el id, y rechaza el borrado si no coincide. '
                         'Nunca inventes un id: obtenelo con buscar_entidad.'),
@@ -682,8 +749,66 @@ TOOLS_SCHEMA = [
             },
             'required': ['slug', 'id', 'nombre_confirmacion']
         }
+    },
+
+    # --- NOTAS: el archivo `agente.md`, ni lectura ni dominio ---
+    {
+        'name': 'escribir_notas',
+        'description': ('Reescribe `agente.md`, la libreta de quien está chateando: lo que te '
+                        'pidan que tengas presente estos días. Es la tool de '
+                        '"anotá que...", "acordate de que...", "de ahora en más...", "ojo '
+                        'que...", y también la de "eso ya no corre, borralo". Ejemplos de nota: '
+                        '"el pañol está en el aula 12 hasta que arreglen el techo", "las salidas '
+                        'de este año las coordina Vanesa", "no cargues la máquina de café como '
+                        'recurso", "los que pasaron al provincial son Fulano y Mengana". '
+                        'ESCRIBÍS EL ARCHIVO ENTERO, NO UN RENGLÓN: tenés el contenido actual a '
+                        'la vista en tus instrucciones, así que `contenido` es ESE TEXTO COMPLETO '
+                        'con tu cambio aplicado — una línea más, una menos, una corregida. Todo '
+                        'lo que no copies SE PIERDE, así que copiá tal cual lo que no te '
+                        'pidieron tocar: no lo resumas, no lo reordenes, no lo "mejores". Si '
+                        'estás agregando algo, el archivo tiene que quedar con todas las notas '
+                        'viejas MÁS la nueva. '
+                        'QUÉ VA: lo que te pidan que vaya, y eso lo decide el usuario, no vos. '
+                        'Si te dicen "anotá esto", se anota — sea una consigna, un aviso, una '
+                        'lista de nombres o algo que se quieren acordar la semana que viene. NO '
+                        'discutas si "va acá o va en una ficha", no lo mandes a otro lado y no '
+                        'pidas permiso: anotalo y decí que quedó anotado. Si además ese dato '
+                        'tendría lugar en el inventario, ofrecé cargarlo DESPUÉS, en una línea. '
+                        'Por tu cuenta no anotes nada: ni lo que sirve sólo para este chat, ni '
+                        'lo que dedujiste vos, ni un horario o un stock que ya se consultan con '
+                        'su tool. Redactalo para que se entienda dentro de un mes sin esta '
+                        'conversación a la vista. '
+                        'La tool te devuelve cuántos renglones había antes y cuántos quedaron: '
+                        'si bajó y vos estabas agregando algo, te comiste una nota — avisale al '
+                        'usuario y arreglalo.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'contenido': {'type': 'string',
+                              'description': 'El archivo COMPLETO como tiene que quedar: lo '
+                                             'que ya estaba, tal cual, más tu cambio'}
+            },
+            'required': ['contenido']
+        }
     }
 ]
+
+# Lo que quedaba del área de historia se saca acá y no a mano en cada descripción: las
+# tools que sin hitos ni personas no tienen a qué apuntar y los campos que eran nada más
+# que del hito. `vincular_entidad` y su inversa existen sólo por la relación
+# persona <-> hito (gestion no declara ninguna M2M), y `eliminar_entidad` sólo podía
+# borrar un hito o una persona — un recurso no se elimina nunca, se da de baja desde la
+# web. Prenderla de nuevo es `historia.ACTIVA = True`, nada más.
+_TOOLS_HISTORIA = ('buscar_hitos', 'vincular_entidad', 'desvincular_entidad',
+                   'eliminar_entidad')
+_CAMPOS_HITO = ('titulo', 'fecha', 'nivel', 'etiquetas', 'protagonistas')
+
+if not HISTORIA:
+    TOOLS_SCHEMA = [t for t in TOOLS_SCHEMA if t['name'] not in _TOOLS_HISTORIA]
+    for _tool in TOOLS_SCHEMA:
+        if _tool['name'] in ('crear_entidad', 'editar_entidad'):
+            for _campo in _CAMPOS_HITO:
+                _tool['input_schema']['properties'].pop(_campo, None)
 
 
 # ============================================================================
@@ -699,7 +824,7 @@ TOOLS_SCHEMA = [
 # TOOLS_SCHEMA sigue siendo exactamente lo que las APIs esperan y no hay que acordarse de
 # limpiarlo antes de mandarlo (Anthropic rechaza con 400 cualquier clave de más, y el
 # proveedor por defecto es DeepSeek, así que ese bug sería invisible en desarrollo).
-# De paso, las 25 se leen de un vistazo.
+# De paso, las 24 se leen de un vistazo.
 PERMISO_POR_TOOL = {
     # --- LECTURA: no tocan ninguna base ---
     'buscar_profesor': 'agente.leer',
@@ -709,6 +834,7 @@ PERMISO_POR_TOOL = {
     'horario_curso': 'agente.leer',
     'horario_aula': 'agente.leer',
     'aulas_libres': 'agente.leer',
+    'coincidencias': 'agente.leer',
     'buscar_entidad': 'agente.leer',
     'listar_todos': 'agente.leer',
     'detalle_entidad': 'agente.leer',
@@ -730,7 +856,19 @@ PERMISO_POR_TOOL = {
     'desvincular_entidad': 'agente.escribir',
     'mover_ubicacion': 'agente.escribir',
     'eliminar_entidad': 'agente.escribir',
+
+    # --- NOTAS: permiso propio, verbo 'admin' (ver agente/__init__.py) ---
+    # No es 'agente.escribir': no toca ningún dato de la escuela, y al revés, un acceso que
+    # carga inventario no tiene por qué reescribir el archivo de notas del administrador.
+    'escribir_notas': PERMISO_NOTAS,
 }
+
+# Las de historia también salen de acá cuando el área está apagada, y no sólo del esquema:
+# así el ejecutor las trata como tool desconocida (fail-closed) en vez de dejarlas al
+# alcance de un request forjado o de un nombre inventado por el modelo.
+if not HISTORIA:
+    for _nombre in _TOOLS_HISTORIA:
+        PERMISO_POR_TOOL.pop(_nombre, None)
 
 # Una tool sin permiso declarado sería una tool que nadie puede ejecutar (fail-closed) y
 # que encima desaparecería del listado sin avisar. Que reviente al importar, no en
@@ -750,6 +888,17 @@ TOOLS_LECTURA = frozenset(PERMISO_POR_TOOL) - TOOLS_ESCRITURA
 # podría escribir en la galería sin tener `agente.escribir`. Las dos condiciones se piden
 # juntas en `tools_permitidas`.
 TOOLS_FOTO = frozenset(['leer_foto', 'adjuntar_foto'])
+
+# Las que dejan rastro en `agente_log`. NO es lo mismo que TOOLS_ESCRITURA: `escribir_notas`
+# escribe —y pisa el archivo ENTERO, que es lo que puede salir mal— pero no toca el dominio.
+# Meterla en TOOLS_ESCRITURA le encendería a un acceso de sólo notas todo el circuito de alta
+# en el system prompt, que es lo que `escribe` decide en llm.py. El `antes` que audita es el
+# contenido completo previo: el segundo camino de vuelta, además de `agente.md.bak`.
+TOOLS_AUDITADAS = TOOLS_ESCRITURA | frozenset(['escribir_notas'])
+
+# La que sólo tiene sentido con el archivo a la vista: viaja con `agente.notas` por
+# PERMISO_POR_TOOL, y su presencia es lo que le dice al prompt que hay notas que mostrar.
+TOOLS_NOTAS = frozenset(['escribir_notas'])
 
 
 # Slugs que piden un permiso propio además del del área (hoy sólo `personas`). Sale de las

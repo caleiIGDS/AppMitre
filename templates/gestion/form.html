@@ -1,18 +1,140 @@
-{# Gestión usa el formulario genérico (ver templates/crud/form.html) y le agrega abajo
-   el ELIMINAR: la baja de un recurso sólo se ofrece acá adentro, no en la ficha. #}
+{# Gestión usa el formulario genérico (ver templates/crud/form.html) y le cuelga abajo lo
+   que la ficha ya no ofrece: los sub-recursos del kit y la BAJA del recurso. Ambos van
+   FUERA del <form> de arriba (un form no anida) y guardan por su cuenta, cada uno con
+   su POST. #}
 {% extends 'crud/form.html' %}
 
 {% block form_extra %}
 {% if fila and puede(permiso_escritura) %}
+
+{% if kit_items is defined %}
+<section class="g-form-kit">
+    <h3>SUB-RECURSOS (KIT)</h3>
+    <p class="g-help">
+        Lo que viene adentro de este recurso. Se guarda por separado del formulario de
+        arriba: cada Agregar, Guardar o × se aplica al toque.
+    </p>
+
+    {% if kit_items %}
+    <div class="g-table-wrap">
+        <table class="g-table">
+            <thead>
+                <tr>
+                    <th>TÍTULO</th>
+                    <th>CANT.</th>
+                    <th>RECURSO ASIGNADO</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in kit_items %}
+                <tr>
+                    <td colspan="3">
+                        <form method="post" class="g-inline-form"
+                              action="{{ url_for('gestion.kit_item_editar', id=fila['id'], item_id=item['id']) }}">
+                            <input type="text" name="titulo" value="{{ item['titulo'] }}" placeholder="Título" required>
+                            <input type="text" name="cantidad" value="{{ item['cantidad'] }}" placeholder="Cantidad" style="width:6em">
+                            <input type="text" name="recurso_asignado" value="{{ item['recurso_asignado'] }}" placeholder="Recurso asignado">
+                            <button type="submit" class="g-btn-mini" title="Guardar">Guardar</button>
+                        </form>
+                    </td>
+                    <td>
+                        <form method="post" class="g-inline-form" style="display:inline"
+                              action="{{ url_for('gestion.kit_item_eliminar', id=fila['id'], item_id=item['id']) }}">
+                            <button type="submit" class="g-btn-mini g-btn-danger" title="Quitar">×</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <form method="post" class="g-inline-form" action="{{ url_for('gestion.kit_item_agregar', id=fila['id']) }}">
+        <input type="text" name="titulo" placeholder="Título" required>
+        <input type="text" name="cantidad" placeholder="Cantidad" style="width:6em">
+        <input type="text" name="recurso_asignado" placeholder="Recurso asignado">
+        <button type="submit" class="g-btn-mini">Agregar</button>
+    </form>
+</section>
+{% endif %}
+
+{# Un recurso no se borra nunca (ver gestion.py: `sin_eliminar` + `dar_de_baja`): sale del
+   inventario dándole de baja, y la baja exige decir qué le pasó. El cuadro que lo pide es
+   el <dialog> de acá abajo. Si ya está de baja, lo único que queda es revertirla. #}
+{% if fila['estado'] == estado_baja %}
 <div class="g-form-peligro">
     <div>
-        <strong>ELIMINAR {{ cfg.singular | upper }}</strong>
-        <span class="g-help">Se borra junto con sus fotos y sus vínculos. No se puede deshacer.</span>
+        <strong>{{ cfg.singular | upper }} DADO DE BAJA</strong>
+        <span class="g-help">
+            Está fuera del inventario y no aparece en el listado. Queda anotado en el
+            registro de bajas junto con el motivo.
+        </span>
     </div>
-    <form method="post" action="{{ url_for(area_nombre ~ '.eliminar', slug=slug, id=fila['id']) }}"
-          onsubmit="return confirm('¿Eliminar este recurso? Esta acción no se puede deshacer.');">
-        <button type="submit" class="g-btn-danger">ELIMINAR</button>
+    <form method="post" action="{{ url_for('gestion.recurso_baja_revertir', id=fila['id']) }}"
+          onsubmit="return confirm('¿Volver a poner este recurso en el inventario? La baja queda marcada como revertida en el registro.');">
+        <button type="submit" class="g-btn-outline-dark">REVERTIR BAJA</button>
     </form>
 </div>
+{% else %}
+<div class="g-form-peligro">
+    <div>
+        <strong>DAR DE BAJA {{ cfg.singular | upper }}</strong>
+        <span class="g-help">
+            El recurso no se borra: sale del inventario y queda en el registro de bajas con
+            lo que le pasó. Se puede revertir.
+        </span>
+    </div>
+    <button type="button" class="g-btn-danger" data-abre-baja>DAR DE BAJA</button>
+</div>
+
+{# Sin JS del todo un <dialog> cerrado no se puede abrir: ahí se muestra como una caja
+   más del formulario, que es exactamente lo que es. #}
+<noscript><style>.g-modal { display: block; position: static; }</style></noscript>
+<dialog class="g-modal" id="dialogo-baja">
+    <form method="post" action="{{ url_for('gestion.recurso_baja', id=fila['id']) }}" class="g-modal-form">
+        <h3>DAR DE BAJA: {{ fila[cfg.campo_nombre or 'nombre'] }}</h3>
+        <p class="g-help">Contá qué le pasó. Queda en el registro de bajas con la fecha de hoy.</p>
+
+        <div class="g-field">
+            <label for="baja-motivo">QUÉ LE PASÓ *</label>
+            <select id="baja-motivo" name="motivo" required>
+                {% for op in motivos_baja %}
+                <option value="{{ op }}">{{ op }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="g-field">
+            <label for="baja-detalle">DETALLE</label>
+            <textarea id="baja-detalle" name="detalle" rows="3"
+                      placeholder="Ej: se quemó el regulador en la práctica del 3° B"></textarea>
+            <span class="g-help">Opcional, pero es lo que hace útil al registro dentro de un año.</span>
+        </div>
+
+        <div class="g-modal-actions">
+            <button type="submit" class="g-btn-danger">CONFIRMAR BAJA</button>
+            <button type="button" class="g-btn-outline-dark" data-cierra-baja>CANCELAR</button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+// El cuadro de la baja. Sin <dialog> (navegador viejo) el formulario se muestra igual,
+// abierto abajo del botón: la baja nunca queda inalcanzable.
+(function () {
+    var dlg = document.getElementById('dialogo-baja');
+    var abrir = document.querySelector('[data-abre-baja]');
+    if (!dlg || !abrir) return;
+    if (!dlg.showModal) { dlg.setAttribute('open', ''); abrir.hidden = true; return; }
+    abrir.addEventListener('click', function () { dlg.showModal(); });
+    dlg.addEventListener('click', function (e) {
+        if (e.target.closest('[data-cierra-baja]')) dlg.close();
+    });
+})();
+</script>
+{% endif %}
+
 {% endif %}
 {% endblock %}

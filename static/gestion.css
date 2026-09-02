@@ -426,6 +426,17 @@
 .g-field textarea:focus,
 .g-field select:focus { border-color: var(--g-accent); }
 
+/* Campo de fecha con el botón "HOY" al lado (ver `boton_hoy` en templates/crud/form.html).
+   El input sigue ocupando todo lo que sobra: el botón no lo achica en celular. */
+.g-field-hoy {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.g-field-hoy input { flex: 1; min-width: 0; }
+.g-field-hoy button { flex: none; }
+
 /* Checkbox suelto dentro de un .g-field (ej: "¿Tiene obra social?"): la regla de arriba
    le mete padding/border/width:100% como si fuera un input de texto y lo desalinea del
    texto según navegador/pantalla. Esta clase resetea la caja y alinea con flexbox, que
@@ -504,6 +515,24 @@
     font-size: 14px;
 }
 
+/* Sub-recursos de un kit: se cargan dentro de EDITAR, no en la ficha. Van fuera del
+   <form> principal y cada fila guarda sola, así que el bloque se separa a la vista. */
+.g-form-kit {
+    margin-top: 28px;
+    padding-top: 16px;
+    border-top: 1px solid var(--g-border);
+}
+
+.g-form-kit h3 {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: var(--g-primary);
+}
+
+.g-form-kit .g-help { display: block; margin: 4px 0 12px; }
+.g-form-kit .g-table-wrap { margin-bottom: 12px; }
+
 /* Pie del formulario de edición: la única puerta para dar de baja un recurso.
    Separado de GUARDAR por el borde rojo para que no se confundan. */
 .g-form-peligro {
@@ -520,6 +549,55 @@
 
 .g-form-peligro .g-help { display: block; margin-top: 2px; }
 .g-form-peligro form { margin: 0; }
+
+/* Campo de select cuyo valor guardado ya no está entre las opciones del área: se muestra
+   como texto y viaja en un hidden (ver templates/crud/form.html). Hoy le pasa al estado
+   "Dado de baja", que lo pone la baja y no el desplegable. */
+.g-campo-fijo {
+    margin: 0;
+    padding: 8px 10px;
+    border: 1px dashed var(--g-border);
+    background: var(--g-surface);
+    font-weight: bold;
+    color: var(--g-muted);
+}
+
+/* Cuadro modal (<dialog>): hoy sólo el de dar de baja un recurso. Sin JS el <noscript>
+   del template lo pasa a `position: static` y queda como una caja más del formulario. */
+.g-modal {
+    border: 1px solid var(--g-primary);
+    border-top: 4px solid var(--g-alert);
+    background: var(--g-surface);
+    color: var(--g-text);
+    padding: 0;
+    max-width: 480px;
+    width: calc(100% - 32px);
+    margin-top: 16px;
+}
+
+.g-modal::backdrop { background: rgba(26, 54, 93, 0.55); }
+
+.g-modal-form { padding: 20px; }
+
+.g-modal-form h3 {
+    margin: 0 0 4px;
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: var(--g-primary);
+}
+
+.g-modal-form .g-field { margin-top: 14px; }
+
+.g-modal-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+}
+
+/* Registro de bajas: la revertida sigue en la lista (es un historial), en gris y tachada. */
+.g-baja-revertida { opacity: 0.55; }
+.g-baja-revertida .g-item-link { text-decoration: line-through; }
 
 .g-error {
     background: rgba(220, 38, 38, 0.08);
@@ -799,24 +877,6 @@
     color: var(--g-muted);
 }
 .g-ficha-seccion .g-ficha-vacio { padding: 0; }
-
-/* Sección opcional todavía vacía (sub-recursos de un kit): al entrar a la ficha no ocupa
-   lugar, sólo queda el desplegable para empezar a cargarla. */
-.g-ficha-agregar { margin: 10px 0 0; }
-.g-ficha-agregar > summary {
-    cursor: pointer;
-    list-style: none;
-    display: inline-block;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: var(--g-muted);
-}
-.g-ficha-agregar > summary::-webkit-details-marker { display: none; }
-.g-ficha-agregar > summary::marker { content: ''; }
-.g-ficha-agregar > summary:hover { color: var(--g-primary); }
-.g-ficha-agregar[open] > summary { color: var(--g-primary); margin-bottom: 8px; }
 
 /* Dónde está: una fila por lugar. Los números de unidad ganan su columna (cada chip
    se puede quitar) y el total va en su propia celda con borde a la izquierda. */
@@ -1284,6 +1344,19 @@
 
 .agente-message-assistant strong {
     color: var(--g-primary);
+}
+
+/* Nombres del calendario enlazados a /horarios (ver agente/enlaces.py). */
+.agente-message-assistant a {
+    color: var(--g-primary);
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+}
+
+.agente-message-assistant a:hover {
+    color: var(--g-accent);
+    text-decoration-style: solid;
 }
 
 .agente-message-assistant code {

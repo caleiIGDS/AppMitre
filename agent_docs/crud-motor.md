@@ -92,7 +92,7 @@ acá, nunca por un `if slug == '...'` dentro de `crud.py`.
 | `secciones_detalle(slug, id, cur)` | al armar la ficha de detalle | los dos |
 | `derivados(slug, valores)` | antes de cada INSERT/UPDATE; devuelve columnas calculadas | `historia` (`nombre_norm`, `fecha_actualizada`) |
 | `valores_iniciales(slug)` | defaults del form de alta | `gestion` (`fecha_revision` = hoy) |
-| `extras_template(vista, slug)` | kwargs extra para `render_template` | ninguna hoy (lo usaba `gestion` para el carrito de préstamos, sacado 2026-08-21) |
+| `extras_template(vista, slug, id)` | kwargs extra para `render_template`; `id` sólo en `detalle` y `editar`, si no `None` | `gestion`: lugares y vencidos del listado, y los sub-recursos del kit en `editar` |
 | `tarjetas_extra(cur)` | tarjetas del home que no salen de `ENTIDADES` | ninguna hoy (ídem, la tarjeta de Préstamos) |
 | `contexto_extra()` | claves extra del context processor | ninguna hoy (ídem, `carrito_count`) |
 | `NAV_EXTRA` | `[(slug, label)]` extra para la nav | ninguna hoy (ídem, el ítem "Préstamos") |
@@ -113,7 +113,14 @@ columnas que el código ya no declara: `migrar` no puede saber qué sobra en la 
 
 `tabla`, `singular`, `plural`, `descripcion` (card del home), `campos` (form), `columnas` (listado),
 `relaciones` (M2M editables desde el form, con prefijo `rel_`) y, opcionales, **`campo_nombre`**,
-**`campo_alias`** y **`permiso`**.
+**`campo_alias`**, **`permiso`** y **`sin_eliminar`**.
+
+Cada campo de `campos` declara `nombre`, `label`, `tipo` (`text`, `number`, `textarea`, `select`
+con `opciones`, `text_datalist`), y opcionales `requerido`, `ayuda` y **`boton_hoy`**. `boton_hoy`
+es el formato strftime de una fecha guardada como texto libre: `templates/crud/form.html` le pone
+al lado un botón **HOY** que la completa con la fecha del día (la calcula el server con
+`config.ahora()` y llega al template por el helper `hoy(formato)` de `crud.contexto_base`, así el
+motor no conoce ni el campo ni el formato). Hoy la declara `gestion.recursos.fecha_revision`.
 
 `campo_nombre` (default `'nombre'`) existe porque `historia.hitos` llama `titulo` a su columna de
 nombre. **Todas las lecturas van por `crud.select(cfg)`**, que agrega `titulo AS nombre`, así que
@@ -131,6 +138,13 @@ Hoy solo la declara `gestion.ENTIDADES['recursos']` (`'campo_alias': 'alias'`): 
 completa el asistente y el humano nunca ve ni edita — ver `agent_docs/gestion-conocimiento.md`,
 `agent_docs/agente-asistente.md` y `dev-log/DECISIONS.md` 2026-08-08/2026-08-21 (por qué se
 había descartado y por qué el override).
+
+`sin_eliminar` (default `False`) marca la entidad que **no se borra nunca**: la ruta `eliminar`
+devuelve 404 para ese slug, `templates/crud/detalle.html` no dibuja el botón y
+`agente/tools/entidades.py::_eliminar_entidad` mira el mismo flag antes de tocar la fila, así que
+no queda puerta abierta ni por URL ni por el chat. Lo declara `gestion.recursos`, que en vez de
+borrarse se **da de baja** (ver `agent_docs/gestion-conocimiento.md`). Una entidad así necesita su
+propia salida del listado: el flag sólo cierra la puerta, no la reemplaza.
 
 ### `permiso`: una entidad que pide más que el área
 

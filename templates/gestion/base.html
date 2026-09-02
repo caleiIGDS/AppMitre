@@ -8,9 +8,9 @@
     <title>{% block titulo %}Sistema de Gestión{% endblock %} — {{ escuela_nombre }}</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename=escuela_logo) }}">
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=37">
+    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=39">
     <script src="{{ url_for('static', filename='gestion.js') }}?v=7" defer></script>
-    <script src="{{ url_for('static', filename='gestion-agente.js') }}?v=7" defer></script>
+    <script src="{{ url_for('static', filename='gestion-agente.js') }}?v=8" defer></script>
     {# El ☰ y su panel lateral: menú de áreas siempre, y en celular además el nav
        y las acciones del header. #}
     <script src="{{ url_for('static', filename='mobile-nav.js') }}?v=2" defer></script>
@@ -32,6 +32,9 @@
                     <a class="g-btn-outline" href="/">‹ SISTEMA DE HORARIOS</a>
                     {% if puede('gestion.alias') %}
                     <a class="g-btn-outline" href="{{ url_for('gestion.alias_lista') }}">ALIAS</a>
+                    {% endif %}
+                    {% if puede('gestion.auditoria') %}
+                    <a class="g-btn-outline" href="{{ url_for('gestion.bajas_lista') }}">BAJAS</a>
                     {% endif %}
                     {% if puede('agente.leer') %}
                     <button id="agente-toggle-btn" class="g-btn-outline" title="Abrir asistente" style="cursor: pointer;">🤖 ASISTENTE</button>
@@ -66,7 +69,7 @@
        aparece en celular (para el nav y las acciones). #}
     {% if acceso_actual() %}
     <nav class="g-areas" aria-label="Áreas">
-        {% if puede('historia.leer') %}
+        {% if 'historia' in areas and puede('historia.leer') %}
         <a href="{{ url_for('historia.home') }}">HISTORIA INSTITUCIONAL</a>
         {% endif %}
         {% if puede('agente.leer') %}

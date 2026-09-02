@@ -47,16 +47,23 @@ ya hay que tocar el `register_blueprint`) y listo. `laboratorio.leer` entra solo
 `interno-lectura`, el admin la ve por el comodín, y los dispositivos ya dados de alta simplemente no
 tienen ese permiso hasta que el admin lo tilde.
 
+**`areas`, el otro global de Jinja.** Junto a `puede`/`acceso_actual`, `registrar_app` deja
+el conjunto de nombres de blueprint que quedaron montados. Los headers preguntan
+`{% if 'historia' in areas and puede('historia.leer') %}` y no sólo por el permiso, porque el
+admin tiene el comodín `'*'`: le diría que sí a un permiso que ya no está en el catálogo y el
+`url_for` de un blueprint que nadie registró reventaría la página entera.
+
 ### Catálogo actual
 
 | clave | verbo | declarado en |
 |---|---|---|
 | `gestion.leer` / `gestion.editar` | leer / escribir | `gestion.py` |
-| `historia.leer` / `historia.editar` | leer / escribir | `historia.py` |
-| `historia.personas` | admin | `historia.py` |
+| ~~`historia.leer` / `historia.editar`~~ | leer / escribir | `historia.py` — **fuera del catálogo**: el área está apagada (`historia.ACTIVA = False`) y `app.py` no la pasa a `registrar_app` |
+| ~~`historia.personas`~~ | admin | ídem |
 | `agente.leer` / `agente.escribir` | leer / escribir | `agente/__init__.py` |
 | `agente.vision` | admin | `agente/__init__.py` |
 | `agente.auditar` | admin | `agente/__init__.py` |
+| `agente.notas` | admin | `agente/__init__.py` |
 | `accesos.admin` | admin | `accesos.py` |
 
 `accesos.admin` es la única clave que nombra este archivo, y es correcta: es el permiso de su propia
@@ -184,10 +191,11 @@ de horarios, que ya no tiene puente al resto). Detalle en `agent_docs/frontend-u
 
 ## El agente: no tener la tool, no tenerla prohibida
 
-`agente/tools/esquemas.py` declara `PERMISO_POR_TOOL` para las 25 tools (15 `agente.leer`, 10
-`agente.escribir`) y expone `tools_permitidas(permisos)`, **la única puerta por la que los esquemas
+`agente/tools/esquemas.py` declara `PERMISO_POR_TOOL` para las 25 tools (14 `agente.leer`, 9
+`agente.escribir`, `escribir_notas` con `agente.notas` y `listar_alias` con el permiso de gestión)
+y expone `tools_permitidas(permisos)`, **la única puerta por la que los esquemas
 salen hacia el modelo**. Los dos loops de `agente/llm.py` mandan sólo lo filtrado, así que un acceso
-de consulta recibe 15 tools y el modelo ni se entera de que existen las otras diez. Eso es distinto
+de consulta recibe 13 tools y el modelo ni se entera de que existen las otras doce. Eso es distinto
 a prohibírselas: una tool que no está en la lista no se anuncia y no se alucina. Sobre ese filtro
 hay dos ejes más: `PERMISO_POR_SLUG` (una entidad puede pedir un permiso extra, hoy `personas`) y
 `TOOLS_FOTO` (ver `agente.vision`, más abajo).
@@ -201,7 +209,7 @@ El system prompt también se recorta (`prompt.construir_system_prompt(..., escri
 de escritura no se le manda el circuito de alta, las reglas de borrado ni el padrón de ~1.600
 tokens, y sí un bloque que le dice explícitamente que no use "✅". `escribe` se deriva de las tools
 que **efectivamente** se mandaron, no de los permisos, para que las dos mitades del mensaje no
-puedan contradecirse. Lo mismo hacen `ve_personas` y `ve_fotos`. Detalle en
+puedan contradecirse. Lo mismo hacen `ve_personas`, `ve_fotos` y `ve_notas`. Detalle en
 `agent_docs/agente-asistente.md`.
 
 ### `agente.vision`: el permiso que corta un gasto, no una tabla
@@ -224,6 +232,20 @@ Las dos tools de foto piden `agente.vision` **además** del permiso que declaran
 `PERMISO_POR_TOOL`, no en su lugar: si `adjuntar_foto` cambiara su permiso por `agente.vision` a
 secas, un dispositivo con visión tildada a mano escribiría en la galería sin tener
 `agente.escribir`.
+
+### `agente.notas`: el permiso que elige un destinatario
+
+El archivo `agente.md` (`/agente/notas`, ver `agent_docs/agente-asistente.md`) va al system prompt
+de **todos los turnos de quien tenga este permiso**, y de nadie más. Por eso es verbo `admin` y no
+`leer`: son las notas de quien administra el sistema —"el pañol está en el aula 12 hasta que
+arreglen el techo"— y no un tablón de anuncios para la escuela. Un preceptor que chatea no recibe
+una sola línea, ni sabe que el archivo existe.
+
+Es el mismo permiso para leerlo y para escribirlo, en la página y por chat (`escribir_notas`):
+partirlo en lectura y escritura inventaría un rol —alguien que ve las notas pero no las toca— que
+no existe. La tool se audita en `agente_log` aunque no sea `agente.escribir` (ver
+`TOOLS_AUDITADAS`), y lo que guarda como `antes` es el **contenido completo previo**: reescribe el
+archivo entero, así que el rastro tiene que serlo también.
 
 ## `accesos.db`
 

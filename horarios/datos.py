@@ -9,7 +9,7 @@ import time
 import unicodedata
 import urllib.request
 import io
-from .config import (TURNO_CURSOS, TURNO_DEFAULT, APPSCRIPT_URL, APPSCRIPT_SECRET,
+from .config import (DIAS, TURNO_CURSOS, TURNO_DEFAULT, APPSCRIPT_URL, APPSCRIPT_SECRET,
                      SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE)
 
 # Todo lo del sistema de horarios vive dentro del paquete, incluidos sus datos:
@@ -145,6 +145,36 @@ def eliminar_acentos(s):
         return ""
     return "".join(c for c in unicodedata.normalize('NFD', s)
                    if unicodedata.category(c) != 'Mn')
+
+# Las tres tablas escriben el día distinto: `clases` guarda "Lunes"/"Miércoles" (título, con
+# tilde) porque viene del Sheet tal cual, mientras `personal_no_docente` y
+# `horarios_preceptores` guardan "LUNES"/"MIERCOLES" (mayúscula, sin tilde) porque las arma el
+# loader. Además `clases` tiene 7 filas con "Miercoles" sin tilde y algunas con "Sábado", que
+# no es un día de cursada. Este es el único lugar que decide qué día es cuál.
+_DIA_POR_NORM = {eliminar_acentos(d).lower(): d for d in DIAS}
+
+def _dia_canonico(dia):
+    """'LUNES', 'Miercoles', 'miércoles' → el día tal como está en DIAS. None si no es de cursada."""
+    return _DIA_POR_NORM.get(eliminar_acentos(str(dia or '')).lower().strip())
+
+def _a_minutos(hhmm):
+    """'07:40' → 460. None si no se puede leer.
+
+    No usar comparación de strings sobre las horas: la base tiene '7:40' y '8:40' sin cero a la
+    izquierda (que ordenan mal lexicográficamente), '19:00:00' con segundos y un '16:60' que como
+    string no es nada pero como minutos es las 17:00. Sumar h*60+m absorbe los tres casos.
+    """
+    partes = str(hhmm or '').strip().split(':')
+    if len(partes) < 2:
+        return None
+    try:
+        return int(partes[0]) * 60 + int(partes[1])
+    except (ValueError, TypeError):
+        return None
+
+def a_hhmm(minutos):
+    """460 → '07:40'. La vuelta de `_a_minutos`, para formatear al final."""
+    return f'{minutos // 60:02d}:{minutos % 60:02d}'
 
 def limpiar_profesor(nombre):
     if not nombre: return ""
@@ -651,6 +681,123 @@ def aulas_libres(dia=None, hora=None):
         'libres_por_piso': libres_por_piso,
         'total_libres': total_libres
     }
+
+
+# ---------------------------------------------------------------------------
+# Ocupación: cuándo está ocupada una entidad, en minutos y con el día canónico.
+#
+# Es la materia prima de la tool `coincidencias` del agente. Todas devuelven la misma forma
+# —{dia: [(inicio_min, fin_min, etiqueta), ...]}— para que quien las cruza no tenga que saber
+# de qué tabla salió cada una. La limpieza (días torcidos, horas rotas, filas vacías) pasa acá
+# y una sola vez: arriba ya llega sano.
+# ---------------------------------------------------------------------------
+
+def _ocupacion_desde_clases(where, params, etiqueta):
+    """Filas de `clases` → {dia: [(ini, fin, etiqueta)]}. `etiqueta` recibe la fila."""
+    con = conectar()
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+    cur.execute(f"SELECT * FROM clases WHERE {where}", params)
+    filas = [dict(r) for r in cur.fetchall()]
+    con.close()
+
+    ocup = {}
+    for f in filas:
+        dia = _dia_canonico(f['dia'])
+        ini, fin = _a_minutos(f['hora_inicio']), _a_minutos(f['hora_fin'])
+        # Descarta de un saque las ~864 filas en blanco del CSV, los días que no son de cursada
+        # y cualquier hora ilegible. Sin esto un bloque roto se planta en el minuto 0.
+        if not dia or ini is None or fin is None or fin <= ini:
+            continue
+        ocup.setdefault(dia, []).append((ini, fin, etiqueta(f)))
+    for dia in ocup:
+        ocup[dia].sort()
+    return ocup
+
+def ocupacion_curso(curso, division):
+    return _ocupacion_desde_clases(
+        "curso = ? AND division = ?", (curso, division),
+        lambda f: f['materia'] or 'CLASE')
+
+def ocupacion_profesor(nombre):
+    # Mismo WHERE que `obtener_filas('profesor', ...)`: cuando hay suplencia activa la clase
+    # aparece tanto para el titular como para quien lo cubre, porque los dos están ocupados.
+    return _ocupacion_desde_clases(
+        "profesor = ? OR (prof_suplente = ? AND suplente_activo = 1)", (nombre, nombre),
+        lambda f: f"{f['materia'] or 'CLASE'} ({f['curso']}°{f['division']})")
+
+def ocupacion_no_docente(nombre):
+    con = conectar()
+    cur = con.cursor()
+    cur.execute("SELECT rol, dia, hora_inicio, hora_fin FROM personal_no_docente WHERE nombre = ?",
+                (nombre,))
+    filas = cur.fetchall()
+    con.close()
+
+    ocup = {}
+    for rol, dia_raw, hi, hf in filas:
+        dia = _dia_canonico(dia_raw)
+        ini, fin = _a_minutos(hi), _a_minutos(hf)
+        if not dia or ini is None or fin is None or fin <= ini:
+            continue
+        ocup.setdefault(dia, []).append((ini, fin, rol or 'EN LA ESCUELA'))
+    for dia in ocup:
+        ocup[dia].sort()
+    return ocup
+
+def ocupacion_preceptor(nombres):
+    """Ocupación de un preceptor: los cursos que cubre, cuando esos cursos tienen clase.
+
+    `horarios_preceptores` no guarda horas — sólo qué preceptor cubre qué curso y qué día — así
+    que las horas salen de las clases de esos cursos. NO se usa la columna `turno` para acotar:
+    el turno de un curso es su turno nominal, y los contraturnos hacen que un curso "de mañana"
+    tenga clase hasta las 17:50, con lo cual la franja de cada turno termina siendo el día
+    entero y no acota nada. Contra eso, los cursos a cargo son un dato real.
+
+    Es una cota superior: si el preceptor cubre un curso sólo en un turno, acá figura ocupado
+    todas las horas de ese curso ese día. Por eso el resultado se marca como aproximado.
+    `nombres` acepta varias grafías del mismo nombre, que es como vienen del padrón.
+    """
+    if isinstance(nombres, str):
+        nombres = [nombres]
+    if not nombres:
+        return {}
+
+    con = conectar()
+    cur = con.cursor()
+    marcas = ','.join('?' * len(nombres))
+    cur.execute(
+        f"SELECT DISTINCT curso, UPPER(division), dia FROM horarios_preceptores WHERE preceptor IN ({marcas})",
+        tuple(nombres))
+    a_cargo = cur.fetchall()
+
+    # Días de cursada en que este preceptor tiene cada curso: {(curso, division): {dias}}
+    dias_por_curso = {}
+    for curso, division, dia_raw in a_cargo:
+        dia = _dia_canonico(dia_raw)
+        if dia:
+            dias_por_curso.setdefault((curso, division), set()).add(dia)
+    if not dias_por_curso:
+        con.close()
+        return {}
+
+    ocup = {}
+    for (curso, division), dias in dias_por_curso.items():
+        cur.execute("SELECT dia, hora_inicio, hora_fin FROM clases WHERE curso = ? AND UPPER(division) = ?",
+                    (curso, division))
+        for dia_raw, hi, hf in cur.fetchall():
+            dia = _dia_canonico(dia_raw)
+            ini, fin = _a_minutos(hi), _a_minutos(hf)
+            if not dia or dia not in dias or ini is None or fin is None or fin <= ini:
+                continue
+            entrada = (ini, fin, f'{curso}°{division}')
+            if entrada not in ocup.setdefault(dia, []):
+                ocup[dia].append(entrada)
+    con.close()
+
+    for dia in ocup:
+        ocup[dia].sort()
+    return ocup
 
 
 def init_db():

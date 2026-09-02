@@ -68,7 +68,15 @@ def conectar():
     (alias, desglose por ubicación, que no pasan por el motor genérico) la usan directo."""
     return crud.conectar(sys.modules[__name__])
 
-ESTADOS_RECURSO = ["Funcional", "Dañado usable", "Roto", "Dado de baja"]
+# Un recurso NUNCA se borra: se da de baja (ver `dar_de_baja` y la tabla `recurso_bajas`).
+# Por eso "Dado de baja" NO está acá: no es un estado que se elija a mano en el formulario
+# ni desde el chat (esta lista es también el enum de las tools, ver agente/tools/esquemas.py),
+# lo pone sólo el alta de una baja, que exige decir qué le pasó.
+ESTADO_BAJA = "Dado de baja"
+ESTADOS_RECURSO = ["Funcional", "Dañado usable", "Roto"]
+# Qué le pasó al recurso que se da de baja. "Otro" existe para no bloquear una baja rara:
+# el detalle libre de al lado es lo que la explica.
+MOTIVOS_BAJA = ["Uso", "Desgaste", "Extravío", "Rotura", "Otro"]
 # "" primero: permite dejar el valor sin definir (recursos previos al inventario).
 VALORES_RECURSO = ["", "Básico", "Secundario", "Alto valor"]
 # Sugerencias de lugar para el desglose por unidad (templates/gestion/detalle.html): NUNCA
@@ -76,6 +84,11 @@ VALORES_RECURSO = ["", "Básico", "Secundario", "Alto valor"]
 # escribir excepciones como "panel solar instalado en el techo".
 LUGARES_RECURSO = ["Laboratorio Armario 1", "Laboratorio Armario 2", "Laboratorio",
                     "Taller", "Taller Armario 3", "Taller Armario 4"]
+
+# Formato de `recursos.fecha_revision`. La columna es TEXT y el inventario importado del
+# sheet trae fechas cortas sin año ("24/4"): conviven, pero lo que se carga de acá en más
+# lleva el año. El agente importa esta constante para no tener dos formatos distintos.
+FORMATO_FECHA_REVISION = '%d/%m/%Y'
 
 # Configuración declarativa de cada entidad: campos del form, columnas del listado
 # y relaciones M2M editables desde su formulario. Los campos de relación usan el
@@ -97,13 +110,19 @@ ENTIDADES = {
             # agent_docs/gestion-conocimiento.md.
             {'nombre': 'estado', 'label': 'Estado', 'tipo': 'select', 'opciones': ESTADOS_RECURSO},
             {'nombre': 'valor', 'label': 'Valor', 'tipo': 'select', 'opciones': VALORES_RECURSO, 'ayuda': 'Importancia del recurso dentro del inventario'},
-            {'nombre': 'fecha_revision', 'label': 'Última revisión', 'tipo': 'text', 'ayuda': 'Fecha del último control de inventario (día/mes/año). En un alta arranca en hoy'},
+            # `boton_hoy` (el formato de la fecha) le pone al lado el botón HOY, ver
+            # templates/crud/form.html.
+            {'nombre': 'fecha_revision', 'label': 'Última revisión', 'tipo': 'text', 'boton_hoy': FORMATO_FECHA_REVISION, 'ayuda': 'Fecha del último control de inventario (día/mes/año). En un alta arranca en hoy'},
         ],
         # 'valor' no está acá a propósito: sigue siendo un campo real (se carga y edita
         # desde la ficha, y el asistente lo usa), pero no tiene columna propia en el
         # listado — se ve en el detalle de cada recurso.
         'columnas': [('nombre', 'NOMBRE'), ('cantidad', 'CANT.'), ('estado', 'ESTADO')],
         'relaciones': [],
+        # Un recurso no se borra nunca: se da de baja (ver `dar_de_baja`). El flag lo lee
+        # crud.py y cierra la ruta genérica de eliminar para este slug, así no queda una
+        # puerta abierta por URL ni por el chat (agente/tools/entidades.py lo mira igual).
+        'sin_eliminar': True,
         # Términos alternativos (no necesariamente sinónimos estrictos: "zapatilla" y
         # "alargue" son cosas distintas pero se confunden) que completa el asistente
         # (agente/tools/esquemas.py), nunca el humano: a propósito NO está en 'campos', así
@@ -116,7 +135,9 @@ ENTIDADES = {
     },
 }
 
-# Tablas a limpiar cuando se elimina un recurso. `recurso_unidades` y `kit_items` no son
+# Tablas a limpiar cuando se elimina un recurso. Hoy ningún recurso se elimina (ver
+# `sin_eliminar` arriba), así que para 'recursos' esto no llega a correr nunca; queda
+# declarado porque el motor lo exige y porque una entidad futura del área sí lo va a usar. `recurso_unidades` y `kit_items` no son
 # relaciones M2M de verdad (son el desglose por unidad y los sub-recursos de un kit, ver
 # más abajo) pero el mecanismo de limpieza es idéntico: borrar filas por `recurso_id`.
 LIMPIEZA_M2M = {
@@ -148,6 +169,15 @@ CREATE TABLE IF NOT EXISTS kit_items (
     titulo TEXT NOT NULL,
     cantidad TEXT DEFAULT '',
     recurso_asignado TEXT DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS recurso_bajas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recurso_id INTEGER NOT NULL,
+    recurso_nombre TEXT NOT NULL,
+    motivo TEXT NOT NULL,
+    detalle TEXT DEFAULT '',
+    fecha TEXT DEFAULT '',
+    revertida INTEGER DEFAULT 0
 );
 """
 
@@ -214,6 +244,19 @@ def migrar(cur):
                 [(r['id'], i, r['ubicacion'] or '') for i in range(1, n + 1)])
         cur.execute("ALTER TABLE recursos DROP COLUMN ubicacion")
 
+    # Hasta el 2026-09-02 "Dado de baja" era un estado más del desplegable y no dejaba
+    # rastro de qué le había pasado al recurso. Los que ya estaban dados de baja entran al
+    # registro nuevo con motivo "Otro" y el detalle diciendo que la baja es anterior: así
+    # /gestion/bajas muestra el inventario completo y no arranca mintiendo por omisión.
+    # Idempotente: sólo toma los que todavía no tienen ninguna fila propia.
+    for r in cur.execute(
+            "SELECT id, nombre FROM recursos WHERE estado = ? AND id NOT IN "
+            "(SELECT recurso_id FROM recurso_bajas)", (ESTADO_BAJA,)).fetchall():
+        cur.execute(
+            "INSERT INTO recurso_bajas (recurso_id, recurso_nombre, motivo, detalle, fecha) "
+            "VALUES (?,?,?,?,'')",
+            (r['id'], r['nombre'], 'Otro', 'Baja anterior al registro: no se anotó el motivo.'))
+
 
 def seed(cur):
     """Datos de ejemplo: el banco de ensayo solar del documento de diseño."""
@@ -238,11 +281,6 @@ def seed(cur):
 # historia.personas, que sí lo necesita — ver historia.ERROR_DUPLICADO).
 ERROR_DUPLICADO = {}
 
-
-# Formato de `recursos.fecha_revision`. La columna es TEXT y el inventario importado del
-# sheet trae fechas cortas sin año ("24/4"): conviven, pero lo que se carga de acá en más
-# lleva el año. El agente importa esta constante para no tener dos formatos distintos.
-FORMATO_FECHA_REVISION = '%d/%m/%Y'
 
 # Umbral del chip "sin revisar hace +6 meses" del listado (rediseño de
 # templates/gestion/lista.html). 183 días ~ 6 meses.
@@ -286,8 +324,8 @@ def secciones_detalle(slug, id, cur):
         secciones.append({'titulo': 'Ubicación', 'slug': None,
                           'items': lugares_recurso_agrupado(cur, id), 'tipo': 'ubicaciones'})
         # Un recurso es "kit" en cuanto tiene sub-recursos cargados acá, sin flag aparte
-        # (mismo criterio orgánico que el desglose por ubicación). `oculto_si_vacio` para
-        # que un recurso sin sub-recursos no muestre la sección a quien no puede escribir.
+        # (mismo criterio orgánico que el desglose por ubicación). En la ficha la sección
+        # es sólo de lectura y sin ítems no aparece: se carga y se edita desde EDITAR.
         secciones.append({'titulo': 'Sub-recursos (kit)', 'slug': None,
                           'items': kit_items_recurso(cur, id), 'tipo': 'kit_items',
                           'oculto_si_vacio': True})
@@ -307,12 +345,19 @@ def init_db():
     crud.init_db(sys.modules[__name__])
 
 
-def extras_template(vista, slug):
+def extras_template(vista, slug, id=None):
     """Kwargs extra para el render. En la ficha: la lista fija de lugares, para el datalist
     del mini form de mover/ubicar unidades (templates/gestion/detalle.html). En el listado:
-    los lugares de cada recurso (para la columna y el filtro) y qué está vencido."""
+    los lugares de cada recurso (para la columna y el filtro) y qué está vencido. En el
+    formulario de edición: los sub-recursos del kit, que se cargan y se borran ahí y no en
+    la ficha (templates/gestion/form.html)."""
     if slug == 'recursos' and vista == 'detalle':
         return {'lugares_recurso': LUGARES_RECURSO}
+    if slug == 'recursos' and vista == 'editar':
+        con = conectar()
+        items = kit_items_recurso(con.cursor(), id)
+        con.close()
+        return {'kit_items': items}
     if slug == 'recursos' and vista == 'lista':
         con = conectar()
         cur = con.cursor()
@@ -325,6 +370,13 @@ def extras_template(vista, slug):
                           key=texto.norm)
         return {'vencidos_recurso': vencidos, 'lugares_filtro': lugares, 'ubicaciones_recurso': ubicaciones}
     return {}
+
+
+def contexto_extra():
+    """Constantes que necesitan varios templates del área: el estado que marca una baja
+    (para no repetir el string suelto en el listado y la ficha) y los motivos del cuadro
+    de baja del formulario."""
+    return {'estado_baja': ESTADO_BAJA, 'motivos_baja': MOTIVOS_BAJA}
 
 
 accesos.registrar_acceso(bp, PERMISO_LECTURA)
@@ -360,6 +412,107 @@ def _stock(cur, rid):
     (agente/tools/ubicaciones.py) para saber si un id de recurso existe de verdad."""
     row = cur.execute("SELECT cantidad FROM recursos WHERE id = ?", (rid,)).fetchone() if rid else None
     return None if row is None else _int(row['cantidad'])
+
+
+# --- Bajas de recursos --------------------------------------------------------
+# Un recurso NUNCA se borra del inventario: cuando deja de existir físicamente (se gastó,
+# se rompió, se perdió) se le da de baja y queda en la ficha con estado ESTADO_BAJA, fuera
+# del listado salvo que se pida verlo. Lo que se pierde al borrar una fila —qué era, cuántos
+# había, dónde estaba, sus fotos— es justamente lo que hace falta para rendir cuentas
+# después, y una escuela rinde cuentas de lo que se le rompe. La contracara es que la baja
+# exige decir qué pasó: `recurso_bajas` es el registro, y sin motivo no hay baja.
+
+def dar_de_baja(cur, rid, motivo, detalle=''):
+    """Da de baja un recurso: lo deja en ESTADO_BAJA y anota la fila del registro.
+
+    Devuelve el motivo guardado, o None si el recurso no existe o el motivo viene vacío
+    (que es la única validación: el detalle es opcional, igual que la fecha exacta de lo
+    que pasó, que nadie suele recordar). Un recurso ya dado de baja se puede volver a dar
+    de baja sin romper nada: suma otra fila al registro, que es un historial, no un estado.
+    """
+    motivo = (motivo or '').strip()
+    fila = cur.execute("SELECT nombre FROM recursos WHERE id = ?", (rid,)).fetchone()
+    if fila is None or not motivo:
+        return None
+    cur.execute(
+        "INSERT INTO recurso_bajas (recurso_id, recurso_nombre, motivo, detalle, fecha) VALUES (?,?,?,?,?)",
+        (rid, fila['nombre'], motivo, (detalle or '').strip(),
+         ahora().strftime(FORMATO_FECHA_REVISION)))
+    cur.execute("UPDATE recursos SET estado = ? WHERE id = ?", (ESTADO_BAJA, rid))
+    return motivo
+
+
+def revertir_baja(cur, rid):
+    """Deshace la última baja de un recurso (el error de dedo del que la dio).
+
+    La fila del registro NO se borra: queda marcada como revertida, porque el registro es
+    el historial de lo que se decidió y no la lista de lo que hoy está de baja. El estado
+    vuelve al primero de ESTADOS_RECURSO ("Funcional"): cuál era antes de la baja no se
+    guarda, y si estaba roto se corrige a mano desde el mismo formulario.
+    """
+    fila = cur.execute("SELECT estado FROM recursos WHERE id = ?", (rid,)).fetchone()
+    if fila is None or fila['estado'] != ESTADO_BAJA:
+        return False
+    ultima = cur.execute(
+        "SELECT id FROM recurso_bajas WHERE recurso_id = ? AND revertida = 0 ORDER BY id DESC LIMIT 1",
+        (rid,)).fetchone()
+    if ultima:
+        cur.execute("UPDATE recurso_bajas SET revertida = 1 WHERE id = ?", (ultima['id'],))
+    cur.execute("UPDATE recursos SET estado = ? WHERE id = ?", (ESTADOS_RECURSO[0], rid))
+    return True
+
+
+def bajas_registro(cur):
+    """El registro completo, la última primero, para /gestion/bajas.
+
+    `recurso_nombre` es la foto del nombre al momento de la baja y `nombre_actual` el de
+    hoy: si alguien renombró el recurso después, el registro sigue diciendo qué se dio de
+    baja. `existe` es False si la fila del recurso desapareció igual (una baja de antes de
+    esta regla, o un borrado desde sqlite a mano): la entrada se muestra sin link."""
+    filas = cur.execute(
+        "SELECT b.id, b.recurso_id, b.recurso_nombre, b.motivo, b.detalle, b.fecha, b.revertida, "
+        "r.nombre AS nombre_actual, r.estado AS estado_actual "
+        "FROM recurso_bajas b LEFT JOIN recursos r ON r.id = b.recurso_id "
+        "ORDER BY b.id DESC").fetchall()
+    return [dict(f, existe=f['nombre_actual'] is not None) for f in filas]
+
+
+@bp.route('/recursos/<int:id>/baja', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
+def recurso_baja(id):
+    con = conectar()
+    cur = con.cursor()
+    hecho = dar_de_baja(cur, id, request.form.get('motivo', ''),
+                        request.form.get('detalle', ''))
+    con.commit()
+    con.close()
+    # Sin motivo se vuelve al formulario, que es donde está el cuadro de la baja; con la
+    # baja hecha, a la ficha, que ya la muestra dada de baja.
+    if not hecho:
+        return redirect(url_for('gestion.editar', slug='recursos', id=id))
+    return redirect(url_for('gestion.detalle', slug='recursos', id=id))
+
+
+@bp.route('/recursos/<int:id>/baja/revertir', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
+def recurso_baja_revertir(id):
+    con = conectar()
+    revertir_baja(con.cursor(), id)
+    con.commit()
+    con.close()
+    return redirect(url_for('gestion.detalle', slug='recursos', id=id))
+
+
+@bp.route('/bajas')
+@accesos.requiere(PERMISO_AUDITORIA)
+def bajas_lista():
+    """Registro de bajas. Mismo permiso que el chip "mostrar dados de baja" del listado
+    (`gestion.auditoria`): lo que salió del inventario es información de auditoría, no
+    parte de la consulta del día a día."""
+    con = conectar()
+    filas = bajas_registro(con.cursor())
+    con.close()
+    return render_template('gestion/bajas.html', filas=filas, activo='bajas')
 
 
 # --- Desglose de recursos por unidad ------------------------------------------
@@ -612,7 +765,7 @@ def kit_item_agregar(id):
                 (id, titulo, cantidad, recurso_asignado))
             con.commit()
         con.close()
-    return redirect(url_for('gestion.detalle', slug='recursos', id=id))
+    return redirect(url_for('gestion.editar', slug='recursos', id=id))
 
 
 @bp.route('/recursos/<int:id>/kit/<int:item_id>/editar', methods=['POST'])
@@ -626,7 +779,7 @@ def kit_item_editar(id, item_id):
                          request.form.get('recurso_asignado', '').strip())
         con.commit()
         con.close()
-    return redirect(url_for('gestion.detalle', slug='recursos', id=id))
+    return redirect(url_for('gestion.editar', slug='recursos', id=id))
 
 
 @bp.route('/recursos/<int:id>/kit/<int:item_id>/eliminar', methods=['POST'])
@@ -636,5 +789,5 @@ def kit_item_eliminar(id, item_id):
     eliminar_kit_item(con.cursor(), id, item_id)
     con.commit()
     con.close()
-    return redirect(url_for('gestion.detalle', slug='recursos', id=id))
+    return redirect(url_for('gestion.editar', slug='recursos', id=id))
 

@@ -20,6 +20,8 @@ instrucción de tono de cada historia porque los resultados de tools no se persi
 historial: en un turno de seguimiento ("¿y después qué pasó?") lo único que el modelo
 tiene a la vista es su propia respuesta anterior, que imita.
 """
+import historia
+
 from .lore import COMO_CUENTA_EMILIO, QUIEN_ES_EMILIO
 
 # ---------------------------------------------------------------------------
@@ -40,13 +42,18 @@ Te consultan preceptores, docentes, jefes de taller, secretaría y dirección �
 en el pasillo, entre hora y hora. Tu trabajo es que no tengan que abrir el sistema ni ir a
 buscar la planilla: preguntan y les resolvés."""
 
-_AREAS_HORARIOS = """Tenés cinco áreas a cargo:
-1. HORARIOS — quién da clase, dónde y cuándo; qué aulas están libres; quién es el preceptor
+_AREA_HORARIOS = """HORARIOS — quién da clase, dónde y cuándo; qué aulas están libres; quién es el preceptor
    de un curso. Es información de consulta: la planilla la carga otra persona, vos no la editás.
    - Por CARGO ("¿qué EMATP hay?", "¿quién es el EMATP de energías renovables?", "la jefa de
      exactas") es `buscar_por_rol`, no `buscar_profesor`. Los cargos están escritos con las
      siglas de la escuela ("EMATP EERR" = EMATP de energías renovables): si la búsqueda no
      matchea, la tool te devuelve el padrón completo de cargos para que reconozcas la sigla vos.
+   - CRUZAR HORARIOS ("¿en qué horario coinciden 2do C, 6to 5ta y 4to 9na?", "¿cuándo se cruza
+     Moreira con 7mo 6ta?", "compará estos dos horarios") es `coincidencias`, con los cursos y
+     las personas juntos en la misma llamada. NUNCA lo armes sacando dos o tres `horario_curso`
+     sueltos y cruzándolos vos: cruzar tres o cuatro horarios a mano te sale mal como la
+     mitad de las veces, y cuando sale mal es porque se te cayó un día entero. La tool te da
+     los tramos ya calculados; tu trabajo es leerlos y explicarlos, no recalcularlos.
    - PRECEPTORES: son gente aparte, no dan clases y no están en el padrón de `buscar_profesor`.
      "¿Quién es el preceptor de 3° B?" y "¿qué cursos tiene Fulana?" se contestan con
      `preceptores`. Los turnos son TRES: MAÑANA, TARDE y VESPERTINO. Cada curso tiene un
@@ -60,7 +67,7 @@ _AREAS_HORARIOS = """Tenés cinco áreas a cargo:
      sabés. No lo deduzcas de que alguien sea "el de contraturno" — eso no dice qué turno es,
      y hay cursos donde un turno no tiene a NADIE cargado y la respuesta correcta es esa."""
 
-_AREAS_RESTO = f"""3. HISTORIA DE LA CASA — la memoria viva de la escuela. Cómo empezó, tradiciones, anécdotas,
+_AREA_LORE = f"""HISTORIA DE LA CASA — la memoria viva de la escuela. Cómo empezó, tradiciones, anécdotas,
    misterios que solo vos conocés. Cuando te pregunten ("¿qué sabés de Fulana?", "contame algo
    de la escuela", "¿por qué se llama así?", "historias de acá"), llamá a `consultar_historia(tema='...')`.
    IMPORTANTE: En historias, SOLO vos hablas. No sos un asistente que le relata al usuario: VOS
@@ -79,8 +86,9 @@ _AREAS_RESTO = f"""3. HISTORIA DE LA CASA — la memoria viva de la escuela. Có
    lore. Un horario, un stock o una persona que no están cargados se contestan
    derecho y sin chiste — "no hay datos de eso", y listo. Al que está buscando una herramienta o
    corriendo a dar clase, una excusa graciosa le cuesta una vuelta al pañol al vacío. Ahí no sos
-   el fantasma orgulloso: sos la herramienta que le resuelve el problema.
-4. LÍNEA DEL TIEMPO — hitos institucionales (logros, eventos, carreras nuevas, construcciones,
+   el fantasma orgulloso: sos la herramienta que le resuelve el problema."""
+
+_AREA_HITOS = """LÍNEA DEL TIEMPO — hitos institucionales (logros, eventos, carreras nuevas, construcciones,
    participaciones en competencias). Cuando la pregunta es sobre "¿qué pasó en X?", "¿hay
    antecedentes?", "últimos logros", "casos históricos", usá `buscar_hitos(etiqueta='...')`.
    La tool devuelve muchos hitos ordenados por nivel (Crítico > Importante > Básico) y fecha.
@@ -91,7 +99,7 @@ _AREAS_RESTO = f"""3. HISTORIA DE LA CASA — la memoria viva de la escuela. Có
    NO ABRUMAR: estos datos son para contextualizar tu respuesta, no para listar todo.
    Una anécdota inventada es peor que nada. Una historia que no está acá, no existe."""
 
-_AREA_PERSONAS = """5. PERSONAS — quién es quién en la escuela. Una ficha por persona con una SEMBLANZA en prosa
+_AREA_PERSONAS = """PERSONAS — quién es quién en la escuela. Una ficha por persona con una SEMBLANZA en prosa
    (quién es, qué aporta, por qué importa) más los hilos que la unen a hitos (incluye lo que
    antes se cargaba como "proyecto": hoy es un hito con "Proyecto" en sus etiquetas).
    `detalle_entidad('personas', id)` te devuelve la semblanza Y esas participaciones juntas,
@@ -134,13 +142,13 @@ _COMO_TRABAJAS = """CÓMO TRABAJÁS
   su ficha). En la duda, pedí de más en una vuelta antes que de a una en varias."""
 
 _NO_AFIRMES = """NUNCA AFIRMES ALGO QUE NO EJECUTASTE - REGLA INVIOLABLE:
-- Solo podés decir que algo se creó / se borró / se registró / se VINCULÓ / se DESVINCULÓ /
-  se editó si llamaste a la tool correspondiente EN ESTE MISMO TURNO y te devolvió ok:true.
+- Solo podés decir que algo se creó / se borró / se registró / se editó si llamaste a la
+  tool correspondiente EN ESTE MISMO TURNO y te devolvió ok:true.
   El id que informes tiene que ser el que devolvió la tool, nunca uno inventado ni supuesto.
-- Deshacer algo NO es automático: "desvinculalo", "sacalo", "volvé atrás", "era una prueba"
-  requieren su propia llamada a la tool (desvincular_entidad, etc.). Que vos
+- Deshacer algo NO es automático: "sacalo", "volvé atrás", "era una prueba" requieren su
+  propia llamada a la tool. Que vos
   hayas hecho la acción opuesta hace un momento no la revierte sola. Si no ejecutaste la tool
-  de deshacer en este turno, NO digas "✅ desvinculado" ni "listo, revertido".
+  de deshacer en este turno, NO digas "✅ listo" ni "listo, revertido".
 - Si una tool devuelve ok:false o un error (incluido "Excepción: ..."), decíselo al usuario en
   texto claro. NO inventes los datos que la tool no te dio, NO rellenes campos con valores
   plausibles, y NO sigas como si hubiera funcionado.
@@ -224,9 +232,9 @@ el circuito:
    armá la ficha de nuevo con la corrección aplicada, una llamada a crear_entidad por cada una
    en ese mismo turno, MANTENIENDO el número de foto que te indica — si lo cambiás o lo omitís,
    esa ficha pierde su imagen. Contestá corto: qué corregiste, y que las revise otra vez.
-El nombre (o el título, en los hitos), el tipo y la descripción los escribís vos a partir de lo
+El nombre%s, el tipo y la descripción los escribís vos a partir de lo
 que te contó: no le pidas que te dicte una descripción. Lo que no te dijeron va vacío, no
-inventado."""
+inventado.""" % (' (o el título, en los hitos)' if historia.ACTIVA else '')
 
 _HITOS = """AL CARGAR UN HITO (línea del tiempo):
 - Si el hito es de alguien, ESA GENTE VA EN `protagonistas`. Un hito de una olimpiada sin los
@@ -380,8 +388,8 @@ sin ficha de confirmación."""
 # Bloques que sólo van si el acceso es de consulta
 # ---------------------------------------------------------------------------
 _SOLO_LECTURA = """DESDE ESTE ACCESO SOLO CONSULTÁS:
-No tenés ninguna herramienta que escriba en la base. No podés dar de alta, editar,
-vincular, desvincular ni borrar — y no es que esté
+No tenés ninguna herramienta que escriba en la base. No podés dar de alta, editar
+ni borrar — y no es que esté
 prohibido: esas herramientas directamente NO EXISTEN para vos en esta conversación.
 Si te piden un cambio, decilo en una línea y sin vueltas: "desde este acceso solo puedo
 consultar; eso se hace desde Gestión de recursos, o pedíselo a alguien con permiso de
@@ -414,6 +422,14 @@ _REGLA_ELIMINAR = """Para ELIMINAR: NUNCA ejecutes en el mismo turno. Describe q
    el borrado si el nombre no coincide con el id — si te rechaza, NO reintentes con otro id a
    ver si pega: volvé a buscar cuál es el correcto."""
 
+# Sin el área de historia no queda nada que borrar y la tool no viaja: un recurso NO se
+# elimina, sale del inventario por la baja de la web. La regla sigue estando igual, porque
+# el pedido ("borrá el taladro") va a llegar lo mismo y sin esto la respuesta es inventada.
+_REGLA_SIN_ELIMINAR = """Para ELIMINAR: no tenés ninguna tool que borre, y no es un olvido. Un recurso no se
+   elimina nunca: sale del inventario dándolo de BAJA desde la web (EDITAR el recurso →
+   DAR DE BAJA), que pide indicar qué le pasó. Si te piden borrar algo, explicá eso en una
+   línea; no prometas hacerlo vos ni digas que lo borraste."""
+
 _REGLA_FOTO = """Para CREAR desde FOTO: ver la sección de datasheets y etiquetas de más arriba. Nunca
    inventes un dato que no se lee en la imagen, y nunca des de alta sin la ficha de confirmación."""
 
@@ -423,19 +439,78 @@ _REGLA_SINONIMOS = """NUNCA digas "no está cargado" porque una búsqueda no enc
    buscar_entidad -> si ningún resultado tiene match "exacto", llamá a listar_todos con el
    mismo slug y buscá vos en la lista completa (ahí sí reconocés sinónimos, marcas y jerga
    del taller) -> recién si tampoco está ahí, decí que no está cargado.
-   Con PERSONAS rige lo mismo, pero el segundo nivel no lo tenés que pedir: si
+   Con las PERSONAS rige lo mismo, pero el segundo nivel no lo tenés que pedir: si
    buscar_profesor, horario_profesor o preceptores no encuentran a nadie, te devuelven
    `padron_completo` en esa misma respuesta. Leelo antes de contestar — un apodo, un nombre
-   al revés o una errata grande no matchean por letras y ahí los reconocés vos. Y son TRES
-   padrones distintos (horarios, preceptores y fichas de personas): que alguien no esté en
-   uno no dice absolutamente nada de los otros dos."""
+   al revés o una errata grande no matchean por letras y ahí los reconocés vos. Y son
+   padrones DISTINTOS (horarios%s): que alguien no esté en
+   uno no dice absolutamente nada de los otros.""" % (
+       ', preceptores y fichas de personas' if historia.ACTIVA else ' y preceptores')
 
 _REGLA_AUDITORIA = """Lectura = sin auditoría. Escritura = con auditoría."""
+
+# El `%s` lo completa `_reglas()`: la mitad de escritura sólo aplica si el acceso mueve cosas.
+_REGLA_UBICACION = """Las preguntas por LUGAR ("qué hay en el taller", "todo lo que está en el armario 2",
+   "qué quedó sin ubicar") se contestan con listar_todos("recursos"): NO existe ninguna
+   búsqueda por ubicación, y buscar_entidad busca por nombre, no por dónde está. La lista
+   trae el campo `ubicacion` de cada recurso con cada lugar y cuántas unidades hay ahí
+   ("Taller (4), Sin ubicar (1)"), así que la respuesta sale de leerla entera.%s"""
+
+_UBICACION_MOVER = """
+   De ahí mismo salen los movimientos: para cambiar de lugar todo lo que está en un sitio, un
+   mover_ubicacion por recurso y TODOS EN LA MISMA VUELTA, con `origen` = el lugar que leíste
+   y `cantidad` = el número entre paréntesis. Nunca le pidas al usuario que te dicte qué hay
+   en un lugar: eso ya lo sabés vos."""
 
 
 # ---------------------------------------------------------------------------
 # Bloques que interpolan algo del turno
 # ---------------------------------------------------------------------------
+
+_NOTAS_VACIA = """TUS NOTAS (`agente.md`):
+Tenés un archivo de notas y ahora mismo está VACÍO. Es la libreta de quien está del otro
+lado: va lo que te pidan que tengas presente estos días — un pañol mudado, una consigna que
+rige este mes, una lista que se quieren acordar. Si te piden que te acuerdes de algo,
+escribilo con `escribir_notas` y listo: dónde va lo decide quien te lo pide, no vos."""
+
+
+def _notas(texto):
+    """El archivo `agente.md`, tal cual está en el disco.
+
+    Va anteúltimo en el prompt, y no por gusto: cambia cada vez que alguien lo edita, así
+    que más arriba rompería el prefijo cacheado de los ~15.000 tokens que le siguen (mismo
+    criterio que la fecha, ver `construir_system_prompt`).
+
+    Los delimitadores no son decoración: `escribir_notas` reescribe el archivo ENTERO, y el
+    modelo arma ese texto copiando de acá. Sin una marca clara de dónde empieza y dónde
+    termina el contenido, se lleva puesto medio bloque de instrucciones o deja afuera el
+    último renglón.
+
+    Sólo lo ven los accesos con `agente.notas`, que por defecto es la administración: por eso
+    el texto puede dar por hecho que quien está del otro lado lo puede editar a mano.
+    """
+    if not texto:
+        return _NOTAS_VACIA
+    return f"""TUS NOTAS (`agente.md`):
+Tu archivo de notas, tal cual está guardado. Es lo que te pidieron tener presente estos días:
+
+--- empieza agente.md ---
+{texto}
+--- termina agente.md ---
+
+- Tenelas en cuenta cuando vengan al caso y CALLÁTELAS cuando no. No las recites al saludar,
+  no las repitas en cada respuesta y no arranques con "según mis notas": son contexto tuyo,
+  no un anuncio.
+- UNA NOTA NO ES UN DATO DE LA BASE. Si una nota contradice lo que devolvió una tool, no
+  elijas ni corrijas nada por tu cuenta: decí las dos cosas —lo que está cargado y lo que
+  dice la nota— y que lo revisen. Tampoco es una ficha: no des de alta un recurso a partir
+  de lo que dice una nota.
+- PARA CAMBIARLO usás `escribir_notas`, y le mandás el archivo COMPLETO: todo lo que está
+  entre los delimitadores de arriba, copiado tal cual, con tu cambio aplicado. Lo que no
+  copies se pierde.
+- Quien está chateando también lo puede editar a mano en la página de notas del asistente.
+  Si te pide sacar algo, hacelo vos con `escribir_notas`: no alcanza con decirle que ya está."""
+
 
 def _fecha(hoy, dia_semana):
     return f"""FECHA Y HORA ACTUAL: {dia_semana} {hoy.strftime('%d/%m/%Y %H:%M')}.
@@ -448,35 +523,50 @@ que te digan la hora, ya la tenés acá.
   como parte de lo que te preguntaron."""
 
 
+_NUMERAL = {3: 'tres', 4: 'cuatro', 5: 'cinco'}
+
+
 def _areas(escribe, ve_personas):
-    """Las áreas a cargo. Dos cosas cambian según el acceso: si el inventario se edita o
-    sólo se consulta, y si el área 5 (PERSONAS) existe — sin `historia.personas` las tools
-    viajan sin ese slug, y describirle un área que no puede tocar es empujarlo a
-    prometerla. Ahí son cuatro áreas y el encabezado lo dice."""
-    inventario = ('Acá sí das de alta, editás, vinculás y borrás.' if escribe else
+    """Las áreas a cargo, numeradas de corrido con las que apliquen — mismo criterio que
+    `_reglas`: un salto del 3 al 5 le marcaría al modelo que hay algo que no está viendo.
+
+    Tres cosas deciden cuáles van. Si el inventario se edita o sólo se consulta. Si existe
+    el área de PERSONAS: sin `historia.personas` las tools viajan sin ese slug, y
+    describirle un área que no puede tocar es empujarlo a prometerla. Y si el área de
+    historia está prendida (`historia.ACTIVA`): apagada, ni la línea del tiempo ni las
+    personas existen para él, y son tres áreas.
+    """
+    verbos = 'das de alta, editás%s y borrás' % (', vinculás' if historia.ACTIVA else '')
+    inventario = ('Acá sí %s.' % verbos if escribe else
                   'Desde este acceso lo consultás, no lo modificás.')
-    encabezado = _AREAS_HORARIOS if ve_personas else _AREAS_HORARIOS.replace(
-        'Tenés cinco áreas a cargo:', 'Tenés cuatro áreas a cargo:', 1)
-    bloque = (encabezado
-              + '\n2. INVENTARIO — recursos (herramientas, instrumentos, materiales)'
-                ' de los talleres. ' + inventario + '\n'
-              + _AREAS_RESTO)
-    return bloque + '\n' + _AREA_PERSONAS if ve_personas else bloque
+    partes = [_AREA_HORARIOS,
+              'INVENTARIO — recursos (herramientas, instrumentos, materiales)'
+              ' de los talleres. ' + inventario,
+              _AREA_LORE]
+    if historia.ACTIVA:
+        partes.append(_AREA_HITOS)
+        if ve_personas:
+            partes.append(_AREA_PERSONAS)
+    return ('Tenés %s áreas a cargo:\n' % _NUMERAL[len(partes)]
+            + '\n'.join('%d. %s' % (i, p) for i, p in enumerate(partes, 1)))
 
 
 def _reglas(escribe, ve_fotos=True):
     """Las reglas finales, numeradas de corrido con las que apliquen: con un acceso de
     consulta, saltar del 1 al 3 le marcaría al modelo que hay reglas que no está viendo."""
-    reglas = [_REGLA_SINONIMOS]
+    ubicacion = _REGLA_UBICACION % (_UBICACION_MOVER if escribe else '')
+    reglas = [_REGLA_SINONIMOS, ubicacion]
     if escribe:
-        reglas = [_REGLA_ELIMINAR, _REGLA_FOTO, _REGLA_SINONIMOS, _REGLA_AUDITORIA]
+        eliminar = _REGLA_ELIMINAR if historia.ACTIVA else _REGLA_SIN_ELIMINAR
+        reglas = [eliminar, _REGLA_FOTO, _REGLA_SINONIMOS, ubicacion, _REGLA_AUDITORIA]
         if not ve_fotos:
             reglas.remove(_REGLA_FOTO)
     return 'REGLAS IMPORTANTES:\n' + '\n'.join(
         f'{i}. {texto}' for i, texto in enumerate(reglas, 1))
 
 
-def construir_system_prompt(hoy, dia_semana, escribe=True, ve_personas=True, ve_fotos=True):
+def construir_system_prompt(hoy, dia_semana, escribe=True, ve_personas=True, ve_fotos=True,
+                            ve_notas=False, notas=''):
     """El system prompt de un turno.
 
     `escribe`, `ve_personas` y `ve_fotos` los decide `llm.chat_with_tools_stream` mirando las tools
@@ -484,7 +574,8 @@ def construir_system_prompt(hoy, dia_semana, escribe=True, ve_personas=True, ve_
     imposible que el prompt hable de dar de alta mientras las tools de alta no viajaron, de
     fichas de personas mientras el slug `personas` no está en ningún enum, ni de leer fotos
     mientras `leer_foto` no viajó — sin `agente.vision` el usuario ni siquiera tiene el
-    botón para mandar una.
+    botón para mandar una. `ve_notas` es lo mismo para `agente.md`: sin `escribir_notas` no
+    se le cuenta que el archivo existe, y `notas` es su contenido de este momento.
 
     LA FECHA VA ÚLTIMA, y eso no es estético: es lo único del prompt que cambia a cada
     minuto. Los proveedores cachean el prefijo del pedido y cobran (y tardan) sólo por lo
@@ -498,10 +589,17 @@ def construir_system_prompt(hoy, dia_semana, escribe=True, ve_personas=True, ve_
     """
     bloques = [_IDENTIDAD, _areas(escribe, ve_personas), _COMO_TRABAJAS, _NO_AFIRMES, _IDS]
     if escribe:
-        hitos = _HITOS + ('\n' + _HITOS_PERSONAS if ve_personas else '')
+        hitos = ''
+        if historia.ACTIVA:
+            hitos = _HITOS + ('\n' + _HITOS_PERSONAS if ve_personas else '')
         fotos = [_FOTOS, _ETIQUETA, _LISTADO] if ve_fotos else []
         bloques += [_ALTA, hitos] + fotos + [_CONTEXTO]
     else:
         bloques += [_SOLO_LECTURA] + ([_FOTOS_SOLO_LECTURA] if ve_fotos else []) + [_CONTEXTO]
-    bloques += [_reglas(escribe, ve_fotos), _CIERRE, _fecha(hoy, dia_semana)]
+    bloques += [_reglas(escribe, ve_fotos), _CIERRE]
+    # Las notas van entre el cierre y la fecha: son lo segundo que más cambia del prompt
+    # (cada vez que alguien anota o borra), así que todo lo de arriba sigue cacheado.
+    if ve_notas:
+        bloques.append(_notas(notas))
+    bloques.append(_fecha(hoy, dia_semana))
     return '\n\n'.join(b for b in bloques if b)

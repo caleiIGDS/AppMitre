@@ -122,7 +122,7 @@ MODOS = {
 MODO_DEFAULT = 'etiqueta'
 
 
-def _leer_imagen(imagen_base64, media_type, texto_usuario='', modo=MODO_DEFAULT):
+def _leer_imagen(imagen_base64, media_type, texto_usuario='', modo=MODO_DEFAULT, uso=None):
     """Lee una foto con el modelo de visión configurado. Devuelve el texto, o None.
 
     `modo` elige el prompt: 'etiqueta' transcribe lo escrito, 'analisis' describe el objeto.
@@ -132,6 +132,11 @@ def _leer_imagen(imagen_base64, media_type, texto_usuario='', modo=MODO_DEFAULT)
     Devuelve None ante cualquier falla (sin API key, cuota agotada, 429 del tier gratuito,
     red caída) en vez de propagar: que no se pueda leer una foto no tiene por qué voltear
     el turno del chat — el que llama muestra el aviso y sigue.
+
+    `uso`: lista opcional donde se anota lo que costó la llamada. Ésta es una API distinta
+    de la del chat, con su propia cuenta y su propio precio, así que se mide aparte y se
+    suma al turno que la disparó (ver `registro.py`). Sin esto, la mitad del gasto del
+    asistente —una tanda de diez fotos son diez llamadas— quedaba invisible.
     """
     config = _get_vision_config()
     if not config:
@@ -158,6 +163,13 @@ def _leer_imagen(imagen_base64, media_type, texto_usuario='', modo=MODO_DEFAULT)
                 {'role': 'user', 'content': contenido},
             ],
         )
+        if uso is not None:
+            u = getattr(respuesta, 'usage', None)
+            uso.append({
+                'modelo': config['model'],
+                'entrada': getattr(u, 'prompt_tokens', 0) or 0,
+                'salida': getattr(u, 'completion_tokens', 0) or 0,
+            })
         return (respuesta.choices[0].message.content or '').strip() or None
     except Exception as e:
         # Tragarse el error es lo correcto para el usuario, pero deja ciego al que está

@@ -47,8 +47,10 @@ app.register_blueprint(gestion.bp)
 gestion.init_db()
 
 # Historia institucional (/historia) — módulo hermano de gestion, DB propia (historia.db).
-app.register_blueprint(historia.bp)
-historia.init_db()
+# Un área con `ACTIVA = False` no se monta: hoy es el caso de historia (ver historia.py).
+if historia.ACTIVA:
+    app.register_blueprint(historia.bp)
+    historia.init_db()
 
 # Asistente conversacional (/agente) — blueprint independiente con su propio gate.
 app.register_blueprint(agente.bp)
@@ -71,7 +73,8 @@ horarios.init_db()
 # globals de Jinja y monta el canje de invitaciones + el panel /accesos. `horarios` NO
 # está en la lista: tiene su propia contraseña, fuera de este sistema.
 accesos.init_db()
-accesos.registrar_app(app, [gestion, historia, agente, salidas])
+accesos.registrar_app(app, [m for m in (gestion, historia, agente, salidas)
+                            if getattr(m, 'ACTIVA', True)])
 
 
 @app.route('/salidas/normativa')

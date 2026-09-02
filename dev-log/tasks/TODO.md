@@ -58,6 +58,12 @@
 
 ---
 
+## En pausa
+
+- **Historia institucional (`/historia`)** — pausada el 2026-09-02: no se le agregan features ni se abren tareas. Los cambios de capa 1 (`crud.py`, `accesos.py`, `templates/crud/`) la siguen alcanzando por arrastre; ahí sólo se verifica que no se rompa.
+
+---
+
 ## Bloqueado
 
 - [ ] #15 — Multi-escuela (Fase 2 y 3 de PLAN_ESCUELAS)  

@@ -1,5 +1,12 @@
 # Historia institucional (`/historia`)
 
+> **El área está APAGADA.** `historia.ACTIVA = False` (en `historia.py`): `app.py` no
+> registra el blueprint ni la pasa a `accesos.registrar_app`, así que `/historia` da 404,
+> `historia.leer` / `historia.editar` / `historia.personas` no están en el catálogo de
+> permisos, el link se cae de los headers y el agente no ve los slugs `hitos`/`personas`,
+> ni `buscar_hitos`, ni `vincular_entidad`, ni `eliminar_entidad`. `historia.db` no se
+> toca. Todo lo que sigue describe el área **cuando el flag está en `True`**.
+
 Una de las cuatro áreas de la app (las otras: el SPA de horarios, `/gestion` y `/agente`).
 Es la **línea del tiempo de la escuela** — qué pasó, cuándo y quién estuvo — más las fichas de
 las personas que la hicieron.

@@ -15,18 +15,19 @@ from ..db import _ahora, conectar
 from ..dominio import ve_entidad
 from ..lore import (EXCUSA_SIN_HISTORIA, _cargar_historia_completa, _historia_fmt,
                     _instruccion_tono)
+from ..notas import escribir as _escribir_notas
 from ..vision import MODO_DEFAULT
 from .entidades import (_buscar_entidad_fmt, _desvincular_entidad, _detalle_entidad_fmt,
                         _editar_entidad, _eliminar_entidad, _listar_alias_fmt,
                         _listar_todos_fmt, _vincular_entidad)
-from .esquemas import (PERMISO_POR_TOOL, TOOLS_ESCRITURA, TOOLS_FOTO, TOOLS_SCHEMA,
-                       slug_visible, tools_permitidas)
+from .esquemas import (PERMISO_POR_TOOL, TOOLS_AUDITADAS, TOOLS_ESCRITURA, TOOLS_FOTO,
+                       TOOLS_NOTAS, TOOLS_SCHEMA, slug_visible, tools_permitidas)
 from .fichas import _crear_entidad, _editar_sub_recurso, _eliminar_sub_recurso
 from .fotos import _adjuntar_foto_entidad, _leer_foto_fmt
 from .hitos import _buscar_hitos_fmt
 from .horarios import (_aulas_libres_fmt, _buscar_por_rol_fmt, _buscar_profesor,
-                       _horario_aula_fmt, _horario_curso_fmt, _horario_profesor_fmt,
-                       _preceptores_fmt)
+                       _coincidencias_fmt, _horario_aula_fmt, _horario_curso_fmt,
+                       _horario_profesor_fmt, _preceptores_fmt)
 from .ubicaciones import _mover_ubicacion_fmt
 
 # ============================================================================
@@ -71,14 +72,17 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
     if permiso is None:
         return {'ok': False, 'error': f'Tool desconocida: {tool_name}'}
 
-    lectura = tool_name not in TOOLS_ESCRITURA
+    # Qué deja rastro en `agente_log`. No es "todo lo que no es lectura": las tools de
+    # notas escriben pero no tocan el dominio, y aun así se auditan — una nota borrada por
+    # el chat no se recupera de ningún otro lado. Ver TOOLS_AUDITADAS.
+    audita = tool_name in TOOLS_AUDITADAS
 
     if not accesos.tiene(permisos, permiso):
         resultado = {'ok': False, 'error': 'Este acceso no tiene permiso para esa '
                                            'operación. No se ejecutó nada.'}
         # Un rechazo de escritura queda auditado: si aparece en /agente/log es que alguien
         # forjó el request o que el filtrado de esquemas tiene un agujero.
-        if not lectura:
+        if audita:
             _auditar(tool_name, tool_input, None, resultado, ok=False)
         return resultado
 
@@ -91,7 +95,7 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
             resultado = {'ok': False,
                          'error': f'Este acceso no puede ver ni tocar "{slug}". No se '
                                   f'ejecutó nada: decíselo al usuario y no lo reintentes.'}
-            if not lectura:
+            if audita:
                 _auditar(tool_name, tool_input, None, resultado, ok=False)
             return resultado
 
@@ -111,10 +115,14 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
             resultado = _horario_aula_fmt(tool_input.get('aula', ''))
         elif tool_name == 'aulas_libres':
             resultado = _aulas_libres_fmt()
+        elif tool_name == 'coincidencias':
+            resultado = _coincidencias_fmt(tool_input.get('cursos'), tool_input.get('personas'),
+                                           tool_input.get('dia'), contexto_turno)
         elif tool_name == 'buscar_entidad':
             resultado = _buscar_entidad_fmt(tool_input.get('slug', ''), tool_input.get('query', ''))
         elif tool_name == 'listar_todos':
-            resultado = _listar_todos_fmt(tool_input.get('slug', ''))
+            resultado = _listar_todos_fmt(tool_input.get('slug', ''),
+                                          con_descripcion=bool(tool_input.get('con_descripcion')))
         elif tool_name == 'listar_alias':
             resultado = _listar_alias_fmt(tool_input.get('slug', ''))
         elif tool_name == 'detalle_entidad':
@@ -192,13 +200,17 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
         elif tool_name == 'eliminar_entidad':
             resultado = _eliminar_entidad(tool_input.get('slug', ''), tool_input.get('id', 0),
                                           tool_input.get('nombre_confirmacion'))
+        elif tool_name == 'escribir_notas':
+            # `autor='agente'` fijo: por esta puerta entra sólo lo que escribe el modelo.
+            # Lo que escribe la administración entra por /agente/notas.
+            resultado = _escribir_notas(tool_input.get('contenido', ''), autor='agente')
         else:
             resultado = {'ok': False, 'error': f'Tool desconocida: {tool_name}'}
 
         # Auditar si es escritura. La ficha de confirmación queda afuera: no tocó la base,
         # y `agente_log` existe para poder deshacer cambios reales, no para guardar borradores.
         es_ficha = isinstance(resultado, dict) and resultado.get('requiere_confirmacion')
-        if not lectura and not es_ficha:
+        if audita and not es_ficha:
             antes = resultado.pop('antes', None) if isinstance(resultado, dict) else None
             ok = resultado.get('ok', False) if isinstance(resultado, dict) else False
             _auditar(tool_name, tool_input, antes, resultado, ok)
@@ -207,6 +219,6 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
 
     except Exception as e:
         resultado = {'ok': False, 'error': f'Excepción: {str(e)}'}
-        if not lectura:
+        if audita:
             _auditar(tool_name, tool_input, None, resultado, ok=False)
         return resultado

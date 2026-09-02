@@ -1,0 +1,90 @@
+{% extends "agente/base.html" %}
+
+{% block titulo %}agente.md{% endblock %}
+
+{% block contenido %}
+<div class="gestion-container">
+  <div class="gestion-header">
+    <h1>📝 agente.md</h1>
+    <p>El archivo de notas de Emilio: lo que querés que tenga presente estos días — un pañol
+       mudado, una consigna que rige este mes, una lista que te querés acordar.
+       Lo lee entero en cada mensaje, <strong>no vence solo</strong> y lo ve únicamente quien
+       tiene este permiso. Él también lo escribe si se lo pedís por chat.</p>
+  </div>
+
+  {% if error %}
+    <p class="notas-error">⚠ {{ error }}</p>
+  {% endif %}
+
+  <form class="notas-form" method="POST" action="{{ url_for('agente.agente_notas_guardar') }}">
+    <textarea name="contenido" rows="14" maxlength="{{ largo_max }}" spellcheck="false"
+              placeholder="- El pañol está en el aula 12 hasta que arreglen el techo.
+- Las salidas de este año las coordina Vanesa.
+- La máquina de café no se carga como recurso.">{{ contenido }}</textarea>
+    <div class="notas-form-pie">
+      <span>
+        Markdown, hasta {{ largo_max }} caracteres.
+        {%- if modificado %} Última edición: {{ modificado }}.{% endif %}
+      </span>
+      <button type="submit" class="g-btn">GUARDAR</button>
+    </div>
+  </form>
+
+  {% if hay_deshacer %}
+    {# El deshacer existe por el modelo más que por la persona: `escribir_notas` reescribe el
+       archivo entero, y si se come un renglón éste es el camino de vuelta. Es de una sola vez. #}
+    <form class="notas-deshacer" method="POST"
+          action="{{ url_for('agente.agente_notas_deshacer') }}">
+      <span>Hay una versión anterior guardada (<code>agente.md.bak</code>).</span>
+      <button type="submit" class="g-btn-outline">DESHACER EL ÚLTIMO CAMBIO</button>
+    </form>
+  {% endif %}
+</div>
+
+{# Estilos de la página, acá y no en gestion.css: son cinco reglas que no usa ninguna otra
+   pantalla, y meterlas en el CSS compartido obliga a subirle la versión a todas. Mismo
+   criterio que agente_log.html. #}
+<style>
+  .notas-form {
+    margin: 1.5rem 0 1rem;
+    border: 2px solid var(--primary);
+    padding: 0.9rem;
+    background: #fff;
+  }
+  .notas-form textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.88rem;
+    line-height: 1.55;
+    padding: 0.7rem;
+    border: 1px solid #ccc;
+    resize: vertical;
+  }
+  .notas-form-pie {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 0.6rem;
+    font-size: 0.78rem;
+    color: #666;
+    flex-wrap: wrap;
+  }
+  .notas-error {
+    border-left: 4px solid var(--alert);
+    background: #fef2f2;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.85rem;
+  }
+  .notas-deshacer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    font-size: 0.78rem;
+    color: #666;
+  }
+</style>
+{% endblock %}

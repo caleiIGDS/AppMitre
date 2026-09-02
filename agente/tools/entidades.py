@@ -23,11 +23,12 @@ LIMITE_BUSQUEDA = 10
 # Las descripciones del inventario son cortas (máx ~180 chars), así que cuando el match
 # vino de ahí se manda entera en vez de recortar una ventana alrededor del término.
 MAX_DESC_BUSQUEDA = 160
-# Tope de `listar_todos`. Con 90 recursos el listado completo son ~500 tokens, menos de un
-# tercio de lo que ya cuesta la lista de personas en cada turno, así que mandarlo entero es
-# barato. Pero no escala para siempre: arriba de este número la tool se niega y pide afinar
-# la búsqueda, para que el día que el inventario crezca degrade de forma predecible en vez
-# de reventar el contexto en silencio.
+# Tope de `listar_todos`. Con 90 recursos el listado completo son ~1.400 tokens (nombre +
+# ubicación), del orden de lo que ya cuesta la lista de personas en cada turno, así que
+# mandarlo entero es barato. Pero no escala para siempre: arriba de este número la tool se
+# niega y pide afinar la búsqueda, para que el día que el inventario crezca degrade de forma
+# predecible en vez de reventar el contexto en silencio. La descripción de cada fila queda
+# detrás de `con_descripcion` justamente porque es la parte que multiplicaría ese costo.
 LIMITE_LISTADO_COMPLETO = 400
 
 
@@ -147,7 +148,19 @@ def _buscar_entidad_fmt(slug, query):
     return salida
 
 
-def _listar_todos_fmt(slug):
+def _ubicacion_texto(lugares):
+    """Los lugares de UN recurso en una línea: "Taller Armario 3 (4), Sin ubicar (1)".
+
+    El conteo va siempre, aunque haya un solo lugar: no es decorativo, es el `cantidad` que
+    después necesita `mover_ubicacion`, y el nombre del lugar es su `origen`. Sin los dos,
+    desde esta lista no se puede armar "movés todo lo que está en A".
+    """
+    if not lugares:
+        return 'Sin ubicar'
+    return ', '.join(f"{g['ubicacion']} ({g['cantidad']})" for g in lugares)
+
+
+def _listar_todos_fmt(slug, con_descripcion=False):
     """Todos los nombres de una entidad, para cuando la búsqueda por string no alcanza.
 
     Es el fallback de `buscar_entidad`: el modelo sabe que un "tester" es un multímetro y
@@ -155,6 +168,13 @@ def _listar_todos_fmt(slug):
     no — compara letras. Viendo la lista entera resuelve sinónimos, paráfrasis y jerga sin
     ningún diccionario que mantener, y sobre todo puede afirmar "no está" habiéndolo
     verificado, en vez de deducirlo de que la búsqueda no encontró nada.
+
+    En `recursos` es además la ÚNICA entrada por ubicación que tiene el agente: las tools de
+    lectura entran todas por recurso (`buscar_entidad`, `detalle_entidad`) y ninguna por
+    lugar, así que "qué hay en el taller" se contesta leyendo esta lista. Por eso la
+    ubicación viaja siempre y la descripción sólo si la piden (`con_descripcion`): la
+    primera es la que habilita una pregunta que no se puede hacer de otra forma, la segunda
+    es la que multiplicaría el costo del listado.
     """
     if slug not in SLUGS_ENTIDAD:
         return {'error': f'Slug inválido: {slug}. Válidos: {", ".join(SLUGS_ENTIDAD)}'}
@@ -165,13 +185,31 @@ def _listar_todos_fmt(slug):
     # query cruda reventaba con "no such column: nombre".
     cfg = modulo.ENTIDADES[slug]
     campo = crud.campo_nombre(cfg)
+    # La descripción sale de los campos declarados, no hardcodeada: una entidad que no la
+    # tenga (hoy todas la tienen, mañana quién sabe) ignora el pedido en vez de reventar.
+    trae_desc = con_descripcion and any(c['nombre'] == 'descripcion' for c in cfg.get('campos', []))
+    columnas = f"id, {campo} AS nombre" + (", descripcion" if trae_desc else "")
     filas = con.execute(
-        f"SELECT id, {campo} AS nombre FROM {cfg['tabla']} ORDER BY nombre COLLATE NOCASE").fetchall()
+        f"SELECT {columnas} FROM {cfg['tabla']} ORDER BY nombre COLLATE NOCASE").fetchall()
+    ubicaciones = gestion.lugares_por_recurso(con.cursor()) if slug == 'recursos' else {}
+    # `lugares_por_recurso` crea las unidades que faltaban (_asegurar_unidades): es un
+    # backfill perezoso, no una escritura de esta tool. Sin el commit se repite en cada
+    # llamada. Mismo caso que el listado web, ver gestion.py::derivados.
+    con.commit()
     con.close()
 
     # Las filas sin nombre no le dicen nada al modelo, pero esconderlas sin avisar haría
     # falsa la afirmación "estos son todos": van contadas aparte.
-    items = [{'id': f['id'], 'nombre': f['nombre']} for f in filas if (f['nombre'] or '').strip()]
+    items = []
+    for f in filas:
+        if not (f['nombre'] or '').strip():
+            continue
+        item = {'id': f['id'], 'nombre': f['nombre']}
+        if slug == 'recursos':
+            item['ubicacion'] = _ubicacion_texto(ubicaciones.get(f['id']))
+        if trae_desc and (f['descripcion'] or '').strip():
+            item['descripcion'] = f['descripcion'].strip()
+        items.append(item)
     sin_nombre = len(filas) - len(items)
 
     if len(items) > LIMITE_LISTADO_COMPLETO:
@@ -190,6 +228,15 @@ def _listar_todos_fmt(slug):
                         'el más parecido como si fuera el correcto. Para ver los datos de uno, '
                         'llamá a detalle_entidad con su id.'),
     }
+    if slug == 'recursos':
+        salida['instruccion'] += (
+            ' `ubicacion` es dónde está cada recurso, con cuántas unidades hay en cada lugar: '
+            'esta lista es la única forma que tenés de contestar por LUGAR ("qué hay en el '
+            'taller", "todo lo que está en A"), porque no existe ninguna búsqueda por '
+            'ubicación. Para mover de lugar todo lo de un sitio, mandá un mover_ubicacion por '
+            'recurso TODOS EN LA MISMA VUELTA, con `origen` = el lugar de acá y `cantidad` = '
+            'el número entre paréntesis. No los pidas de a uno y no le pidas la lista al '
+            'usuario: ya la tenés.')
     if sin_nombre:
         salida['sin_nombre'] = sin_nombre
     return salida
@@ -426,6 +473,16 @@ def _eliminar_entidad(slug, id, nombre_confirmacion=None):
     if not cfg:
         con.close()
         return {'ok': False, 'error': f'Slug inválido: {slug}'}
+
+    # Entidad que no se borra nunca (`sin_eliminar`, hoy los recursos: se dan de baja
+    # diciendo qué les pasó, ver gestion.dar_de_baja). Se mira el flag y no el slug para
+    # no volver a nombrar una tabla concreta acá adentro, igual que hace crud.py.
+    if cfg.get('sin_eliminar'):
+        con.close()
+        return {'ok': False, 'error':
+                f'{slug} no se elimina nunca: sale del inventario dándole de baja, y la '
+                f'baja se hace desde la web (EDITAR el recurso → DAR DE BAJA), donde hay '
+                f'que indicar qué le pasó. Contale eso al usuario. No se borró nada.'}
 
     nombre_real = antes['fila'].get('nombre', '')
     if not nombre_confirmacion:

@@ -4,6 +4,10 @@ Son auditoría y sesión, no datos de dominio: por eso viven en la DB de recurso
 tienen una propia. `agente_log` guarda cada escritura con su snapshot "antes";
 `agente_conversaciones` guarda el chat; `agente_fotos_pendientes` guarda la foto de la
 que salió una ficha hasta que alguien la confirma.
+
+Las tres son EFÍMERAS: la conversación y sus fotos se barren a los CONVERSACION_MINUTOS.
+El registro de uso —que es lo contrario, crece sin techo y se guarda para siempre— sí
+tiene DB propia, `agente.db`: ver `registro.py`.
 """
 import json
 import os
@@ -14,6 +18,7 @@ from datetime import timedelta
 from config import ahora
 from flask import session
 
+from . import registro
 from .dominio import RAIZ
 
 DB_PATH = os.path.join(RAIZ, 'gestion.db')
@@ -73,6 +78,10 @@ def init_db():
     cur.executescript(SCHEMA)
     con.commit()
     con.close()
+    # El registro de uso vive en su propia DB (ver registro.py) pero se crea desde acá para
+    # que `agente.init_db()` siga siendo lo único que tiene que llamar `app.py`. Las notas
+    # del admin no aparecen acá: no son una tabla, son `agente.md` (ver notas.py).
+    registro.init_db()
 
 def _ahora():
     return ahora().strftime('%Y-%m-%d %H:%M:%S')

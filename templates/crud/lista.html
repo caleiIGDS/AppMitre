@@ -29,7 +29,7 @@
         </thead>
         <tbody>
             {% for fila in filas %}
-            <tr data-buscar="{{ buscar[fila['id']] }}">
+            <tr data-buscar="{{ buscar[fila['id']] }}" data-alias="{{ buscar_alias[fila['id']] }}">
                 {% for campo, label in cfg.columnas %}
                 {# data-label repite el encabezado de la columna: en celular la fila se
                    muestra como tarjeta y cada valor necesita su etiqueta al lado (ver

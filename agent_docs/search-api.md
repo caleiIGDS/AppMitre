@@ -28,6 +28,8 @@ Si los datos aún no cargaron, cada camino hace **fallback** a su endpoint `/hor
 
 Las búsquedas `profesor`/`aula`/`curso`/`horario_preceptor` setean `location.hash` (ej: `#/profesor/MACIEL%20MARTIN`, `#/horario_preceptor/PEREZ%20JUAN`) via `history.replaceState`. El bloque `init()` al final de `script.js` lee el hash al cargar (tras `cargarDatosIniciales()`) y dispara la búsqueda. `cambiarTab()` limpia el hash.
 
+**`#/comparar/...` — el modo comparación por URL**: `#/comparar/curso:1%C2%B0%20A,profesor:MACIEL%20MARTIN` abre el calendario con todo eso superpuesto (`abrirComparacionDesdeHash()`). Lo genera el asistente cuando corre `coincidencias` (ver `agente/enlaces.py`), y nada lo escribe de vuelta: en modo comparación `buscarEnServidor()` no toca el hash. Los pares van separados por `,` y cada valor va percent-encoded con `,` y `:` incluidos, así que `init()` lo desvía **antes** del `decodeURIComponent` general — decodificar primero rompería el split. Sólo `profesor`/`curso`/`aula` (los preceptores no son comparables) y hace falta un mínimo de dos.
+
 **Deep-link de preceptor — cuidado con la race**: `tab-horario_preceptor` normalmente dispara `mostrarPlanillaCursos()` (fetch async que escribe en `contenedor-lista`), igual que `renderizarTablaPreceptor`. Para evitar que la planilla pise la tabla del preceptor en un deep-link, `cambiarTab()` **omite** `mostrarPlanillaCursos()` cuando `window.isProgrammaticNavigation` está activo (lo setea el `init()`): así `buscarEnServidor` renderiza directo la tabla del preceptor.
 
 ---

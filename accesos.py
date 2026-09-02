@@ -673,7 +673,8 @@ def registrar_app(app, modulos):
     única línea que hay que tocar al sumar un área nueva, y está al lado del
     `register_blueprint` que ya hay que tocar igual.
     """
-    for modulo in list(modulos) + [sys.modules[__name__]]:
+    montados = list(modulos) + [sys.modules[__name__]]
+    for modulo in montados:
         declarados = getattr(modulo, 'PERMISOS', None)
         if declarados:
             declarar(getattr(modulo, 'GRUPO_PERMISOS', modulo.__name__), declarados)
@@ -682,6 +683,13 @@ def registrar_app(app, modulos):
     # de por la vieja marca binaria `session.gestion_ok`.
     app.jinja_env.globals['puede'] = puede
     app.jinja_env.globals['acceso_actual'] = actual
+
+    # Qué áreas quedaron montadas, por nombre de blueprint, para el menú que comparten
+    # todos los headers. `puede()` no alcanza para esconder un área apagada: el admin tiene
+    # el comodín '*', así que le diría que sí a un permiso que ya no está en el catálogo y
+    # el `url_for` de un blueprint que nadie registró reventaría la página entera.
+    app.jinja_env.globals['areas'] = frozenset(
+        m.bp.name for m in montados if getattr(m, 'bp', None) is not None)
 
     app.register_blueprint(bp)
 

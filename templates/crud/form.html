@@ -15,18 +15,37 @@
         {% if c.tipo == 'textarea' %}
         <textarea id="campo-{{ c.nombre }}" name="{{ c.nombre }}" rows="4">{{ valores[c.nombre] or '' }}</textarea>
         {% elif c.tipo == 'select' %}
+        {% set actual = valores[c.nombre] or c.opciones[0] %}
+        {% if actual not in c.opciones %}
+        {# El valor guardado ya no figura entre las opciones que ofrece el área (le pasa al
+           "Dado de baja" de gestión, que ahora lo pone sólo la baja y no el desplegable).
+           Se muestra tal cual y viaja en un hidden: un <select> que no lo tiene mostraría
+           la primera opción y GUARDAR lo pisaría en silencio. #}
+        <p class="g-campo-fijo" id="campo-{{ c.nombre }}">{{ actual }}</p>
+        <input type="hidden" name="{{ c.nombre }}" value="{{ actual }}">
+        {% else %}
         <select id="campo-{{ c.nombre }}" name="{{ c.nombre }}">
-            {% set actual = valores[c.nombre] or c.opciones[0] %}
             {% for op in c.opciones %}
             <option value="{{ op }}" {{ 'selected' if op == actual }}>{{ op }}</option>
             {% endfor %}
         </select>
+        {% endif %}
         {% elif c.tipo == 'text_datalist' %}
         <input id="campo-{{ c.nombre }}" type="text" name="{{ c.nombre }}" list="datalist-{{ c.nombre }}"
                value="{{ valores[c.nombre] or '' }}" {% if c.requerido %}required{% endif %}>
         <datalist id="datalist-{{ c.nombre }}">
             {% for op in c.opciones %}<option value="{{ op }}">{% endfor %}
         </datalist>
+        {% elif c.boton_hoy %}
+        {# Fecha en texto libre (gestión: "Última revisión"): el botón la completa con la
+           de hoy en el formato que declara el área, para no tipearla ni equivocarle el
+           orden de día/mes. Sin JS el campo se escribe a mano como siempre. #}
+        <div class="g-field-hoy">
+            <input id="campo-{{ c.nombre }}" type="{{ c.tipo }}" name="{{ c.nombre }}"
+                   value="{{ valores[c.nombre] or '' }}" {% if c.requerido %}required{% endif %}>
+            <button type="button" class="g-btn-outline-dark g-btn-mini" data-hoy="{{ hoy(c.boton_hoy) }}"
+                    data-campo="campo-{{ c.nombre }}">HOY</button>
+        </div>
         {% else %}
         <input id="campo-{{ c.nombre }}" type="{{ c.tipo }}" name="{{ c.nombre }}"
                value="{{ valores[c.nombre] or '' }}" {% if c.requerido %}required{% endif %}>
@@ -70,6 +89,19 @@
 </form>
 
 {# Acciones que no son "guardar" y no pueden ir dentro del <form> de arriba (un form
-   no anida): gestión mete acá el ELIMINAR. El área que no lo usa no ve nada. #}
+   no anida): gestión mete acá la baja del recurso. El área que no lo usa no ve nada. #}
 {% block form_extra %}{% endblock %}
+
+<script>
+// Botón "HOY" de los campos con `boton_hoy`: la fecha ya viene armada por el server (en
+// el formato del área y con el reloj de la escuela), acá sólo se copia al input.
+document.addEventListener('click', function (e) {
+    var boton = e.target.closest('button[data-hoy]');
+    if (!boton) return;
+    var campo = document.getElementById(boton.dataset.campo);
+    if (!campo) return;
+    campo.value = boton.dataset.hoy;
+    campo.focus();
+});
+</script>
 {% endblock %}

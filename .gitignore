@@ -1,6 +1,11 @@
 # Database (incluye horarios/escuela.db)
 *.db
 
+# Notas del asistente: las escribe la app (y el propio agente) en el disco del server.
+# En git se pisarían en cada deploy — ver agente/notas.py.
+agente.md
+agente.md.bak
+
 # PDFs generados por Salidas educativas (contienen DNI y datos de salud)
 salidas_pdfs/
 

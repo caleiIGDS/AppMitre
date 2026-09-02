@@ -1058,6 +1058,12 @@ document.addEventListener('DOMContentLoaded', function() {
     s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
     s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Links [texto](destino), que el server pone sobre los nombres del calendario
+    // (ver agente/enlaces.py). Sólo destinos internos que arrancan con "/": el texto
+    // sale de un LLM, así que un href libre sería una inyección (javascript:, phishing).
+    // Abren en otra pestaña para no perder el chat, que en /gestion es un widget.
+    s = s.replace(/\[([^\]\n]+)\]\((\/[^)\s]*)\)/g, (m, txt, href) =>
+      '<a href="' + href.replace(/"/g, '%22') + '" target="_blank" rel="noopener">' + txt + '</a>');
     return s;
   }
 

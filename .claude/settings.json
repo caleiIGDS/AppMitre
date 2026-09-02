@@ -69,7 +69,9 @@
       "Bash(echo \"exit: $?\")",
       "Bash(python -c \"import app; print\\('OK import'\\); print\\([str\\(r\\) for r in app.app.url_map.iter_rules\\(\\) if 'horarios' in r.endpoint or r.rule in \\('/','/salir'\\)]\\)\")",
       "Bash(git mv *)",
-      "Bash(python -c \"import agente\")"
+      "Bash(python -c \"import agente\")",
+      "Bash(node --check static/gestion.js)",
+      "Bash(python -c \"import crud, gestion; print\\('py OK'\\)\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\calei\\projects\\AppMitre\\static\\vendor\\pdfjs\\build",

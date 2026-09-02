@@ -16,10 +16,13 @@
         {# `permiso_escritura` lo inyecta crud.contexto_base con la clave del área. #}
         {% if puede(permiso_escritura) %}
         <a class="g-btn-outline-dark" href="{{ url_for(area_nombre ~ '.editar', slug=slug, id=fila['id']) }}">EDITAR</a>
+        {# `sin_eliminar`: la entidad no se borra nunca (recursos, que se dan de baja). #}
+        {% if not cfg.sin_eliminar %}
         <form method="post" action="{{ url_for(area_nombre ~ '.eliminar', slug=slug, id=fila['id']) }}"
               onsubmit="return confirm('¿Eliminar este elemento? Esta acción no se puede deshacer.');">
             <button type="submit" class="g-btn-danger">ELIMINAR</button>
         </form>
+        {% endif %}
         {% endif %}
     </div>
 </div>

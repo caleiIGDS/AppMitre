@@ -9,7 +9,7 @@
     <div class="g-toolbar">
         <div style="display: flex; align-items: baseline; gap: 12px;">
             <h2>{{ cfg.plural | upper }}</h2>
-            <span class="g-fichas-count">{{ filas | rejectattr('estado', 'equalto', 'Dado de baja') | list | length }} FICHAS</span>
+            <span class="g-fichas-count">{{ filas | rejectattr('estado', 'equalto', estado_baja) | list | length }} FICHAS</span>
         </div>
         <div class="g-toolbar-actions">
             <form method="get" class="g-search g-search-mini" action="{{ url_for(area_nombre ~ '.lista', slug=slug) }}">
@@ -66,11 +66,12 @@
                patrón que /salidas. Sin JS sigue funcionando desde el nombre del recurso. #}
             {% for fila in filas %}
             <tr data-buscar="{{ buscar[fila['id']] }}"
+                data-alias="{{ buscar_alias[fila['id']] }}"
                 data-ubicacion="|{{ ubicaciones_recurso[fila['id']] | map(attribute='ubicacion') | join('|') }}|"
                 data-vencido="{{ '1' if fila['id'] in vencidos_recurso else '0' }}"
                 data-href="{{ url_for(area_nombre ~ '.detalle', slug=slug, id=fila['id']) }}"
-                {{ 'hidden' if fila['estado'] == 'Dado de baja' }}
-                class="{{ 'g-recurso-baja' if fila['estado'] == 'Dado de baja' else 'g-recurso-roto' if fila['estado'] == 'Roto' }}">
+                {{ 'hidden' if fila['estado'] == estado_baja }}
+                class="{{ 'g-recurso-baja' if fila['estado'] == estado_baja else 'g-recurso-roto' if fila['estado'] == 'Roto' }}">
                 <td data-label="RECURSO">
                     <a class="g-item-link" href="{{ url_for(area_nombre ~ '.detalle', slug=slug, id=fila['id']) }}">{{ fila['nombre'] }}</a>
                     {%- if fila['id'] in via_alias %}<span class="g-tag-alias">· por alias</span>{% endif -%}

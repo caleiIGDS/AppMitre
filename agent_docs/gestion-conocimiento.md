@@ -93,6 +93,7 @@ lo único que cambia es CSS, más un script que reubica bloques. Es común a las
 | `recursos` | id, nombre, tipo, descripcion, estado, cantidad, valor, fecha_revision, **fotos**, **alias** |
 | `recurso_unidades` | recurso_id, numero, ubicacion (`UNIQUE(recurso_id, numero)`) — la ubicación de CADA unidad, ver abajo |
 | `kit_items` | id, recurso_id, titulo, cantidad, recurso_asignado — los sub-recursos de un kit, ver abajo |
+| `recurso_bajas` | id, recurso_id, recurso_nombre, motivo, detalle, fecha, revertida — el registro de bajas, ver abajo |
 
 **Ubicación** (`recurso_unidades`): `recursos` no tiene columna `ubicacion` — nunca hay "un lugar
 principal" separado del desglose, la ubicación de un recurso ES la lista de sus unidades, aunque
@@ -118,10 +119,11 @@ cargados acá — no hay tipo/flag aparte, mismo criterio orgánico que `recurso
 sub-recurso es sólo `titulo` + `cantidad` + `recurso_asignado` (texto libre e independiente,
 **no** un link a otro recurso de `recursos`). Helpers en `gestion.py`: `kit_items_recurso()`
 (sub-recursos de un kit, para la ficha) y `buscar_kit_items()` (los que matchean una búsqueda,
-en cualquier kit, para el listado — ver "Búsqueda tolerante" abajo). Desde la ficha web (sección
-"Sub-recursos (kit)" del detalle, siempre visible) se agrega, edita y borra por renglón (rutas
-`/gestion/recursos/<id>/kit/agregar`, `/kit/<item_id>/editar`, `/kit/<item_id>/eliminar`) —
-ahí es donde se completa `recurso_asignado`, que el chat nunca toca.
+en cualquier kit, para el listado — ver "Búsqueda tolerante" abajo). Se agrega, edita y borra
+por renglón **dentro de EDITAR** (`templates/gestion/form.html`, rutas
+`/gestion/recursos/<id>/kit/agregar`, `/kit/<item_id>/editar`, `/kit/<item_id>/eliminar`, que
+redirigen de vuelta al formulario) — ahí es donde se completa `recurso_asignado`, que el chat
+nunca toca. **La ficha muestra el kit sólo de lectura**, y si está vacío no muestra la sección.
 
 El chat arma un kit **al dar de alta** el recurso: `crear_entidad(..., sub_recursos=[{titulo,
 cantidad}, ...])` (ver "Alta con ficha de confirmación" en `agent_docs/agente-asistente.md`) —
@@ -131,6 +133,19 @@ es ADITIVO (agrega sin reemplazar ni pisar lo que ya tenía), pensado para carga
 tandas. Y puede corregir o sacar UN sub-recurso puntual con `editar_sub_recurso(id, item_id, ...)`
 / `eliminar_sub_recurso(id, item_id)` — el `item_id` (la fila de `kit_items`, no el id del kit)
 sale de `detalle_entidad`. Las tres escriben directo, sin ficha de confirmación.
+
+**Bajas** (`recurso_bajas`): **un recurso no se borra nunca**. `ENTIDADES['recursos']` declara
+`sin_eliminar` (ver `agent_docs/crud-motor.md`), así que la ruta genérica de eliminar devuelve 404
+y el chat tampoco puede: lo que se hace es **darlo de baja**, y la baja exige decir qué pasó. Se da
+desde EDITAR (`templates/gestion/form.html`, un `<dialog>` con `motivo` + `detalle` libre) por
+`POST /gestion/recursos/<id>/baja`: `gestion.dar_de_baja()` inserta la fila del registro y deja el
+recurso en `ESTADO_BAJA` (`"Dado de baja"`), que ya lo saca del listado salvo que se pida verlo.
+`revertir_baja()` (botón REVERTIR BAJA, `POST .../baja/revertir`) devuelve el recurso al inventario
+y marca esa fila como `revertida` — **no la borra**: el registro es el historial de lo que se
+decidió, no la lista de lo que hoy está de baja. `recurso_nombre` es la foto del nombre al momento
+de la baja, para que renombrar el recurso después no reescriba la historia. `MOTIVOS_BAJA` = Uso /
+Desgaste / Extravío / Rotura / Otro, y el detalle libre es lo que la explica. El registro completo
+se ve en `/gestion/bajas` (`bajas_registro()`), solo con `gestion.auditoria`.
 
 **Galería de fotos** (`fotos`): array JSON con objetos `{b64, tipo, fecha}`.
 - `b64`: imagen codificada en base64 (embedded, sin servicios externos)
@@ -155,7 +170,9 @@ sale de `detalle_entidad`. Las tres escriben directo, sin ficha de confirmación
   diferencia de subir y borrar
 - Las miniaturas son `<button>` (no `<img>` suelta) para que el visor se abra también con teclado
 
-Estados: recursos = Disponible / Retirado / En uso / En reparación / De baja / Sin revisar.
+Estados (`ESTADOS_RECURSO`): recursos = Funcional / Dañado usable / Roto. `"Dado de baja"`
+(`ESTADO_BAJA`) **no** está en esa lista a propósito: no se elige a mano ni desde el form ni desde
+el chat (la lista es también el enum de las tools), lo pone sólo la baja — ver "Bajas" más arriba.
 Valor (recursos): "" / Básico / Secundario / Alto valor — es la *importancia* del recurso
 dentro del inventario, no su precio (se llamaba `utilidad`, renombrada 2026-08-08).
 `cantidad` y `fecha_revision` son TEXT. **`fecha_revision` se precarga con la fecha de hoy
@@ -221,11 +238,14 @@ unidad y los sub-recursos de un kit, pero el mecanismo de limpieza es idéntico)
 | `/gestion/<slug>/nuevo` | GET/POST | Alta (valida nombre no vacío server-side) |
 | `/gestion/<slug>/<id>` | GET | Detalle: campos + secciones ("Ubicación" y "Sub-recursos (kit)" en recursos) |
 | `/gestion/<slug>/<id>/editar` | GET/POST | Edición |
-| `/gestion/<slug>/<id>/eliminar` | POST | Borra fila + sus filas de `LIMPIEZA_M2M` (confirm en el browser) |
+| `/gestion/<slug>/<id>/eliminar` | POST | Borra fila + sus filas de `LIMPIEZA_M2M` (confirm en el browser). **404 en `recursos`**, que declara `sin_eliminar`: se dan de baja |
+| `/gestion/bajas` | GET | Registro de bajas (solo `gestion.auditoria`): qué salió del inventario, con qué motivo y cuándo |
 | `/gestion/<slug>/<id>/foto` | POST | Sube una imagen a la galería (multipart → base64). Devuelve JSON |
 | `/gestion/<slug>/<id>/foto/<indice>/eliminar` | POST | Borra la foto de esa posición y vuelve a la ficha |
 | `/gestion/<slug>/<id>/foto/<indice>/rotar` | POST | Reemplaza esa foto por la versión girada que manda el navegador (imagen cruda en el body). Solo admin (`gestion.rotar`) |
 | `/gestion/alias` | GET | Solo lectura, solo admin (`gestion.alias`): tabla NOMBRE / ALIAS de todos los recursos. Único lugar de la web donde se ve el alias oculto — no hay edición acá |
+| `/gestion/recursos/<id>/baja` | POST | Da de baja el recurso: exige `motivo` (sin motivo vuelve al form), guarda `detalle` y la fecha de hoy |
+| `/gestion/recursos/<id>/baja/revertir` | POST | Devuelve el recurso al inventario y marca esa baja como revertida |
 | `/gestion/recursos/<id>/unidades/mover` | POST | Fija un lugar para unidades puntuales (`numeros`) o una cantidad de ellas |
 | `/gestion/recursos/<id>/unidades/quitar` | POST | Marca una unidad puntual como "sin ubicar" |
 | `/gestion/recursos/<id>/kit/agregar` | POST | Agrega un sub-recurso (`titulo`, `cantidad`, `recurso_asignado`) |
@@ -261,11 +281,17 @@ matches normales. El mecanismo genérico (`crud.campo_alias(cfg_ent)`, análogo 
 
 **Búsqueda en vivo (client-side, `static/gestion.js`)**: además del filtrado server-side,
 el listado filtra en el navegador mientras se escribe, sin recargar ni ir al servidor. La
-ruta emite por fila un atributo `data-buscar` con el texto ya normalizado por Python
-(`texto.norm(nombre + descripcion)`, más el alias si la entidad lo declara), y el JS filtra
-con un puerto de `texto.puntaje_busqueda` (mismo umbral `UMBRAL_SIMILITUD = 0.68`): substring
-normalizado siempre gana, y perdona typos por similitud a partir de 3 caracteres, igual que
-el backend. Es progressive enhancement: sin JS, el form sigue haciendo la búsqueda difusa
+ruta emite por fila dos atributos con el texto ya normalizado por Python: `data-buscar`
+(`texto.norm(nombre + descripcion)`) y, aparte, `data-alias` (el alias si la entidad lo
+declara, si no vacío). El JS filtra con un puerto de `texto.puntaje_busqueda` (mismo umbral
+`UMBRAL_SIMILITUD = 0.68`): substring normalizado siempre gana, y perdona typos por
+similitud a partir de 3 caracteres, igual que el backend. **Van separados porque el JS
+también reordena**: repite la jerarquía de la segunda pasada de arriba — primero las filas
+que coinciden por nombre/descripción (en su orden alfabético, sin saltar mientras se
+escribe), después las que coinciden sólo por alias, y estas **sin la etiqueta "· por alias"**
+(la muestra sólo el camino sin JS; el alias no se le muestra al humano). Concatenados en un
+solo `data-buscar`, el filtro no podía distinguir de dónde venía el match y buscar "pinza"
+dejaba "Alicate" (alias `pinza universal`) arriba de "Pinza de fuerza". Es progressive enhancement: sin JS, el form sigue haciendo la búsqueda difusa
 server-side. Con JS, el botón BUSCAR se oculta y Enter no recarga — por eso la capa en vivo
 tiene que tolerar typos ella misma: con JS activo (la inmensa mayoría de los casos) nunca se
 llega al camino server-side, así que ya no hay "respaldo" fuzzy real detrás. Mismo puerto que
@@ -279,8 +305,8 @@ matchean en una tabla aparte debajo ("Sub-recursos de kits"), cada uno linkeando
 lo contiene. El motor no sabe qué son esas filas — sólo las reenvía a la plantilla.
 
 Secciones mostradas en detalle (`secciones_detalle`): recurso → **Ubicación** (la lista de
-unidades, siempre presente) y **Sub-recursos (kit)** (los `kit_items` del recurso, siempre
-presente aunque esté vacía).
+unidades, siempre presente) y **Sub-recursos (kit)** (los `kit_items` del recurso, sólo de
+lectura y sólo si tiene alguno).
 
 ## Respaldos (`backups/`)
 
@@ -323,15 +349,15 @@ El área declara cinco, y el verbo es lo que los hace entrar solos en los perfil
 | clave | verbo | qué habilita |
 |---|---|---|
 | `gestion.leer` | leer | ver el inventario. Es el permiso base del blueprint |
-| `gestion.editar` | escribir | `nuevo`/`editar`/`eliminar`/fotos/desglose por ubicación |
+| `gestion.editar` | escribir | `nuevo`/`editar`/fotos/desglose por ubicación + dar de baja un recurso y revertir la baja (borrar, no: ningún recurso se borra) |
 | `gestion.alias` | admin | `/gestion/alias` (tabla de solo lectura) y la tool del agente `listar_alias`. Verbo `admin`: no entra en ningún preset de interno, solo lo tiene el comodín `'*'` (mismo criterio que `historia.personas`) |
-| `gestion.auditoria` | admin | los chips de auditoría del listado (vencidos de revisión, dados de baja) |
+| `gestion.auditoria` | admin | los chips de auditoría del listado (vencidos de revisión, dados de baja) y `/gestion/bajas`, el registro de bajas |
 | `gestion.rotar` | admin | el botón ROTAR del visor de fotos y su ruta. `crud.py` lo lee del hook opcional `PERMISO_ROTAR_FOTO`; el área que no lo declara (historia) cae en su permiso de escritura |
 
 `PERMISO_ESCRITURA` lo aplica `crud.registrar_rutas` a sus cinco rutas genéricas, y las dos
 rutas propias del desglose por ubicación lo piden a mano con `@accesos.requiere(...)`.
 
-Con `gestion.leer` a secas la UI queda en modo consulta: sin CREAR, sin Editar, sin ELIMINAR y
+Con `gestion.leer` a secas la UI queda en modo consulta: sin CREAR, sin Editar, sin DAR DE BAJA y
 sin subida de fotos. El motor entero de accesos está en `agent_docs/accesos.md`.
 
 Es una traba de desarrollo, no seguridad completa: sin usuarios ni auditoría, sin

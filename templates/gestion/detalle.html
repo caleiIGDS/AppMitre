@@ -133,9 +133,9 @@
         {% endif %}
 
         {% elif s.get('tipo') == 'kit_items' %}
-        {# Un recurso sin sub-recursos cargados no es un kit: la sección entera no aparece
-           al entrar a la ficha (ni la barra ni el formulario vacío). Quien puede escribir
-           sólo ve un desplegable chico para empezar a cargarlos. #}
+        {# Sólo de lectura: los sub-recursos se cargan, se editan y se quitan desde EDITAR
+           (templates/gestion/form.html). Un recurso sin sub-recursos no es un kit, así que
+           sin ítems la sección entera no aparece. #}
         {% if s['items'] %}
         <div class="g-ficha-bar"><span>{{ s.titulo | upper }}</span></div>
         <div class="g-ficha-seccion">
@@ -146,57 +146,20 @@
                             <th>TÍTULO</th>
                             <th>CANT.</th>
                             <th>RECURSO ASIGNADO</th>
-                            {% if puede(permiso_escritura) %}<th></th>{% endif %}
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in s['items'] %}
                         <tr>
-                            {% if puede(permiso_escritura) %}
-                            <td colspan="3">
-                                <form method="post" class="g-inline-form"
-                                      action="{{ url_for('gestion.kit_item_editar', id=fila['id'], item_id=item['id']) }}">
-                                    <input type="text" name="titulo" value="{{ item['titulo'] }}" placeholder="Título" required>
-                                    <input type="text" name="cantidad" value="{{ item['cantidad'] }}" placeholder="Cantidad" style="width:6em">
-                                    <input type="text" name="recurso_asignado" value="{{ item['recurso_asignado'] }}" placeholder="Recurso asignado">
-                                    <button type="submit" class="g-btn-mini" title="Guardar">Guardar</button>
-                                </form>
-                            </td>
-                            <td>
-                                <form method="post" class="g-inline-form" style="display:inline"
-                                      action="{{ url_for('gestion.kit_item_eliminar', id=fila['id'], item_id=item['id']) }}">
-                                    <button type="submit" class="g-btn-mini g-btn-danger" title="Quitar">×</button>
-                                </form>
-                            </td>
-                            {% else %}
                             <td data-label="TÍTULO">{{ item['titulo'] }}</td>
                             <td data-label="CANT.">{{ item['cantidad'] }}</td>
                             <td data-label="RECURSO ASIGNADO">{{ item['recurso_asignado'] }}</td>
-                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-            {% if puede(permiso_escritura) %}
-            <form method="post" class="g-inline-form" action="{{ url_for('gestion.kit_item_agregar', id=fila['id']) }}">
-                <input type="text" name="titulo" placeholder="Título" required>
-                <input type="text" name="cantidad" placeholder="Cantidad" style="width:6em">
-                <input type="text" name="recurso_asignado" placeholder="Recurso asignado">
-                <button type="submit" class="g-btn-mini">Agregar</button>
-            </form>
-            {% endif %}
         </div>
-        {% elif puede(permiso_escritura) %}
-        <details class="g-ficha-agregar">
-            <summary>+ {{ s.titulo }}</summary>
-            <form method="post" class="g-inline-form" action="{{ url_for('gestion.kit_item_agregar', id=fila['id']) }}">
-                <input type="text" name="titulo" placeholder="Título" required>
-                <input type="text" name="cantidad" placeholder="Cantidad" style="width:6em">
-                <input type="text" name="recurso_asignado" placeholder="Recurso asignado">
-                <button type="submit" class="g-btn-mini">Agregar</button>
-            </form>
-        </details>
         {% endif %}
 
         {% else %}

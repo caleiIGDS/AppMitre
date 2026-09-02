@@ -3,6 +3,8 @@
 Es la única área que el agente NO puede escribir: la planilla se carga desde Google
 Sheets con un botón aparte del SPA.
 """
+import json
+import re
 import sqlite3
 
 import texto
@@ -20,6 +22,14 @@ from ..padrones import (_buscar_profesor_scored, _etiqueta_curso, _personas_cono
 # `LIMITE_LISTADO_COMPLETO` en `entidades.py`, y por la misma razón; hoy el padrón son ~344
 # nombres, así que el margen es chico y esto se va a activar antes de lo que parece.
 LIMITE_PADRON = 400
+
+# Tope de la `grilla` de `coincidencias`, medido sobre el JSON serializado y no sobre la
+# cantidad de entidades: la cantidad es mal proxy, porque "todos los 1ros" son 11 cursos pero
+# pesan 5.000 tokens (comparten horario, hay pocas fronteras distintas) y 10 cursos al azar
+# pesan 7.700. 20.000 chars son ~6.600 tokens y caen entre 10 y 15 entidades, así que todo lo
+# que alguien pregunta de verdad conserva el detalle. Sin esto, cruzar los 62 cursos manda
+# 62.000 tokens al historial para que el modelo lea "no coinciden nunca".
+LIMITE_GRILLA_CHARS = 20000
 
 # Explicación de titular/contraturno que acompaña a todas las respuestas de preceptores:
 # sin esto el modelo lee dos nombres y no sabe cuál dar cuando le preguntan "el preceptor"
@@ -51,6 +61,31 @@ NOTA_TURNOS = ('Los turnos de la escuela son TRES: MAÑANA, TARDE y VESPERTINO. 
                'persona no cubre la semana entera. `sin_asignar` significa que la planilla dice '
                'FALTA ahí, no que haya alguien llamado así (distinto de `turnos_sin_nadie`, que '
                'es no haber ninguna fila).')
+
+# Las clases de taller parten el curso en dos mitades que van a la misma hora con docentes y
+# talleres distintos. Sin esto el modelo veía dos clases simultáneas del mismo curso y las
+# leía como un error de la planilla o elegía una sola.
+NOTA_GRUPOS = ('Las clases que dicen "Grupo A" o "Grupo B" son de MEDIA división: en talleres '
+               'el curso se parte en dos mitades, cada una con su docente y su taller. Lo más '
+               'común es que las dos vayan a la misma hora, y entonces dos clases simultáneas del '
+               'mismo curso con grupos distintos NO son un error ni una superposición: son las dos '
+               'mitades, y las dos van. Pero NO siempre es así: hay horarios donde figura un solo '
+               'grupo, y ahí la otra mitad cursa en otro momento o no tiene nada cargado. Contá lo '
+               'que dice la planilla: no des por hecho que a cada grupo le corresponde otro a la '
+               'misma hora, ni completes el que falta. Las clases sin grupo las cursa la división '
+               'entera. Si te preguntan por un alumno concreto no adivines de qué grupo es: mostrá '
+               'los dos y aclaralo.')
+
+
+def _sufijo_grupo(fila):
+    """` · Grupo A` cuando la clase es de media división, o vacío cuando es de todo el curso."""
+    grupo = (fila.get('grupo') or '').strip()
+    return f' · Grupo {grupo.upper()}' if grupo else ''
+
+
+def _hay_grupos(filas):
+    return any((f.get('grupo') or '').strip() for f in filas)
+
 
 
 def _padron_completo_horarios():
@@ -439,10 +474,16 @@ def _horario_profesor_fmt(nombre, permisos=frozenset()):
     # Agrupar por día
     por_dia = {}
     for f in filas:
-        dia = f['dia']
+        # `clases.dia` viene del Sheet sin normalizar: hay filas con "Miercoles" sin tilde, que
+        # comparadas contra DIAS no matcheaban y desaparecían del horario sin aviso. También
+        # hay "Sábado" y filas en blanco, que no son días de cursada y sí se descartan.
+        dia = database._dia_canonico(f['dia'])
+        if not dia:
+            continue
         if dia not in por_dia:
             por_dia[dia] = []
         linea = f"{f['hora_inicio']}–{f['hora_fin']} · {f['materia']} · {f['curso']}°{f['division']} · {f['aula']}"
+        linea += _sufijo_grupo(f)
         if f.get('suplente_activo') == 1:
             linea += f" (suplente: {f['prof_suplente']})"
         por_dia[dia].append(linea)
@@ -454,6 +495,8 @@ def _horario_profesor_fmt(nombre, permisos=frozenset()):
             clases_ordenadas[dia] = por_dia[dia]
 
     resultado = {'profesor': nombre_usado, 'clases': clases_ordenadas}
+    if _hay_grupos(filas):
+        resultado['nota_grupos'] = NOTA_GRUPOS
     if no_docente:
         # Da clases Y tiene cargo no docente: son dos horarios que conviven, no uno que
         # reemplaza al otro. Van separados para que el modelo no los mezcle en un mismo día.
@@ -469,7 +512,20 @@ def _horario_profesor_fmt(nombre, permisos=frozenset()):
     return resultado
 
 def _horario_curso_fmt(curso, division):
-    """Horario de curso, formato interpretado."""
+    """Horario de curso, formato interpretado.
+
+    Normaliza antes de consultar: el modelo manda la división como la dijo el usuario, y las de
+    4° a 7° son números que en castellano se escriben "5ta"/"9na". Con el string crudo la query
+    daba cero filas y la respuesta era "no se encontraron clases", que es indistinguible de un
+    curso que de verdad no tiene ninguna. Mismo criterio que `preceptores`.
+    """
+    par = _parsear_curso(f'{curso} {division}')
+    if par:
+        curso, division = par
+    else:
+        curso = database._extraer_num_curso(curso)
+        division = database._extraer_num_curso(division).strip().upper()
+
     con = database.conectar()
     con.row_factory = sqlite3.Row  # database.conectar() no lo setea; sin esto dict(row) revienta
     cur = con.cursor()
@@ -482,10 +538,16 @@ def _horario_curso_fmt(curso, division):
 
     por_dia = {}
     for f in filas:
-        dia = f['dia']
+        # `clases.dia` viene del Sheet sin normalizar: hay filas con "Miercoles" sin tilde, que
+        # comparadas contra DIAS no matcheaban y desaparecían del horario sin aviso. También
+        # hay "Sábado" y filas en blanco, que no son días de cursada y sí se descartan.
+        dia = database._dia_canonico(f['dia'])
+        if not dia:
+            continue
         if dia not in por_dia:
             por_dia[dia] = []
         linea = f"{f['hora_inicio']}–{f['hora_fin']} · {f['materia']} · {f['profesor']} · {f['aula']}"
+        linea += _sufijo_grupo(f)
         por_dia[dia].append(linea)
 
     clases_ordenadas = {}
@@ -493,7 +555,10 @@ def _horario_curso_fmt(curso, division):
         if dia in por_dia:
             clases_ordenadas[dia] = por_dia[dia]
 
-    return {'curso': f'{curso}° {division}', 'clases': clases_ordenadas}
+    resultado = {'curso': f'{curso}° {division}', 'clases': clases_ordenadas}
+    if _hay_grupos(filas):
+        resultado['nota_grupos'] = NOTA_GRUPOS
+    return resultado
 
 def _horario_aula_fmt(aula):
     """Horario de aula, formato interpretado."""
@@ -509,10 +574,16 @@ def _horario_aula_fmt(aula):
 
     por_dia = {}
     for f in filas:
-        dia = f['dia']
+        # `clases.dia` viene del Sheet sin normalizar: hay filas con "Miercoles" sin tilde, que
+        # comparadas contra DIAS no matcheaban y desaparecían del horario sin aviso. También
+        # hay "Sábado" y filas en blanco, que no son días de cursada y sí se descartan.
+        dia = database._dia_canonico(f['dia'])
+        if not dia:
+            continue
         if dia not in por_dia:
             por_dia[dia] = []
         linea = f"{f['hora_inicio']}–{f['hora_fin']} · {f['materia']} · {f['curso']}°{f['division']} · {f['profesor']}"
+        linea += _sufijo_grupo(f)
         por_dia[dia].append(linea)
 
     clases_ordenadas = {}
@@ -520,8 +591,353 @@ def _horario_aula_fmt(aula):
         if dia in por_dia:
             clases_ordenadas[dia] = por_dia[dia]
 
-    return {'aula': aula, 'clases': clases_ordenadas}
+    resultado = {'aula': aula, 'clases': clases_ordenadas}
+    if _hay_grupos(filas):
+        resultado['nota_grupos'] = NOTA_GRUPOS
+    return resultado
 
 def _aulas_libres_fmt():
     """Aulas libres ahora."""
     return database.aulas_libres()
+
+
+# ---------------------------------------------------------------------------
+# coincidencias: cuándo varias entidades están en la escuela al mismo tiempo.
+#
+# La cuenta la hace Python, no el modelo. `deepseek-v4-pro` SÍ puede cruzarlos solo, pero con
+# el payload viejo —tres `horario_curso` sueltos— acertó 2 de 6 sobre tres casos, quemando
+# 9.400 a 12.000 tokens de razonamiento y hasta 6 minutos por respuesta; con cuatro cursos se
+# comió el tope de salida sin escribir nada las dos veces. Y cuando falla, falla omitiendo un
+# día entero, que es el lado que nadie audita. Con la grilla ya calculada: 3/3 en 15-28 s.
+# Ver `dev-log/DECISIONS.md`.
+# ---------------------------------------------------------------------------
+
+INSTRUCCION_GRILLA = (
+    'Cada tramo dice qué hace cada entidad en esa franja: el nombre de una materia (o de un '
+    'curso, para un preceptor) es que está EN CLASE; "hueco" es que está en la escuela ese día '
+    'pero sin clase en ese rato; "fuera" es que todavía no llegó o ya se fue. Coinciden en los '
+    'tramos marcados `todos: true`, que son los que no tienen ningún "fuera" — ya están '
+    'calculados: leelos, NO los recalcules. '
+    'Hay dos resúmenes por día y conviene dar el que corresponda: `tramos_todos_en_clase` es '
+    'cuándo están todos con clase (el dato firme, el que sirve para "cuándo los junto"), y '
+    '`tramos_con_todos` es cuándo están todos en el edificio aunque alguno tenga un hueco (más '
+    'amplio, pero si el hueco es largo puede que se hayan ido a la casa y vuelto: el dato no '
+    'dice si se quedaron, así que no lo afirmes). '
+    'Coincidir NO es tener clase juntos ni estar libres: es estar ahí a la vez. Si no coinciden, '
+    'mirá la grilla y explicá por qué (quién se va antes, quién llega después).')
+
+# La que va cuando la grilla no viajó. `INSTRUCCION_GRILLA` termina mandando a "mirar la
+# grilla": con el detalle omitido eso es mandarlo a mirar algo que no está, que es pedirle que
+# lo invente. Los tramos siguen siendo exactos —se calcularon sobre la grilla completa, antes
+# de descartarla—; lo único que falta es el desglose entidad por entidad.
+INSTRUCCION_SIN_GRILLA = (
+    'Son muchas entidades y el detalle tramo por tramo se omitió por tamaño; te quedan los dos '
+    'resúmenes por día. Los tramos que traen SON EXACTOS: se calcularon con todos los datos, no '
+    'son una aproximación. `tramos_todos_en_clase` es cuándo están todas con clase y '
+    '`tramos_con_todos` cuándo están todas en el edificio aunque alguna tenga un hueco. '
+    'Contestá con eso. NO expliques quién entra o se va a cada hora ni armes un desglose por '
+    'entidad: ese dato no te llegó y no lo podés deducir. Si el usuario quiere el detalle, '
+    'pedile menos cursos o un día concreto y volvé a llamar la tool.')
+
+NOTA_PRECEPTORES_COINCIDENCIA = (
+    'La ocupación de un preceptor es APROXIMADA y va por arriba: `horarios_preceptores` no '
+    'guarda horas, así que se toman las clases de los cursos que tiene a cargo ese día. Si '
+    'cubre un curso sólo en un turno, acá figura ocupado todas las horas de ese curso. Decilo '
+    'como "está con tal curso", no como un horario exacto.')
+
+
+def _parsear_curso(txt):
+    """'2do C' → ('2', 'C'); '6to 5ta' → ('6', '5'); '4° 9na' → ('4', '9'). None si no se entiende.
+
+    Los cursos de 4° a 7° tienen la división numerada, y en castellano eso se dice y se escribe
+    "6ta"/"9na" — tal cual lo tipea el usuario y tal cual se lo pasa el modelo. En la base la
+    división de esos años es un dígito pelado, así que sin esto la consulta daba cero filas y la
+    respuesta era "no se encontraron clases", indistinguible de un curso que de verdad no tiene
+    ninguna. Por eso las DOS partes pasan por `_extraer_num_curso`, no sólo el año.
+    """
+    s = database.eliminar_acentos(str(txt or '')).upper().replace('°', ' ')
+    s = re.sub(r'\s+', ' ', s).strip()
+    if not s:
+        return None
+
+    m = re.match(r'^(\d+)\s*(?:RO|DO|ER|TO|MO|MA|NO|VO)?\s+(.+)$', s)
+    if m:
+        curso, division = m.group(1), m.group(2)
+    else:
+        # "3B" todo pegado. Sólo con letra: "45" sería ambiguo entre año y división.
+        m = re.match(r'^(\d)\s*([A-Z])$', s)
+        if not m:
+            return None
+        curso, division = m.group(1), m.group(2)
+
+    division = database._extraer_num_curso(division).strip().upper()
+    return (curso, division) if curso and division else None
+
+
+def _cursos_disponibles():
+    """'1° A', '1° B', … tal como están en la base. Para el caso de curso inexistente."""
+    con = database.conectar()
+    cur = con.cursor()
+    cur.execute("SELECT DISTINCT curso, division FROM clases WHERE curso != '' AND division != '' "
+                "ORDER BY CAST(curso AS INTEGER), division")
+    disponibles = [_etiqueta_curso(c, d) for c, d in cur.fetchall()]
+    con.close()
+    return disponibles
+
+
+def _unir_ocupaciones(a, b):
+    """Dos {dia: [(ini, fin, etiqueta)]} en uno. Para quien está en dos padrones a la vez."""
+    unida = {dia: list(tramos) for dia, tramos in a.items()}
+    for dia, tramos in b.items():
+        ya = unida.setdefault(dia, [])
+        ya.extend(t for t in tramos if t not in ya)
+    for dia in unida:
+        unida[dia].sort()
+    return unida
+
+
+def _candidatos_persona(nombre):
+    """Candidatos de LOS DOS padrones juntos, de mejor a peor: (puntaje, tipo, etiqueta, extra).
+
+    Docentes/no docentes y preceptores viven en tablas distintas y se buscan por separado en el
+    resto del módulo. Acá van al mismo ranking a propósito: si un nombre puntúa parecido en los
+    dos, eso es una ambigüedad real y hay que preguntar, no quedarse con el padrón que se miró
+    primero.
+    """
+    q_norm = texto.norm(nombre or '')
+    candidatos = [(puntaje, 'docente', n, rol)
+                  for puntaje, n, rol in _buscar_profesor_scored(nombre)]
+
+    for grupo in _alias_preceptores(_lista_preceptores()):
+        puntaje = max(max(_puntaje_nombre(q_norm, texto.norm(v)),
+                          texto.puntaje_busqueda(q_norm, v) or 0.0) for v in grupo)
+        if puntaje >= 0.6:
+            candidatos.append((puntaje, 'preceptor', grupo[0], grupo))
+
+    candidatos.sort(reverse=True, key=lambda x: (x[0], x[2]))
+    return candidatos[:5]
+
+
+def _resolver_persona(nombre, permisos=frozenset()):
+    """Nombre suelto → {'etiqueta', 'ocupacion', 'es_preceptor', 'comparable', 'nota'}, o {'error': {...}}.
+
+    `comparable` es si esta persona se puede abrir en el modo comparación del calendario, que
+    pinta bloques de `clases` y nada más: un preceptor no entra (su horario es una tabla, no un
+    calendario) y un no docente puro tampoco (no tiene una sola fila en `clases`). Sale de acá
+    porque es el único punto donde se sabe de qué padrón salió el nombre.
+    """
+    candidatos = _candidatos_persona(nombre)
+
+    if not candidatos:
+        error = {'error': f'No hay nadie parecido a "{nombre}" en los horarios.',
+                 'nota': 'NO afirmes que no existe: se comparan letras, no personas. '
+                         + _otros_padrones(permisos)}
+        padron = _padron_completo_horarios()
+        if padron:
+            error['padron_completo'] = padron
+        error['preceptores'] = sorted(_lista_preceptores())
+        return {'error': error}
+
+    # Mismo criterio que `horario_profesor` y `preceptores`: se auto-resuelve sólo si hay un
+    # ganador claro; si están empatados se pregunta, no se elige.
+    ganador_claro = len(candidatos) == 1 or candidatos[0][0] - candidatos[1][0] >= 0.15
+    if not ganador_claro:
+        return {'error': {
+            'error': f'Hay varias personas parecidas a "{nombre}".',
+            'sugerencias': [c[2] for c in candidatos],
+            'nota': 'Preguntale al usuario cuál es en vez de elegir vos. NO inventes el horario.'}}
+
+    _puntaje, tipo, nombre_usado, extra = candidatos[0]
+    nota = None
+    if texto.norm(nombre_usado) != texto.norm(nombre):
+        nota = f'No hay coincidencia exacta con "{nombre}"; se usó "{nombre_usado}".'
+
+    if tipo == 'preceptor':
+        return {'etiqueta': nombre_usado, 'ocupacion': database.ocupacion_preceptor(extra),
+                'es_preceptor': True, 'comparable': False, 'nota': nota}
+
+    ocupacion = database.ocupacion_profesor(nombre_usado)
+    da_clases = bool(ocupacion)
+    if extra:
+        # `extra` es el cargo no docente: da clases Y tiene un cargo, y está ocupada en los dos.
+        # Quedarse con uno solo era perderle media agenda (RODRIGUEZ VIRGINIA, CALEI).
+        ocupacion = _unir_ocupaciones(ocupacion, database.ocupacion_no_docente(nombre_usado))
+    return {'etiqueta': nombre_usado, 'ocupacion': ocupacion, 'es_preceptor': False,
+            'comparable': da_clases, 'nota': nota}
+
+
+def _grilla(ocupaciones, dias):
+    """{etiqueta: ocupacion} → {dia: [tramo, ...]}, todas alineadas en el mismo eje.
+
+    Se corta el día en cada frontera horaria de CUALQUIER entidad y se mira tramo por tramo.
+    No hay bandas de presencia de la primera a la última clase: el 32% de los días-curso tienen
+    un pozo en el medio (mediana 90 min, máximo 480), así que una banda contigua inventa
+    presencia que no existe — y ningún umbral de corte los separa bien, porque hay huecos
+    legítimos de más de 3 horas. Cortando por tramos los huecos no hay que modelarlos: se ven.
+    """
+    etiquetas = list(ocupaciones)
+    grilla = {}
+
+    for dia in dias:
+        bordes = sorted({t for ocup in ocupaciones.values()
+                         for ini, fin, _ in ocup.get(dia, []) for t in (ini, fin)})
+        tramos = []
+        for inicio, fin in zip(bordes, bordes[1:]):
+            estados = {}
+            for etiqueta in etiquetas:
+                del_dia = ocupaciones[etiqueta].get(dia, [])
+                encima = sorted({lab for a, b, lab in del_dia if a <= inicio and b >= fin})
+                if encima:
+                    # Puede haber más de uno: media división en talleres (Grupo A y B), o un
+                    # preceptor con dos cursos a cargo en la misma franja.
+                    estados[etiqueta] = ' + '.join(encima)
+                elif del_dia and min(a for a, _, _ in del_dia) <= inicio \
+                        and max(b for _, b, _ in del_dia) >= fin:
+                    estados[etiqueta] = 'hueco'
+                else:
+                    estados[etiqueta] = 'fuera'
+
+            if all(e == 'fuera' for e in estados.values()):
+                continue
+            tramo = {'de': database.a_hhmm(inicio), 'a': database.a_hhmm(fin)}
+            tramo.update(estados)
+            if not any(e == 'fuera' for e in estados.values()):
+                tramo['todos'] = True
+            tramos.append(tramo)
+
+        if tramos:
+            grilla[dia] = tramos
+    return grilla
+
+
+def _resumir(tramos, entidades, solo_en_clase=False):
+    """Franjas de un día que cumplen la condición, pegando las contiguas: ['10:00–13:00', …]."""
+    juntos = []
+    for tramo in tramos:
+        if not tramo.get('todos'):
+            continue
+        if solo_en_clase and any(tramo[e] == 'hueco' for e in entidades):
+            continue
+        if juntos and juntos[-1][1] == tramo['de']:
+            juntos[-1][1] = tramo['a']
+        else:
+            juntos.append([tramo['de'], tramo['a']])
+    return [f'{ini}–{fin}' for ini, fin in juntos]
+
+
+def _coincidencias_fmt(cursos=None, personas=None, dia=None, contexto_turno=None):
+    """Cuándo están varias entidades en la escuela a la vez, en una grilla alineada.
+
+    Deja además en `contexto_turno['comparacion']` las entidades que el modo comparación del
+    calendario sabe dibujar, para que la respuesta salga con el link que las abre superpuestas
+    (lo arma `enlaces.enlace_comparacion`). Va por `contexto_turno` y no en lo que se devuelve
+    porque es para el usuario, no para el modelo: un link en el resultado de la tool termina
+    copiado a mano —y mal— en la respuesta.
+    """
+    cursos = [c for c in (cursos or []) if str(c).strip()]
+    personas = [p for p in (personas or []) if str(p).strip()]
+
+    ocupaciones = {}
+    notas = []
+    hay_preceptor = False
+    comparables, sin_calendario = [], []
+
+    for crudo in cursos:
+        par = _parsear_curso(crudo)
+        if not par:
+            return {'error': f'No entendí qué curso es "{crudo}".',
+                    'cursos_disponibles': _cursos_disponibles(),
+                    'nota': 'Pasá el curso como lo dijo el usuario ("2do C", "6to 5ta") o como '
+                            'figura en la lista. No inventes el horario.'}
+        num, division = par
+        etiqueta = _etiqueta_curso(num, division)
+        ocupacion = database.ocupacion_curso(num, division)
+        if not ocupacion:
+            return {'error': f'No hay clases cargadas para {etiqueta} (pedido como "{crudo}").',
+                    'cursos_disponibles': _cursos_disponibles(),
+                    'nota': 'Fijate si el curso es alguno de la lista antes de decir que no '
+                            'existe. Si está en la lista y no tiene clases, decilo así.'}
+        ocupaciones[etiqueta] = ocupacion
+        comparables.append(('curso', etiqueta))
+
+    for crudo in personas:
+        resuelta = _resolver_persona(crudo)
+        if 'error' in resuelta:
+            return resuelta['error']
+        if not resuelta['ocupacion']:
+            return {'error': f'{resuelta["etiqueta"]} no tiene horario cargado, así que no se '
+                             'puede cruzar con nadie.',
+                    'nota': 'Decilo tal cual: no es que no coincidan, es que falta el dato.'}
+        ocupaciones[resuelta['etiqueta']] = resuelta['ocupacion']
+        if resuelta.get('comparable'):
+            comparables.append(('profesor', resuelta['etiqueta']))
+        else:
+            sin_calendario.append(resuelta['etiqueta'])
+        hay_preceptor = hay_preceptor or resuelta['es_preceptor']
+        if resuelta['nota']:
+            notas.append(resuelta['nota'])
+
+    if len(ocupaciones) < 2:
+        # Distinguir "me pasaste una sola" de "me pasaste dos que son la misma": `"2do C"` y
+        # `"2° C"` resuelven a la misma clave y colapsan, y decirle "hacen falta dos" cuando
+        # dio dos lo deja dando vueltas sin entender qué le falta.
+        if len(cursos) + len(personas) > 1:
+            unica = next(iter(ocupaciones), None)
+            return {'error': f'Todo lo que pasaste es la misma entidad ({unica}), escrita de '
+                             'formas distintas. No hay nada que cruzar.',
+                    'nota': 'Decíselo al usuario así. Si quería otra, pedile cuál.'}
+        return {'error': 'Hacen falta al menos DOS entidades para cruzar horarios.',
+                'nota': 'Pasá los cursos en `cursos` y las personas en `personas`. Para el '
+                        'horario de una sola, usá `horario_curso` o `horario_profesor`.'}
+
+    if dia:
+        dia_pedido = database._dia_canonico(dia)
+        if not dia_pedido:
+            return {'error': f'"{dia}" no es un día de cursada.', 'dias_validos': list(DIAS)}
+        dias = [dia_pedido]
+    else:
+        dias = list(DIAS)
+
+    entidades = list(ocupaciones)
+    grilla = _grilla(ocupaciones, dias)
+    # Dos resúmenes, porque son dos preguntas distintas y la diferencia entre ellas es
+    # justamente el hueco: 6°5 los miércoles tiene clase 07:40-09:40 y vuelve 13:30, así que
+    # "están todos" hasta las 12:00 sólo vale si no se fueron a la casa en el medio. Con uno
+    # solo, cualquiera de los dos criterios miente en la mitad de los casos.
+    tramos_con_todos = {d: _resumir(t, entidades) for d, t in grilla.items()}
+    tramos_todos_en_clase = {d: _resumir(t, entidades, solo_en_clase=True)
+                             for d, t in grilla.items()}
+
+    resultado = {
+        'entidades': entidades,
+        'tramos_todos_en_clase': tramos_todos_en_clase,
+        'tramos_con_todos': tramos_con_todos,
+    }
+    # La grilla se calcula siempre —los resúmenes salen de ella— pero no siempre viaja. Es el
+    # 86% del payload con cuatro cursos y el 99% con sesenta, y ahí ya no explica nada: nadie
+    # lee una tabla de 62 columnas para que le confirmen que no coinciden nunca. Los resúmenes
+    # pesan ~500 tokens tenga 8 entidades o 62.
+    cabe = len(json.dumps(grilla, ensure_ascii=False)) <= LIMITE_GRILLA_CHARS
+    if cabe:
+        resultado['grilla'] = grilla
+    else:
+        resultado['grilla_omitida'] = True
+    resultado['instruccion'] = INSTRUCCION_GRILLA if cabe else INSTRUCCION_SIN_GRILLA
+    if not any(tramos_con_todos.values()):
+        resultado['sin_coincidencias'] = True
+        resultado['aviso'] = ('No hay ni un tramo con todos a la vez en los días consultados. '
+                              'Es un resultado válido, no un error: '
+                              + ('explicá con la grilla qué horarios se cruzan de a dos y cuál '
+                                 'queda afuera.' if cabe else
+                                 'decilo tal cual, sin inventar cuál es el que no encaja.'))
+    if hay_preceptor:
+        resultado['nota_preceptores'] = NOTA_PRECEPTORES_COINCIDENCIA
+    if notas:
+        resultado['nota'] = ' '.join(notas)
+
+    # Con una sola entidad dibujable no hay nada que superponer y el link sobra.
+    if contexto_turno is not None and len(comparables) >= 2:
+        # Sin `dia`: el calendario comparado siempre muestra la semana entera, y filtrarlo
+        # por un día sería prometer algo que la vista no hace.
+        contexto_turno['comparacion'] = {'items': comparables, 'afuera': sin_calendario}
+    return resultado

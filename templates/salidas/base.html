@@ -6,8 +6,8 @@
     <title>{% block titulo %}Salidas Educativas{% endblock %} — {{ escuela_nombre }}</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename=escuela_logo) }}">
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=25">
-    <script src="{{ url_for('static', filename='gestion-agente.js') }}?v=7" defer></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='gestion.css') }}?v=26">
+    <script src="{{ url_for('static', filename='gestion-agente.js') }}?v=8" defer></script>
     {# El ☰ y su panel lateral: menú de áreas siempre, y en celular además el nav
        y las acciones del header. #}
     <script src="{{ url_for('static', filename='mobile-nav.js') }}?v=2" defer></script>
@@ -64,7 +64,7 @@
         {% if puede('gestion.leer') %}
         <a href="{{ url_for('gestion.home') }}">GESTIÓN DE RECURSOS</a>
         {% endif %}
-        {% if puede('historia.leer') %}
+        {% if 'historia' in areas and puede('historia.leer') %}
         <a href="{{ url_for('historia.home') }}">HISTORIA INSTITUCIONAL</a>
         {% endif %}
         {% if puede('agente.leer') %}

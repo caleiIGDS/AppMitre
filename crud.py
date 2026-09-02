@@ -29,14 +29,17 @@ concreta entra por un **hook opcional**, nunca por un `if slug == '...'` acá ad
       resultados_extra_busqueda(slug, q, cur)  filas extra para el listado cuando hay `q`
       derivados(slug, valores)        columnas calculadas al guardar (no van en 'campos')
       valores_iniciales(slug)         defaults del form de alta
-      extras_template(vista, slug)    kwargs extra para render_template
+      extras_template(vista, slug, id)  kwargs extra para render_template (`id` sólo en
+                                      las vistas de una fila: detalle y editar; si no, None)
       tarjetas_extra(cur)             tarjetas del home que no salen de ENTIDADES
       contexto_extra()                claves extra del context processor
       NAV_EXTRA                       [(slug, label)] extra para la nav
       ERROR_DUPLICADO                 {slug: mensaje} cuando un UNIQUE rechaza el guardado
 
 Cada cfg de ENTIDADES: tabla, singular, plural, descripcion, campos, columnas,
-relaciones y (opcional) campo_nombre y permiso.
+relaciones y (opcional) campo_nombre, permiso y `sin_eliminar` (la entidad no se borra
+nunca: la ruta de eliminar devuelve 404 y los templates no ofrecen el botón — lo usa
+`gestion.recursos`, que en vez de borrarse se da de baja).
 """
 
 import base64
@@ -485,6 +488,9 @@ def contexto_base(bp, area):
         # el de escritura y no cambia nada.
         'permiso_rotar_foto': _hook(area, 'PERMISO_ROTAR_FOTO')
                               or _hook(area, 'PERMISO_ESCRITURA'),
+        # Para el botón "HOY" de un campo de fecha de texto libre (`boton_hoy` en el cfg
+        # del campo): el formato lo pone el área, la fecha sale del reloj de la escuela.
+        'hoy': lambda formato: ahora().strftime(formato),
     }
     extra = _hook(area, 'contexto_extra')
     if extra:
@@ -504,9 +510,9 @@ def registrar_rutas(bp, area):
     escritura = _hook(area, 'PERMISO_ESCRITURA')
     rotar = _hook(area, 'PERMISO_ROTAR_FOTO') or escritura
 
-    def _extras(vista, slug):
+    def _extras(vista, slug, id=None):
         hook = _hook(area, 'extras_template')
-        return hook(vista, slug) if hook else {}
+        return hook(vista, slug, id) if hook else {}
 
     @bp.context_processor
     def _contexto():
@@ -573,14 +579,17 @@ def registrar_rutas(bp, area):
             via_alias = {fila['id'] for _, fila in por_alias}
             filas = [fila for _, fila in puntuadas] + [fila for _, fila in por_alias]
         # Texto ya normalizado por fila, para el filtrado en vivo del navegador
-        # (data-buscar). Incluye el alias cuando la entidad lo declara, para que el
-        # filtrado en vivo (solo substring, sin fuzzy) también lo encuentre.
+        # (data-buscar / data-alias). El alias viaja APARTE, no concatenado al nombre: si
+        # va todo junto, el filtro en vivo no puede saber de dónde vino el match y una fila
+        # que sólo coincide por alias queda mezclada entre las que coinciden por nombre
+        # (buscar "pinza" ponía "Alicate" arriba de "Pinza de fuerza", por orden alfabético).
+        # Con los dos campos separados, gestion.js puede repetir la misma jerarquía que la
+        # segunda pasada de acá arriba: los de alias, al final.
         def _texto_buscar(fila):
-            base = f"{fila['nombre']} {fila['descripcion'] or ''}"
-            if campo_al and fila[campo_al]:
-                base += f" {fila[campo_al]}"
-            return texto.norm(base)
+            return texto.norm(f"{fila['nombre']} {fila['descripcion'] or ''}")
         buscar = {fila['id']: _texto_buscar(fila) for fila in filas}
+        buscar_alias = {fila['id']: texto.norm(fila[campo_al] or '') if campo_al else ''
+                        for fila in filas}
         # Filas que no son de esta entidad pero matchean la búsqueda (ej: sub-recursos de
         # un kit): el hook decide qué son, el motor sólo las reenvía a la plantilla.
         extra_filas = []
@@ -590,8 +599,9 @@ def registrar_rutas(bp, area):
                 extra_filas = extra_hook(slug, q, cur)
         con.close()
         return render_template(f'{nombre}/lista.html', cfg=cfg_ent, slug=slug, filas=filas,
-                               q=q, activo=slug, buscar=buscar, via_alias=via_alias,
-                               extra_filas=extra_filas, **_extras('lista', slug))
+                               q=q, activo=slug, buscar=buscar, buscar_alias=buscar_alias,
+                               via_alias=via_alias, extra_filas=extra_filas,
+                               **_extras('lista', slug))
 
     @bp.route('/<slug>/nuevo', methods=['GET', 'POST'])
     @accesos.requiere(escritura)
@@ -647,7 +657,7 @@ def registrar_rutas(bp, area):
         fila_dict['fotos'] = json.loads(fila_dict.get('fotos', '[]'))
         return render_template(f'{nombre}/detalle.html', cfg=cfg_ent, slug=slug,
                                fila=fila_dict, secciones=secciones, activo=slug,
-                               **_extras('detalle', slug))
+                               **_extras('detalle', slug, id))
 
     @bp.route('/<slug>/<int:id>/editar', methods=['GET', 'POST'])
     @accesos.requiere(escritura)
@@ -681,12 +691,16 @@ def registrar_rutas(bp, area):
         return render_template(f'{nombre}/form.html', cfg=cfg_ent, slug=slug, fila=fila,
                                valores=valores, opciones=opciones, seleccion=seleccion,
                                relaciones=relaciones, error=error, activo=slug,
-                               **_extras('editar', slug))
+                               **_extras('editar', slug, id))
 
     @bp.route('/<slug>/<int:id>/eliminar', methods=['POST'])
     @accesos.requiere(escritura)
     def eliminar(slug, id):
         cfg_ent = cfg(area, slug)
+        # Entidad que no se borra nunca (`sin_eliminar`): la ruta ni existe para ese slug.
+        # Los templates ya no muestran el botón, pero esto es lo que cierra la URL a mano.
+        if cfg_ent.get('sin_eliminar'):
+            abort(404)
         con = conectar(area)
         cur = con.cursor()
         cur.execute(f"DELETE FROM {cfg_ent['tabla']} WHERE id = ?", (id,))

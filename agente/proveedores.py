@@ -122,6 +122,71 @@ def _get_vision_config():
     return _vision_config_cache
 
 
+# ============================================================================
+# Precios: tokens → dólares
+# ============================================================================
+# USD por MILLÓN de tokens. Se aplican AL MOSTRAR y el costo NO se guarda en la fila del
+# registro: si un precio estaba mal o el proveedor lo cambia, corregirlo acá arregla también
+# todo el histórico. Un modelo que no esté en la tabla muestra '—', nunca un número
+# inventado — un costo mal calculado es peor que ninguno.
+#
+# `cache` es el precio de los tokens de entrada que llegaron cacheados (van descontados de
+# `entrada`, no se suman aparte). `pico` es el multiplicador en horario pico; si el modelo
+# no tiene esa distinción, no lleva la clave.
+#
+# Precios verificados el 2026-09-01 contra la página oficial de cada proveedor. Al tocar
+# esta tabla, actualizar la fecha: es lo único que dice si el número sigue valiendo.
+PRECIOS = {
+    # api-docs.deepseek.com/quick_start/pricing
+    'deepseek-v4-pro': {'entrada': 0.66, 'salida': 1.98, 'cache': 0.022, 'pico': 2.0},
+    'deepseek-v4-flash': {'entrada': 0.22, 'salida': 0.66, 'cache': 0.007, 'pico': 2.0},
+    # ai.google.dev/gemini-api/docs/pricing — el lector de fotos corre en el TIER GRATUITO,
+    # así que en la práctica hoy no se paga. El precio del tier pago igual sirve: es lo que
+    # costaría el día que el volumen se pase del free tier, que es justo lo que hay que ver
+    # venir.
+    'gemini-3.5-flash-lite': {'entrada': 0.30, 'salida': 2.50, 'cache': 0.30},
+}
+
+# Horario pico de DeepSeek: 01:00-04:00 y 06:00-10:00 UTC, de lunes a viernes; el resto
+# vale la mitad. Las fechas del registro están en hora de la escuela (`config.ahora()`,
+# Argentina UTC-3 sin horario de verano desde 2009), así que alcanza con sumarle 3 horas.
+#
+# En la práctica el turno mañana y el tarde caen enteros en off-peak (07:30 ART son las
+# 10:30 UTC, justo después de que termina el pico) y sólo la última hora del turno noche
+# entra en pico. Sale más caro de lo que parece a simple vista sólo esa franja.
+_PICO_UTC_HORAS = frozenset((1, 2, 3, 6, 7, 8, 9))
+
+
+def _es_pico(fecha):
+    """¿Ese turno cayó en horario pico? `fecha` es 'YYYY-MM-DD HH:MM:SS' hora de escuela."""
+    from datetime import datetime, timedelta
+    try:
+        utc = datetime.strptime(str(fecha)[:19], '%Y-%m-%d %H:%M:%S') + timedelta(hours=3)
+    except (ValueError, TypeError):
+        return False
+    return utc.weekday() < 5 and utc.hour in _PICO_UTC_HORAS
+
+
+def costo(modelo, entrada=0, salida=0, cache=0, pico=False):
+    """USD de un consumo. None si no sabemos cuánto vale ese modelo.
+
+    `cache` son tokens de entrada que ya venían cacheados: están DENTRO de `entrada` y acá
+    se separan para cobrarlos a su precio, que en DeepSeek es 30 veces más barato. Sin esa
+    resta, un turno con mucho contexto repetido se ve carísimo cuando en realidad es casi
+    gratis, que es lo contrario de lo que el panel tiene que mostrar.
+
+    `pico` viene guardado en la fila del turno (lo resuelve `_es_pico` cuando se registra),
+    no se deduce acá: en un total agrupado ya no hay hora que mirar.
+    """
+    p = PRECIOS.get((modelo or '').strip())
+    if not p:
+        return None
+    entrada, salida, cache = entrada or 0, salida or 0, cache or 0
+    sin_cache = max(entrada - cache, 0)
+    bruto = (sin_cache * p['entrada'] + cache * p['cache'] + salida * p['salida']) / 1_000_000
+    return bruto * (p.get('pico', 1.0) if pico else 1.0)
+
+
 # Variables globales por compatibilidad
 def _get_agente_provider():
     return _get_config()['provider']

@@ -1,0 +1,340 @@
+{% extends "agente/base.html" %}
+
+{% block titulo %}Uso del Asistente{% endblock %}
+
+{# Formato de plata: los turnos sueltos cuestan fracciones de centavo, así que con dos
+   decimales se verían todos en cero; los totales, en cambio, con cuatro se vuelven
+   ilegibles. El corte es US$ 1. '—' es "no sabemos el precio de ese modelo", que es
+   distinto de cero. #}
+{% macro plata(v) -%}
+  {%- if v is none -%}—
+  {%- elif v >= 1 -%}US$ {{ '%.2f'|format(v) }}
+  {%- else -%}US$ {{ '%.4f'|format(v) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro num(v) -%}{{ '{:,}'.format(v or 0).replace(',', '.') }}{%- endmacro %}
+
+{# Costo de un grupo ya plegado. Los turnos de un modelo que no está en la tabla de
+   precios no anulan el total: se suman aparte y se muestran al lado, para que el número
+   se lea como un piso y no como la verdad completa. #}
+{% macro plata_g(g) -%}
+  {{ plata(g.costo) }}
+  {%- if g.sin_precio %} <span class="uso-sintarifa" title="turnos de un modelo que no está en la tabla de precios">+{{ g.sin_precio }} sin tarifa</span>{% endif %}
+{%- endmacro %}
+
+{% block contenido %}
+<div class="gestion-container">
+  <div class="gestion-header">
+    <h1>📊 Uso del Asistente</h1>
+    <p>Quién lo usa, cuánto gasta y qué le pregunta. Se registra cada turno desde que se
+       activó el registro; los chats se guardan completos.</p>
+  </div>
+
+  {# ---- Totales ---- #}
+  <div class="uso-tarjetas">
+    {% for t, rotulo in [(hoy, 'Hoy'), (mes, 'Últimos ' ~ dias_panel ~ ' días'), (historico, 'Desde siempre')] %}
+      <div class="uso-tarjeta">
+        <span class="uso-rotulo">{{ rotulo }}</span>
+        <span class="uso-plata">{{ plata_g(t) }}</span>
+        <span class="uso-detalle">
+          {{ num(t.turnos) }} turno{{ '' if t.turnos == 1 else 's' }}
+          {%- if t.fallidos %} · <strong class="uso-mal">{{ num(t.fallidos) }} fallado{{ '' if t.fallidos == 1 else 's' }}</strong>{% endif %}
+        </span>
+        <span class="uso-detalle">
+          {{ num(t.entrada) }} entrada · {{ num(t.salida) }} salida
+          {%- if t.cache %} · {{ num(t.cache) }} de cache{% endif %}
+        </span>
+        {% if t.vision_llamadas %}
+          <span class="uso-detalle">{{ num(t.vision_llamadas) }} lectura{{ '' if t.vision_llamadas == 1 else 's' }} de foto</span>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+  {# ---- Por día ---- #}
+  <h2 class="uso-titulo">Por día</h2>
+  {% if por_dia %}
+    <table class="uso-tabla">
+      <thead>
+        <tr><th>Día</th><th class="n">Turnos</th><th class="n">Entrada</th>
+            <th class="n">Salida</th><th class="n">Costo</th><th class="barra-col"></th></tr>
+      </thead>
+      <tbody>
+        {% for d in por_dia %}
+          <tr>
+            <td><code>{{ d.grupo }}</code>{% if d.fallidos %} <span class="uso-mal" title="turnos que terminaron mal">⚠ {{ d.fallidos }}</span>{% endif %}</td>
+            <td class="n">{{ num(d.turnos) }}</td>
+            <td class="n">{{ num(d.entrada) }}</td>
+            <td class="n">{{ num(d.salida) }}</td>
+            <td class="n">{{ plata_g(d) }}</td>
+            <td class="barra-col">
+              <span class="barra" style="width: {{ (100 * (d.entrada + d.salida) / tope_dia)|round(1) if tope_dia else 0 }}%"></span>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="uso-vacio">Sin turnos en la ventana.</p>
+  {% endif %}
+
+  {# ---- Por dispositivo y por modelo ---- #}
+  <div class="uso-dos">
+    <div>
+      <h2 class="uso-titulo">Por dispositivo</h2>
+      {% if por_acceso %}
+        <table class="uso-tabla">
+          <thead><tr><th>Quién</th><th class="n">Turnos</th><th class="n">Tokens</th>
+                     <th class="n">Costo</th><th>Último</th></tr></thead>
+          <tbody>
+            {% for a in por_acceso %}
+              <tr>
+                <td>{{ a.nombre or a.grupo }}{% if a.grupo.startswith('admin') %} <span class="uso-chip">admin</span>{% endif %}</td>
+                <td class="n">{{ num(a.turnos) }}</td>
+                <td class="n">{{ num(a.entrada + a.salida) }}</td>
+                <td class="n">{{ plata_g(a) }}</td>
+                <td><code>{{ a.ultimo }}</code></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="uso-vacio">Todavía nadie.</p>
+      {% endif %}
+    </div>
+
+    <div>
+      <h2 class="uso-titulo">Por modelo</h2>
+      {% if por_modelo %}
+        <table class="uso-tabla">
+          <thead><tr><th>Modelo</th><th class="n">Turnos</th><th class="n">Tokens</th>
+                     <th class="n">Costo</th></tr></thead>
+          <tbody>
+            {% for m in por_modelo %}
+              <tr>
+                <td><code>{{ m.grupo }}</code></td>
+                <td class="n">{{ num(m.turnos) }}</td>
+                <td class="n">{{ num(m.entrada + m.salida) }}</td>
+                <td class="n">{{ plata_g(m) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="uso-nota">El costo del lector de fotos va sumado en el turno que lo
+          disparó, no en esta tabla: es un modelo aparte, con su propia cuenta.</p>
+      {% else %}
+        <p class="uso-vacio">Sin datos.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---- Chats ---- #}
+  <h2 class="uso-titulo">Conversaciones</h2>
+  {% if chats %}
+    <table class="uso-tabla">
+      <thead><tr><th>Quién</th><th class="n">Turnos</th><th>Desde</th><th>Hasta</th>
+                 <th class="n">Tokens</th><th></th></tr></thead>
+      <tbody>
+        {% for c in chats %}
+          <tr class="{{ 'fila-mal' if c.fallidos }}">
+            <td>{{ c.nombre or '—' }}</td>
+            <td class="n">{{ num(c.turnos) }}{% if c.fallidos %} <span class="uso-mal">⚠</span>{% endif %}</td>
+            <td><code>{{ c.inicio }}</code></td>
+            <td><code>{{ c.fin }}</code></td>
+            <td class="n">{{ num(c.tokens) }}</td>
+            <td><a class="g-btn-outline uso-mini" href="{{ url_for('agente.agente_uso', sid=c.sid) }}">Leer</a></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="uso-vacio">Sin conversaciones registradas.</p>
+  {% endif %}
+
+  {# ---- Turnos ---- #}
+  <h2 class="uso-titulo">
+    {% if sid %}Conversación completa{% else %}Últimos turnos{% endif %}
+  </h2>
+  {% if sid %}
+    <p class="uso-nota">
+      Chat <code>{{ sid }}</code>, en orden cronológico.
+      <a href="{{ url_for('agente.agente_uso') }}">‹ volver a los últimos turnos</a>
+    </p>
+  {% endif %}
+
+  {% if turnos %}
+    <div class="uso-turnos">
+      {% for t in turnos %}
+        <article class="uso-turno {{ 'fila-mal' if t.estado != 'ok' or t.escritura_fantasma }}">
+          <header class="uso-turno-cab">
+            <code>{{ t.fecha }}</code>
+            <strong>{{ t.acceso_nombre or t.acceso_tipo or '?' }}</strong>
+            <span class="uso-chip">{{ t.origen }}</span>
+            {% if t.estado != 'ok' %}<span class="uso-chip malo">{{ t.estado }}</span>{% endif %}
+            {% if t.escritura_fantasma %}<span class="uso-chip malo">anunció un cambio que no hizo</span>{% endif %}
+            <span class="uso-turno-cifras">
+              {{ num(t.tokens_entrada) }}↓ {{ num(t.tokens_salida) }}↑
+              {%- if t.vueltas > 1 %} · {{ t.vueltas }} vueltas{% endif %}
+              {%- if t.vision_llamadas %} · {{ t.vision_llamadas }} 📷{% endif %}
+              {%- if t.ms %} · {{ (t.ms / 1000)|round(1) }}s{% endif %}
+              · {{ plata(t.costo) }}
+            </span>
+          </header>
+
+          {% if t.tools_lista %}
+            <p class="uso-tools">
+              {% for x in t.tools_lista %}
+                <span class="uso-chip {{ '' if x.ok else 'malo' }}">{{ x.tool }}</span>
+              {% endfor %}
+            </p>
+          {% endif %}
+
+          <p class="uso-pregunta">{{ t.pregunta or '(sin texto)' }}</p>
+          <details>
+            <summary>Respuesta</summary>
+            <pre>{{ t.respuesta }}</pre>
+          </details>
+          {% if t.detalle_error %}
+            <details>
+              <summary>Error</summary>
+              <pre>{{ t.detalle_error }}</pre>
+            </details>
+          {% endif %}
+          {% if not sid %}
+            <a class="uso-verchat" href="{{ url_for('agente.agente_uso', sid=t.sid) }}">ver esta conversación entera ›</a>
+          {% endif %}
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="uso-vacio">Sin turnos registrados todavía.</p>
+  {% endif %}
+</div>
+
+<style>
+  .uso-tarjetas {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+  .uso-tarjeta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 1rem;
+    border: 2px solid var(--primary);
+    background: #fff;
+  }
+  .uso-rotulo {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--primary);
+    font-weight: 700;
+  }
+  .uso-plata { font-size: 1.6rem; font-weight: 700; }
+  .uso-detalle { font-size: 0.78rem; color: #555; }
+  .uso-mal { color: var(--alert); }
+  .uso-sintarifa { font-size: 0.68rem; color: #92400e; background: #fef3c7;
+                   padding: 0.05rem 0.3rem; white-space: nowrap; }
+
+  .uso-titulo {
+    margin: 2rem 0 0.6rem;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 2px solid var(--primary);
+    padding-bottom: 0.3rem;
+  }
+  .uso-nota { font-size: 0.78rem; color: #666; margin: 0.4rem 0 0; }
+  .uso-vacio { color: #666; font-size: 0.85rem; }
+
+  .uso-dos {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .uso-tabla { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .uso-tabla th {
+    background: var(--primary);
+    color: #fff;
+    padding: 0.4rem 0.5rem;
+    text-align: left;
+    font-weight: 700;
+  }
+  .uso-tabla td { padding: 0.35rem 0.5rem; border-bottom: 1px solid #ddd; }
+  .uso-tabla .n { text-align: right; font-variant-numeric: tabular-nums; }
+  .uso-tabla th.n { text-align: right; }
+  .uso-tabla .fila-mal { background: #fef2f2; }
+  .barra-col { width: 30%; }
+  .barra {
+    display: block;
+    height: 10px;
+    background: var(--secondary);
+    min-width: 1px;
+  }
+
+  .uso-chip {
+    display: inline-block;
+    padding: 0.05rem 0.4rem;
+    background: #eef2f7;
+    border: 1px solid #cbd5e1;
+    border-radius: 2px;
+    font-size: 0.7rem;
+  }
+  .uso-chip.malo { background: #fee2e2; border-color: var(--alert); color: var(--alert); }
+  .uso-mini { padding: 0.1rem 0.5rem; font-size: 0.7rem; }
+
+  .uso-turnos { display: flex; flex-direction: column; gap: 0.7rem; }
+  .uso-turno {
+    border: 1px solid #ddd;
+    border-left: 4px solid var(--primary);
+    padding: 0.7rem 0.9rem;
+    background: #fff;
+  }
+  .uso-turno.fila-mal { border-left-color: var(--alert); background: #fef8f8; }
+  .uso-turno-cab {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+  }
+  .uso-turno-cifras { margin-left: auto; color: #555; font-variant-numeric: tabular-nums; }
+  .uso-tools { margin: 0.4rem 0 0; display: flex; flex-wrap: wrap; gap: 0.25rem; }
+  .uso-pregunta {
+    margin: 0.5rem 0 0.3rem;
+    font-weight: 600;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .uso-turno details summary {
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.78rem;
+    color: var(--primary);
+    font-weight: 700;
+  }
+  .uso-turno pre {
+    background: #f5f5f5;
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .uso-verchat { display: inline-block; margin-top: 0.4rem; font-size: 0.72rem; }
+
+  .uso-tabla code, .uso-turno-cab code { font-size: 0.74rem; color: #444; }
+
+  @media (max-width: 700px) {
+    .barra-col { display: none; }
+    .uso-turno-cifras { margin-left: 0; width: 100%; }
+  }
+</style>
+{% endblock %}

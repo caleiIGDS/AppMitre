@@ -9,12 +9,14 @@ Mapa del paquete:
     dominio.py      RAIZ del proyecto + qué módulo (gestion/historia) es dueño de cada slug
     proveedores.py  config del LLM del chat y del lector de imágenes (son independientes)
     db.py           tablas propias en gestion.db: auditoría, conversación, fotos pendientes
+    notas.py        la libreta del admin: lo que el agente tiene que saber esta semana
     padrones.py     los dos padrones de personas y el cruce entre ellos
     lore.py         la historia de la escuela contada por Emilio
     vision.py       el lector de etiquetas (una llamada suelta, sin tools)
     prompt.py       el system prompt
     llm.py          clientes por proveedor + los dos loops de tool-calling
     filtros.py      lo que se limpia de la respuesta antes de mostrarla y de guardarla
+    enlaces.py      los nombres del calendario, enlazados a /horarios (sólo al mostrar)
     rutas.py        los endpoints Flask
     tools/          lo que el agente sabe hacer (esquemas + ejecutores, juntos por área)
 
@@ -61,16 +63,23 @@ bp = Blueprint('agente', __name__, url_prefix='/agente')
 # `vision.py`), y el resto de las tools sólo leen la base. Con verbo 'admin' no entra en
 # ningún preset de interno, así que por defecto lo tiene sólo la administración por el
 # comodín; el admin igual puede tildárselo a mano a un dispositivo puntual desde /accesos.
+# `agente.notas` va con verbo 'admin' por lo mismo, pero por otro motivo: no cuida un
+# gasto sino el DESTINATARIO. Las notas son la libreta de quien administra el sistema
+# ("el pañol se mudó mientras arreglan el techo"), viajan en el prompt de todos los turnos
+# de quien las tenga y no son un tablón para la escuela. Con verbo 'admin' las ve por
+# defecto sólo la administración; el resto de los accesos chatea sin enterarse.
 PERMISOS = [
     ('agente.leer', 'Usar el asistente para consultar', 'leer'),
     ('agente.escribir', 'Que el asistente pueda modificar datos', 'escribir'),
     ('agente.vision', 'Mandarle fotos al asistente (usa la API de visión)', 'admin'),
     ('agente.auditar', 'Ver el registro de auditoría del asistente', 'admin'),
+    ('agente.notas', 'Dejarle notas al asistente y que él las recuerde', 'admin'),
 ]
 GRUPO_PERMISOS = 'Asistente'
 PERMISO_LECTURA = 'agente.leer'
 PERMISO_ESCRITURA = 'agente.escribir'
 PERMISO_VISION = 'agente.vision'
+PERMISO_NOTAS = 'agente.notas'
 
 
 # Al final: `rutas` hace `from . import bp`, así que `bp` tiene que existir antes.

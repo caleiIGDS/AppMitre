@@ -6,24 +6,34 @@ al login y el resto contesta 401, que es lo que el fetch del chat sabe leer.
 """
 import json
 import re
+import time
+from datetime import timedelta
 
-from flask import Response, jsonify, render_template, request, stream_with_context
+from flask import (Response, jsonify, redirect, render_template, request,
+                   stream_with_context, url_for)
 
 import accesos
 import crud
 import texto
-from config import DIAS, ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION, ahora
+from config import (DIAS, ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION,
+                    PRODUCCION, ahora)
 
-from . import PERMISO_ESCRITURA, PERMISO_LECTURA, PERMISO_VISION, bp
+from . import (PERMISO_ESCRITURA, PERMISO_LECTURA, PERMISO_NOTAS, PERMISO_VISION,
+               bp)
 from .db import (FICHAS_MAX, FOTOS_MAX, HISTORIAL_AL_MODELO, _conv_borrar, _conv_cargar,
                  _conv_guardar, _foto_lote_tomar, _fotos_lote_borrar, _fotos_lote_guardar,
                  _sid, _sin_imagenes, conectar)
 from .dominio import _modulo, ve_entidad
+from .enlaces import enlace_comparacion, enlazar
 from .filtros import (AVISO_NO_EJECUTADO, _es_pregunta_relativa, _escritura_no_ejecutada,
                       _extraer_entidad_mencionada, _ocultar_ids, _quitar_acotaciones)
 from .llm import chat_with_tools_stream
+from .notas import (LARGO_MAX as NOTAS_LARGO_MAX, deshacer as _notas_deshacer,
+                    escribir as _notas_escribir, hay_deshacer as _notas_hay_deshacer,
+                    leer as _notas_leer, modificado as _notas_modificado)
 from .padrones import _personas_nombradas_en
-from .proveedores import _get_config, _get_vision_config
+from .proveedores import _es_pico, _get_config, _get_vision_config, costo
+from .registro import agrupado, conversaciones, registrar_turno, ultimos
 from .tools import ejecutar_tool
 from .tools.entidades import _vincular_entidad
 from .tools.fichas import (_campos_para_editar, _campos_validos, _nombre_de,
@@ -33,7 +43,8 @@ from .tools.fichas import (_campos_para_editar, _campos_validos, _nombre_de,
 # (con `next` para volver acá), no un 401 pelado: entrar por link directo a /agente
 # desde el celular es el caso normal, y ahí un 401 es un callejón.
 # Los endpoints JSON sí siguen dando 401, que es lo que el fetch del chat sabe leer.
-_ENDPOINTS_PAGINA = ('agente.chat_page', 'agente.agente_log')
+_ENDPOINTS_PAGINA = ('agente.chat_page', 'agente.agente_log', 'agente.agente_uso',
+                     'agente.agente_notas')
 
 # Gate de acceso: el mismo motor que /gestion y /historia, pero acá el blueprint mezcla
 # páginas HTML con endpoints JSON, así que sólo las páginas redirigen al login y el resto
@@ -222,9 +233,74 @@ def _normalizar_imagenes(data):
     return fotos, len(crudas)
 
 
-def _turno(mensaje_usuario, fotos=(), mandadas=0):
+def _registrar_uso(origen, contexto_turno, trazas, pregunta, respuesta, fotos,
+                   escritura_fantasma, comienzo):
+    """Arma la fila del turno y la manda a `agente.db`.
+
+    Los tokens llegan por `contexto_turno['uso']`, con UNA entrada por vuelta del loop de
+    tool-calling (ver `llm._uso`): hay que sumarlas, no quedarse con la última. El modelo y
+    el proveedor salen de la primera entrada y no de `_get_config()` porque la config está
+    cacheada por proceso y lo que interesa es con qué se corrió ESTE turno; si el turno
+    murió antes de la primera llamada no hay ninguna, y ahí sí vale la config.
+
+    `pregunta` es lo que la persona escribió, sin el sello de hora ni el "(refiriéndote
+    a: …)" que se le inyectan antes de mandarlo: para analizar hace falta el texto de
+    verdad, no el que armó el servidor.
+
+    Todo el cuerpo va bajo `try`, y no alcanza con el que ya tiene `registro.registrar_turno`:
+    acá se hace trabajo ANTES de llegar a él —leer el acceso, sumar el uso, pedir el sid— y
+    cualquiera de esas cosas fallando voltearía un turno que el usuario ya tiene contestado.
+    Lo peor de perder la medición es perder la medición.
+    """
+    try:
+        _fila_de_uso(origen, contexto_turno, trazas, pregunta, respuesta, fotos,
+                     escritura_fantasma, comienzo)
+    except Exception as e:
+        if not PRODUCCION:
+            print(f'[registro] no se pudo armar el turno: {type(e).__name__}: {e}')
+
+
+def _fila_de_uso(origen, contexto_turno, trazas, pregunta, respuesta, fotos,
+                 escritura_fantasma, comienzo):
+    uso = contexto_turno.get('uso', [])
+    vision = contexto_turno.get('uso_vision', [])
+    acceso = accesos.actual() or {}
+    # La franja horaria se decide y se guarda ACÁ, con la hora del turno a la vista: en un
+    # total agrupado por día o por dispositivo ya no hay hora que mirar, y DeepSeek cobra
+    # el doble en pico (ver proveedores._es_pico).
+    fecha = ahora().strftime('%Y-%m-%d %H:%M:%S')
+    registrar_turno(
+        fecha=fecha,
+        pico=1 if _es_pico(fecha) else 0,
+        sid=_sid(),
+        acceso_tipo=acceso.get('tipo'),
+        acceso_id=acceso.get('id'),
+        acceso_nombre=acceso.get('nombre'),
+        origen=origen,
+        provider=uso[0]['provider'] if uso else _get_config()['provider'],
+        modelo=uso[0]['modelo'] if uso else _get_config()['model'],
+        vueltas=len(uso),
+        tokens_entrada=sum(u['entrada'] for u in uso),
+        tokens_salida=sum(u['salida'] for u in uso),
+        tokens_cache=sum(u['cache'] for u in uso),
+        vision_llamadas=len(vision),
+        vision_modelo=vision[0]['modelo'] if vision else None,
+        vision_entrada=sum(u['entrada'] for u in vision),
+        vision_salida=sum(u['salida'] for u in vision),
+        ms=int((time.perf_counter() - comienzo) * 1000),
+        fotos=fotos,
+        tools=trazas,
+        estado=contexto_turno.get('estado', 'ok'),
+        detalle_error=contexto_turno.get('detalle_error'),
+        escritura_fantasma=1 if escritura_fantasma else 0,
+        pregunta=pregunta,
+        respuesta=respuesta,
+    )
+
+
+def _turno(mensaje_usuario, fotos=(), mandadas=0, origen='chat'):
     """El turno completo, de una. Devuelve el payload; los eventos de progreso se descartan."""
-    gen = _turno_stream(mensaje_usuario, fotos, mandadas)
+    gen = _turno_stream(mensaje_usuario, fotos, mandadas, origen=origen)
     while True:
         try:
             next(gen)
@@ -232,7 +308,7 @@ def _turno(mensaje_usuario, fotos=(), mandadas=0):
             return fin.value
 
 
-def _turno_stream(mensaje_usuario, fotos=(), mandadas=0):
+def _turno_stream(mensaje_usuario, fotos=(), mandadas=0, origen='chat'):
     """Un turno completo del chat: historial → modelo → filtros → persistencia.
 
     Lo usan `/chat` y `/chat/stream` (con lo que escribió el usuario) y `/lote` (con el
@@ -247,7 +323,12 @@ def _turno_stream(mensaje_usuario, fotos=(), mandadas=0):
     intercala es quién pide la próxima vuelta. `_turno` es el envoltorio que lo drena.
 
     `fotos` es una lista de `(b64, tipo)`; ya viene recortada a FOTOS_MAX.
+
+    `origen` es sólo para el registro de uso: distingue el turno que escribió una persona
+    (`chat`/`stream`) del que arma el servidor al cerrar un lote (`lote`), que si no se
+    contaría como si alguien lo hubiera tipeado.
     """
+    comienzo = time.perf_counter()
     # Conversación: sale de gestion.db, no de la cookie (ver _conv_cargar).
     conv = _conv_cargar()
     # Si venía vencida, lo que el front tiene pintado de antes ya no es lo que el agente
@@ -368,9 +449,28 @@ def _turno_stream(mensaje_usuario, fotos=(), mandadas=0):
         contexto_turno.get('lectura_foto'))
     _conv_guardar(historial, entidad, fichas)
 
+    # Registro de uso. Va acá y no en el endpoint por dos razones: `/chat/stream` streamea
+    # el cuerpo HTTP, así que para cuando el endpoint recupera el control los headers ya
+    # salieron y la sesión no se puede tocar — `_conv_guardar` escribe en este mismo punto
+    # por lo mismo —, y porque los tres call sites del modelo (`/chat`, `/chat/stream` y
+    # `/lote`) pasan por este generador: instrumentarlo acá los cubre a los tres solos.
+    _registrar_uso(origen, contexto_turno, trazas, mensaje_usuario, respuesta,
+                   len(fotos), escritura_fantasma, comienzo)
+
     # Si quedaron fichas esperando revisión, el front pinta sus botones debajo del mensaje,
     # en vez de que el usuario tenga que escribir "sí" (ver /revisar y /lote).
-    return {'respuesta': respuesta, 'tools': trazas,
+    #
+    # Los links al calendario se agregan ACÁ y no antes: lo que se guardó arriba va sin
+    # ellos a propósito, para que el modelo no los tenga como ejemplo en el turno que viene
+    # (ver `enlaces.py`). Al repintar el historial los vuelve a poner `_mensaje_visible`.
+    #
+    # El de la comparación es el único que NO vuelve al repintar: se arma con lo que cruzó la
+    # tool en este turno, y eso no se persiste. Es una acción del momento, no parte del texto.
+    # El de la comparación se pega antes de `enlazar` y no después para que los nombres de
+    # su aclaración también queden enlazados; el link en sí `enlazar` no lo toca (ver el
+    # grupo `enlace` de su regex).
+    visible = enlazar(respuesta + enlace_comparacion(contexto_turno.get('comparacion')))
+    return {'respuesta': visible, 'tools': trazas,
             'escritura_fantasma': escritura_fantasma,
             'confirmaciones': _confirmaciones(fichas),
             'reiniciada': reiniciada}
@@ -451,7 +551,7 @@ def chat():
     if error:
         return error
 
-    return jsonify(_turno(mensaje_usuario, fotos, mandadas))
+    return jsonify(_turno(mensaje_usuario, fotos, mandadas, origen='chat'))
 
 
 # Cómo se llama, en castellano y para el que espera, lo que el modelo pidió. Es copy de la
@@ -521,7 +621,7 @@ def chat_stream():
     _sid()
 
     def eventos():
-        gen = _turno_stream(mensaje_usuario, fotos, mandadas)
+        gen = _turno_stream(mensaje_usuario, fotos, mandadas, origen='stream')
         while True:
             try:
                 paso = next(gen)
@@ -632,7 +732,11 @@ def _mensaje_visible(msg):
     en las conversaciones de antes del deploy — se lee igual para que no queden mensajes
     mancos al repintar.
     """
-    item = {'rol': msg.get('role'), 'texto': _texto_visible(msg)}
+    visible = _texto_visible(msg)
+    # Los links al calendario no se persisten (ver `enlaces.py`): se rearman al repintar.
+    if msg.get('role') == 'assistant':
+        visible = enlazar(visible)
+    item = {'rol': msg.get('role'), 'texto': visible}
     guardadas = msg.get('imagenes') or ([msg['imagen']] if msg.get('imagen') else [])
     if guardadas:
         item['imagenes'] = ['data:{};base64,{}'.format(i.get('tipo', 'image/jpeg'),
@@ -1057,7 +1161,7 @@ def lote():
     # la conversación de la DB: si no, las fichas que se acaban de guardar seguirían ahí y
     # el modelo las vería como pendientes.
     _conv_guardar(conv['historial'], conv['entidad_actual'], fichas)
-    salida = _turno(mensaje_modelo)
+    salida = _turno(mensaje_modelo, origen='lote')
     # El resumen de lo guardado va primero: es lo que el usuario acaba de pedir, y la
     # respuesta del modelo abajo son las fichas nuevas para revisar.
     if respuesta:
@@ -1084,3 +1188,169 @@ def agente_log():
     con.close()
 
     return render_template('agente/agente_log.html', filas=filas)
+
+
+# ---------------------------------------------------------------------------
+# Panel de uso: quién gasta cuánto, y qué se está preguntando
+# ---------------------------------------------------------------------------
+# Un mes es la ventana por defecto porque es la unidad en la que facturan los proveedores
+# y en la que se piensa el gasto. Los totales "desde siempre" van igual, sin filtro.
+DIAS_PANEL = 30
+TURNOS_PANEL = 60
+
+_CAMPOS_SUMA = ('turnos', 'entrada', 'salida', 'cache', 'fallidos',
+                'vision_llamadas', 'vision_entrada', 'vision_salida', 'ms')
+
+
+def _plegar(filas):
+    """Suma las filas de `registro.agrupado` en una por grupo, COBRANDO ANTES DE SUMAR.
+
+    Cada fila viene desglosada por modelo, modelo de visión y franja horaria porque el
+    precio depende de los tres; se cobra fila por fila y recién ahí se acumula. Al revés
+    —sumar todos los tokens y multiplicar por un precio— daría cualquier cosa apenas
+    convivan dos modelos o dos franjas, que es el caso normal.
+
+    Un modelo que no está en la tabla de precios NO anula el total del grupo: se suma lo
+    que sí se sabe y se cuentan aparte los turnos que quedaron sin tarifar (`sin_precio`),
+    que el panel muestra al lado. Anular el total era la otra opción y es peor: alcanzaba
+    un turno suelto de prueba contra un Ollama local para dejar el número en '—' para
+    siempre. Así el total se lee como un piso, y se ve cuánto le falta.
+    """
+    grupos = {}
+    for f in filas:
+        g = grupos.get(f['grupo'])
+        if g is None:
+            g = grupos[f['grupo']] = dict({c: 0 for c in _CAMPOS_SUMA},
+                                          grupo=f['grupo'], nombre=f['nombre'],
+                                          ultimo='', costo=0.0, sin_precio=0)
+        for c in _CAMPOS_SUMA:
+            g[c] += f[c] or 0
+        if (f['ultimo'] or '') > g['ultimo']:
+            g['ultimo'] = f['ultimo'] or ''
+
+        chat = costo(f['modelo'], f['entrada'], f['salida'], f['cache'], pico=bool(f['pico']))
+        # Visión no tiene tarifa por horario; el modelo es otro y su precio también.
+        vista = (costo(f['vision_modelo'], f['vision_entrada'], f['vision_salida'])
+                 if f['vision_llamadas'] else 0.0)
+        if chat is None or vista is None:
+            g['sin_precio'] += f['turnos'] or 0
+        else:
+            g['costo'] += chat + vista
+    return list(grupos.values())
+
+
+def _total(filas):
+    """El único grupo de un `_plegar` sobre 'total', o una fila en cero si no hay nada."""
+    plegado = _plegar(filas)
+    return plegado[0] if plegado else dict({c: 0 for c in _CAMPOS_SUMA},
+                                           grupo='todo', nombre=None, ultimo='',
+                                           costo=0.0, sin_precio=0)
+
+
+def _con_costo(turno):
+    """Un turno del listado, con lo que costó."""
+    pico = bool(turno.get('pico'))
+    chat = costo(turno.get('modelo'), turno.get('tokens_entrada'),
+                 turno.get('tokens_salida'), turno.get('tokens_cache'), pico=pico)
+    vista = (costo(turno.get('vision_modelo'), turno.get('vision_entrada'),
+                   turno.get('vision_salida'))
+             if turno.get('vision_llamadas') else 0.0)
+    turno['costo'] = None if chat is None or vista is None else chat + vista
+    try:
+        turno['tools_lista'] = json.loads(turno.get('tools') or '[]')
+    except ValueError:
+        turno['tools_lista'] = []
+    return turno
+
+
+@bp.route('/uso', methods=['GET'])
+@accesos.requiere('agente.auditar')
+def agente_uso():
+    """Panel de consumo del asistente: quién, cuándo, cuánto y qué se preguntó.
+
+    Va con `agente.auditar`, que está declarado con verbo 'admin' (ver `__init__.py`) y por
+    eso no entra en ningún preset de interno: por defecto lo tiene sólo la administración.
+    Es a propósito — acá se lee el texto completo de lo que escribió cada persona.
+
+    Con `?sid=` la lista de turnos pasa a ser una conversación entera en orden, que es cómo
+    se pasa de "este turno salió mal" a "qué venía pasando antes".
+    """
+    sid = (request.args.get('sid') or '').strip()
+    hoy = ahora().strftime('%Y-%m-%d')
+    desde_mes = (ahora() - timedelta(days=DIAS_PANEL)).strftime('%Y-%m-%d')
+
+    por_dia = sorted(_plegar(agrupado('dia', desde=desde_mes)),
+                     key=lambda f: f['grupo'], reverse=True)
+    # Para las barras: la escala es el día más cargado de la ventana, no un tope fijo.
+    tope_dia = max([f['entrada'] + f['salida'] for f in por_dia] or [0])
+
+    return render_template(
+        'agente/agente_uso.html',
+        sid=sid,
+        dias_panel=DIAS_PANEL,
+        hoy=_total(agrupado('total', desde=hoy)),
+        mes=_total(agrupado('total', desde=desde_mes)),
+        historico=_total(agrupado('total')),
+        por_dia=por_dia,
+        tope_dia=tope_dia,
+        por_modelo=sorted(_plegar(agrupado('modelo')),
+                          key=lambda f: f['turnos'], reverse=True),
+        por_acceso=sorted(_plegar(agrupado('acceso')),
+                          key=lambda f: f['turnos'], reverse=True),
+        chats=conversaciones(),
+        turnos=[_con_costo(t) for t in ultimos(TURNOS_PANEL, sid=sid or None)],
+    )
+
+
+# ---------------------------------------------------------------------------
+# `agente.md`: el archivo de notas que el asistente lee en cada turno
+# ---------------------------------------------------------------------------
+# Todo con `agente.notas`, verbo 'admin' (ver `__init__.py`): quien puede leer el archivo es
+# el mismo que puede escribirlo, y es el mismo a quien el prompt se lo muestra. Partirlo en
+# un permiso de lectura y otro de escritura sería inventar un rol que no existe.
+#
+# Los POST no están en `_ENDPOINTS_PAGINA` a propósito: si la sesión venció mientras la
+# página estaba abierta, un 401 es más honesto que un redirect al login que se come el texto
+# que la persona acababa de escribir.
+
+@bp.route('/notas', methods=['GET'])
+@accesos.requiere(PERMISO_NOTAS)
+def agente_notas():
+    """El editor de `agente.md`: un textarea con el archivo entero, como corresponde.
+
+    `error` viaja por la query string porque el proyecto no usa `flash` en ningún lado — no
+    hay mensajes de sesión que mantener— y el único error posible acá es el de
+    `notas.escribir` (archivo demasiado largo o disco que no deja escribir).
+    """
+    return render_template('agente/agente_notas.html',
+                           activo='notas',
+                           contenido=_notas_leer(),
+                           largo_max=NOTAS_LARGO_MAX,
+                           modificado=_notas_modificado(),
+                           hay_deshacer=_notas_hay_deshacer(),
+                           error=(request.args.get('error') or '').strip())
+
+
+@bp.route('/notas/guardar', methods=['POST'])
+@accesos.requiere(PERMISO_NOTAS)
+def agente_notas_guardar():
+    """Guarda el archivo desde la página. `autor='admin'`: lo del modelo entra por la tool."""
+    resultado = _notas_escribir(request.form.get('contenido', ''), autor='admin')
+    # "No cambió nada" no es un error que valga la pena mostrar: apretar GUARDAR sin haber
+    # tocado el textarea es lo más común que va a pasar en esta pantalla.
+    if resultado['ok'] or 'idéntico' in resultado.get('error', ''):
+        return redirect(url_for('agente.agente_notas'))
+    return redirect(url_for('agente.agente_notas', error=resultado['error']))
+
+
+@bp.route('/notas/deshacer', methods=['POST'])
+@accesos.requiere(PERMISO_NOTAS)
+def agente_notas_deshacer():
+    """Vuelve a la versión anterior (`agente.md.bak`), que es de una sola vez.
+
+    Existe por el modelo, no por la persona: `escribir_notas` pisa el archivo entero, y si
+    se come un renglón que nadie pidió borrar, éste es el camino de vuelta de un click. El
+    otro —más viejo pero completo— es el `antes` de `agente_log`.
+    """
+    _notas_deshacer()
+    return redirect(url_for('agente.agente_notas'))

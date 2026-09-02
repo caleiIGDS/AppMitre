@@ -1,0 +1,63 @@
+{# Registro de bajas: qué salió del inventario y por qué. Es un historial, no un listado
+   de estado — una baja revertida sigue figurando, tachada. Sólo lo ve `gestion.auditoria`,
+   igual que el chip "mostrar dados de baja" del listado (ver gestion.py::bajas_lista). #}
+{% extends 'gestion/base.html' %}
+{% block titulo %}Registro de bajas{% endblock %}
+{% block contenido %}
+<div class="g-panel-top">
+    <div class="g-toolbar">
+        <div style="display: flex; align-items: baseline; gap: 12px;">
+            <h2>REGISTRO DE BAJAS</h2>
+            <span class="g-fichas-count">{{ filas | rejectattr('revertida') | list | length }} BAJAS</span>
+        </div>
+        <div class="g-toolbar-actions">
+            <a class="g-btn-outline-dark" href="{{ url_for('gestion.lista', slug='recursos') }}">‹ INVENTARIO</a>
+        </div>
+    </div>
+    <p class="g-help">
+        Los recursos no se borran: se dan de baja desde EDITAR, diciendo qué les pasó.
+        Acá queda cada baja con su motivo y su fecha.
+    </p>
+</div>
+
+{% if filas %}
+<div class="g-table-wrap">
+    <table class="g-table">
+        <thead>
+            <tr>
+                <th>RECURSO</th>
+                <th>MOTIVO</th>
+                <th>DETALLE</th>
+                <th>FECHA</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in filas %}
+            <tr class="{{ 'g-baja-revertida' if f.revertida }}">
+                <td data-label="RECURSO">
+                    {% if f.existe %}
+                    <a class="g-item-link" href="{{ url_for('gestion.detalle', slug='recursos', id=f.recurso_id) }}">{{ f.recurso_nombre }}</a>
+                    {% else %}
+                    {{ f.recurso_nombre }}
+                    {% endif %}
+                    {# El nombre de la baja es el que tenía ese día: si lo renombraron después,
+                       se muestran los dos para no perder de vista de qué ficha se trata. #}
+                    {%- if f.existe and f.nombre_actual != f.recurso_nombre %}
+                    <span class="g-recurso-sub">hoy: {{ f.nombre_actual }}</span>
+                    {%- endif %}
+                    {%- if f.revertida %}<span class="g-recurso-sub">baja revertida</span>{% endif %}
+                </td>
+                <td data-label="MOTIVO"><span class="g-badge">{{ f.motivo }}</span></td>
+                <td data-label="DETALLE">{{ f.detalle }}</td>
+                <td data-label="FECHA">{{ f.fecha }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="g-empty">
+    <p>Todavía no se dio de baja ningún recurso.</p>
+</div>
+{% endif %}
+{% endblock %}

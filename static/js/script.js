@@ -128,6 +128,37 @@ function activarModoComparacion() {
     actualizarEstadoComparacion();
 }
 
+// Abre la comparación ya armada desde la URL: "curso:1%C2%B0%20A,profesor:MACIEL%20MARTIN".
+// Es la puerta de entrada del link que manda el asistente cuando cruza horarios (ver
+// agente/enlaces.py). Los preceptores no llegan nunca acá: no son comparables (más abajo,
+// en buscarEnServidor), y el server ya los deja afuera del link.
+function abrirComparacionDesdeHash(crudo) {
+    const COMPARABLES = ['profesor', 'curso', 'aula'];
+    const items = (crudo || '').split(',').map(parte => {
+        const corte = parte.indexOf(':');
+        if (corte < 1) return null;
+        return { modo: parte.slice(0, corte), valor: decodeURIComponent(parte.slice(corte + 1)) };
+    }).filter(i => i && COMPARABLES.includes(i.modo) && i.valor);
+
+    if (items.length < 2) return;  // con uno solo no hay nada que superponer
+
+    // El modo tiene que quedar activo ANTES de tocar la tab y de buscar: si no, cambiarTab
+    // limpia el calendario y buscarEnServidor pinta un horario individual en vez de sumarlo.
+    isComparacionMode = true;
+    comparacionItems = [];
+
+    const tabBtn = document.querySelector(`[onclick*="cambiarTab"][onclick*="tab-${items[0].modo}"]`);
+    window.isProgrammaticNavigation = true;
+    if (tabBtn) tabBtn.click();
+    // El placeholder va antes de buscar y no después: las búsquedas se resuelven contra la
+    // caché ya descargada, pero si alguna cae a la red el resultado llega más tarde y el
+    // contenedor no puede quedar vacío mientras tanto. La primera que entra lo pisa.
+    _mostrarPlaceholderComparacion();
+    actualizarEstadoComparacion();
+    items.forEach(item => buscarEnServidor(item.modo, item.valor));
+    window.isProgrammaticNavigation = false;
+}
+
 function _mostrarPlaceholderComparacion() {
     const c = document.getElementById('contenedor-calendario');
     c.innerHTML = `<div style="padding:60px; text-align:center; color:#70757a; font-family:'Roboto Mono',monospace; letter-spacing:1px; font-size:14px;">Seleccioná un calendario para comparar.</div>`;
@@ -1882,6 +1913,16 @@ document.addEventListener('click', (e) => {
         if (!hash.startsWith('#/')) return;
         const parts = hash.slice(2).split('/');
         const modo = parts[0];
+
+        // "#/comparar/curso:1%C2%B0%20A,profesor:MACIEL%20MARTIN" — lo arma el asistente
+        // cuando cruza horarios (ver agente/enlaces.py). Se resuelve antes que el resto
+        // porque acá NO se puede decodificar el resto del hash de una: cada valor lleva su
+        // coma y sus dos puntos escapados, y decodificarlos primero rompería el split.
+        if (modo === 'comparar') {
+            abrirComparacionDesdeHash(parts.slice(1).join('/'));
+            return;
+        }
+
         const valor = parts.length >= 2 ? decodeURIComponent(parts.slice(1).join('/')) : null;
 
         const tabId = TAB_SOLO[modo];

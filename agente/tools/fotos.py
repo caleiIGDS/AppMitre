@@ -83,9 +83,12 @@ def _leer_foto_fmt(contexto_turno=None, modo=MODO_DEFAULT, foto=None):
                          'funciona, no necesita leerla). NO inventes lo que decía la foto.'}
 
     texto_usuario = (contexto_turno or {}).get('texto_usuario', '')
+    # Lo que gasta el lector se anota en el contexto del turno, igual que el del chat: son
+    # dos APIs con cuentas separadas y el panel de uso las suma (ver registro.py).
+    uso = contexto_turno.setdefault('uso_vision', []) if contexto_turno is not None else None
     lecturas = []
     for f in fotos:
-        lectura = _leer_imagen(f['b64'], f['tipo'], texto_usuario, modo)
+        lectura = _leer_imagen(f['b64'], f['tipo'], texto_usuario, modo, uso=uso)
         if lectura:
             lecturas.append({'foto': f['n'], 'lectura': lectura})
 

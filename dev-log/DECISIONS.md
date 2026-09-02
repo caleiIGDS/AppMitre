@@ -6,6 +6,36 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-09-02] — Ningún recurso se borra: se da de baja diciendo qué pasó
+
+Borrar la fila se lleva justo lo que después hace falta para rendir cuentas: qué era,
+cuántos había, dónde estaba, las fotos. Así que el recurso queda con estado "Dado de baja"
+(fuera del listado salvo que se pida verlo) y la baja anota en `recurso_bajas` el motivo y
+el detalle — sin motivo no hay baja. "Dado de baja" salió de `ESTADOS_RECURSO` para que no
+se pueda poner suelto y sin explicación desde el form o el chat. La baja se revierte, pero
+la fila del registro no se borra: queda marcada `revertida`, porque es un historial.
+
+## [2026-09-01] — El registro de uso del agente va a `agente.db`, y sin respaldo
+
+Las otras tres tablas del agente viven en `gestion.db` porque son efímeras (se barren a
+las 4 horas). `agente_turnos` es lo contrario: una fila por turno, con el texto del chat,
+para siempre. En `gestion.db` se la llevarían los 20 respaldos rotativos de `respaldos.py`,
+multiplicando por veinte el archivo de chats; suelta se puede bajar sola para analizarla.
+Por lo mismo `agente.db` NO entra en `respaldos.py`: es telemetría — perderla cuesta
+análisis, no datos de la escuela — y rotarle 20 copias deshace lo que se ganó al sacarla.
+
+## [2026-09-01] — Cruzar horarios lo calcula Python, y por tramos, no por bandas
+
+`coincidencias` no le pasa los horarios crudos al modelo para que los cruce. `deepseek-v4-pro`
+puede hacerlo, pero medido sobre tres casos con `horario_curso` sueltos acertó 2 de 6, gastando
+9.400–12.000 tokens de razonamiento y hasta 6 minutos; con cuatro cursos agotó el tope de salida
+sin escribir nada las dos veces (el usuario lee "me quedé sin espacio"). Cuando falla, omite un
+día entero. Con la grilla ya calculada: 3/3 en 15–28 s y ~1.100 tokens.
+La presencia tampoco se modela como banda de la primera a la última clase: el 32% de los
+días-curso tienen un pozo en el medio (máximo 480 min), y ningún umbral de corte los separa
+de un cambio de turno porque hay huecos legítimos de más de 3 h. Por eso se corta el día en
+cada frontera y cada tramo dice `materia` / `hueco` / `fuera`: el hueco no se modela, se ve.
+
 ## [2026-08-29] — El sistema de horarios es un sitio aparte, no un área de `accesos`
 
 Pedido de la escuela: horarios y el resto, dos sitios sin relación. `horarios/` es un
