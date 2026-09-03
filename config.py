@@ -6,6 +6,15 @@
 import os
 from datetime import datetime, timedelta, timezone
 
+RAIZ = os.path.dirname(os.path.abspath(__file__))
+
+# Dónde viven TODAS las bases: una sola carpeta, para que "qué hay que respaldar" tenga una
+# respuesta corta y para que en la raíz no se confunda un archivo vivo con una sobra. Cada
+# área arma su ruta desde acá (`os.path.join(DIR_DATOS, 'x.db')`); qué hay en cada archivo lo
+# cuenta `database/LEEME.md`. El sistema de horarios tiene su propia copia de esta constante
+# en `horarios/config.py`, como el resto de lo que duplica a propósito.
+DIR_DATOS = os.path.join(RAIZ, 'database')
+
 # ¿Estamos en el hosting? PythonAnywhere exporta PYTHONANYWHERE_DOMAIN en el entorno del
 # web app. Separa las dos cosas que tienen que diferir entre local y producción: el flag
 # Secure de la cookie (en localhost es http y con Secure no viajaría) y fallar al arrancar

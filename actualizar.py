@@ -15,6 +15,9 @@ importa a la otra (ver CLAUDE.md, criterio de capas):
   3. Gestión dejó de ser UN inventario y pasó a ser varios, uno por archivo: `recursos` y
      sus tres tablas se van de `gestion.db` a `inventarios/<slug>.db`, y los permisos
      `gestion.*` que había en `accesos.db` pasan a llevar el ámbito de ese inventario.
+  4. Todas las bases se mudaron a `database/`. Esa no es una migración de datos sino de
+     archivos, y es la única que hay que correr sí o sí: sin ella la app se niega a
+     arrancar (ver la guarda de `app.py`), porque los datos quedaron en el lugar viejo.
 
 En el equipo de desarrollo eso se corrió una vez con un script de un solo uso y se borró;
 una instalación que venga de un deploy anterior nunca lo vio. Sin esto, un `git pull` deja
@@ -25,9 +28,12 @@ dos veces no rompe nada.
 """
 
 import argparse
+import glob
 import os
 import sqlite3
 import sys
+
+from dotenv import load_dotenv
 
 RAIZ = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, RAIZ)
@@ -39,13 +45,20 @@ sys.path.insert(0, RAIZ)
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(errors='replace')
 
+# El `.env` lo carga `app.py` al arrancar el web app, pero esto corre en una consola donde
+# nadie lo hizo. Sin esto, importar un área que exige variables en producción (horarios
+# pide SHEETS_PROXY_*) revienta antes de llegar a la primera migración. Va antes de los
+# imports de área, que es cuando se leen esas variables.
+load_dotenv(os.path.join(RAIZ, '.env'))
+
 import accesos
+import estudiantes
 import gestion
 import historia
 import agente
 import salidas
 import respaldos
-from config import ahora  # el reloj de la escuela; nunca datetime.now() (ver crud-motor.md)
+from config import DIR_DATOS, ahora  # `ahora`: el reloj de la escuela, nunca datetime.now()
 from agente import db as agente_db  # su SCHEMA vive dentro de gestion.db
 from agente import registro as agente_registro  # el registro de uso, en agente.db
 
@@ -84,6 +97,19 @@ def _tiene_columna(con, tabla, columna):
     return tabla in _tablas(con) and columna in _columnas(con, tabla)
 
 
+def _donde_esta(ruta):
+    """La ruta real de una base: la nueva si ya está mudada, la vieja si todavía no.
+
+    Sólo para INFORMAR. Después del paso 0 las dos son la misma, así que esto únicamente
+    cambia algo en `--dry-run`, donde el diagnóstico tiene que poder leer bases que
+    todavía están en la raíz.
+    """
+    for origen, destino in _mudanzas():
+        if destino == ruta:
+            return origen
+    return ruta
+
+
 def _tablas_de(ruta):
     """Las tablas de una DB por ruta, abriéndola y cerrándola. Para los chequeos sueltos
     del diagnóstico, donde no vale la pena arrastrar una conexión."""
@@ -97,7 +123,93 @@ def _tablas_de(ruta):
 
 
 # ---------------------------------------------------------------------------
-# Paso 0 — diagnóstico
+# Paso 0 — todas las bases se mudan a database/
+# ---------------------------------------------------------------------------
+
+# Lo que SQLite deja al lado de la base y tiene que viajar con ella: si un `-wal` se
+# quedara atrás, se perderían las últimas transacciones confirmadas.
+SIDECARS = ('-wal', '-shm', '-journal')
+
+
+def _mudanzas():
+    """`(origen, destino)` de cada cosa que cambió de lugar, si el origen todavía existe.
+
+    El destino es lo que HOY declara cada módulo (ya apunta a `database/`); el origen es
+    donde estaba antes — la raíz para casi todas, `horarios/` para `escuela.db`. En una
+    instalación ya mudada ninguno de esos orígenes existe y la lista queda vacía.
+
+    Sólo entran las bases que el código declara. Cualquier otro `.db` suelto en la raíz es
+    una sobra (una prueba, una restauración vieja) y se reporta sin tocarlo: mezclarlo con
+    las buenas es justamente lo que la carpeta nueva viene a evitar.
+    """
+    bases = (gestion.DB_PATH, historia.DB_PATH, accesos.DB_PATH, salidas.DB_PATH,
+             agente_registro.DB_PATH, estudiantes.DB_PATH)
+    pares = [(os.path.join(RAIZ, os.path.basename(d)), d) for d in bases]
+    pares.append((os.path.join(RAIZ, 'horarios', 'escuela.db'),
+                  os.path.join(DIR_DATOS, 'escuela.db')))
+
+    # Las copias .pre-actualizacion-* de corridas anteriores viajan con su base: restaurar
+    # una es copiarla encima del destino, así que tienen que quedar en la misma carpeta.
+    for origen, destino in list(pares):
+        for sufijo in SIDECARS:
+            pares.append((origen + sufijo, destino + sufijo))
+        for copia in sorted(glob.glob(origen + '.pre-actualizacion-*')):
+            pares.append((copia, destino + copia[len(origen):]))
+
+    pares.append((os.path.join(RAIZ, 'inventarios'), gestion.DIR_INVENTARIOS))
+    pares.append((os.path.join(RAIZ, 'backups'), respaldos.BACKUP_DIR))
+    return [(o, d) for o, d in pares if os.path.exists(o)]
+
+
+def mudar_a_database(dry):
+    """Mueve las bases del layout viejo a `database/`.
+
+    Antes cada área dejaba su `.db` donde le quedaba cómodo: seis sueltas en la raíz,
+    `escuela.db` adentro del paquete de horarios, más `inventarios/` y `backups/`. El
+    código nuevo las busca todas en `database/`.
+
+    Mueve con `os.replace` y no con una copia: es un rename dentro del mismo filesystem,
+    instantáneo y sin estados a medias. Nunca pisa un destino que ya exista — si el mismo
+    archivo aparece de los dos lados no hay forma de saber cuál es el bueno, así que se
+    frena y lo decide una persona.
+    """
+    print("\n" + "=" * 70)
+    print("PASO 0 · Todas las bases a database/")
+    print("=" * 70)
+
+    pendientes = _mudanzas()
+    if not pendientes:
+        print("  · Nada que mudar: no quedó ninguna base en el lugar viejo.")
+    else:
+        choques = [(o, d) for o, d in pendientes if os.path.exists(d)]
+        if choques:
+            print("  ✗ El mismo archivo está de los dos lados y no se puede saber cuál vale:")
+            for origen, destino in choques:
+                print(f"      {os.path.relpath(origen, RAIZ)}  ya existe en  "
+                      f"{os.path.relpath(destino, RAIZ)}")
+            print("    No se movió nada. Comparalos a mano, dejá uno solo y volvé a correr.")
+            return False
+
+        for origen, destino in pendientes:
+            if dry:
+                print(f"  [dry-run] movería {os.path.relpath(origen, RAIZ)} → "
+                      f"{os.path.relpath(destino, RAIZ)}")
+                continue
+            os.makedirs(DIR_DATOS, exist_ok=True)
+            os.replace(origen, destino)
+            print(f"  ✓ {os.path.relpath(origen, RAIZ)} → {os.path.relpath(destino, RAIZ)}")
+
+    # Lo que quede suelto en la raíz no lo toca nadie, pero conviene que se vea: son
+    # sobras, y la única forma de que sigan siendo sobras es nombrarlas.
+    sobras = [os.path.basename(f) for f in sorted(glob.glob(os.path.join(RAIZ, '*.db')))]
+    if sobras and not dry:
+        AVISOS.append(f"Quedaron {len(sobras)} .db sueltos en la raíz que no son de "
+                      f"ningún área ({', '.join(sobras)}). Revisalos y borralos.")
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Paso 0.5 — diagnóstico
 # ---------------------------------------------------------------------------
 
 def diagnostico():
@@ -107,8 +219,10 @@ def diagnostico():
     print("=" * 70)
     print(f"Python {sys.version.split()[0]}  ·  SQLite {sqlite3.sqlite_version}")
 
-    for ruta in (gestion.DB_PATH, historia.DB_PATH, salidas.DB_PATH,
-                 agente_registro.DB_PATH):
+    for declarada in (gestion.DB_PATH, historia.DB_PATH, salidas.DB_PATH,
+                      agente_registro.DB_PATH, estudiantes.DB_PATH):
+        # `_donde_esta`: en --dry-run la mudanza no se hizo y las bases siguen en la raíz.
+        ruta = _donde_esta(declarada)
         nombre = os.path.basename(ruta)
         if not os.path.exists(ruta):
             print(f"\n{nombre}: no existe todavía (se va a crear vacía)")
@@ -122,13 +236,15 @@ def diagnostico():
         finally:
             con.close()
 
-    for fila in (gestion.listar_inventarios() if os.path.exists(gestion.DB_PATH)
-                 and 'inventarios' in _tablas_de(gestion.DB_PATH) else []):
-        marca = ' · SIN CLAVE' if fila['sin_clave'] else ''
-        print(f"\ninventarios/{fila['slug']}.db: {fila['total']} recursos{marca}")
+    if 'inventarios' in _tablas_de(gestion.DB_PATH):
+        for fila in gestion.listar_inventarios():
+            marca = ' · SIN CLAVE' if fila['sin_clave'] else ''
+            print(f"\ndatabase/inventarios/{fila['slug']}.db: {fila['total']} recursos{marca}")
+    else:
+        print("\n(el detalle de cada inventario se ve una vez hecha la mudanza)")
 
-    escuela = os.path.join(RAIZ, 'horarios', 'escuela.db')
-    print(f"\nhorarios/escuela.db: {'presente' if os.path.exists(escuela) else 'ausente'} "
+    escuela = _donde_esta(os.path.join(DIR_DATOS, 'escuela.db'))
+    print(f"\nescuela.db: {'presente' if os.path.exists(escuela) else 'ausente'} "
           "(se regenera desde Google Sheets con POST /horarios/api/actualizar, no se toca acá)")
 
     # El único bloqueo posible: la migración destructiva de `drive_url` necesita un SQLite
@@ -172,7 +288,7 @@ def copia_de_seguridad(dry):
 
     sello = ahora().strftime('%Y%m%d-%H%M%S')
     for ruta in (gestion.DB_PATH, historia.DB_PATH, accesos.DB_PATH, salidas.DB_PATH,
-                 agente_registro.DB_PATH):
+                 agente_registro.DB_PATH, estudiantes.DB_PATH):
         if not os.path.exists(ruta):
             continue
         destino = f"{ruta}.pre-actualizacion-{sello}"
@@ -743,6 +859,12 @@ def main():
 
     if args.dry_run:
         print("\n*** MODO DRY-RUN: no se escribe nada ***")
+
+    # Antes que nada: si los archivos siguen en el lugar viejo, todo lo que viene leería
+    # rutas vacías (y peor, las crearía). Es un rename, no toca una sola fila.
+    if not mudar_a_database(args.dry_run):
+        print("\nAbortado en la mudanza. No se movió nada ni se tocó ninguna DB.")
+        return 1
 
     if not diagnostico():
         print("\nAbortado en el diagnóstico. No se tocó ninguna DB.")

@@ -25,6 +25,11 @@ let _allPersonal = null;          // todo el personal no docente
 let _horariosPreceptores = null;  // { nombre: [filas de su horario] }
 let _planillaPreceptores = null;  // lista por curso con turnos (planilla + preceptor-por-curso)
 let _datosPromise = null;         // evita descargas duplicadas
+// Cuándo se bajó el horario por última vez. El dashboard repinta cada segundo desde
+// memoria y sólo vuelve a la red cada REFRESCO_DATOS_MS, por si alguien reimportó
+// desde Sheets mientras la pantalla estaba abierta.
+const REFRESCO_DATOS_MS = 10 * 60 * 1000;
+let ultimoRefrescoDatos = 0;
 
 function cargarDatosIniciales() {
     if (_datosPromise) return _datosPromise;
@@ -40,6 +45,7 @@ function cargarDatosIniciales() {
         // Reutilizar el mismo dataset para planilla general y dashboard
         allDataCache = _allClases;
         lastDashboardData = _allClases;
+        ultimoRefrescoDatos = Date.now();
         return { clases: _allClases, personal: _allPersonal };
     }).catch(err => {
         console.error("Error cargando datos iniciales:", err);
@@ -265,7 +271,7 @@ function seleccionarOpcionSlide(opcion, tabId) {
         if (allDataCache) {
             generarPlanillaGeneral();
         } else {
-            fetch(API_BASE + '/api/dashboard').then(r => r.json()).then(d => { allDataCache = d; generarPlanillaGeneral(); });
+            cargarDatosIniciales().then(() => generarPlanillaGeneral());
         }
     }
 }
@@ -850,11 +856,16 @@ function setManualTime() {
 function iniciarDashboard() {
     actualizarReloj();
     if (dashboardInterval) clearInterval(dashboardInterval);
+    // Cada segundo cambia la HORA, no el horario. Este intervalo antes hacía un fetch por
+    // segundo de las 2299 clases (732 KB crudos, ~0.9s de respuesta): tardaba más que el
+    // propio intervalo, así que los pedidos se encolaban y se comían el único worker del
+    // hosting — con el kiosco abierto se frenaba la navegación del resto de la app.
+    // Ahora repinta desde memoria y sale a la red sólo cada REFRESCO_DATOS_MS.
     dashboardInterval = setInterval(() => {
         actualizarReloj();
-        if (document.getElementById('tab-envivo').style.display === 'block' && !isManualClock) {
-            cargarDatosDashboard();
-        }
+        if (document.getElementById('tab-envivo').style.display !== 'block' || isManualClock) return;
+        renderizarDashboard(lastDashboardData);
+        if (Date.now() - ultimoRefrescoDatos > REFRESCO_DATOS_MS) refrescarDatosDashboard();
     }, 1000);
     cargarDatosDashboard();
 }
@@ -872,13 +883,22 @@ function actualizarReloj() {
 }
 
 function cargarDatosDashboard() {
-    fetch(API_BASE + '/api/dashboard')
-        .then(res => res.json())
-        .then(filas => {
-            lastDashboardData = filas;
-            renderizarDashboard(filas);
+    // Sin fetch propio: `cargarDatosIniciales` ya trajo las clases al abrir la página y
+    // memoriza su promesa, así que esto es instantáneo salvo la primera vez.
+    return cargarDatosIniciales()
+        .then(({ clases }) => {
+            if (clases) lastDashboardData = clases;
+            renderizarDashboard(lastDashboardData);
         })
         .catch(err => console.error("Error Dashboard:", err));
+}
+
+function refrescarDatosDashboard() {
+    // Tira la promesa memorizada para forzar una descarga nueva. Es el único camino que
+    // vuelve a la red una vez cargada la página.
+    _datosPromise = null;
+    ultimoRefrescoDatos = Date.now();
+    return cargarDatosDashboard();
 }
 
 function renderizarDashboard(filas) {
@@ -1716,12 +1736,7 @@ function togglePlanillaGeneral(checkbox) {
         if (allDataCache) {
             generarPlanillaGeneral();
         } else {
-            fetch(API_BASE + '/api/dashboard')
-                .then(res => res.json())
-                .then(data => {
-                    allDataCache = data;
-                    generarPlanillaGeneral();
-                });
+            cargarDatosIniciales().then(() => generarPlanillaGeneral());
         }
     } else {
         controls.style.display = 'none';

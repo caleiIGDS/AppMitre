@@ -24,13 +24,14 @@
 # ver dev-log/DECISIONS.md 2026-08-21 si se retoman.
 
 import contextlib
+import hashlib
 import os
 import re
 import sqlite3
 import sys
 from datetime import datetime
 
-from config import ahora
+from config import DIR_DATOS, ahora
 from flask import (Blueprint, abort, g, has_request_context, redirect,
                    render_template, request, session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -40,11 +41,10 @@ import crud
 import respaldos
 import texto
 
-RAIZ = os.path.dirname(os.path.abspath(__file__))
 # El registro. Comparte archivo con las tablas del agente (ver agente/db.py), que nunca
 # fueron de un inventario en particular.
-DB_PATH = os.path.join(RAIZ, 'gestion.db')
-DIR_INVENTARIOS = os.path.join(RAIZ, 'inventarios')
+DB_PATH = os.path.join(DIR_DATOS, 'gestion.db')
+DIR_INVENTARIOS = os.path.join(DIR_DATOS, 'inventarios')
 
 # Slugs que no puede tomar un inventario porque son rutas del registro (`/gestion/admin/…`,
 # `/gestion/login`). Sin esto, un inventario llamado "admin" se comería el panel.
@@ -133,6 +133,19 @@ CREATE TABLE IF NOT EXISTS inventarios (
 """
 
 
+def _hashear(clave):
+    """El hash de una clave de inventario, con el algoritmo más fuerte que tenga ESTE server.
+
+    Werkzeug 3 elige `scrypt` por defecto y `scrypt` sale del OpenSSL de abajo: en un
+    hosting donde no está, `generate_password_hash` revienta — y reventaría justo al crear
+    un inventario, con un 500 y ninguna pista. El hash se genera y se verifica siempre en
+    la misma máquina, así que caer a pbkdf2 ahí no rompe nada guardado.
+    """
+    if hasattr(hashlib, 'scrypt'):
+        return generate_password_hash(clave)
+    return generate_password_hash(clave, method='pbkdf2:sha256')
+
+
 def conectar_registro():
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
@@ -218,7 +231,7 @@ def crear_inventario(nombre, clave):
     slug = slugificar(nombre, cur)
     cur.execute(
         "INSERT INTO inventarios (slug, nombre, clave_hash, creado) VALUES (?,?,?,?)",
-        (slug, nombre, generate_password_hash(clave) if clave else None,
+        (slug, nombre, _hashear(clave) if clave else None,
          ahora().strftime('%Y-%m-%d %H:%M:%S')))
     con.commit()
     con.close()
@@ -247,7 +260,7 @@ def fijar_clave(inv_id, clave):
         return False
     con = conectar_registro()
     con.execute("UPDATE inventarios SET clave_hash = ? WHERE id = ?",
-                (generate_password_hash(clave), inv_id))
+                (_hashear(clave), inv_id))
     con.commit()
     con.close()
     return True
@@ -902,7 +915,23 @@ def panel():
     for f in filas:
         f['abre'] = _puede_abrir(f)
     return render_template('inventarios/panel.html', inventarios=filas, activo='inventarios',
+                           falta_migrar=not filas and _recursos_sin_mudar(),
                            error=request.args.get('error'))
+
+
+def _recursos_sin_mudar():
+    """¿`gestion.db` todavía tiene la tabla `recursos` del inventario único?
+
+    Pasa en un deploy al que le llegó el código nuevo pero no se le corrió
+    `actualizar.py`: el registro nace vacío y la lista queda en blanco, con los datos ahí
+    al lado y sin nada que lo diga. Un aviso barato en la página evita el rato de creer
+    que la migración perdió el inventario.
+    """
+    con = conectar_registro()
+    hay = con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='recursos'"
+                      ).fetchone() is not None
+    con.close()
+    return hay
 
 
 @bp_inv.route('/admin/crear', methods=['POST'])

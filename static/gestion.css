@@ -1,8 +1,10 @@
 /* gestion.css — Sistema de Gestión de Conocimiento (/gestion)
-   Importa global.css para paleta, reset y header compartido.
+   `global.css` NO se importa desde acá: va como un <link> aparte en la plantilla.
+   Con `@import` el navegador no puede ni enterarse de que global.css existe hasta
+   terminar de bajar y parsear este archivo, así que las dos hojas se descargaban en
+   serie y las dos bloquean el pintado. Como <link> viajan en paralelo.
    Aquí solo van estilos específicos de gestión (tablas, fichas, galería, etc). */
 
-@import url('global.css');
 
 /* Header y estilos base: vienen de global.css */
 

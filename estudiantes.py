@@ -15,8 +15,9 @@ import sys
 
 import crud
 import texto
+from config import DIR_DATOS
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'estudiantes.db')
+DB_PATH = os.path.join(DIR_DATOS, 'estudiantes.db')
 PREFIJO_BACKUP = 'estudiantes'
 TABLA_TESTIGO = 'estudiantes'
 

@@ -8,6 +8,21 @@
 
 {% if error %}<div class="g-error">{{ error }}</div>{% endif %}
 
+{% if falta_migrar %}
+{# El código nuevo llegó por git pull pero la migración no se corrió: los recursos siguen
+   adentro de gestion.db y la lista queda vacía. Sin este aviso parece que se perdieron. #}
+<div class="g-error">
+    <strong>Falta terminar la actualización.</strong> El inventario que ya existía todavía
+    está en <code>gestion.db</code>: no se perdió nada, pero hasta que no se lo mude no
+    aparece acá. En la consola del servidor, en la carpeta del proyecto:
+    <br><br>
+    <code>python actualizar.py --dry-run</code> &nbsp;(muestra qué va a mover)<br>
+    <code>python actualizar.py</code> &nbsp;(lo aplica)
+    <br><br>
+    Después, Reload del web app. El inventario va a aparecer sin clave: ponésela desde acá.
+</div>
+{% endif %}
+
 <p class="g-help">Cada inventario es independiente: tiene su propia gente y su propia
     clave. Tener acceso a uno no da acceso a ninguno de los otros.</p>
 

@@ -534,13 +534,26 @@ def api_actualizar():
         print(f"Error actualizando datos: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# Las columnas de `clases` que el front realmente lee. La lista es explícita y no un
+# `SELECT *` por dos motivos: la tabla guarda `dni`, `telefono` y `email` de cada docente
+# —que no tienen por qué viajar al navegador de cualquiera que abra el horario— y este
+# endpoint devuelve las 2.299 filas de una, así que cada columna de más se paga entera.
+# Al recortarlo el JSON pasó de 804 KB a 586 KB. Si el front empieza a usar otra
+# columna (`especialidad`, `tipo_materia`, `tipo_aula`), hay que sumarla acá.
+COLUMNAS_DASHBOARD = (
+    'curso', 'division', 'materia', 'profesor', 'aula', 'dia',
+    'hora_inicio', 'hora_fin', 'grupo', 'superposicion',
+    'suplente_activo', 'prof_suplente', 'sup_ini', 'sup_fin',
+)
+
+
 @bp.route('/api/dashboard')
 def api_dashboard():
     try:
         con = datos.conectar()
         con.row_factory = sqlite3.Row
         cur = con.cursor()
-        cur.execute("SELECT * FROM clases")
+        cur.execute(f"SELECT {', '.join(COLUMNAS_DASHBOARD)} FROM clases")
         filas = [dict(row) for row in cur.fetchall()]
         con.close()
         return jsonify(filas)

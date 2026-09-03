@@ -6,6 +6,22 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-09-03] — Todas las bases se mudaron a `database/`
+
+**Archivos**: `config.py`, `horarios/config.py`, `app.py`, `actualizar.py`, `accesos.py`, `gestion.py`, `historia.py`, `salidas.py`, `estudiantes.py`, `respaldos.py`, `horarios/datos.py`, `database/LEEME.md`
+
+Ninguna `.db` vive más en la raíz ni adentro de `horarios/`: van todas a `database/`, junto con `inventarios/` y `backups/`. La ruta se arma desde **`config.DIR_DATOS`** (y su copia `horarios.config.DIR_DATOS`, que es lo único del paquete de horarios que sale de su carpeta); un módulo nuevo que declare un `DB_PATH` con `os.path.join(RAIZ, ...)` va a escribir donde nadie lo respalda ni lo busca.
+
+Una instalación vieja necesita **`python actualizar.py`** (paso 0, un rename: no toca una sola fila) antes del Reload. Si no, `app.py` se niega a arrancar — sin esa guarda cada área crearía su base vacía en `database/` mientras los datos reales siguen arriba, y la guarda anti-pérdida de `crud.init_db` no salta porque los respaldos se mudan con ellas.
+
+## [2026-09-03] — Estáticos con caché de un año (`static_v`) y `/api/dashboard` recortado
+
+**Archivos**: `app.py`, `templates/*/base.html`, `templates/index.html`, `static/{global,gestion,horarios}.css`, `static/js/script.js`, `horarios/rutas.py`
+
+Las plantillas ya **no** usan `url_for('static', ...)` para CSS/JS/imágenes: va `{{ static_v('archivo.css') }}`, que agrega el mtime como `?v=` y habilita `SEND_FILE_MAX_AGE_DEFAULT` de 1 año. Un `<link>`/`<script>` nuevo que use `url_for` directo queda cacheado un año **sin forma de invalidarlo**. `global.css` ya no se `@import`-a desde `gestion.css`/`horarios.css`: va como `<link>` propio y **antes** que el otro, o se pierde la cascada.
+
+`/horarios/api/dashboard` devuelve sólo las columnas de `COLUMNAS_DASHBOARD` (`horarios/rutas.py`), no `SELECT *` — sin `especialidad`, `tipo_materia`, `tipo_aula`, `dni`, `telefono`, `email`. El frontend que necesite una columna nueva tiene que sumarla ahí. El dashboard tampoco pollea más: `setInterval` repinta desde `lastDashboardData` y sólo sale a la red cada 10 min (ver `agent_docs/calendar-engine.md`).
+
 ## [2026-09-02] — Gestión son varios inventarios: las URLs llevan `<inv>` y los permisos, ámbito
 
 **Archivos**: `gestion.py`, `accesos.py`, `crud.py`, `actualizar.py`, `app.py`, `agente/dominio.py`, `agente/tools/esquemas.py`, `templates/{gestion,inventarios,accesos,agente,historia,salidas}/`

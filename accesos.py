@@ -53,10 +53,10 @@ from flask import (Blueprint, abort, g, has_request_context, jsonify, redirect,
                    render_template, request, session, url_for)
 
 import respaldos
-from config import (ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION, PRODUCCION, ahora)
+from config import (DIR_DATOS, ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION,
+                    PRODUCCION, ahora)
 
-RAIZ = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(RAIZ, 'accesos.db')
+DB_PATH = os.path.join(DIR_DATOS, 'accesos.db')
 
 # Respaldos rotativos, igual que las otras áreas con datos propios: accesos.db no se
 # regenera desde ninguna fuente y no viaja por git.

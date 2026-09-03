@@ -16,14 +16,14 @@
 import os
 import sys
 
-from config import ahora
+from config import DIR_DATOS, ahora
 from flask import Blueprint
 
 import accesos
 import crud
 import texto
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'historia.db')
+DB_PATH = os.path.join(DIR_DATOS, 'historia.db')
 
 # Interruptor del área, hoy APAGADA. En False el área entera no existe: `app.py` no
 # registra el blueprint ni la pasa a `accesos.registrar_app` (sus permisos no entran al

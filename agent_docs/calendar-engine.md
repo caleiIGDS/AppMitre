@@ -164,11 +164,12 @@ Los datos vienen de `/api/dashboard` que devuelve TODAS las clases. El filtro po
 
 `iniciarDashboard()` llama `setInterval(fn, 1000)`. Cada segundo:
 1. Actualiza el reloj en pantalla.
-2. Si el tab En Vivo está visible y no está en modo manual → llama `cargarDatosDashboard()`.
+2. Si el tab En Vivo está visible y no está en modo manual → repinta con `renderizarDashboard(lastDashboardData)`, **desde memoria**.
+3. Sólo si pasaron `REFRESCO_DATOS_MS` (10 min) desde la última descarga, llama `refrescarDatosDashboard()`, que tira `_datosPromise` y vuelve a bajar los tres endpoints del bootstrap.
 
-Esto significa una petición a `/api/dashboard` por segundo cuando el tab está activo.
+El intervalo **no pega al servidor**. Lo que cambia cada segundo es la hora, no el horario: éste sólo se mueve cuando alguien reimporta desde Sheets, y para eso alcanza con mirar cada 10 minutos. Antes acá había un `fetch('/api/dashboard')` por segundo — 2.299 filas que tardaban ~0.9 s en responder, o sea más que el propio intervalo: los pedidos se encolaban y saturaban el único worker del hosting, frenando la navegación del resto de la app.
 
-**Caché**: `lastDashboardData` guarda las últimas filas. El filtro `renderizarDashboard(filas)` se llama tanto con datos frescos (desde el endpoint) como con los datos cacheados (para refiltrar cuando el usuario escribe en el campo de filtro).
+**Caché**: `lastDashboardData` guarda las filas vigentes (las pone `cargarDatosIniciales()`). `renderizarDashboard(filas)` se llama siempre contra esa caché, tanto para el tick del reloj como para refiltrar cuando el usuario escribe en el campo de filtro.
 
 ### Modo manual
 
@@ -202,7 +203,7 @@ Efectos de `is-fullscreen`:
 
 ### Fuente de datos
 
-`allDataCache` — se carga una vez con `fetch('/api/dashboard')` (todas las clases). No se recarga en la sesión. Si el usuario actualiza la DB mientras tiene la planilla abierta, ve datos viejos hasta hacer F5.
+`allDataCache` — lo llena `cargarDatosIniciales()` en el bootstrap (todas las clases). Es el mismo array que `lastDashboardData`, no una segunda copia. Se renueva solo cada 10 min mientras el tab En Vivo está abierto (ver *Refresh*); en el resto de la app, si alguien actualiza la DB hay que hacer F5.
 
 Las aulas del piso vienen de `window.APP_DATA.floorMapping[selectedFloor]` (lista de strings como `["11","12","13","14","15","16"]`). El filtro de filas es `f[9]` (campo `aula` del row).
 

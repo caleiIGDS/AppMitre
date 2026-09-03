@@ -28,8 +28,9 @@ rutas propias, escritas a mano, reutilizando sólo lo compartido (`accesos`,
   (ver "Vigencia y purga" abajo). Una sola tabla: `salidas` (una fila por salida, con su
   `token`). Lo que completa una familia por el link público **no** se guarda en esta DB
   (ni en ninguna) — ver "Link público" más abajo.
-- **`salidas_pdfs/`** — carpeta junto al módulo (mismo patrón que `backups/` de
-  `respaldos.py`: fuera de `static/`, no listable/adivinable por URL). Un PDF por anexo
+- **`salidas_pdfs/`** — carpeta en la raíz, al lado del módulo y NO adentro de
+  `database/`, que es sólo para bases. Fuera de `static/`: no listable ni adivinable
+  por URL. Un PDF por anexo
   por salida: `salidas_pdfs/<id>/AnexoIII.pdf` … `AnexoIX.pdf`. En `.gitignore` porque
   contienen DNI y datos de salud. El Anexo IX puede tener copias extra
   (`AnexoIX_2.pdf`, `AnexoIX_3.pdf`, ...) — ver "Más de un seguro escolar" más abajo. El

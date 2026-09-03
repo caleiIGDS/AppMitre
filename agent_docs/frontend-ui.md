@@ -79,7 +79,7 @@ Grilla de 20×20px en azul muy transparente sobre el fondo `--tech-bg`. En modo 
 
 ## Tipografía
 
-**Browser**: Roboto Mono cargada desde Google Fonts (`link` en `<head>` de `index.html`). Pesos: 300, 400, 600, 700.
+**Browser**: Roboto Mono **auto-hospedada** — `@font-face` en `static/global.css` apuntando a `static/fonts/robotomono-<peso>-<subset>.woff2` (pesos 400, 600, 700; subsets latin y latin-ext; `font-display: swap`). No hay ningún `<link>` a `fonts.googleapis.com`: eran dos orígenes extra con su propio DNS y TLS, los dos bloqueando el pintado.
 
 **PDF (fpdf2)**: misma fuente pero desde archivos locales en `static/fonts/`:
 - `RobotoMono-Regular.ttf`

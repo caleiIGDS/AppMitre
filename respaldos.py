@@ -1,9 +1,10 @@
 """Respaldos rotativos de bases SQLite — capa 0, sin dominio.
 
-Existen porque `gestion.db` e `historia.db` no se regeneran desde ninguna fuente externa
-y están en `.gitignore`: si el archivo se pierde, no hay commit ni Sheet del que
-recuperarlo (ver `dev-log/DECISIONS.md` 2026-08-08, que es la pérdida real que motivó
-todo esto). `escuela.db` no usa esto: se rearma desde Google Sheets.
+Existen porque casi ninguna base se regenera desde una fuente externa y ninguna viaja
+por git: si el archivo se pierde, no hay commit ni Sheet del que recuperarlo (ver
+`dev-log/DECISIONS.md` 2026-08-08, que es la pérdida real que motivó todo esto). Las dos
+excepciones —`escuela.db`, que se rearma desde Sheets, y `agente.db`, telemetría que crece
+sin techo— no llaman a `respaldar`. Quién es quién: `database/LEEME.md`.
 
 No conoce ninguna tabla concreta — el área le pasa cuál mirar para decidir si su DB
 "tiene datos".
@@ -13,9 +14,9 @@ import glob
 import hashlib
 import os
 import sqlite3
-from config import ahora
+from config import DIR_DATOS, ahora
 
-BACKUP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backups')
+BACKUP_DIR = os.path.join(DIR_DATOS, 'backups')
 BACKUP_MAX = 20
 
 

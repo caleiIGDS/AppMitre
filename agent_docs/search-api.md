@@ -7,7 +7,7 @@
 ## ⚡ Resolución client-side (desde [2026-06-29])
 
 **Ninguna búsqueda pega al servidor** en el caso normal. Al cargar la web, `cargarDatosIniciales()` descarga **todo** a memoria con 3 requests en paralelo:
-- `GET /horarios/api/dashboard` → `_allClases` (todas las filas de `clases`, ~2.300)
+- `GET /horarios/api/dashboard` → `_allClases` (todas las filas de `clases`, ~2.300, con las columnas de `COLUMNAS_DASHBOARD`)
 - `GET /horarios/api/personal_todos` → `_allPersonal` (todo el personal no docente)
 - `GET /horarios/api/preceptores_data` → `_horariosPreceptores` (`{nombre: [filas]}`) + `_planillaPreceptores` (lista por curso con turnos)
 
@@ -262,7 +262,7 @@ for f in filas:
 
 ## Formato de fila: objetos con claves nombradas (desde [2026-07-13])
 
-La API devuelve cada clase como **objeto JSON** cuyas claves son las columnas de la tabla `clases` (`sqlite3.Row` → `dict` en `obtener_filas()` y `/horarios/api/dashboard`):
+La API devuelve cada clase como **objeto JSON** con claves nombradas (`sqlite3.Row` → `dict`). `obtener_filas()` expone la tabla `clases` entera:
 
 ```
 {curso, division, especialidad, materia, tipo_materia, profesor, dni, telefono, email,
@@ -270,7 +270,16 @@ La API devuelve cada clase como **objeto JSON** cuyas claves son las columnas de
  prof_suplente, sup_ini, sup_fin}
 ```
 
+`/horarios/api/dashboard` devuelve **un subconjunto**, el declarado en `COLUMNAS_DASHBOARD` (`horarios/rutas.py`) — las 14 que el frontend realmente lee:
+
+```
+{curso, division, materia, profesor, aula, dia, hora_inicio, hora_fin, grupo,
+ superposicion, suplente_activo, prof_suplente, sup_ini, sup_fin}
+```
+
+Quedan afuera `especialidad`, `tipo_materia` y `tipo_aula` (nadie las usa) y `dni`, `telefono` y `email` (datos personales de los docentes que no tienen por qué viajar al navegador). Este endpoint manda las 2.300 filas de una, así que cada columna de más se paga entera: recortarlo bajó el JSON de 804 KB a 586 KB. **Si el frontend empieza a usar otra columna, hay que sumarla a `COLUMNAS_DASHBOARD`.**
+
 - El frontend accede por clave (`f.profesor`, `f.aula`, `f.hora_inicio`, ...). No queda ningún acceso por índice a filas de clases.
 - El código del PDF en `horarios/rutas.py` (`obtener_datos_calendario`, `dibujar_pagina_horario`) consume el mismo formato.
 - Las filas sintéticas de `personalToFila()` agregan la clave extra `tipo: 'personal'`.
-- Agregar una columna a la tabla `clases` la expone automáticamente en la API sin romper el frontend (E3 de `PLAN_ESCUELAS.md`, completado 2026-07-13).
+- Agregar una columna a la tabla `clases` la expone automáticamente en `obtener_filas()` sin romper el frontend (E3 de `PLAN_ESCUELAS.md`, completado 2026-07-13). En `/api/dashboard` no: ahí hay que sumarla a `COLUMNAS_DASHBOARD`.

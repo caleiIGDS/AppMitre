@@ -9,7 +9,8 @@ viven en la propia base (columna `fotos`, ver abajo).
 
 Desde el 2026-09-02 el área no tiene UNA base sino una por inventario. `gestion.db` quedó
 como el **registro** (la tabla `inventarios`, más las tablas del asistente que siempre
-vivieron ahí) y cada inventario es `inventarios/<slug>.db` con sus cuatro tablas.
+vivieron ahí) y cada inventario es `database/inventarios/<slug>.db` con sus cuatro
+tablas. Como todas las bases del proyecto, viven en `database/` (ver `database/LEEME.md`).
 
 ```
 /gestion                    la lista de inventarios (blueprint `inventarios`)
@@ -35,7 +36,7 @@ tuvo que cambiar**.
 
 > Hasta el 2026-08-10 el modelo era otro: los archivos reales vivían en Google Drive y cada
 > entidad guardaba un link en `drive_url`. La escuela dejó de usar Drive y la columna se
-> eliminó. Si ves `drive_url` en un respaldo viejo de `backups/`, es de antes de ese corte.
+> eliminó. Si ves `drive_url` en un respaldo viejo, es de antes de ese corte.
 
 **Qué NO está acá**: la línea del tiempo institucional (`hitos`) y las fichas de personas se
 separaron a `/historia` + `historia.db` el 2026-08-10 — ver `agent_docs/historia-institucional.md`
@@ -61,7 +62,7 @@ el motor genérico `crud.py`, que no importa a ninguno de los dos — ver `agent
   `clave_hash`, creado) y nada de dominio. Alberga además las tablas del asistente
   (`agente_log`, `agente_conversaciones`, `agente_fotos_pendientes`), que son auditoría/
   sesión y nunca fueron de un inventario en particular.
-- **`inventarios/<slug>.db`** — un archivo por inventario, con `recursos`,
+- **`database/inventarios/<slug>.db`** — un archivo por inventario, con `recursos`,
   `recurso_unidades`, `kit_items` y `recurso_bajas`. **No** se regeneran desde Sheets y
   `/api/actualizar` no las toca. El `slug` sale del nombre y no se renombra nunca (es la
   URL); el ámbito de los permisos va por **id**, así que renombrar no rompe nada.
@@ -347,14 +348,14 @@ Secciones mostradas en detalle (`secciones_detalle`): recurso → **Ubicación**
 unidades, siempre presente) y **Sub-recursos (kit)** (los `kit_items` del recurso, sólo de
 lectura y sólo si tiene alguno).
 
-## Respaldos (`backups/`)
+## Respaldos (`database/backups/`)
 
 Las bases de los inventarios no se regeneran desde Sheets y están en `.gitignore`, así que
 **si un archivo se pierde no hay commit ni fuente externa de la cual recuperarlo**. Por eso
 `init_db()` recorre el registro y llama a `crud.init_db` por inventario, que arranca
 respaldando.
 
-- Copia a `backups/inv<id>-YYYYMMDD-HHMMSS-ffffff.db` con la **API `backup()` de
+- Copia a `database/backups/inv<id>-YYYYMMDD-HHMMSS-ffffff.db` con la **API `backup()` de
   sqlite3**, no `shutil.copy`: garantiza una copia consistente aunque otro proceso
   esté escribiendo. Los microsegundos evitan que dos respaldos del mismo segundo se
   pisen y mantienen el orden alfabético igual al cronológico.

@@ -25,11 +25,9 @@ import os
 import sqlite3
 
 import config as config_app
-from config import ahora
+from config import DIR_DATOS, ahora
 
-from .dominio import RAIZ
-
-DB_PATH = os.path.join(RAIZ, 'agente.db')
+DB_PATH = os.path.join(DIR_DATOS, 'agente.db')
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS agente_turnos (

@@ -41,6 +41,12 @@ ESCUELA_VERSION = "V1.16"
 # Días laborales (en orden, título case con acentos).
 DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
 
+# Dónde vive `escuela.db`: la carpeta de bases del proyecto, que es una sola para todas las
+# áreas (ver `database/LEEME.md`). Es lo ÚNICO del paquete que sale de `horarios/`, y es una
+# ruta, no un import: la config de la raíz sigue sin tocarse desde acá.
+DIR_DATOS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         'database')
+
 # ---------------------------------------------------------------------------
 # Fuente de datos: Google Sheets vía el Web App de Apps Script
 # ---------------------------------------------------------------------------

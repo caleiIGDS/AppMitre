@@ -1,4 +1,5 @@
-# Database (incluye horarios/escuela.db y un archivo por inventario en inventarios/)
+# Las bases viven todas en database/ (ver database/LEEME.md, que SÍ va a git). La regla es
+# por extensión y no por carpeta, así el LEEME viaja y los datos no.
 *.db
 # Copias previas a una migración, que deja `python actualizar.py`: son datos reales
 # de la escuela y no terminan en .db, así que no las agarra la regla de arriba.

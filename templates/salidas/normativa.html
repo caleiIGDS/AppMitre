@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Resolución RESOC-2024-3871-GDEBA-DGCYE</title>
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/escudo.svg') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ static_v('images/escudo.svg') }}">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -109,13 +109,13 @@
 
     <script type="module">
         // Importar pdf.js localmente (versión 4.6.82 de pdfjs-dist)
-        import * as pdfjsLib from '{{ url_for("static", filename="vendor/pdfjs/pdf.min.mjs") }}';
+        import * as pdfjsLib from '{{ static_v('vendor/pdfjs/pdf.min.mjs') }}';
 
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '{{ url_for("static", filename="vendor/pdfjs/pdf.worker.min.mjs") }}';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '{{ static_v('vendor/pdfjs/pdf.worker.min.mjs') }}';
 
         let pdfDoc = null;
         let pageCanvases = [];
-        const PDF_URL = '{{ url_for("static", filename="salidas/resolucion-3871-24.pdf") }}';
+        const PDF_URL = '{{ static_v('salidas/resolucion-3871-24.pdf') }}';
         const container = document.getElementById('container');
         const pageInfo = document.getElementById('pageInfo');
 

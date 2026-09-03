@@ -1,8 +1,10 @@
 /* style.css — Horarios (sistema autónomo)
-   Importa global.css para variables y reset compartido.
+   `global.css` NO se importa desde acá: va como un <link> aparte en la plantilla.
+   Con `@import` el navegador no puede ni enterarse de que global.css existe hasta
+   terminar de bajar y parsear este archivo, así que las dos hojas se descargaban en
+   serie y las dos bloquean el pintado. Como <link> viajan en paralelo.
    Aquí solo van estilos específicos del sistema de horarios (calendario, dashboard, etc). */
 
-@import url('global.css');
 
 :root {
     /* Aliases legacy de horarios: --secondary, --primary, etc. pasan por variables de global.css */

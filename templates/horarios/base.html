@@ -4,11 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block titulo %}Horarios{% endblock %} — {{ escuela_nombre }}</title>
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename=escuela_logo) }}">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="{{ static_v(escuela_logo) }}">
     {# Sólo global.css: `horarios.css` es del SPA (calendario, tema oscuro) y su regla
        suelta sobre `footer` le pisa el pie de página a esta pantalla. #}
-    <link rel="stylesheet" href="{{ url_for('static', filename='global.css') }}?v=2">
+    <link rel="stylesheet" href="{{ static_v('global.css') }}">
     {# El shell (header, escudo, footer) es el de global.css, igual que en el resto de la
        app. Acá abajo va sólo la tarjeta del formulario, que no existe en ninguna otra
        pantalla. #}
@@ -47,7 +46,7 @@
         <header class="g-header">
             <div class="g-container g-header-flex">
                 <div class="marca">
-                    <img src="{{ url_for('static', filename=escuela_logo) }}" alt="Escudo" class="marca-escudo">
+                    <img src="{{ static_v(escuela_logo) }}" alt="Escudo" class="marca-escudo">
                     <div class="g-titles">
                         <h1>{{ escuela_nombre }} <span class="g-serial">{{ escuela_version }}</span></h1>
                         <p>Sistema de Horarios</p>

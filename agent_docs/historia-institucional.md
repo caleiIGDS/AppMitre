@@ -221,11 +221,11 @@ Las filas emiten `data-buscar` con el texto ya normalizado, el hook del filtrado
 la búsqueda es solo server-side. Si se quiere el filtrado en vivo, alcanza con sumar el
 `<script>`.
 
-## Respaldos (`backups/`)
+## Respaldos (`database/backups/`)
 
 Mismo mecanismo que `gestion.db` porque es el mismo código (`respaldos.py`), con prefijo propio
 (`PREFIJO_BACKUP = 'historia'`) para no mezclarse: copias a
-`backups/historia-YYYYMMDD-HHMMSS-ffffff.db` con la API `backup()` de sqlite3 (copia
+`database/backups/historia-YYYYMMDD-HHMMSS-ffffff.db` con la API `backup()` de sqlite3 (copia
 consistente aunque otro proceso esté escribiendo). No respalda una DB sin hitos, no duplica si
 el contenido no cambió, y conserva los últimos `BACKUP_MAX` (20) más el primero de cada día.
 `crud.init_db()` respalda antes de tocar nada.

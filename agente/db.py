@@ -15,13 +15,12 @@ import secrets
 import sqlite3
 from datetime import timedelta
 
-from config import ahora
+from config import DIR_DATOS, ahora
 from flask import session
 
 from . import registro
-from .dominio import RAIZ
 
-DB_PATH = os.path.join(RAIZ, 'gestion.db')
+DB_PATH = os.path.join(DIR_DATOS, 'gestion.db')
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS agente_log (

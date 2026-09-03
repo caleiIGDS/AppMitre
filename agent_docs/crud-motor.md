@@ -69,7 +69,7 @@ esté simplemente no se usa.
 | | qué es |
 |---|---|
 | `DB_PATH` | ruta a su `.db` |
-| `PREFIJO_BACKUP` | prefijo de sus respaldos (`'gestion'` → `backups/gestion-*.db`) |
+| `PREFIJO_BACKUP` | prefijo de sus respaldos (`'gestion'` → `database/backups/gestion-*.db`) |
 | `TABLA_TESTIGO` | tabla que se mira para saber si la DB "tiene datos" |
 | `ENTIDADES` | `{slug: cfg}` — la config declarativa |
 | `SCHEMA` | script SQL idempotente (`CREATE TABLE IF NOT EXISTS`) |

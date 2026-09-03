@@ -9,13 +9,15 @@ import time
 import unicodedata
 import urllib.request
 import io
-from .config import (DIAS, TURNO_CURSOS, TURNO_DEFAULT, APPSCRIPT_URL, APPSCRIPT_SECRET,
-                     SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE)
+from .config import (DIAS, DIR_DATOS, TURNO_CURSOS, TURNO_DEFAULT, APPSCRIPT_URL,
+                     APPSCRIPT_SECRET, SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES,
+                     GID_PERSONAL_NO_DOCENTE)
 
-# Todo lo del sistema de horarios vive dentro del paquete, incluidos sus datos:
-# `escuela.db` (gitignoreada, se regenera desde Sheets) y `nombre_mapeos.json` si existe.
+# El código del sistema de horarios vive todo dentro del paquete; sus datos, no:
+# `escuela.db` está en la carpeta de bases del proyecto (`database/`, ver DIR_DATOS en
+# horarios/config.py), junto a las del resto. `nombre_mapeos.json` sí sigue acá.
 AQUI = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(AQUI, 'escuela.db')
+DB_PATH = os.path.join(DIR_DATOS, 'escuela.db')
 
 
 def _cargar_nombre_mapeos():

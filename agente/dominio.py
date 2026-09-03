@@ -10,11 +10,11 @@ import crud
 import gestion
 import historia
 
-# El paquete vive en AppMitre/agente/, así que la raíz del proyecto —donde están las DB
-# y los JSON de historias— es el directorio de ARRIBA. Cuando esto era un módulo suelto
+# El paquete vive en AppMitre/agente/, así que la raíz del proyecto —donde están los JSON
+# de historias y `agente.md`— es el directorio de ARRIBA. Cuando esto era un módulo suelto
 # alcanzaba con dirname(abspath(__file__)); al bajar un nivel hay que volver a subirlo, o
-# las rutas apuntarían a AppMitre/agente/ y SQLite crearía ahí una gestion.db vacía en vez
-# de fallar, que es la clase de error que no se nota hasta que falta el inventario entero.
+# las rutas apuntarían a AppMitre/agente/. Las bases NO salen de acá: van por
+# `config.DIR_DATOS`, que es `database/` para todo el mundo.
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Módulos de dominio que el agente puede leer/escribir, por slug de entidad. Antes todo

@@ -34,10 +34,10 @@ from fpdf import FPDF, FontFace
 import accesos
 import crud
 import estudiantes
-from config import ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION, ahora
+from config import DIR_DATOS, ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION, ahora
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(_AQUI, 'salidas.db')
+DB_PATH = os.path.join(DIR_DATOS, 'salidas.db')
 PDF_DIR = os.path.join(_AQUI, 'salidas_pdfs')
 ANEXOS_JSON_DIR = os.path.join(_AQUI, 'Salidas')
 
