@@ -1,2 +1,36 @@
-{# Gestión usa el template genérico tal cual — ver templates/crud/login.html #}
-{% extends 'crud/login.html' %}
+{# La clave DE ESTE INVENTARIO, no la de la escuela. La pone el administrador general al
+   crearlo y con ella entra el encargado, que desde adentro decide quién más entra.
+   `accesos.registrar_acceso` renderiza esta página con el hook `contexto_login` de
+   gestion.py, que es de dónde sale `inventario`. #}
+{% extends base_template %}
+{% block titulo %}{{ inventario.nombre if inventario else 'Inventario' }}{% endblock %}
+{% block contenido %}
+<div class="g-toolbar">
+    <h2>{{ (inventario.nombre if inventario else 'Inventario') | upper }}</h2>
+</div>
+
+{% if error %}<div class="g-error">{{ error }}</div>{% endif %}
+
+{% if inventario and not inventario.clave_hash %}
+<div class="g-error">Este inventario todavía no tiene clave. Pedile a administración que
+    le ponga una desde la lista de inventarios.</div>
+{% else %}
+<form method="post" class="g-form" action="{{ url_for('gestion.login') }}">
+    <input type="hidden" name="next" value="{{ next }}">
+    <div class="g-field">
+        <label for="campo-clave">CLAVE DE ESTE INVENTARIO</label>
+        <input id="campo-clave" type="password" name="clave" required autofocus>
+        <span class="g-help">Es la clave del encargado de este inventario y no sirve para
+            ningún otro. Si te habilitaron por link, no necesitás clave: entrá con el link
+            que te mandaron.</span>
+    </div>
+    <div class="g-form-actions">
+        <button type="submit" class="g-btn">ENTRAR</button>
+    </div>
+</form>
+{% endif %}
+
+<div class="g-form-actions">
+    <a class="g-btn-outline" href="{{ url_for('inventarios.panel') }}">‹ TODOS LOS INVENTARIOS</a>
+</div>
+{% endblock %}

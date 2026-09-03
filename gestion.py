@@ -3,9 +3,19 @@
 # y el CRUD se lo da el motor genérico (crud.py). Lo que NO es genérico y vive acá entero:
 # el desglose de recursos por lugar, al final del archivo.
 #
-# Usa su propia DB (gestion.db): a diferencia de escuela.db, NO se regenera desde
-# Google Sheets y /api/actualizar no la toca. Es la única DB con datos propios de la app
-# (además de historia.db).
+# VARIOS INVENTARIOS, ESTANCOS. El área no es un inventario sino N: cada uno tiene su
+# propio archivo (`inventarios/<slug>.db`), su encargado, su clave y su gente. Lo que
+# separa a uno de otro no es un filtro sino el archivo: estando conectado a uno es
+# imposible leer el de al lado aunque a alguien se le olvide un WHERE.
+#
+#   gestion.db              el REGISTRO (tabla `inventarios`) + las tablas del agente
+#   inventarios/<slug>.db   recursos / recurso_unidades / kit_items / recurso_bajas
+#
+# QUIÉN PUEDE QUÉ. El admin general (`GESTION_CLAVE`) crea inventarios, les pone nombre y
+# clave y los elimina — y NO ve el contenido de ninguno: sus claves están en
+# `PERMISOS_AMBITO`, adonde el comodín '*' no llega (ver accesos.tiene). Adentro manda el
+# encargado, que entra con la clave del inventario y desde ahí invita y revoca, sólo ahí.
+# El encargado de un inventario es una persona cualquiera para el de al lado.
 #
 # Entidades: recursos.
 #
@@ -13,22 +23,39 @@
 # (retiro interno de recursos). Se sacaron por decisión de producto, no por deuda técnica:
 # ver dev-log/DECISIONS.md 2026-08-21 si se retoman.
 
+import contextlib
 import os
+import re
+import sqlite3
 import sys
 from datetime import datetime
 
 from config import ahora
-from flask import Blueprint, redirect, render_template, request, url_for
+from flask import (Blueprint, abort, g, has_request_context, redirect,
+                   render_template, request, session, url_for)
+from werkzeug.security import check_password_hash, generate_password_hash
 
 import accesos
 import crud
+import respaldos
 import texto
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gestion.db')
+RAIZ = os.path.dirname(os.path.abspath(__file__))
+# El registro. Comparte archivo con las tablas del agente (ver agente/db.py), que nunca
+# fueron de un inventario en particular.
+DB_PATH = os.path.join(RAIZ, 'gestion.db')
+DIR_INVENTARIOS = os.path.join(RAIZ, 'inventarios')
+
+# Slugs que no puede tomar un inventario porque son rutas del registro (`/gestion/admin/…`,
+# `/gestion/login`). Sin esto, un inventario llamado "admin" se comería el panel.
+SLUGS_RESERVADOS = {'admin', 'login', 'salir', 'static'}
 
 # Permisos que declara el área al catálogo de `accesos`. El VERBO es lo que hace que un
 # perfil los agarre solo: 'leer' entra en interno-lectura, 'escribir' en interno-gestion.
 PERMISOS = [
+    # La ÚNICA clave del área sin ámbito, y la única que tiene el admin general: administrar
+    # la LISTA de inventarios. No abre ninguno — ver PERMISOS_AMBITO más abajo.
+    ('inventarios.admin', 'Crear, renombrar y eliminar inventarios (sin ver su contenido)', 'admin'),
     ('gestion.leer', 'Ver el inventario', 'leer'),
     ('gestion.editar', 'Cargar, editar y eliminar recursos', 'escribir'),
     # Verbo 'admin' = no entra en ningún preset de interno (ver accesos.PERFILES, que los
@@ -44,29 +71,300 @@ PERMISOS = [
     # re-codifica), así que es una operación de mantenimiento del inventario y no parte de
     # cargar un recurso. Subir y borrar fotos siguen siendo de `gestion.editar`.
     ('gestion.rotar', 'Rotar las fotos de un recurso', 'admin'),
+    # Quién reparte los permisos DE ESTE inventario. Lo tiene el encargado por haber
+    # entrado con la clave, y lo puede delegar en alguien más desde su propio panel.
+    ('gestion.accesos', 'Administrar quién entra a este inventario', 'admin'),
 ]
 GRUPO_PERMISOS = 'Gestión de recursos'
+
+# Las claves que valen SÓLO adentro de un inventario. Son las mismas de siempre —nada en
+# crud.py, en los templates ni en las tools del agente cambió de nombre—, pero se guardan
+# prefijadas (`inv:7/gestion.editar`) y el comodín '*' no las alcanza. Ese detalle es todo
+# el aislamiento: tener `gestion.editar` en el taller no es tenerlo en el laboratorio, y
+# ser el admin de la escuela no es ser el encargado de ningún inventario.
+PERMISOS_AMBITO = frozenset({
+    'gestion.leer', 'gestion.editar', 'gestion.alias', 'gestion.auditoria',
+    'gestion.rotar', 'gestion.accesos',
+})
+
 PERMISO_LECTURA = 'gestion.leer'
 PERMISO_ESCRITURA = 'gestion.editar'
 PERMISO_ALIAS = 'gestion.alias'
 PERMISO_AUDITORIA = 'gestion.auditoria'
+PERMISO_ACCESOS = 'gestion.accesos'
+PERMISO_REGISTRO = 'inventarios.admin'
 # Hook opcional que lee crud.py: quién puede girar una foto ya cargada. Si un área no lo
 # declara (historia), el botón pide el permiso de escritura de siempre.
 PERMISO_ROTAR_FOTO = 'gestion.rotar'
 
 # Respaldos rotativos: la maquinaria vive en respaldos.py (capa 0). Acá sólo se declara
-# con qué prefijo se guardan y qué tabla mirar para saber si la DB tiene datos de verdad
-# (una DB vacía no se respalda: taparía los respaldos buenos).
-PREFIJO_BACKUP = 'gestion'
+# qué tabla mirar para saber si la DB tiene datos de verdad (una DB vacía no se respalda:
+# taparía los respaldos buenos). El PREFIJO ya no es una constante: hay uno por inventario
+# (ver `prefijo_backup`), o los respaldos de cada uno se comerían los del resto.
 TABLA_TESTIGO = 'recursos'
+PREFIJO_BACKUP_REGISTRO = 'gestion-registro'
 
-bp = Blueprint('gestion', __name__, url_prefix='/gestion')
+bp = Blueprint('gestion', __name__, url_prefix='/gestion/<inv>')
 
 
 def conectar():
-    """Conexión a gestion.db — `crud.conectar` con esta área ya puesta. Las rutas propias
-    (alias, desglose por ubicación, que no pasan por el motor genérico) la usan directo."""
+    """Conexión al .db del inventario ACTIVO — `crud.conectar` con esta área ya puesta.
+    Las rutas propias (alias, desglose por ubicación, que no pasan por el motor genérico)
+    la usan directo."""
     return crud.conectar(sys.modules[__name__])
+
+
+# ---------------------------------------------------------------------------
+# El registro: qué inventarios hay
+# ---------------------------------------------------------------------------
+# Vive en `gestion.db`, que a partir de acá NO tiene recursos: sólo la lista y las tablas
+# del agente. La clave va hasheada (werkzeug, que ya viene con Flask) y puede ser NULL —
+# un inventario sin clave existe pero no lo abre nadie, que es como queda el que migró del
+# inventario único hasta que el admin le pone la suya.
+
+SCHEMA_REGISTRO = """
+CREATE TABLE IF NOT EXISTS inventarios (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug       TEXT NOT NULL UNIQUE,
+    nombre     TEXT NOT NULL,
+    clave_hash TEXT,
+    creado     TEXT NOT NULL
+);
+"""
+
+
+def conectar_registro():
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    return con
+
+
+def slugificar(nombre, cur=None):
+    """"Taller de Electrónica" -> "taller-de-electronica", único y sin pisar una ruta.
+
+    El slug es la URL del inventario y NO se renombra nunca: los permisos guardados
+    apuntan al id, pero los links que la gente tiene guardados apuntan al slug.
+    """
+    base = re.sub(r'[^a-z0-9]+', '-', texto.norm(nombre)).strip('-')[:40] or 'inventario'
+    cerrar = cur is None
+    con = conectar_registro() if cerrar else None
+    cur = con.cursor() if cerrar else cur
+    tomados = {f['slug'] for f in cur.execute("SELECT slug FROM inventarios").fetchall()}
+    tomados |= SLUGS_RESERVADOS
+    slug, n = base, 1
+    while slug in tomados:
+        n += 1
+        slug = f'{base}-{n}'
+    if cerrar:
+        con.close()
+    return slug
+
+
+def listar_inventarios():
+    """Todos, por nombre. Cada uno con `total` (cuántos recursos tiene) y `sin_clave`.
+
+    El total es un agregado, no contenido: es lo único que el admin general ve de adentro,
+    y es lo que hace que el panel del registro sirva para algo.
+    """
+    con = conectar_registro()
+    filas = con.execute("SELECT * FROM inventarios ORDER BY nombre COLLATE NOCASE").fetchall()
+    con.close()
+    salida = []
+    for fila in filas:
+        d = dict(fila)
+        d['total'] = total_recursos(d['slug'])
+        d['sin_clave'] = not d['clave_hash']
+        salida.append(d)
+    return salida
+
+
+def inventario(slug):
+    """La fila de un inventario por slug, o None. Cacheada por request: la piden el gate,
+    los permisos, la conexión y el header, todos en el mismo ciclo."""
+    if not slug:
+        return None
+    cache = None
+    if has_request_context():
+        cache = g.setdefault('_inventarios', {})
+        if slug in cache:
+            return cache[slug]
+    con = conectar_registro()
+    fila = con.execute("SELECT * FROM inventarios WHERE slug = ?", (slug,)).fetchone()
+    con.close()
+    fila = dict(fila) if fila else None
+    if cache is not None:
+        cache[slug] = fila
+    return fila
+
+
+def inventario_por_id(inv_id):
+    con = conectar_registro()
+    fila = con.execute("SELECT * FROM inventarios WHERE id = ?", (inv_id,)).fetchone()
+    con.close()
+    return dict(fila) if fila else None
+
+
+def crear_inventario(nombre, clave):
+    """Crea la fila y el archivo. Devuelve la fila, o None si el nombre viene vacío.
+
+    La clave la pone el admin general acá y es la del inventario: no hay cambio de clave
+    desde adentro (si se pierde, se re-fija desde el mismo panel donde se puso).
+    """
+    nombre = ' '.join((nombre or '').split())[:80]
+    if len(nombre) < 2:
+        return None
+    con = conectar_registro()
+    cur = con.cursor()
+    slug = slugificar(nombre, cur)
+    cur.execute(
+        "INSERT INTO inventarios (slug, nombre, clave_hash, creado) VALUES (?,?,?,?)",
+        (slug, nombre, generate_password_hash(clave) if clave else None,
+         ahora().strftime('%Y-%m-%d %H:%M:%S')))
+    con.commit()
+    con.close()
+    init_inventario(slug)
+    return inventario(slug)
+
+
+def renombrar_inventario(inv_id, nombre):
+    """Cambia el nombre visible. El slug NO se toca: es la URL que la gente ya tiene
+    guardada, y el ámbito de los permisos apunta al id, así que nada se rompe."""
+    nombre = ' '.join((nombre or '').split())[:80]
+    if len(nombre) < 2:
+        return False
+    con = conectar_registro()
+    con.execute("UPDATE inventarios SET nombre = ? WHERE id = ?", (nombre, inv_id))
+    con.commit()
+    con.close()
+    return True
+
+
+def fijar_clave(inv_id, clave):
+    """Pone (o repone) la clave del inventario. Es el botón de pánico: cambia la huella,
+    así que las sesiones de quien había entrado con la anterior dejan de valer en el
+    request siguiente (ver `_acceso_encargado`)."""
+    if not clave:
+        return False
+    con = conectar_registro()
+    con.execute("UPDATE inventarios SET clave_hash = ? WHERE id = ?",
+                (generate_password_hash(clave), inv_id))
+    con.commit()
+    con.close()
+    return True
+
+
+def eliminar_inventario(inv_id):
+    """Borra el inventario entero: respalda el .db, lo borra, saca la fila del registro y
+    limpia de `accesos.db` todo permiso que apuntara ahí.
+
+    Sin ese último paso quedarían claves colgadas (`inv:7/gestion.editar`) que un id
+    reciclado por AUTOINCREMENT podría llegar a revivir.
+    """
+    fila = inventario_por_id(inv_id)
+    if fila is None:
+        return False
+    ruta = os.path.join(DIR_INVENTARIOS, f"{fila['slug']}.db")
+    if os.path.exists(ruta):
+        # El último respaldo queda: borrar un inventario por error no puede ser definitivo.
+        respaldos.respaldar(ruta, f"inv{fila['id']}", TABLA_TESTIGO)
+        os.remove(ruta)
+    con = conectar_registro()
+    con.execute("DELETE FROM inventarios WHERE id = ?", (inv_id,))
+    con.commit()
+    con.close()
+    accesos.purgar_ambito(f"inv:{fila['id']}")
+    return True
+
+
+def total_recursos(slug):
+    """Cuántos recursos tiene, sin abrir el inventario para escribir. -1 si el archivo no
+    está (un inventario recién creado que todavía no se inicializó, o uno que perdió su
+    .db): el panel lo muestra como un aviso y no como un cero, que mentiría."""
+    ruta = os.path.join(DIR_INVENTARIOS, f'{slug}.db')
+    if not os.path.exists(ruta):
+        return -1
+    try:
+        con = sqlite3.connect(f'file:{ruta}?mode=ro', uri=True)
+        try:
+            return con.execute(f"SELECT COUNT(*) FROM {TABLA_TESTIGO}").fetchone()[0]
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return -1
+
+
+# ---------------------------------------------------------------------------
+# Cuál es el inventario de ESTE request
+# ---------------------------------------------------------------------------
+# Tres fuentes, en orden: el forzado (scripts de consola y el arranque, que corren sin
+# request), la URL (`/gestion/<inv>/…`) y la sesión (`inv_activo`, que es lo que le
+# permite al agente saber de qué inventario está hablando cuando el chat se abre en
+# `/agente` y no adentro de una ficha).
+
+_FORZADO = None
+
+
+@contextlib.contextmanager
+def usando(slug):
+    """Fija el inventario activo a mano. Para el arranque, `actualizar.py` y cualquier
+    cosa que corra fuera de un request."""
+    global _FORZADO
+    previo, _FORZADO = _FORZADO, slug
+    try:
+        yield
+    finally:
+        _FORZADO = previo
+
+
+def slug_activo():
+    if _FORZADO:
+        return _FORZADO
+    if not has_request_context():
+        return None
+    return getattr(g, 'inv', None) or session.get('inv_activo')
+
+
+def inventario_activo():
+    return inventario(slug_activo())
+
+
+def db_path():
+    """Hook de crud.py: el archivo del inventario activo.
+
+    Revienta si no hay ninguno, y es a propósito: significa que algo llamó al CRUD de
+    gestión fuera de un inventario, y devolver una base cualquiera sería peor. En la web no
+    puede pasar (el blueprint lleva el `<inv>` en la URL); en el agente tampoco, porque sin
+    inventario activo no hay `gestion.leer` y las tools ni se le ofrecen al modelo.
+    """
+    inv = inventario_activo()
+    if inv is None:
+        raise RuntimeError(
+            "No hay inventario activo: se pidió la DB de gestión fuera de un inventario.")
+    return os.path.join(DIR_INVENTARIOS, f"{inv['slug']}.db")
+
+
+def prefijo_backup():
+    """Hook de crud.py. Va por id y no por slug para que dos slugs parecidos ("taller" y
+    "taller-2") no compartan rotación: `respaldos.listar` globea `<prefijo>-*.db`."""
+    inv = inventario_activo()
+    return f"inv{inv['id']}" if inv else PREFIJO_BACKUP_REGISTRO
+
+
+def ambito():
+    """El ámbito de `accesos` para el inventario activo: `inv:7`.
+
+    Por id y no por slug para que el ámbito sobreviva a cualquier cosa que se le haga al
+    nombre; el slug es de la URL, el id es de los permisos.
+    """
+    inv = inventario_activo()
+    return f"inv:{inv['id']}" if inv else None
+
+
+def init_inventario(slug):
+    """Crea/migra/respalda el .db de UN inventario, con el motor de siempre."""
+    os.makedirs(DIR_INVENTARIOS, exist_ok=True)
+    with usando(slug):
+        crud.init_db(sys.modules[__name__])
 
 # Un recurso NUNCA se borra: se da de baja (ver `dar_de_baja` y la tabla `recurso_bajas`).
 # Por eso "Dado de baja" NO está acá: no es un estado que se elija a mano en el formulario
@@ -144,6 +442,8 @@ LIMPIEZA_M2M = {
     'recursos': [('recurso_unidades', 'recurso_id'), ('kit_items', 'recurso_id')],
 }
 
+# El schema de UN inventario (`inventarios/<slug>.db`). El del registro, que vive en
+# gestion.db, es SCHEMA_REGISTRO — son dos bases distintas y ninguna referencia a la otra.
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS recursos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -258,22 +558,10 @@ def migrar(cur):
             (r['id'], r['nombre'], 'Otro', 'Baja anterior al registro: no se anotó el motivo.'))
 
 
-def seed(cur):
-    """Datos de ejemplo: el banco de ensayo solar del documento de diseño."""
-    recursos = [
-        ("Panel solar 100W", "Equipo", "Panel fotovoltaico monocristalino de 100W usado para prácticas de energías renovables.", "Funcional", "Taller de Electricidad"),
-        ("Estructura regulable", "Estructura", "Estructura metálica con ángulo de inclinación regulable, construida en la escuela.", "Funcional", "Taller de Electricidad"),
-        ("Inclinómetro digital", "Instrumento", "Medidor digital de ángulo de inclinación.", "Funcional", "Pañol"),
-        ("Multímetro", "Instrumento", "Multímetro digital para medición de tensión, corriente y resistencia.", "Funcional", "Pañol"),
-        ("Pinza amperométrica", "Instrumento", "Pinza para medición de corriente sin abrir el circuito.", "Funcional", "Pañol"),
-    ]
-    for nombre, tipo, descripcion, estado, lugar in recursos:
-        cur.execute(
-            "INSERT INTO recursos (nombre, tipo, descripcion, estado) VALUES (?,?,?,?)",
-            (nombre, tipo, descripcion, estado))
-        cur.execute(
-            "INSERT INTO recurso_unidades (recurso_id, numero, ubicacion) VALUES (?,1,?)",
-            (cur.lastrowid, lugar))
+# No hay `seed`: un inventario nuevo arranca VACÍO a propósito. Los datos de ejemplo
+# tenían sentido cuando el área era una sola base que se creaba una vez; ahora se crea una
+# por inventario y sembrar el banco de ensayo solar en cada uno sería ruido que después hay
+# que borrar a mano.
 
 
 # Qué decir cuando un UNIQUE de la DB rechaza el guardado (si no, sale un 500 pelado).
@@ -341,8 +629,22 @@ def resultados_extra_busqueda(slug, q, cur):
 
 
 def init_db():
-    """Lo hace el motor; queda como nombre estable para app.py e init_gestion.py."""
-    crud.init_db(sys.modules[__name__])
+    """Crea/actualiza el registro y pone al día el .db de cada inventario.
+
+    El registro no pasa por `crud.init_db` por lo mismo que `accesos.db`: aquél hace
+    `raise` si la tabla testigo está vacía y hay respaldos, y un registro sin inventarios
+    es un estado legítimo (es como nace una instalación nueva). Los inventarios en cambio
+    SÍ pasan por el motor, uno por uno: es lo que les hace el respaldo rotativo en cada
+    arranque y lo que mantiene viva la guarda anti-pérdida de cada archivo.
+    """
+    os.makedirs(DIR_INVENTARIOS, exist_ok=True)
+    respaldos.respaldar(DB_PATH, PREFIJO_BACKUP_REGISTRO, 'inventarios')
+    con = conectar_registro()
+    con.executescript(SCHEMA_REGISTRO)
+    con.commit()
+    con.close()
+    for fila in listar_inventarios():
+        init_inventario(fila['slug'])
 
 
 def extras_template(vista, slug, id=None):
@@ -374,13 +676,275 @@ def extras_template(vista, slug, id=None):
 
 def contexto_extra():
     """Constantes que necesitan varios templates del área: el estado que marca una baja
-    (para no repetir el string suelto en el listado y la ficha) y los motivos del cuadro
-    de baja del formulario."""
-    return {'estado_baja': ESTADO_BAJA, 'motivos_baja': MOTIVOS_BAJA}
+    (para no repetir el string suelto en el listado y la ficha), los motivos del cuadro de
+    baja del formulario, y cuál es el inventario abierto — que el header muestra al lado
+    del título, porque con varios hay que saber en cuál se está escribiendo."""
+    return {'estado_baja': ESTADO_BAJA, 'motivos_baja': MOTIVOS_BAJA,
+            'inventario': inventario_activo(), 'permiso_accesos': PERMISO_ACCESOS}
 
 
-accesos.registrar_acceso(bp, PERMISO_LECTURA)
+# ---------------------------------------------------------------------------
+# El gate de un inventario
+# ---------------------------------------------------------------------------
+# `bp` está montado en `/gestion/<inv>`, y el par preprocessor/url_defaults es lo que hace
+# que ningún `url_for('gestion.…')` de los templates tenga que enterarse: el `<inv>` sale
+# de la URL al entrar y se vuelve a poner solo al construir cualquier link del área.
+
+@bp.url_value_preprocessor
+def _tomar_inventario(endpoint, valores):
+    g.inv = (valores or {}).pop('inv', None)
+    if inventario(g.inv) is None:
+        abort(404)
+
+
+@bp.url_defaults
+def _poner_inventario(endpoint, valores):
+    if 'inv' not in valores and getattr(g, 'inv', None):
+        valores['inv'] = g.inv
+
+
+# La clave de un inventario en la sesión: {'<id>': '<huella del hash>'}. Se guarda la
+# huella y no un booleano por lo mismo que la sesión de admin guarda la de GESTION_CLAVE
+# (ver accesos.huella_clave): re-fijar la clave corta en el acto lo que abría la anterior.
+CLAVES_SESION = 'inv_claves'
+
+
+def _huella(clave_hash):
+    return (clave_hash or '')[-12:]
+
+
+def _acceso_encargado():
+    """Hook de `accesos`: lo que aporta haber entrado con la clave del inventario activo.
+
+    Es un acceso que se SUMA al que ya haya (o el único que hay: el encargado del taller no
+    tiene por qué ser un dispositivo invitado de nada). Da el juego completo de ESE
+    inventario y nada más — en el de al lado esta misma persona no tiene nada.
+    """
+    inv = inventario_activo()
+    if inv is None or not inv['clave_hash']:
+        return None
+    guardada = (session.get(CLAVES_SESION) or {}).get(str(inv['id']))
+    if not guardada or guardada != _huella(inv['clave_hash']):
+        return None
+    return {'tipo': 'inventario', 'nombre': f"Encargado · {inv['nombre']}",
+            'permisos': PERMISOS_AMBITO}
+
+
+def _entrar_inventario(clave):
+    """Hook de `accesos.registrar_acceso`: qué valida `/gestion/<inv>/login`.
+
+    NO hace `session.clear()`, a diferencia del login de admin: entrar al taller no puede
+    echarte del laboratorio ni cortarte la conversación del agente.
+    """
+    inv = inventario_activo()
+    if inv is None or not inv['clave_hash'] or not check_password_hash(inv['clave_hash'], clave):
+        return False
+    session.permanent = True
+    claves = dict(session.get(CLAVES_SESION) or {})
+    claves[str(inv['id'])] = _huella(inv['clave_hash'])
+    session[CLAVES_SESION] = claves
+    session['inv_activo'] = inv['slug']
+    return True
+
+
+def _salir_inventario():
+    """Ídem para `/gestion/<inv>/salir`: cierra ESTE inventario, no la sesión entera."""
+    inv = inventario_activo()
+    if inv is not None:
+        claves = dict(session.get(CLAVES_SESION) or {})
+        claves.pop(str(inv['id']), None)
+        session[CLAVES_SESION] = claves
+    session.pop('inv_activo', None)
+
+
+def _contexto_login():
+    return {'inventario': inventario_activo()}
+
+
+accesos.registrar_ambito(ambito)
+accesos.registrar_acceso_extra(_acceso_encargado)
+accesos.registrar_acceso(bp, PERMISO_LECTURA, entrar=_entrar_inventario,
+                         al_salir=_salir_inventario, contexto_login=_contexto_login)
 crud.registrar_rutas(bp, sys.modules[__name__])
+
+
+@bp.before_request
+def _recordar_inventario():
+    """Deja anotado en la sesión en qué inventario se está trabajando.
+
+    Corre después del gate, así que sólo se anota uno al que el acceso puede entrar. Es lo
+    que le permite al asistente saber de qué inventario le están hablando cuando el chat se
+    abre en `/agente` y no adentro de una ficha (ver `slug_activo`).
+    """
+    if g.inv and session.get('inv_activo') != g.inv:
+        session['inv_activo'] = g.inv
+
+
+# ---------------------------------------------------------------------------
+# El panel del encargado: quién entra a ESTE inventario
+# ---------------------------------------------------------------------------
+# Es el panel de `/accesos` pero acotado: sólo reparte las claves del área, sólo ve los
+# dispositivos que tienen alguna de este inventario, y su "quitar" saca las de acá y
+# ninguna otra (ver accesos.quitar_ambito). El admin general no aparece por ningún lado —
+# su comodín no llega a estas claves.
+
+def _catalogo_inventario():
+    return [e for e in accesos.CATALOGO_AMBITO if e[3] == GRUPO_PERMISOS]
+
+
+def _perfiles_inventario():
+    """Los presets de siempre menos 'admin': el comodín '*' no es de un encargado."""
+    return [(p, accesos.ETIQUETA_PERFIL.get(p, p)) for p in accesos.PERFILES if p != 'admin']
+
+
+def _render_accesos(link_nuevo=None, link_multiuso=False, error=None):
+    catalogo = _catalogo_inventario()
+    return render_template(
+        'gestion/accesos.html', activo='accesos',
+        dispositivos=accesos.listar_dispositivos(ambito()),
+        invitaciones=accesos.listar_invitaciones(ambito()),
+        grupos=accesos.catalogo_por_grupo(catalogo),
+        perfiles=_perfiles_inventario(),
+        preset={p: accesos.permisos_de_perfil(p, catalogo) for p, _e in _perfiles_inventario()},
+        link_nuevo=link_nuevo, link_multiuso=link_multiuso, error=error)
+
+
+@bp.route('/accesos')
+@accesos.requiere(PERMISO_ACCESOS)
+def accesos_panel():
+    return _render_accesos()
+
+
+@bp.route('/accesos/invitar', methods=['POST'])
+@accesos.requiere(PERMISO_ACCESOS)
+def accesos_invitar():
+    etiqueta = ' '.join((request.form.get('etiqueta') or '').split())[:80]
+    if len(etiqueta) < 2:
+        return _render_accesos(error='Poné para quién es el link (te sirve a vos después).')
+
+    perfil = request.form.get('perfil', 'interno-lectura')
+    catalogo = _catalogo_inventario()
+    validos = {c for c, _e, _v, _g in catalogo}
+    if perfil not in dict(_perfiles_inventario()):
+        perfil = 'interno-lectura'
+    # La intersección con `validos` es el corte real: un POST a mano con
+    # `permisos=accesos.admin` no puede sacar una clave de afuera del inventario.
+    marcados = sorted(set(request.form.getlist('permisos')) & validos)
+    if not marcados:
+        return _render_accesos(error='Elegí al menos un permiso.')
+    if marcados != sorted(accesos.permisos_de_perfil(perfil, catalogo)):
+        perfil = 'custom'
+
+    multiuso = request.form.get('multiuso') == 'on'
+    token = accesos.crear_invitacion(etiqueta, perfil, marcados, multiuso=multiuso,
+                                     ambito=ambito())
+    return _render_accesos(link_nuevo=url_for('acceso_canjear_ver', token=token,
+                                              _external=True),
+                           link_multiuso=multiuso)
+
+
+@bp.route('/accesos/quitar/<int:disp_id>', methods=['POST'])
+@accesos.requiere(PERMISO_ACCESOS)
+def accesos_quitar(disp_id):
+    """Le saca a un dispositivo el acceso a ESTE inventario. Si no le quedaba nada más,
+    `quitar_ambito` lo revoca entero; si tenía el agente o el inventario de al lado, eso
+    sigue intacto — no es asunto de este panel."""
+    accesos.quitar_ambito(disp_id, ambito())
+    return redirect(url_for('gestion.accesos_panel'))
+
+
+@bp.route('/accesos/invitacion/<int:invitacion_id>/borrar', methods=['POST'])
+@accesos.requiere(PERMISO_ACCESOS)
+def accesos_borrar_invitacion(invitacion_id):
+    accesos.borrar_invitacion(invitacion_id, ambito())
+    return redirect(url_for('gestion.accesos_panel'))
+
+
+# ---------------------------------------------------------------------------
+# El registro: /gestion, la lista de inventarios
+# ---------------------------------------------------------------------------
+# Blueprint aparte porque no cuelga de ningún inventario. Su permiso base es None: la
+# lista la ve cualquiera que esté identificado —le muestra los que puede abrir— y lo que
+# pide `inventarios.admin` son las acciones, marcadas una por una con `requiere()`.
+#
+# Las rutas de administración cuelgan de `/gestion/admin/...` y no de `/gestion/<id>/...`
+# para no chocar con `/gestion/<inv>/<slug>` del área (ver SLUGS_RESERVADOS).
+
+bp_inv = Blueprint('inventarios', __name__, url_prefix='/gestion')
+
+
+@bp_inv.context_processor
+def _contexto_registro():
+    from config import ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION
+    return {'escuela_nombre': ESCUELA_NOMBRE, 'escuela_logo': ESCUELA_LOGO,
+            'escuela_version': ESCUELA_VERSION, 'area_nombre': 'inventarios',
+            'base_template': 'inventarios/base.html'}
+
+
+def _puede_abrir(fila):
+    """¿Este acceso entra a este inventario sin tipear la clave?
+
+    Se pregunta por el ámbito de ESA fila y no con `puede()`, porque `puede()` responde
+    siempre sobre el inventario activo y acá se está listando otro. El admin general da que
+    no, y es correcto: su comodín no llega a `gestion.leer` (ver PERMISOS_AMBITO).
+    """
+    if fila['clave_hash'] and (session.get(CLAVES_SESION) or {}).get(
+            str(fila['id'])) == _huella(fila['clave_hash']):
+        return True
+    return accesos.tiene(accesos.permisos_en(f"inv:{fila['id']}"), PERMISO_LECTURA)
+
+
+@bp_inv.route('/')
+def panel():
+    """La lista. Para el admin general es el tablero de altas y bajas; para el resto es
+    nada más la puerta: los inventarios que puede abrir, y un candado en los otros."""
+    filas = listar_inventarios()
+    for f in filas:
+        f['abre'] = _puede_abrir(f)
+    return render_template('inventarios/panel.html', inventarios=filas, activo='inventarios',
+                           error=request.args.get('error'))
+
+
+@bp_inv.route('/admin/crear', methods=['POST'])
+@accesos.requiere(PERMISO_REGISTRO)
+def crear():
+    fila = crear_inventario(request.form.get('nombre', ''), request.form.get('clave', ''))
+    if fila is None:
+        return redirect(url_for('inventarios.panel', error='Poné un nombre.'))
+    return redirect(url_for('inventarios.panel'))
+
+
+@bp_inv.route('/admin/<int:inv_id>/renombrar', methods=['POST'])
+@accesos.requiere(PERMISO_REGISTRO)
+def renombrar(inv_id):
+    renombrar_inventario(inv_id, request.form.get('nombre', ''))
+    return redirect(url_for('inventarios.panel'))
+
+
+@bp_inv.route('/admin/<int:inv_id>/clave', methods=['POST'])
+@accesos.requiere(PERMISO_REGISTRO)
+def clave(inv_id):
+    if not fijar_clave(inv_id, request.form.get('clave', '')):
+        return redirect(url_for('inventarios.panel', error='La clave no puede quedar vacía.'))
+    return redirect(url_for('inventarios.panel'))
+
+
+@bp_inv.route('/admin/<int:inv_id>/eliminar', methods=['POST'])
+@accesos.requiere(PERMISO_REGISTRO)
+def eliminar(inv_id):
+    """Borra el inventario entero. El formulario exige escribir el nombre: es lo único
+    irreversible del panel (queda el último respaldo, ver `eliminar_inventario`)."""
+    fila = inventario_por_id(inv_id)
+    if fila is None:
+        abort(404)
+    if texto.norm(request.form.get('confirmar', '')) != texto.norm(fila['nombre']):
+        return redirect(url_for('inventarios.panel',
+                                error='Para eliminar hay que escribir el nombre exacto.'))
+    eliminar_inventario(inv_id)
+    return redirect(url_for('inventarios.panel'))
+
+
+accesos.registrar_acceso(bp_inv, None, endpoint_default='panel')
 
 
 def _int(texto):

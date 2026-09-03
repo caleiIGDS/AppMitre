@@ -58,9 +58,10 @@
        Un link por permiso, renderizado en el server. #}
     {% if acceso_actual() %}
     <nav class="g-areas" aria-label="Áreas">
-        {% if puede('gestion.leer') %}
-        <a href="{{ url_for('gestion.home') }}">GESTIÓN DE RECURSOS</a>
-        {% endif %}
+        {# El link va al REGISTRO y no a un inventario: cuál se abre lo decide esa
+           página, que muestra los que este acceso puede abrir. Sin condición de permiso
+           porque `gestion.leer` es de UN inventario y acá no hay ninguno activo. #}
+        <a href="{{ url_for('inventarios.panel') }}">INVENTARIOS</a>
         {% if 'historia' in areas and puede('historia.leer') %}
         <a href="{{ url_for('historia.home') }}">HISTORIA INSTITUCIONAL</a>
         {% endif %}

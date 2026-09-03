@@ -17,7 +17,7 @@ import gestion
 import historia
 
 from .. import PERMISO_NOTAS, PERMISO_VISION
-from ..dominio import SLUGS_ENTIDAD, _modulo
+from ..dominio import SLUGS_ENTIDAD, _modulo, permisos_entidad
 
 # El área de historia puede estar apagada (`historia.ACTIVA`, hoy False) y entonces el
 # modelo no se tiene que enterar de que existió: ni la tool de la línea del tiempo, ni los
@@ -901,11 +901,27 @@ TOOLS_AUDITADAS = TOOLS_ESCRITURA | frozenset(['escribir_notas'])
 TOOLS_NOTAS = frozenset(['escribir_notas'])
 
 
-# Slugs que piden un permiso propio además del del área (hoy sólo `personas`). Sale de las
-# `ENTIDADES` de cada área y no de una lista a mano, igual que SLUGS_ENTIDAD: una entidad
-# que mañana se esconda entra sola acá.
-PERMISO_POR_SLUG = {s: crud.permiso_entidad(_modulo(s), s) for s in SLUGS_ENTIDAD
-                    if crud.permiso_entidad(_modulo(s), s)}
+# Qué permisos pide cada slug: el de lectura de su área más el propio de la entidad, si
+# declaró uno (`personas`). Sale de las `ENTIDADES` de cada área y no de una lista a mano,
+# igual que SLUGS_ENTIDAD.
+#
+# Que el permiso del ÁREA entre acá es lo que ata el asistente al inventario abierto: desde
+# que gestión son varios, `gestion.leer` sólo vale adentro de uno (ver PERMISOS_AMBITO), y
+# `agente.leer` por sí solo ya no alcanza para pedirle recursos a nadie. Sin inventario
+# abierto, `recursos` se cae de todos los enum y las tools que se quedan sin ningún slug
+# directamente no viajan.
+PERMISO_POR_SLUG = {s: permisos_entidad(s) for s in SLUGS_ENTIDAD}
+
+# Tools que tocan una entidad SIN recibir el slug (los sub-recursos de un kit y las
+# unidades son siempre de `recursos`). No pueden pasar por PERMISO_POR_SLUG, así que
+# declaran a mano qué ámbito necesitan. Se pide ADEMÁS del permiso de PERMISO_POR_TOOL, no
+# en su lugar: el asistente sigue teniendo permisos propios para escribir (ver
+# agente/__init__.py), lo que esto agrega es "y adentro de un inventario que puedas ver".
+PERMISO_EXTRA_POR_TOOL = {
+    'editar_sub_recurso': gestion.PERMISO_LECTURA,
+    'eliminar_sub_recurso': gestion.PERMISO_LECTURA,
+    'mover_ubicacion': gestion.PERMISO_LECTURA,
+}
 
 
 def _sin_slugs(esquema, prohibidos):
@@ -948,12 +964,35 @@ def tools_permitidas(permisos):
     `adjuntar_foto` no viajan. Si viajaran, el modelo ofrecería leer una foto que el
     usuario no tiene forma de mandarle.
     """
-    prohibidos = {s for s, p in PERMISO_POR_SLUG.items() if not accesos.tiene(permisos, p)}
+    prohibidos = {s for s, ps in PERMISO_POR_SLUG.items()
+                  if not all(accesos.tiene(permisos, p) for p in ps)}
     ve_fotos = accesos.tiene(permisos, PERMISO_VISION)
-    return [_sin_slugs(t, prohibidos) if prohibidos else t
-            for t in TOOLS_SCHEMA
-            if accesos.tiene(permisos, PERMISO_POR_TOOL[t['name']])
-            and (ve_fotos or t['name'] not in TOOLS_FOTO)]
+
+    def pasa(t):
+        extra = PERMISO_EXTRA_POR_TOOL.get(t['name'])
+        return (accesos.tiene(permisos, PERMISO_POR_TOOL[t['name']])
+                and (extra is None or accesos.tiene(permisos, extra))
+                and (ve_fotos or t['name'] not in TOOLS_FOTO))
+
+    salida = []
+    for t in TOOLS_SCHEMA:
+        if not pasa(t):
+            continue
+        recortada = _sin_slugs(t, prohibidos) if prohibidos else t
+        # Una tool que se quedó sin ningún slug no se manda: un enum vacío no es una
+        # herramienta más chica, es una que el modelo no puede llamar de ninguna forma
+        # válida. Sin inventario abierto es lo que hace desaparecer las siete tools de
+        # entidades en vez de ofrecerlas rotas.
+        if _sin_opciones(recortada):
+            continue
+        salida.append(recortada)
+    return salida
+
+
+def _sin_opciones(esquema):
+    """True si alguna propiedad del esquema quedó con el enum vacío."""
+    return any(prop.get('enum') == []
+               for prop in esquema['input_schema'].get('properties', {}).values())
 
 
 def slug_visible(tools, slug):

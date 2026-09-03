@@ -20,8 +20,9 @@ from ..vision import MODO_DEFAULT
 from .entidades import (_buscar_entidad_fmt, _desvincular_entidad, _detalle_entidad_fmt,
                         _editar_entidad, _eliminar_entidad, _listar_alias_fmt,
                         _listar_todos_fmt, _vincular_entidad)
-from .esquemas import (PERMISO_POR_TOOL, TOOLS_AUDITADAS, TOOLS_ESCRITURA, TOOLS_FOTO,
-                       TOOLS_NOTAS, TOOLS_SCHEMA, slug_visible, tools_permitidas)
+from .esquemas import (PERMISO_EXTRA_POR_TOOL, PERMISO_POR_TOOL, TOOLS_AUDITADAS,
+                       TOOLS_ESCRITURA, TOOLS_FOTO, TOOLS_NOTAS, TOOLS_SCHEMA,
+                       slug_visible, tools_permitidas)
 from .fichas import _crear_entidad, _editar_sub_recurso, _eliminar_sub_recurso
 from .fotos import _adjuntar_foto_entidad, _leer_foto_fmt
 from .hitos import _buscar_hitos_fmt
@@ -77,7 +78,12 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
     # el chat no se recupera de ningún otro lado. Ver TOOLS_AUDITADAS.
     audita = tool_name in TOOLS_AUDITADAS
 
-    if not accesos.tiene(permisos, permiso):
+    # El extra de las tools que tocan una entidad sin recibir su slug (sub-recursos y
+    # unidades, siempre de `recursos`): sin el permiso de lectura del área no hay inventario
+    # abierto que valga. Ver esquemas.PERMISO_EXTRA_POR_TOOL.
+    extra = PERMISO_EXTRA_POR_TOOL.get(tool_name)
+    if not accesos.tiene(permisos, permiso) or (
+            extra is not None and not accesos.tiene(permisos, extra)):
         resultado = {'ok': False, 'error': 'Este acceso no tiene permiso para esa '
                                            'operación. No se ejecutó nada.'}
         # Un rechazo de escritura queda auditado: si aparece en /agente/log es que alguien

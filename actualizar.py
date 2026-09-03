@@ -12,6 +12,9 @@ importa a la otra (ver CLAUDE.md, criterio de capas):
   1. `hitos` / `personas` / `persona_hitos` se mudaron de `gestion.db` a `historia.db`.
   2. La entidad `proyectos` se eliminó: sus filas son hoy hitos con 'Proyecto' en
      `etiquetas`, y viven en la otra DB.
+  3. Gestión dejó de ser UN inventario y pasó a ser varios, uno por archivo: `recursos` y
+     sus tres tablas se van de `gestion.db` a `inventarios/<slug>.db`, y los permisos
+     `gestion.*` que había en `accesos.db` pasan a llevar el ámbito de ese inventario.
 
 En el equipo de desarrollo eso se corrió una vez con un script de un solo uso y se borró;
 una instalación que venga de un deploy anterior nunca lo vio. Sin esto, un `git pull` deja
@@ -81,6 +84,18 @@ def _tiene_columna(con, tabla, columna):
     return tabla in _tablas(con) and columna in _columnas(con, tabla)
 
 
+def _tablas_de(ruta):
+    """Las tablas de una DB por ruta, abriéndola y cerrándola. Para los chequeos sueltos
+    del diagnóstico, donde no vale la pena arrastrar una conexión."""
+    if not os.path.exists(ruta):
+        return set()
+    con = _conectar(ruta)
+    try:
+        return _tablas(con)
+    finally:
+        con.close()
+
+
 # ---------------------------------------------------------------------------
 # Paso 0 — diagnóstico
 # ---------------------------------------------------------------------------
@@ -106,6 +121,11 @@ def diagnostico():
                 print(f"    {tabla:<26} {_filas(con, tabla):>5} filas")
         finally:
             con.close()
+
+    for fila in (gestion.listar_inventarios() if os.path.exists(gestion.DB_PATH)
+                 and 'inventarios' in _tablas_de(gestion.DB_PATH) else []):
+        marca = ' · SIN CLAVE' if fila['sin_clave'] else ''
+        print(f"\ninventarios/{fila['slug']}.db: {fila['total']} recursos{marca}")
 
     escuela = os.path.join(RAIZ, 'horarios', 'escuela.db')
     print(f"\nhorarios/escuela.db: {'presente' if os.path.exists(escuela) else 'ausente'} "
@@ -393,6 +413,138 @@ def migrar_proyectos(dry):
 
 
 # ---------------------------------------------------------------------------
+# Paso 3.5 — el inventario único se convierte en el primero de varios
+# ---------------------------------------------------------------------------
+
+# Las tablas que dejan de ser de `gestion.db` y pasan a ser de cada inventario.
+TABLAS_INVENTARIO = ('recursos', 'recurso_unidades', 'kit_items', 'recurso_bajas')
+
+# Cómo se va a llamar el inventario que sale del que ya existía. Se le pone la clave desde
+# /gestion cuando el admin entra: hasta entonces no lo abre nadie, que es lo correcto —
+# nadie eligió todavía quién lo maneja.
+NOMBRE_INVENTARIO_INICIAL = 'General'
+
+
+def _permisos_sueltos(con, tabla):
+    """Filas de accesos.db con alguna clave `gestion.*` SIN ámbito: las que quedaron del
+    inventario único y hay que reapuntar."""
+    import json
+    pendientes = []
+    for fila in con.execute(f"SELECT id, permisos FROM {tabla}").fetchall():
+        claves = json.loads(fila['permisos'])
+        if any(c.startswith('gestion.') and '/' not in c for c in claves):
+            pendientes.append((fila['id'], claves))
+    return pendientes
+
+
+def mudar_a_inventarios(dry):
+    """Saca `recursos` y compañía de `gestion.db` y las pone en su propio inventario.
+
+    Dos mitades, cada una idempotente por su cuenta: mover las tablas (se saltea si
+    `gestion.db` ya no las tiene) y reapuntar los permisos de `accesos.db` (se saltea si ya
+    no queda ninguna clave `gestion.*` suelta). Sin la segunda, todos los dispositivos que
+    ya estaban habilitados se quedarían afuera del único inventario que existe.
+    """
+    import json
+
+    print("\n" + "=" * 70)
+    print("PASO 3.5 · El inventario único pasa a ser uno de varios")
+    print("=" * 70)
+
+    if not os.path.exists(gestion.DB_PATH):
+        print("  · gestion.db no existe todavía: no hay nada que mudar.")
+        return True
+
+    con_g = _conectar(gestion.DB_PATH)
+    try:
+        tablas_g = _tablas(con_g)
+        hay_que_mudar = 'recursos' in tablas_g
+        if hay_que_mudar:
+            filas = {t: _filas(con_g, t) for t in TABLAS_INVENTARIO if t in tablas_g}
+            detalle = ', '.join(f"{t} ({n})" for t, n in filas.items())
+            if dry:
+                print(f"  [dry-run] crearía el inventario «{NOMBRE_INVENTARIO_INICIAL}» "
+                      f"(sin clave, para que se la ponga el admin)")
+                print(f"  [dry-run] movería a inventarios/<slug>.db: {detalle}")
+                print("  [dry-run] y borraría esas tablas de gestion.db")
+            else:
+                gestion.init_db()   # crea la tabla `inventarios` y la carpeta
+                fila = gestion.crear_inventario(NOMBRE_INVENTARIO_INICIAL, None)
+                if fila is None:
+                    print("  ✗ no se pudo crear el inventario inicial.")
+                    return False
+                destino = os.path.join(gestion.DIR_INVENTARIOS, f"{fila['slug']}.db")
+                con_i = _conectar(destino)
+                try:
+                    for tabla in TABLAS_INVENTARIO:
+                        if tabla not in tablas_g:
+                            continue
+                        datos = con_g.execute(f"SELECT * FROM {tabla}").fetchall()
+                        if not datos:
+                            continue
+                        cols = list(datos[0].keys())
+                        marcas = ','.join('?' * len(cols))
+                        con_i.executemany(
+                            f"INSERT INTO {tabla} ({','.join(cols)}) VALUES ({marcas})",
+                            [tuple(d[c] for c in cols) for d in datos])
+                    con_i.commit()
+                finally:
+                    con_i.close()
+                for tabla in TABLAS_INVENTARIO:
+                    if tabla in tablas_g:
+                        con_g.execute(f"DROP TABLE {tabla}")
+                con_g.commit()
+                print(f"  ✓ inventario «{fila['nombre']}» (/gestion/{fila['slug']}): {detalle}")
+                print("    Todavía NO tiene clave: ponésela desde /gestion o no entra nadie.")
+        else:
+            print("  · gestion.db ya no tiene `recursos`: la mudanza ya estaba hecha.")
+    finally:
+        con_g.close()
+
+    # --- Los permisos de accesos.db ----------------------------------------
+    if not os.path.exists(accesos.DB_PATH):
+        return True
+    inventarios = gestion.listar_inventarios()
+    con_a = _conectar(accesos.DB_PATH)
+    try:
+        pendientes = {t: _permisos_sueltos(con_a, t)
+                      for t in ('dispositivos', 'invitaciones') if t in _tablas(con_a)}
+        total = sum(len(v) for v in pendientes.values())
+        if not total:
+            print("  · accesos.db: no quedan permisos `gestion.*` sin inventario.")
+            return True
+        if dry and hay_que_mudar and not inventarios:
+            # En dry-run el inventario todavía no existe: el reapunte iría a ése.
+            print(f"  [dry-run] reapuntaría {total} acceso(s) al inventario nuevo "
+                  f"«{NOMBRE_INVENTARIO_INICIAL}»")
+            return True
+        if len(inventarios) != 1:
+            AVISOS.append(
+                f"accesos.db tiene {total} acceso(s) con permisos `gestion.*` viejos y hay "
+                f"{len(inventarios)} inventarios: no se puede adivinar a cuál apuntan. "
+                f"Reasignalos a mano desde el panel de cada inventario.")
+            print(f"  ! {total} acceso(s) con permisos viejos y {len(inventarios)} "
+                  f"inventarios: no se tocan (ver avisos al final).")
+            return True
+        marca = f"inv:{inventarios[0]['id']}"
+        if dry:
+            print(f"  [dry-run] reapuntaría {total} acceso(s) a {marca} "
+                  f"(«{inventarios[0]['nombre']}»)")
+            return True
+        for tabla, filas in pendientes.items():
+            for fila_id, claves in filas:
+                nuevas = [f'{marca}/{c}' if c.startswith('gestion.') and '/' not in c else c
+                          for c in claves]
+                con_a.execute(f"UPDATE {tabla} SET permisos = ? WHERE id = ?",
+                              (json.dumps(sorted(set(nuevas))), fila_id))
+        con_a.commit()
+        print(f"  ✓ {total} acceso(s) reapuntados a «{inventarios[0]['nombre']}»")
+    finally:
+        con_a.close()
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Paso 4 — migraciones de schema de cada área
 # ---------------------------------------------------------------------------
 
@@ -437,16 +589,28 @@ def migraciones_de_schema(dry):
 # Paso 5 — limpieza de sobras (tablas y columnas que el código ya no declara)
 # ---------------------------------------------------------------------------
 
-# Qué SQL describe a cada DB. `gestion.db` tiene dos dueños: el área y el asistente, que
-# guarda ahí sus tablas de auditoría y sesión. Sin sumar las dos, la limpieza se comería
-# `agente_log` y compañía por creerlas sobras.
-DUENOS = (
-    (lambda: gestion.DB_PATH, lambda: (gestion.SCHEMA, agente_db.SCHEMA)),
+# Qué SQL describe a cada DB. `gestion.db` tiene dos dueños: el REGISTRO de inventarios y
+# el asistente, que guarda ahí sus tablas de auditoría y sesión. Sin sumar las dos, la
+# limpieza se comería `agente_log` y compañía por creerlas sobras. Ojo: desde la mudanza,
+# `gestion.SCHEMA` NO describe gestion.db sino cada `inventarios/<slug>.db`.
+DUENOS_FIJOS = (
+    (lambda: gestion.DB_PATH, lambda: (gestion.SCHEMA_REGISTRO, agente_db.SCHEMA)),
     (lambda: historia.DB_PATH, lambda: (historia.SCHEMA,)),
     (lambda: accesos.DB_PATH, lambda: (accesos.SCHEMA,)),
     (lambda: salidas.DB_PATH, lambda: (salidas.SCHEMA,)),
     (lambda: agente_registro.DB_PATH, lambda: (agente_registro.SCHEMA,)),
 )
+
+
+def _duenos():
+    """Los dueños fijos más UNO POR INVENTARIO, que se resuelven al vuelo porque la lista
+    depende de la DB y no del código. Es lo que hace que la limpieza de sobras siga
+    alcanzando a `recurso_ubicaciones` y compañía adentro de cada inventario."""
+    inventarios = gestion.listar_inventarios() if os.path.exists(gestion.DB_PATH) else []
+    return list(DUENOS_FIJOS) + [
+        (lambda slug=f['slug']: os.path.join(gestion.DIR_INVENTARIOS, f'{slug}.db'),
+         lambda: (gestion.SCHEMA,))
+        for f in inventarios]
 
 
 def _schema_de_referencia(*schemas):
@@ -494,7 +658,7 @@ def limpiar_sobras(dry, forzar):
 
     puede_drop_columna = sqlite3.sqlite_version_info >= SQLITE_MINIMO_DROP_COLUMN
 
-    for get_ruta, get_schemas in DUENOS:
+    for get_ruta, get_schemas in _duenos():
         ruta = get_ruta()
         if not os.path.exists(ruta):
             continue
@@ -554,7 +718,7 @@ def limpiar_sobras(dry, forzar):
 
     # Compactar: los DROP dejan páginas libres adentro del archivo, no lo achican.
     if not dry:
-        for get_ruta, _ in DUENOS:
+        for get_ruta, _ in _duenos():
             if os.path.exists(get_ruta()):
                 con = sqlite3.connect(get_ruta())
                 try:
@@ -586,8 +750,8 @@ def main():
 
     copia_de_seguridad(args.dry_run)
 
-    pasos = (mudar_a_historia, migrar_proyectos, migraciones_de_schema,
-             lambda dry: limpiar_sobras(dry, args.limpiar))
+    pasos = (mudar_a_historia, migrar_proyectos, mudar_a_inventarios,
+             migraciones_de_schema, lambda dry: limpiar_sobras(dry, args.limpiar))
     for paso in pasos:
         if not paso(args.dry_run):
             print("\n" + "=" * 70)

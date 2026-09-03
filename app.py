@@ -41,8 +41,11 @@ if PRODUCCION:
     # Para que los links de invitación (url_for con _external) salgan en https.
     app.config['PREFERRED_URL_SCHEME'] = 'https'
 
-# Gestión de recursos (/gestion) — módulo independiente con DB propia (gestion.db).
-# init_db() en import para que también corra bajo gunicorn/WSGI (no solo en __main__).
+# Gestión de recursos (/gestion) — N inventarios estancos, cada uno con su .db, su clave
+# y su encargado. Dos blueprints: `bp_inv` es el registro (/gestion, la lista) y `bp` es un
+# inventario abierto (/gestion/<inv>/...). init_db() en import para que también corra bajo
+# gunicorn/WSGI (no solo en __main__); pone al día el registro y cada inventario.
+app.register_blueprint(gestion.bp_inv)
 app.register_blueprint(gestion.bp)
 gestion.init_db()
 

@@ -10,7 +10,8 @@ que declara sus `ENTIDADES`.
 |---|---|---|
 | **Público** | nada | Casi nada: el canje de invitación (`/acceso/<token>`), el link de familias de salidas (`/salidas/completar/<token>`) y el visor `/salidas/normativa`. `/` redirige a `/horarios`, que tiene su propia contraseña (`HORARIOS_CLAVE`, fuera de este sistema) |
 | **Interno** | link de invitación de un solo uso → **dispositivo habilitado** | Lo que digan sus permisos |
-| **Admin** | `GESTION_CLAVE` en `/gestion/login` (o el de cualquier área) | Todo: tiene el comodín `'*'` |
+| **Admin** | `GESTION_CLAVE` en `/gestion/login` (o el de cualquier área) | Casi todo: tiene el comodín `'*'`, que **no** alcanza las claves con ámbito (ver abajo) |
+| **Encargado** | la clave de UN inventario, en `/gestion/<inv>/login` | Ese inventario entero y nada más. Puede no tener ningún otro acceso |
 
 La clave sigue existiendo **sólo** para el admin, y es a propósito: es el break-glass. Las `.db` no
 viajan por git, así que en una instalación nueva `accesos.db` nace vacía y no hay ningún dispositivo
@@ -25,12 +26,16 @@ Cada área declara los suyos como `(clave, etiqueta, verbo)`:
 ```python
 # gestion.py
 PERMISOS = [
-    ('gestion.leer',   'Ver el inventario', 'leer'),
-    ('gestion.editar', 'Cargar, editar y eliminar recursos', 'escribir'),
+    ('inventarios.admin', 'Crear, renombrar y eliminar inventarios', 'admin'),
+    ('gestion.leer',      'Ver el inventario', 'leer'),
+    ('gestion.editar',    'Cargar, editar y eliminar recursos', 'escribir'),
 ]
 GRUPO_PERMISOS    = 'Gestión de recursos'   # título bajo el que se agrupan en el panel
 PERMISO_LECTURA   = 'gestion.leer'          # el piso del área
 PERMISO_ESCRITURA = 'gestion.editar'        # lo que piden nuevo/editar/eliminar/fotos
+# Las que valen sólo adentro de un compartimento: se guardan prefijadas y el comodín '*'
+# no las alcanza. Ver "Ámbitos" más abajo.
+PERMISOS_AMBITO   = frozenset({'gestion.leer', 'gestion.editar', ...})
 ```
 
 El **verbo** es lo que hace que capa 1 arme los perfiles sin nombrar ningún área:
@@ -53,11 +58,52 @@ el conjunto de nombres de blueprint que quedaron montados. Los headers preguntan
 admin tiene el comodín `'*'`: le diría que sí a un permiso que ya no está en el catálogo y el
 `url_for` de un blueprint que nadie registró reventaría la página entera.
 
+## Ámbitos: el mismo permiso, pero sólo acá
+
+Un permiso puede guardarse **prefijado** — `'inv:7/gestion.editar'` — y entonces vale sólo
+mientras ese ámbito sea el activo del request. Es lo que permite partir un área en
+compartimentos estancos **sin duplicar ninguna clave**: `crud.py`, los templates y las tools
+del agente siguen preguntando por `gestion.editar` a secas, y `permisos()` les entrega el
+conjunto ya resuelto contra el compartimento en el que se está.
+
+`accesos.py` no sabe qué es un inventario. Sabe tres cosas:
+
+| Pieza | Qué es | Quién la pone |
+|---|---|---|
+| el separador `/` | `'<ambito>/<clave>'` | `con_ambito` / `sin_ambito` / `_efectivos` |
+| `registrar_ambito(fn)` | `fn()` dice cuál es el ámbito activo del request | el área (`gestion.ambito`, que devuelve `inv:<id>`) |
+| `registrar_acceso_extra(fn)` | un acceso que el área **suma** a este request | el área (`gestion._acceso_encargado`: lo que da haber tipeado la clave del inventario) |
+
+Los dos accesos **se suman**: alguien puede ser encargado del taller por clave y a la vez un
+dispositivo invitado al laboratorio. Y el extra puede ser lo **único** que haya — el
+encargado no tiene por qué ser dispositivo de nada, y por eso `actual()` devuelve un acceso
+aunque `session['acceso']` esté vacío.
+
+`permisos_en(ambito)` responde por un compartimento que **no** es el activo: lo necesita la
+lista de inventarios, para marcar cuáles se abren sin tipear la clave.
+
+### El comodín `'*'` no llega a un ámbito
+
+`PERMISOS_AMBITO` (que declara el área y junta `registrar_app` en `SIN_COMODIN`) es la lista
+de claves a las que `tiene()` **no** deja llegar al comodín. Es lo que hace que el admin
+general administre la lista de inventarios —crear, renombrar, ponerles la clave, eliminar—
+**sin poder entrar a ninguno**: adentro manda el encargado, y el break-glass del admin llega
+hasta la puerta. Fue un pedido explícito, no una consecuencia: ver `dev-log/DECISIONS.md`
+2026-09-02.
+
+Por eso también las claves con ámbito **no entran al catálogo global**: `/accesos` no las
+ofrece y un POST a mano tampoco las cuela (`invitar` interseca contra `CATALOGO`). Quien las
+reparte es el encargado, desde `/gestion/<inv>/accesos`, y ahí `crear_invitacion(...,
+ambito=)` se las prefija sola. Su "QUITAR" es `quitar_ambito`, que saca las claves de ESE
+inventario y ninguna otra: un encargado no puede cortarle a nadie el acceso al agente.
+
 ### Catálogo actual
 
 | clave | verbo | declarado en |
 |---|---|---|
-| `gestion.leer` / `gestion.editar` | leer / escribir | `gestion.py` |
+| `inventarios.admin` | admin | `gestion.py` — administrar la LISTA de inventarios, sin ver ninguno |
+| `gestion.leer` / `gestion.editar` | leer / escribir | `gestion.py`, **con ámbito** |
+| `gestion.alias` / `gestion.auditoria` / `gestion.rotar` / `gestion.accesos` | admin | `gestion.py`, **con ámbito** |
 | ~~`historia.leer` / `historia.editar`~~ | leer / escribir | `historia.py` — **fuera del catálogo**: el área está apagada (`historia.ACTIVA = False`) y `app.py` no la pasa a `registrar_app` |
 | ~~`historia.personas`~~ | admin | ídem |
 | `agente.leer` / `agente.escribir` | leer / escribir | `agente/__init__.py` |
@@ -120,9 +166,16 @@ dispositivos — conviene repasarla a fin de año lectivo, cuando rotan los alum
 Sólo esto:
 
 ```python
-session['acceso'] = {'tipo': 'dispositivo', 'id': 17}
-session['acceso'] = {'tipo': 'admin', 'clave': '<sha256(GESTION_CLAVE)[:12]>'}
+session['acceso']     = {'tipo': 'dispositivo', 'id': 17}
+session['acceso']     = {'tipo': 'admin', 'clave': '<sha256(GESTION_CLAVE)[:12]>'}
+session['inv_claves'] = {'7': '<huella del clave_hash del inventario 7>'}
+session['inv_activo'] = 'taller'   # en cuál se está trabajando (lo lee el asistente)
 ```
+
+`inv_claves` va aparte de `acceso` y no adentro por lo mismo que los dos accesos se suman:
+entrar a un inventario no puede pisar la sesión de dispositivo ni la de otro inventario. La
+huella es el final del hash guardado, así que **re-fijar la clave de un inventario corta esas
+sesiones en el request siguiente**, igual que `GESTION_CLAVE` con las de admin.
 
 Los permisos **no** viajan en la cookie, por dos razones: revocar tiene que cortar en el request
 siguiente (si viajaran, revocar no haría nada hasta que expirara), y el presupuesto de ~4KB ya está
@@ -157,6 +210,17 @@ accesos.tiene(conjunto, permiso)   # puro: el agente lo usa fuera del request
 
 `registrar_acceso` reemplaza al viejo `crud.registrar_acceso`. Mantiene `endpoints_pagina` y
 `endpoint_default` con la misma semántica, y suma el permiso base del área.
+
+Tres parámetros más, los tres opcionales y los tres para el mismo caso: un área cuya clave no
+es la del sistema. `entrar(clave)` valida y deja la sesión lista (el default sigue siendo
+`GESTION_CLAVE` → admin); `al_salir()` reemplaza el `session.clear()` de `/salir`; y
+`contexto_login()` agrega claves al template del login. Gestión usa los tres, porque entrar a
+un inventario no puede echarte de los otros ni cortarte la conversación del agente, y salir
+de uno tampoco.
+
+El permiso base puede ser **`None`**: el área pide sólo que del otro lado haya alguien y marca
+con `requiere()` lo que exige más. Es el caso del registro de inventarios — la lista la ve
+cualquiera (le muestra los que puede abrir) y crear/eliminar es de `inventarios.admin`.
 
 **Sin acceso** → redirect al login (páginas) o **401** (endpoints JSON).
 **Con acceso pero sin el permiso** → **403**, nunca el login: mandar al login a quien ya entró es un
@@ -266,7 +330,7 @@ invitaciones(id, token, etiqueta, perfil, permisos, creada, expira, usada, dispo
              multiuso)
 ```
 
-`permisos` es JSON (`["gestion.leer"]` o `["*"]`). `revocado`/`usada` en NULL = activo. Un link
+`permisos` es JSON (`["agente.leer"]`, `["*"]`, o con ámbito: `["inv:7/gestion.editar"]`). `revocado`/`usada` en NULL = activo. Un link
 `multiuso` (1) se queda con `usada` en NULL para siempre — es lo que lo mantiene vigente en
 `listar_invitaciones()` sin que esa query tenga que saber nada de multiuso.
 `email`/`google_sub` están reservados para sumar Google Sign-In sin migrar nada; hoy nadie los lee.

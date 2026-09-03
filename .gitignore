@@ -1,5 +1,8 @@
-# Database (incluye horarios/escuela.db)
+# Database (incluye horarios/escuela.db y un archivo por inventario en inventarios/)
 *.db
+# Copias previas a una migración, que deja `python actualizar.py`: son datos reales
+# de la escuela y no terminan en .db, así que no las agarra la regla de arriba.
+*.pre-actualizacion-*
 
 # Notas del asistente: las escribe la app (y el propio agente) en el disco del server.
 # En git se pisarían en cada deploy — ver agente/notas.py.

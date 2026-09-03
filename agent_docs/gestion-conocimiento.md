@@ -1,10 +1,37 @@
 # Gestión de recursos (`/gestion`)
 
-Una de las cuatro áreas de la app (las otras: el SPA de horarios, `/historia` y `/agente`).
-Es el **inventario técnico** de la escuela: recursos (instrumentos, equipos, materiales,
-estructuras), con sus fotos y su desglose por ubicación. **`gestion.db` es la fuente de
-verdad**: lo que no está acá, no está. Las fotos viven en la propia base (columna `fotos`,
-ver abajo).
+Una de las cinco áreas de la app. Son los **inventarios técnicos** de la escuela: recursos
+(instrumentos, equipos, materiales, estructuras), con sus fotos y su desglose por ubicación.
+**La base del inventario es la fuente de verdad**: lo que no está ahí, no está. Las fotos
+viven en la propia base (columna `fotos`, ver abajo).
+
+## No es un inventario: son varios, y son estancos
+
+Desde el 2026-09-02 el área no tiene UNA base sino una por inventario. `gestion.db` quedó
+como el **registro** (la tabla `inventarios`, más las tablas del asistente que siempre
+vivieron ahí) y cada inventario es `inventarios/<slug>.db` con sus cuatro tablas.
+
+```
+/gestion                    la lista de inventarios (blueprint `inventarios`)
+/gestion/login              clave del ADMIN GENERAL (GESTION_CLAVE): administra la lista
+/gestion/<inv>/login        clave DE ESE INVENTARIO: entra el encargado
+/gestion/<inv>/…            todo lo que este documento describe, adentro de uno
+/gestion/<inv>/accesos      el encargado invita y revoca, sólo para su inventario
+```
+
+Lo que separa un inventario de otro **no es un filtro sino el archivo**: estando conectado a
+uno es imposible leer el de al lado aunque a alguien se le olvide un `WHERE`. `crud.conectar`
+pregunta por el hook `db_path()`, que resuelve el inventario del request (la URL) o el de la
+sesión (`inv_activo`, que es de dónde lo saca el asistente).
+
+**El admin general no entra a ningún inventario.** Crea, renombra, le pone la clave y lo
+elimina; el contenido es del encargado. Eso funciona porque las claves del área están en
+`PERMISOS_AMBITO` y el comodín `'*'` no las alcanza — ver `agent_docs/accesos.md`.
+
+El blueprint `bp` se sigue llamando `gestion` aunque su prefijo pasó a ser `/gestion/<inv>`:
+un `url_value_preprocessor` guarda el `<inv>` en `g.inv` y un `url_defaults` lo vuelve a
+poner al construir cualquier link, así que **ningún `url_for('gestion.…')` de los templates
+tuvo que cambiar**.
 
 > Hasta el 2026-08-10 el modelo era otro: los archivos reales vivían en Google Drive y cada
 > entidad guardaba un link en `drive_url`. La escuela dejó de usar Drive y la columna se
@@ -22,17 +49,22 @@ el motor genérico `crud.py`, que no importa a ninguno de los dos — ver `agent
 
 ## Arquitectura
 
-- **`gestion.py`** — el área: blueprint Flask (`bp`, prefix `/gestion`), `ENTIDADES` (hoy solo
-  `recursos`), `SCHEMA`, sus hooks (`migrar`, `seed`, `secciones_detalle`, `valores_iniciales`)
+- **`gestion.py`** — el área: dos blueprints (`bp`, prefix `/gestion/<inv>`, y `bp_inv`,
+  el registro en `/gestion`), `ENTIDADES` (hoy solo `recursos`), `SCHEMA` (el de un
+  inventario) y `SCHEMA_REGISTRO`, sus hooks (`migrar`, `db_path`, `prefijo_backup`,
+  `secciones_detalle`, `valores_iniciales`)
   y **el desglose de recursos por ubicación**, que es lo único que no pasa por el motor. Las
   rutas CRUD las monta `crud.registrar_rutas(bp, ...)` y el gate `accesos.registrar_acceso(bp,
   ...)` — ver `agent_docs/crud-motor.md`. Server-rendered con Jinja. El JS propio es
   `static/gestion.js`: una sola mejora progressive-enhancement, la búsqueda en vivo del listado.
-- **`gestion.db`** — SQLite propia, separada de `escuela.db`. **No** se regenera desde
-  Sheets y `/api/actualizar` no la toca. Junto con `historia.db` son las DBs con datos
-  propios de la app. Alberga además las tablas del asistente (`agente_log`,
-  `agente_conversaciones`, `agente_fotos_pendientes`), que son auditoría/sesión y no datos
-  de dominio.
+- **`gestion.db`** — el **registro**: la tabla `inventarios` (id, slug, nombre,
+  `clave_hash`, creado) y nada de dominio. Alberga además las tablas del asistente
+  (`agente_log`, `agente_conversaciones`, `agente_fotos_pendientes`), que son auditoría/
+  sesión y nunca fueron de un inventario en particular.
+- **`inventarios/<slug>.db`** — un archivo por inventario, con `recursos`,
+  `recurso_unidades`, `kit_items` y `recurso_bajas`. **No** se regeneran desde Sheets y
+  `/api/actualizar` no las toca. El `slug` sale del nombre y no se renombra nunca (es la
+  URL); el ámbito de los permisos va por **id**, así que renombrar no rompe nada.
 - **`templates/gestion/`** — `base.html` (layout + nav), `home.html`, `lista.html`,
   `form.html`, `detalle.html`, `alias_lista.html`. `lista.html`/`form.html` son **genéricos**:
   se renderizan a partir de la config declarativa de la entidad. `detalle.html` en cambio
@@ -232,7 +264,10 @@ unidad y los sub-recursos de un kit, pero el mecanismo de limpieza es idéntico)
 | Ruta | Método | Descripción |
 |------|--------|-------------|
 | `/gestion/login` | GET/POST | Form de acceso; con clave OK setea sesión y redirige a `?next=` (solo si empieza con `/gestion`, anti open-redirect) |
-| `/gestion/salir` | GET | Borra la sesión y vuelve al login |
+| `/gestion/` | GET | La lista de inventarios. Con `inventarios.admin`, además crear / renombrar / re-fijar clave / eliminar (`/gestion/admin/…`) |
+| `/gestion/<inv>/login` | GET/POST | La clave DE ESE inventario. Alcanzable sin sesión previa: es la puerta del encargado |
+| `/gestion/<inv>/salir` | GET | Cierra ESE inventario, no la sesión entera (el `/salir` global sigue estando en el ☰) |
+| `/gestion/<inv>/accesos` | GET | Panel del encargado (`gestion.accesos`): invitar y quitar, con el ámbito del inventario pegado a cada permiso |
 | `/gestion/` | GET | Home: cards con contadores |
 | `/gestion/<slug>` | GET | Listado (`?q=` búsqueda tolerante en nombre + descripcion — ver abajo) |
 | `/gestion/<slug>/nuevo` | GET/POST | Alta (valida nombre no vacío server-side) |
@@ -251,6 +286,10 @@ unidad y los sub-recursos de un kit, pero el mecanismo de limpieza es idéntico)
 | `/gestion/recursos/<id>/kit/agregar` | POST | Agrega un sub-recurso (`titulo`, `cantidad`, `recurso_asignado`) |
 | `/gestion/recursos/<id>/kit/<item_id>/editar` | POST | Actualiza los tres campos de un sub-recurso puntual |
 | `/gestion/recursos/<id>/kit/<item_id>/eliminar` | POST | Borra un sub-recurso puntual |
+
+Las rutas de la tabla van todas **abajo de un inventario**: la columna de arriba se lee
+`/gestion/<inv>/<slug>`, `/gestion/<inv>/bajas`, etc. Se escriben cortas por legibilidad, y
+porque en el código tampoco se nombra el `<inv>` (lo pone `url_defaults`).
 
 `slug` sólo puede ser `recursos`; otro valor → 404. (`hitos` y `personas` viven en
 `/historia`, con las mismas rutas bajo su propio prefijo.)
@@ -310,11 +349,12 @@ lectura y sólo si tiene alguno).
 
 ## Respaldos (`backups/`)
 
-`gestion.db` es la única DB con datos propios: no se regenera desde Sheets y está en
-`.gitignore`, así que **si el archivo se pierde no hay commit ni fuente externa de la
-cual recuperarla**. Por eso `init_db()` arranca llamando a `respaldos.respaldar()`.
+Las bases de los inventarios no se regeneran desde Sheets y están en `.gitignore`, así que
+**si un archivo se pierde no hay commit ni fuente externa de la cual recuperarlo**. Por eso
+`init_db()` recorre el registro y llama a `crud.init_db` por inventario, que arranca
+respaldando.
 
-- Copia a `backups/gestion-YYYYMMDD-HHMMSS-ffffff.db` con la **API `backup()` de
+- Copia a `backups/inv<id>-YYYYMMDD-HHMMSS-ffffff.db` con la **API `backup()` de
   sqlite3**, no `shutil.copy`: garantiza una copia consistente aunque otro proceso
   esté escribiendo. Los microsegundos evitan que dos respaldos del mismo segundo se
   pisen y mantienen el orden alfabético igual al cronológico.
@@ -324,41 +364,57 @@ cual recuperarla**. Por eso `init_db()` arranca llamando a `respaldos.respaldar(
 - **Retención** (`respaldos._a_borrar`): los últimos `BACKUP_MAX` (20) **más el primero de cada
   día**. Sin la regla diaria, una tarde de reinicios depurando empuja fuera de la
   rotación todo lo viejo — que es exactamente lo que uno querría recuperar.
+- **Un prefijo por inventario, y por id y no por slug** (`prefijo_backup()`): `respaldos.listar`
+  globea `<prefijo>-*.db`, así que con slugs la rotación de "taller" se comería la de
+  "taller-2". El registro usa `gestion-registro`. Eliminar un inventario respalda antes de
+  borrar el archivo: un borrado por error no puede ser definitivo.
 
 Los respaldos caen bajo `*.db` del `.gitignore`; no se versionan ni se pushean.
 
-## Seed
+## Sin seed, pero con la guarda anti-pérdida
 
-`init_db()` crea las tablas y, si `recursos` está vacía, carga el ejemplo del documento
-de diseño: 5 recursos (panel solar, estructura regulable, inclinómetro digital,
-multímetro, pinza amperométrica).
+**No hay `seed`.** Los 5 recursos de ejemplo del documento de diseño tenían sentido cuando el
+área era una sola base que se creaba una vez; ahora se crea una por inventario y sembrar el
+banco de ensayo solar en cada uno sería ruido que después hay que borrar a mano. Un
+inventario nuevo arranca vacío a propósito.
 
-**El seed no es incondicional.** Una DB vacía es ambigua: puede ser una instalación
-nueva o datos perdidos. Los respaldos desempatan — si `respaldos()` devuelve algo,
-`init_db()` **levanta `RuntimeError` con las instrucciones de restauración en vez de
-sembrar**, porque sembrar taparía la pérdida en silencio (que es lo que pasó el
-2026-08-08: se trabajó un día entero contra los 5 de ejemplo sin notarlo).
-
-Para empezar de cero a propósito: `GESTION_SEED=1`. En un deploy limpio (Render,
-PythonAnywhere) no hay respaldos, así que el primer arranque siembra normalmente.
+Lo que sí sigue es la guarda de `crud.init_db`: una DB vacía es ambigua —instalación nueva o
+datos perdidos— y los respaldos desempatan. Si el archivo de un inventario está vacío y
+**hay respaldos con su prefijo**, `init_db()` levanta `RuntimeError` con las instrucciones de
+restauración en vez de seguir de largo (que es lo que pasó el 2026-08-08: se trabajó un día
+entero contra los 5 de ejemplo sin notarlo). Un inventario recién creado no tiene respaldos
+propios todavía, así que no dispara. Para pasar por encima: `GESTION_SEED=1`.
 
 ## Permisos
 
-El área declara cinco, y el verbo es lo que los hace entrar solos en los perfiles:
+El área declara siete. Seis son **de ámbito**: valen sólo adentro del inventario abierto y el
+comodín `'*'` no las alcanza (se guardan como `inv:<id>/gestion.editar`, ver
+`agent_docs/accesos.md`). La séptima, `inventarios.admin`, es la única que tiene el admin
+general y no abre ningún inventario.
 
 | clave | verbo | qué habilita |
 |---|---|---|
+| `inventarios.admin` | admin | **sin ámbito**: crear, renombrar, re-fijar la clave y eliminar inventarios desde `/gestion`. NO da acceso al contenido de ninguno |
 | `gestion.leer` | leer | ver el inventario. Es el permiso base del blueprint |
 | `gestion.editar` | escribir | `nuevo`/`editar`/fotos/desglose por ubicación + dar de baja un recurso y revertir la baja (borrar, no: ningún recurso se borra) |
 | `gestion.alias` | admin | `/gestion/alias` (tabla de solo lectura) y la tool del agente `listar_alias`. Verbo `admin`: no entra en ningún preset de interno, solo lo tiene el comodín `'*'` (mismo criterio que `historia.personas`) |
 | `gestion.auditoria` | admin | los chips de auditoría del listado (vencidos de revisión, dados de baja) y `/gestion/bajas`, el registro de bajas |
 | `gestion.rotar` | admin | el botón ROTAR del visor de fotos y su ruta. `crud.py` lo lee del hook opcional `PERMISO_ROTAR_FOTO`; el área que no lo declara (historia) cae en su permiso de escritura |
+| `gestion.accesos` | admin | `/gestion/<inv>/accesos`: invitar y quitar gente DE ESE inventario. Lo tiene el encargado por haber entrado con la clave, y lo puede delegar |
 
 `PERMISO_ESCRITURA` lo aplica `crud.registrar_rutas` a sus cinco rutas genéricas, y las dos
 rutas propias del desglose por ubicación lo piden a mano con `@accesos.requiere(...)`.
 
 Con `gestion.leer` a secas la UI queda en modo consulta: sin CREAR, sin Editar, sin DAR DE BAJA y
 sin subida de fotos. El motor entero de accesos está en `agent_docs/accesos.md`.
+
+**Cómo se entra a un inventario**, dos caminos que se suman: la **clave** del inventario
+(`/gestion/<inv>/login`, la guarda `session['inv_claves']` como huella del hash, así que
+re-fijarla corta esas sesiones en el request siguiente) da el juego completo; o un **link de
+invitación** del encargado, que crea un dispositivo con las claves ya prefijadas. Una misma
+persona puede ser encargada del taller y estar invitada al laboratorio, y en cada uno tiene
+lo suyo. "QUITAR" desde el panel del encargado saca **sólo** las claves de ese inventario:
+si esa persona además usa el asistente, eso no se toca.
 
 Es una traba de desarrollo, no seguridad completa: sin usuarios ni auditoría, sin
 CSRF, sin límite de intentos. Decisión 2026-07-19 (ver `dev-log/DECISIONS.md`).

@@ -6,6 +6,15 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-09-02] — Un inventario = un archivo, y el admin general no entra a ninguno
+
+Gestión pasó a ser N inventarios estancos. Cada uno es `inventarios/<slug>.db` y no una
+columna `inventario_id` en una base común: el aislamiento tiene que sobrevivir a que alguien
+se olvide un `WHERE` en una de las ~30 queries del área, y estando conectado a un archivo eso
+es imposible. Sus permisos van con ámbito (`inv:7/gestion.editar`) y el comodín `'*'` **no**
+los alcanza (`accesos.SIN_COMODIN`), así que el admin general crea, nombra y elimina
+inventarios pero no ve el contenido de ninguno: fue el pedido, adentro manda el encargado.
+
 ## [2026-09-02] — Ningún recurso se borra: se da de baja diciendo qué pasó
 
 Borrar la fila se lleva justo lo que después hace falta para rendir cuentas: qué era,

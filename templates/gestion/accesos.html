@@ -1,0 +1,167 @@
+{# Panel del ENCARGADO: quién entra a ESTE inventario.
+
+   Es el hermano acotado de /accesos. Todo lo que se ve y se toca acá lleva el ámbito del
+   inventario pegado (ver gestion.py::_render_accesos): los permisos que reparte son los de
+   este inventario, los dispositivos que lista son los que tienen alguno, y QUITAR saca los
+   de acá y ninguno más — si esa persona además usa el asistente o el inventario de al lado,
+   eso no es asunto de esta página. #}
+{% extends 'gestion/base.html' %}
+{% block titulo %}Quién entra{% endblock %}
+{% block contenido %}
+
+<div class="g-toolbar">
+    <h2>QUIÉN ENTRA A {{ (inventario.nombre if inventario else '') | upper }}</h2>
+</div>
+
+{% if error %}<div class="g-error">{{ error }}</div>{% endif %}
+
+{% if link_nuevo %}
+<div class="g-card" style="border-color: var(--secondary);">
+    {% if link_multiuso %}
+    <h3>LINK PÚBLICO LISTO — COMPARTILO DONDE HAGA FALTA</h3>
+    <p class="g-help">Lo puede abrir <strong>cualquiera</strong>, todas las veces que
+        quiera: no se quema. Cada uno escribe su nombre y queda un acceso nuevo a este
+        inventario. Para anularlo, "ANULAR" en la lista de abajo.</p>
+    {% else %}
+    <h3>LINK LISTO — MANDÁSELO A LA PERSONA</h3>
+    <p class="g-help">Sirve <strong>una sola vez</strong> y vence en 7 días. Al abrirlo va a
+        escribir su nombre y queda habilitado ese dispositivo, sólo para este inventario.</p>
+    {% endif %}
+    <div class="g-field">
+        <input id="link-nuevo" type="text" readonly value="{{ link_nuevo }}"
+               onclick="this.select()" style="width:100%;">
+    </div>
+    <button class="g-btn" type="button" onclick="
+        var c = document.getElementById('link-nuevo');
+        c.select(); document.execCommand('copy'); this.textContent = 'COPIADO ✓';
+    ">COPIAR LINK</button>
+</div>
+{% endif %}
+
+<table class="g-table">
+    <thead>
+        <tr>
+            <th>QUIÉN DIJO SER</th>
+            <th>ETIQUETA</th>
+            <th>ACCESO ACÁ</th>
+            <th>DISPOSITIVO</th>
+            <th>ÚLTIMO USO</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for d in dispositivos %}
+        <tr {% if d.revocado %}style="opacity:.5;"{% endif %}>
+            <td>{{ d.nombre }}</td>
+            <td>{{ d.etiqueta or '—' }}</td>
+            <td>{{ d.perfil_etiqueta }}{% if d.revocado %} · REVOCADO{% endif %}</td>
+            <td>{{ d.dispositivo }}</td>
+            <td>{{ d.ultimo_uso[:16] if d.ultimo_uso else 'nunca' }}</td>
+            <td style="white-space:nowrap;">
+                {% if not d.revocado %}
+                <form method="post" action="{{ url_for('gestion.accesos_quitar', disp_id=d.id) }}" style="display:inline;"
+                      onsubmit="return confirm('Sacarle a {{ d.nombre }} el acceso a este inventario? Deja de entrar en el acto.');">
+                    <button class="g-btn-outline" type="submit">QUITAR</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="g-help">Todavía no habilitaste a nadie. Los únicos que
+            entran son los que tienen la clave de este inventario.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if invitaciones %}
+<div class="g-toolbar"><h2>LINKS ACTIVOS</h2></div>
+<table class="g-table">
+    <thead><tr><th>PARA QUIÉN</th><th>ACCESO</th><th>TIPO</th><th>VENCE</th><th></th></tr></thead>
+    <tbody>
+        {% for i in invitaciones %}
+        <tr>
+            <td>{{ i.etiqueta }}</td>
+            <td>{{ i.perfil_etiqueta }}</td>
+            <td>{% if i.multiuso %}Público · {{ i.usos }} dispositivo{{ 's' if i.usos != 1 else '' }}{% else %}Un solo uso, sin usar{% endif %}</td>
+            <td>{{ i.expira[:10] }}</td>
+            <td>
+                <form method="post" action="{{ url_for('gestion.accesos_borrar_invitacion', invitacion_id=i.id) }}" style="display:inline;"
+                      {% if i.multiuso %}onsubmit="return confirm('Anular este link público? Nadie más va a poder entrar con él; los que ya entraron siguen.');"{% endif %}>
+                    <button class="g-btn-outline" type="submit">ANULAR</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<div class="g-toolbar"><h2>HABILITAR A ALGUIEN NUEVO</h2></div>
+
+<form method="post" action="{{ url_for('gestion.accesos_invitar') }}" class="g-form" id="form-invitar">
+    <div class="g-field">
+        <label for="campo-etiqueta">PARA QUIÉN ES</label>
+        <input id="campo-etiqueta" type="text" name="etiqueta" required
+               placeholder="alumna 5°B, pañol, profe de taller…">
+        <span class="g-help">Es tu nota, no la ve la persona. Ella escribe su nombre al
+            abrir el link, y acá vas a ver los dos: si no coinciden, el link se reenvió.</span>
+    </div>
+
+    <div class="g-field">
+        <label>NIVEL DE ACCESO</label>
+        {% for clave, etiqueta in perfiles %}
+        <label style="display:block; font-weight:normal;">
+            <input type="radio" name="perfil" value="{{ clave }}" data-perfil="{{ clave }}"
+                   {% if clave == 'interno-lectura' %}checked{% endif %}>
+            {{ etiqueta }}
+        </label>
+        {% endfor %}
+        <span class="g-help">Son atajos: marcan los permisos de abajo. Si tocás alguno a
+            mano, el acceso queda "a medida".</span>
+    </div>
+
+    {% for grupo, permisos in grupos.items() %}
+    <div class="g-field">
+        <label>PERMISOS EN ESTE INVENTARIO</label>
+        {% for clave, etiqueta, verbo in permisos %}
+        <label style="display:block; font-weight:normal;">
+            <input type="checkbox" name="permisos" value="{{ clave }}"> {{ etiqueta }}
+        </label>
+        {% endfor %}
+    </div>
+    {% endfor %}
+
+    <div class="g-field">
+        <label style="display:block; font-weight:normal;">
+            <input type="checkbox" name="multiuso">
+            SIN LÍMITE DE USOS — cualquiera que abra el link entra, no sólo la primera persona
+        </label>
+        <span class="g-help">Para un cartel o un grupo, no para una persona puntual: no se
+            quema al usarlo y no vence a los 7 días.</span>
+    </div>
+
+    <div class="g-form-actions">
+        <button type="submit" class="g-btn">GENERAR LINK</button>
+    </div>
+</form>
+
+{# Los presets del server, para que tildar un nivel marque sus permisos. Si después se toca
+   un checkbox a mano, el server detecta que no coincide y guarda 'custom'. #}
+<script>
+(function () {
+    var PRESET = {{ preset | tojson }};
+    var form = document.getElementById('form-invitar');
+    if (!form) return;
+    function aplicar(perfil) {
+        var claves = PRESET[perfil] || [];
+        form.querySelectorAll('input[name="permisos"]').forEach(function (chk) {
+            chk.checked = claves.indexOf(chk.value) !== -1;
+        });
+    }
+    form.querySelectorAll('input[name="perfil"]').forEach(function (radio) {
+        radio.addEventListener('change', function () { aplicar(this.value); });
+    });
+    aplicar('interno-lectura');
+})();
+</script>
+{% endblock %}

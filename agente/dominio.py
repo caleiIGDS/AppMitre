@@ -47,8 +47,23 @@ def ve_entidad(slug, permisos):
     Un slug que no está en SLUGS_ENTIDAD es NO, y ahí no hay permiso que valga: es el caso
     de un área apagada. Sin esto, el admin —que tiene el comodín '*'— seguiría cruzando
     nombres contra `personas` (ver tools/horarios.py) de un área que ya no existe.
+
+    Se pide el permiso de LECTURA del área además del propio de la entidad, y eso importa
+    desde que gestión son varios inventarios: `gestion.leer` sólo vale adentro del que está
+    abierto (ver gestion.PERMISOS_AMBITO), así que es lo que distingue "puede ver recursos"
+    de "puede ver los recursos DE ESTE inventario". Sin inventario abierto no lo tiene
+    nadie, y entonces no hay entidad de gestión que valga.
     """
     if slug and slug not in SLUGS_ENTIDAD:
         return False
-    permiso = crud.permiso_entidad(_modulo(slug), slug) if slug else None
-    return not permiso or accesos.tiene(permisos, permiso)
+    return all(accesos.tiene(permisos, p) for p in permisos_entidad(slug))
+
+
+def permisos_entidad(slug):
+    """Todo lo que hace falta para ver `slug`: el permiso base del área más el propio de la
+    entidad, si declaró uno (`personas`). Frozenset vacío para un slug vacío."""
+    if not slug or slug not in SLUGS_ENTIDAD:
+        return frozenset()
+    modulo = _modulo(slug)
+    propio = crud.permiso_entidad(modulo, slug)
+    return frozenset([modulo.PERMISO_LECTURA] + ([propio] if propio else []))

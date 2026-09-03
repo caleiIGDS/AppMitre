@@ -6,6 +6,12 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-09-02] — Gestión son varios inventarios: las URLs llevan `<inv>` y los permisos, ámbito
+
+**Archivos**: `gestion.py`, `accesos.py`, `crud.py`, `actualizar.py`, `app.py`, `agente/dominio.py`, `agente/tools/esquemas.py`, `templates/{gestion,inventarios,accesos,agente,historia,salidas}/`
+
+`bp` de gestión se sigue llamando `gestion` pero su prefijo es **`/gestion/<inv>`** (los `url_for` no cambian: lo inyecta un `url_defaults`), y `/gestion` es el blueprint nuevo **`inventarios`**. `gestion.SCHEMA` ya no describe `gestion.db` sino `inventarios/<slug>.db`; `gestion.db` guarda `SCHEMA_REGISTRO` + las tablas del agente. `crud.conectar/init_db` resuelven la base por los hooks nuevos **`db_path()`/`prefijo_backup()`**. En `accesos.db` un permiso puede venir prefijado (`inv:7/gestion.leer`) y **`'*'` ya no alcanza `PERMISOS_AMBITO`**: código que asumía que el admin puede todo deja de ser cierto. Correr `python actualizar.py` (paso 3.5) antes del Reload: mueve las cuatro tablas y reapunta los permisos viejos, o el inventario y todos los accesos quedan colgados.
+
 ## [2026-09-02] — `listar_todos` trae la ubicación de cada recurso
 
 **Archivos**: `agente/tools/entidades.py`, `agente/tools/esquemas.py`, `agente/tools/__init__.py`, `agente/prompt.py`

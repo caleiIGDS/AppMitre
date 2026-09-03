@@ -23,13 +23,18 @@
                     <img src="{{ url_for('static', filename=escuela_logo) }}" alt="Escudo" class="marca-escudo">
                     <div class="g-titles">
                         <h1>{{ escuela_nombre }} <span class="g-serial">{{ escuela_version }}</span></h1>
-                        <p>Sistema de Gestión de Conocimiento</p>
+                        {# Con varios inventarios, cuál está abierto no es un detalle: es
+                           en cuál se está cargando y borrando. #}
+                        <p>{% if inventario %}Inventario · {{ inventario.nombre }}{% else %}Sistema de Gestión de Conocimiento{% endif %}</p>
                     </div>
                 </div>
                 {# El header queda para acciones de ESTA página. Saltar a otra área es el
                    ☰ (bloque `.g-areas` al final del body). #}
                 <div class="g-header-actions">
-                    <a class="g-btn-outline" href="/">‹ SISTEMA DE HORARIOS</a>
+                    <a class="g-btn-outline" href="{{ url_for('inventarios.panel') }}">‹ INVENTARIOS</a>
+                    {% if puede(permiso_accesos) %}
+                    <a class="g-btn-outline" href="{{ url_for('gestion.accesos_panel') }}">🔑 QUIÉN ENTRA</a>
+                    {% endif %}
                     {% if puede('gestion.alias') %}
                     <a class="g-btn-outline" href="{{ url_for('gestion.alias_lista') }}">ALIAS</a>
                     {% endif %}

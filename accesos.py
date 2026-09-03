@@ -49,8 +49,8 @@ import sqlite3
 import sys
 from datetime import timedelta
 
-from flask import (Blueprint, abort, g, jsonify, redirect, render_template, request,
-                   session, url_for)
+from flask import (Blueprint, abort, g, has_request_context, jsonify, redirect,
+                   render_template, request, session, url_for)
 
 import respaldos
 from config import (ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION, PRODUCCION, ahora)
@@ -370,6 +370,27 @@ def _resolver_sesion():
     return None
 
 
+def _sesion():
+    """`_resolver_sesion()` una sola vez por request."""
+    if not has_request_context():
+        return _resolver_sesion()
+    if '_acceso_sesion' not in g:
+        g._acceso_sesion = _resolver_sesion()
+    return g._acceso_sesion
+
+
+def permisos_en(ambito):
+    """El conjunto que la SESIÓN da en `ambito`, sea o no el ámbito activo.
+
+    `puede()` siempre responde sobre el activo, y a veces hay que preguntar por otro: la
+    lista de inventarios tiene que marcar cuáles se abren sin tipear la clave. Lo que
+    aportan los `registrar_acceso_extra` no entra acá — eso es del ámbito activo y lo sabe
+    el área que lo registró.
+    """
+    base = _sesion()
+    return frozenset(_efectivos(base['permisos'], ambito)) if base else frozenset()
+
+
 def _resolver():
     """El acceso de este request: la sesión (acotada al ámbito activo) MÁS lo que aporten
     las áreas por `registrar_acceso_extra`.
@@ -379,7 +400,7 @@ def _resolver():
     encargado que no es dispositivo de nada entra igual, con lo que le da su clave y nada
     más.
     """
-    base = _resolver_sesion()
+    base = _sesion()
     ambito = ambito_actual()
     permisos_efectivos = set(_efectivos(base['permisos'], ambito)) if base else set()
 
@@ -512,9 +533,13 @@ def registrar_acceso(bp, permiso, endpoints_pagina=None, endpoint_default='home'
             if endpoints_pagina is None or request.endpoint in endpoints_pagina:
                 return redirect(url_for(f'{bp.name}.login', next=request.path))
             abort(401)
-        # El permiso de esta ruta puntual si `requiere()` la marcó; si no, el base.
+        # El permiso de esta ruta puntual si `requiere()` la marcó; si no, el base. Un
+        # área puede no tener permiso base (None): le alcanza con que del otro lado haya
+        # alguien, y marca con `requiere()` lo que pide más. Es el caso del registro de
+        # inventarios: la lista la ve cualquiera —le muestra los que puede abrir—, pero
+        # crear y eliminar es del admin general.
         necesario = getattr(request.url_rule, 'mitre_permiso', None) or permiso
-        if not puede(necesario):
+        if necesario and not puede(necesario):
             return denegar(necesario)
 
     @bp.route('/login', methods=['GET', 'POST'])
@@ -743,6 +768,33 @@ def borrar_invitacion(inv_id, ambito=None):
     con.commit()
     con.close()
     return True
+
+
+def purgar_ambito(ambito):
+    """Saca de TODOS lados las claves de un compartimento que dejó de existir.
+
+    La llama el área cuando elimina uno (gestión, al borrar un inventario). Sin esto
+    quedarían permisos colgando de un ámbito muerto, y un id reciclado por AUTOINCREMENT
+    podría llegar a revivirlos en un compartimento nuevo que no tiene nada que ver.
+    """
+    con = conectar()
+    cur = con.cursor()
+    for tabla in ('dispositivos', 'invitaciones'):
+        for fila in cur.execute(f"SELECT id, permisos FROM {tabla}").fetchall():
+            guardados = json.loads(fila['permisos'])
+            quedan = [c for c in guardados if sin_ambito(c)[0] != ambito]
+            if len(quedan) == len(guardados):
+                continue
+            if quedan:
+                cur.execute(f"UPDATE {tabla} SET permisos = ? WHERE id = ?",
+                            (json.dumps(sorted(set(quedan))), fila['id']))
+            elif tabla == 'invitaciones':
+                cur.execute("DELETE FROM invitaciones WHERE id = ?", (fila['id'],))
+            else:
+                cur.execute("UPDATE dispositivos SET permisos = '[]', revocado = ? "
+                            "WHERE id = ?", (_ahora_txt(), fila['id']))
+    con.commit()
+    con.close()
 
 
 def quitar_ambito(disp_id, ambito):

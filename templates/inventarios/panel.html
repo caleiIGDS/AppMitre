@@ -1,0 +1,111 @@
+{% extends 'inventarios/base.html' %}
+{% block titulo %}Inventarios{% endblock %}
+{% block contenido %}
+
+<div class="g-toolbar">
+    <h2>INVENTARIOS</h2>
+</div>
+
+{% if error %}<div class="g-error">{{ error }}</div>{% endif %}
+
+<p class="g-help">Cada inventario es independiente: tiene su propia gente y su propia
+    clave. Tener acceso a uno no da acceso a ninguno de los otros.</p>
+
+<div class="g-cards">
+    {% for i in inventarios %}
+    <div class="g-card">
+        <div class="g-card-head">
+            <h3>{{ i.nombre | upper }}</h3>
+            {# -1 = el archivo no está. Mostrarlo como 0 sería mentir sobre un inventario
+               que puede tener todo adentro y haber perdido el .db. #}
+            <span class="g-count">{% if i.total < 0 %}—{% else %}{{ i.total }}{% endif %}</span>
+        </div>
+
+        {% if i.sin_clave %}
+        <p class="g-error">Todavía no tiene clave: no puede entrar nadie.</p>
+        {% endif %}
+
+        <div class="g-card-actions">
+            {% if i.abre %}
+            <a class="g-btn" href="{{ url_for('gestion.home', inv=i.slug) }}">ABRIR</a>
+            {% elif not i.sin_clave %}
+            <a class="g-btn-outline-dark" href="{{ url_for('gestion.login', inv=i.slug) }}">ENTRAR CON CLAVE</a>
+            {% endif %}
+        </div>
+
+        {% if puede('inventarios.admin') %}
+        {# Administrar la LISTA no es entrar: desde acá se le pone el nombre y la clave, y
+           se lo elimina, pero no hay ningún link al contenido. #}
+        <details class="g-card-desc">
+            <summary>ADMINISTRAR</summary>
+
+            <form method="post" action="{{ url_for('inventarios.renombrar', inv_id=i.id) }}" class="g-form">
+                <div class="g-field">
+                    <label for="nombre-{{ i.id }}">NOMBRE</label>
+                    <input id="nombre-{{ i.id }}" type="text" name="nombre" value="{{ i.nombre }}" required>
+                    <span class="g-help">La dirección (<code>/gestion/{{ i.slug }}</code>)
+                        no cambia: los links que ya circulan siguen andando.</span>
+                </div>
+                <div class="g-form-actions">
+                    <button type="submit" class="g-btn-outline">GUARDAR NOMBRE</button>
+                </div>
+            </form>
+
+            <form method="post" action="{{ url_for('inventarios.clave', inv_id=i.id) }}" class="g-form">
+                <div class="g-field">
+                    <label for="clave-{{ i.id }}">CLAVE DEL INVENTARIO</label>
+                    <input id="clave-{{ i.id }}" type="text" name="clave" required
+                           placeholder="la clave del encargado">
+                    <span class="g-help">Se la pasás al encargado y con eso entra. Ponerle
+                        una nueva deja afuera a quien haya entrado con la anterior.</span>
+                </div>
+                <div class="g-form-actions">
+                    <button type="submit" class="g-btn-outline">
+                        {% if i.sin_clave %}PONER CLAVE{% else %}CAMBIAR CLAVE{% endif %}
+                    </button>
+                </div>
+            </form>
+
+            <form method="post" action="{{ url_for('inventarios.eliminar', inv_id=i.id) }}" class="g-form"
+                  onsubmit="return confirm('Eliminar {{ i.nombre }}? Se borran sus recursos, sus fotos y los accesos que daba.');">
+                <div class="g-field">
+                    <label for="borrar-{{ i.id }}">ELIMINAR</label>
+                    <input id="borrar-{{ i.id }}" type="text" name="confirmar" required
+                           placeholder="escribí «{{ i.nombre }}» para confirmar">
+                    <span class="g-help">Se borra el inventario entero. Queda un respaldo
+                        automático, pero recuperarlo es a mano y desde el servidor.</span>
+                </div>
+                <div class="g-form-actions">
+                    <button type="submit" class="g-btn-outline">ELIMINAR INVENTARIO</button>
+                </div>
+            </form>
+        </details>
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="g-help">Todavía no hay ningún inventario.</p>
+    {% endfor %}
+</div>
+
+{% if puede('inventarios.admin') %}
+<div class="g-toolbar"><h2>NUEVO INVENTARIO</h2></div>
+
+<form method="post" action="{{ url_for('inventarios.crear') }}" class="g-form">
+    <div class="g-field">
+        <label for="campo-nombre">NOMBRE</label>
+        <input id="campo-nombre" type="text" name="nombre" required
+               placeholder="Taller de Electrónica, Laboratorio, Pañol…">
+    </div>
+    <div class="g-field">
+        <label for="campo-clave">CLAVE PARA EL ENCARGADO</label>
+        <input id="campo-clave" type="text" name="clave" required>
+        <span class="g-help">Con esta clave el encargado entra al inventario y decide quién
+            más entra. Vos no vas a ver lo que carguen adentro.</span>
+    </div>
+    <div class="g-form-actions">
+        <button type="submit" class="g-btn">CREAR INVENTARIO</button>
+    </div>
+</form>
+{% endif %}
+
+{% endblock %}
