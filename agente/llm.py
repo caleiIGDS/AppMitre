@@ -6,6 +6,7 @@ prompt y cómo se devuelven los resultados de las tools.
 """
 import json
 
+import gestion
 from config import DIAS, ahora
 
 from .notas import leer as _notas_del_admin
@@ -374,10 +375,15 @@ def chat_with_tools_stream(mensajes_usuario, trazas=None, contexto_turno=None,
     # nombra el archivo y este acceso no lee una sola línea. Se lee del disco una vez por
     # turno — es la única parte del prompt que no está en el código.
     ve_notas = bool(TOOLS_NOTAS & nombres)
+    # Y para el inventario: son varios y estancos, así que el prompt dice CUÁL está
+    # abierto. Se pregunta por el slug `recursos` y no por la sesión para no nombrarle un
+    # inventario del que no le mandamos ni una tool.
+    inv = gestion.inventario_activo() if slug_visible(tools, 'recursos') else None
     system_prompt = construir_system_prompt(hoy, dia_semana,
                                             escribe=escribe, ve_personas=ve_personas,
                                             ve_fotos=ve_fotos, ve_notas=ve_notas,
-                                            notas=_notas_del_admin() if ve_notas else '')
+                                            notas=_notas_del_admin() if ve_notas else '',
+                                            inventario=inv['nombre'] if inv else None)
 
     # Una tanda de fotos es el turno más largo que existe: leer todas (1 vuelta) + una
     # `crear_entidad` por foto. Si el modelo no las paraleliza, diez fichas (FOTOS_MAX) son

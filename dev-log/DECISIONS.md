@@ -6,6 +6,15 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-09-04] — Una foto puede ser N altas: la ficha se identifica por nombre
+
+La identidad-por-foto de `_identidad_ficha()` (ver la entrada del 2026-08-13, que la anota
+como un beneficio que "salió gratis") daba por sentado una ficha por foto. Con una foto de
+una lista —un remito, el índice de una colección— el modelo arma decenas de altas con el
+MISMO número, y las 66 fichas de un caso real colapsaron a 2 sin un solo aviso. Ahora el
+nombre entra siempre a la identidad; el caso que cubría la otra —la corrección que le cambia
+el nombre a la única ficha de una etiqueta— lo sostiene `_reemplazo_uno_a_uno()`.
+
 ## [2026-09-02] — Un inventario = un archivo, y el admin general no entra a ninguno
 
 Gestión pasó a ser N inventarios estancos. Cada uno es `inventarios/<slug>.db` y no una

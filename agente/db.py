@@ -56,7 +56,14 @@ CREATE TABLE IF NOT EXISTS agente_fotos_pendientes (
 # se queda deslogueado y sin conversación. En la cookie queda solo `agente_sid`.
 HISTORIAL_GUARDADO = 60    # mensajes que se conservan en la DB (30 turnos)
 HISTORIAL_AL_MODELO = 24   # mensajes que se le mandan al LLM por turno (12 turnos)
-FICHAS_MAX = 20            # altas sin confirmar que se recuerdan a la vez
+# Altas sin confirmar que se recuerdan a la vez. Estaba en 20, pensado para una tanda de
+# fotos de etiquetas (una ficha por foto, FOTOS_MAX=10). Una SOLA foto de una lista —un
+# remito, el índice de una colección— son decenas de altas, y el recorte se lleva las
+# últimas SIN AVISAR: de 66 libros se guardaban 20 y nadie se enteraba de los otros 46.
+# 100 cubre lo que el modelo puede emitir en un turno (medido: 64 `crear_entidad` = ~12.6k
+# tokens de salida contra MAX_TOKENS_SALIDA=16000) y el JSON de la columna sigue siendo
+# texto chico — las fotos no viven acá, ver `agente_fotos_pendientes`.
+FICHAS_MAX = 100
 CONVERSACION_MINUTOS = 240  # a los N minutos sin uso, la conversación (y sus fotos
                             # pendientes de confirmar) se descarta
 
@@ -251,22 +258,35 @@ def _fotos_lote_guardar(fotos):
     return numeros
 
 
-def _foto_lote_tomar(n):
-    """Devuelve (b64, tipo) de la foto N de esta conversación y la borra. None si no hay."""
+def _foto_lote_leer(n):
+    """Devuelve (b64, tipo) de la foto N de esta conversación SIN borrarla. None si no hay.
+
+    Leer y borrar están separados porque una misma foto puede alimentar varias fichas (una
+    lista de libros son decenas de altas de una sola imagen): la primera que se guarda tiene
+    que copiar la imagen, no llevársela. Quién decide borrarla es `rutas._soltar_foto`, que
+    mira si queda alguna ficha pendiente que la use.
+    """
     if not n:
         return None
-    clave = _clave_foto(n)
     con = conectar()
     fila = con.execute(
         "SELECT b64, tipo FROM agente_fotos_pendientes "
         "WHERE token = ? AND sid = ? AND fecha >= ?",
-        (clave, _sid(), _vencimiento())
+        (_clave_foto(n), _sid(), _vencimiento())
     ).fetchone()
-    if fila:
-        con.execute("DELETE FROM agente_fotos_pendientes WHERE token = ?", (clave,))
-        con.commit()
     con.close()
     return (fila['b64'], fila['tipo']) if fila else None
+
+
+def _foto_lote_tomar(n):
+    """Devuelve (b64, tipo) de la foto N de esta conversación y la borra. None si no hay."""
+    foto = _foto_lote_leer(n)
+    if foto:
+        con = conectar()
+        con.execute("DELETE FROM agente_fotos_pendientes WHERE token = ?", (_clave_foto(n),))
+        con.commit()
+        con.close()
+    return foto
 
 
 def _fotos_lote_borrar():

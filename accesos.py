@@ -276,7 +276,11 @@ def sin_ambito(clave):
 
 def _efectivos(guardados, ambito):
     """De lo que hay en la DB al conjunto que vale ACÁ: las claves sin ámbito pasan tal
-    cual, y las del ámbito activo pasan sin su prefijo. Las de otro ámbito no existen."""
+    cual, y las del ámbito activo pasan sin su prefijo. Las de otro ámbito no existen.
+
+    NO sirve como test de pertenencia a un compartimento: da no vacío para cualquiera que
+    tenga una clave global, que es justo lo que hay que dejar afuera. Para eso, `_propios`.
+    """
     salida = set()
     for clave in guardados:
         amb, base = sin_ambito(clave)
@@ -285,6 +289,13 @@ def _efectivos(guardados, ambito):
         elif amb == ambito:
             salida.add(base)
     return salida
+
+
+def _propios(guardados, ambito):
+    """Sólo las claves DE ese compartimento, sin su prefijo. Es el test de pertenencia: a
+    diferencia de `_efectivos`, una clave sin ámbito no cuenta — tener `agente.leer` no es
+    estar habilitado en ningún inventario."""
+    return {base for amb, base in map(sin_ambito, guardados) if amb == ambito}
 
 
 # ---------------------------------------------------------------------------
@@ -697,9 +708,14 @@ def _dispositivo_legible(user_agent):
 
 
 def listar_dispositivos(ambito=None):
-    """Los dispositivos, o sólo los que tienen alguna clave de `ambito` (y entonces sus
-    permisos se muestran ya sin el prefijo: el encargado ve `gestion.editar`, que es lo
-    que la clave significa dentro de su inventario)."""
+    """Los dispositivos, o sólo los que tienen alguna clave DE `ambito` (y entonces se
+    muestran únicamente esas, ya sin el prefijo: el encargado ve `gestion.editar`, que es
+    lo que la clave significa dentro de su inventario).
+
+    El filtro es `_propios` y no `_efectivos` porque acá la pregunta es la pertenencia al
+    compartimento: tener `agente.leer` no habilita a nadie en ningún inventario, y lo que
+    esa persona pueda hacer en otra área no es asunto de este panel.
+    """
     con = conectar()
     filas = con.execute(
         "SELECT * FROM dispositivos ORDER BY revocado IS NOT NULL, id DESC").fetchall()
@@ -709,7 +725,7 @@ def listar_dispositivos(ambito=None):
         d = dict(fila)
         guardados = json.loads(d['permisos'])
         if ambito:
-            propios = sorted(_efectivos(guardados, ambito))
+            propios = sorted(_propios(guardados, ambito))
             if not propios:
                 continue
             d['permisos_lista'] = propios
@@ -735,7 +751,7 @@ def listar_invitaciones(ambito=None):
     salida = []
     for fila in filas:
         d = dict(fila)
-        if ambito and not _efectivos(json.loads(d['permisos']), ambito):
+        if ambito and not _propios(json.loads(d['permisos']), ambito):
             continue
         d['perfil_etiqueta'] = ETIQUETA_PERFIL.get(d['perfil'], d['perfil'])
         if d['multiuso']:
@@ -761,7 +777,7 @@ def borrar_invitacion(inv_id, ambito=None):
     con = conectar()
     if ambito:
         fila = con.execute("SELECT permisos FROM invitaciones WHERE id = ?", (inv_id,)).fetchone()
-        if fila is None or not _efectivos(json.loads(fila['permisos']), ambito):
+        if fila is None or not _propios(json.loads(fila['permisos']), ambito):
             con.close()
             return False
     con.execute("DELETE FROM invitaciones WHERE id = ? AND usada IS NULL", (inv_id,))
@@ -810,7 +826,13 @@ def quitar_ambito(disp_id, ambito):
     if fila is None:
         con.close()
         return False
-    quedan = [c for c in json.loads(fila['permisos']) if sin_ambito(c)[0] != ambito]
+    guardados = json.loads(fila['permisos'])
+    quedan = [c for c in guardados if sin_ambito(c)[0] != ambito]
+    if len(quedan) == len(guardados):
+        # No tenía ninguna clave de acá: no hay nada que quitar y este panel no tiene por
+        # qué tocarle la fila (pisarle el perfil le cambiaría la etiqueta en /accesos).
+        con.close()
+        return False
     con.execute("UPDATE dispositivos SET permisos = ?, perfil = ? WHERE id = ?",
                 (json.dumps(sorted(set(quedan))), 'custom', disp_id))
     if not quedan:

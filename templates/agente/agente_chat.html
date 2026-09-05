@@ -9,6 +9,26 @@
       <span class="agente-title-dot" aria-hidden="true"></span>
       <span>Asistente</span>
     </div>
+
+    {# En qué inventario trabaja el chat. Sólo acá y no en el widget flotante: el widget
+       se abre adentro de `/gestion/<inv>/…`, donde el inventario lo fija la URL y elegir
+       otro sería contradecir la página. Los que se listan son los que ESTE acceso abre
+       (gestion.abribles()); el server igual revalida en /agente/inventario. #}
+    {% if inventarios %}
+    <div class="agente-inv">
+      <label for="agente-inv-select" class="agente-inv-label">Inventario</label>
+      <select id="agente-inv-select" class="agente-inv-select"
+              title="Cambiar de inventario reinicia la conversación">
+        {% if not inv_activo %}
+        <option value="" selected disabled>Elegí uno…</option>
+        {% endif %}
+        {% for inv in inventarios %}
+        <option value="{{ inv.slug }}" {{ 'selected' if inv.slug == inv_activo }}>{{ inv.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
     <button id="agente-reset-btn" class="agente-reset-btn" title="Reiniciar conversación" aria-label="Reiniciar conversación">↺ Reiniciar</button>
   </div>
 

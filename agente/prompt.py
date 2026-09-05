@@ -354,7 +354,11 @@ un renglón por ítem, con nombre y cantidad tal como se leyeron.
 4. Si el usuario aclara que esos ítems NO son un kit sino recursos sueltos e independientes
    (por ejemplo, un remito de compra con productos que van a distintos talleres), armá una
    ficha por ítem en vez de una sola con sub_recursos, igual que con varias fotos de etiquetas
-   distintas.
+   distintas. Varias fichas pueden salir de la MISMA foto: pasale su número a todas.
+   ÚNICA EXCEPCIÓN al "si son ocho, van las ocho": si la lista pasa de 40 ítems sueltos, armá
+   las primeras 40 en este turno, decile cuántas quedan y seguí con el resto cuando te diga.
+   No es para no marearlo —es que una respuesta con más de 40 crear_entidad se corta a la
+   mitad por el tope de salida y se pierde el turno entero, las 40 buenas incluidas.
 5. Si no queda claro si es un kit o ítems sueltos, preguntalo antes de armar la ficha: la
    diferencia es un solo recurso con desglose interno contra varios recursos independientes en
    el inventario, y no se puede deshacer sin editar a mano.
@@ -526,22 +530,33 @@ que te digan la hora, ya la tenés acá.
 _NUMERAL = {3: 'tres', 4: 'cuatro', 5: 'cinco'}
 
 
-def _areas(escribe, ve_personas):
+def _areas(escribe, ve_personas, inventario=None):
     """Las áreas a cargo, numeradas de corrido con las que apliquen — mismo criterio que
     `_reglas`: un salto del 3 al 5 le marcaría al modelo que hay algo que no está viendo.
 
-    Tres cosas deciden cuáles van. Si el inventario se edita o sólo se consulta. Si existe
-    el área de PERSONAS: sin `historia.personas` las tools viajan sin ese slug, y
-    describirle un área que no puede tocar es empujarlo a prometerla. Y si el área de
-    historia está prendida (`historia.ACTIVA`): apagada, ni la línea del tiempo ni las
+    Cuatro cosas deciden cuáles van y cómo. Si el inventario se edita o sólo se consulta.
+    CUÁL inventario está abierto (`inventario`, su nombre): son varios y estancos, así que
+    decir "el inventario" a secas invita a contestar por uno cuando le preguntaron por
+    otro. Si existe el área de PERSONAS: sin `historia.personas` las tools viajan sin ese
+    slug, y describirle un área que no puede tocar es empujarlo a prometerla. Y si el área
+    de historia está prendida (`historia.ACTIVA`): apagada, ni la línea del tiempo ni las
     personas existen para él, y son tres áreas.
     """
     verbos = 'das de alta, editás%s y borrás' % (', vinculás' if historia.ACTIVA else '')
-    inventario = ('Acá sí %s.' % verbos if escribe else
-                  'Desde este acceso lo consultás, no lo modificás.')
+    permiso = ('Acá sí %s.' % verbos if escribe else
+               'Desde este acceso lo consultás, no lo modificás.')
+    if inventario:
+        cual = (' La escuela tiene VARIOS inventarios, estancos, y en este chat está'
+                ' abierto **%s**: lo que ves y lo que cargues es de ése y de ningún otro.'
+                ' Si te preguntan por uno distinto, decí que lo cambien en el selector de'
+                ' arriba del chat — vos no podés.' % inventario)
+    else:
+        cual = (' La escuela tiene VARIOS inventarios, estancos, y ahora mismo no hay'
+                ' ninguno abierto: no podés consultar ni cargar recursos hasta que elijan'
+                ' uno en el selector de arriba del chat.')
     partes = [_AREA_HORARIOS,
               'INVENTARIO — recursos (herramientas, instrumentos, materiales)'
-              ' de los talleres. ' + inventario,
+              ' de los talleres. ' + permiso + cual,
               _AREA_LORE]
     if historia.ACTIVA:
         partes.append(_AREA_HITOS)
@@ -566,7 +581,7 @@ def _reglas(escribe, ve_fotos=True):
 
 
 def construir_system_prompt(hoy, dia_semana, escribe=True, ve_personas=True, ve_fotos=True,
-                            ve_notas=False, notas=''):
+                            ve_notas=False, notas='', inventario=None):
     """El system prompt de un turno.
 
     `escribe`, `ve_personas` y `ve_fotos` los decide `llm.chat_with_tools_stream` mirando las tools
@@ -577,17 +592,23 @@ def construir_system_prompt(hoy, dia_semana, escribe=True, ve_personas=True, ve_
     botón para mandar una. `ve_notas` es lo mismo para `agente.md`: sin `escribir_notas` no
     se le cuenta que el archivo existe, y `notas` es su contenido de este momento.
 
+    `inventario` es el NOMBRE del inventario abierto (o None si no hay ninguno). Lo pasa
+    `llm.py` mirando lo mismo: si el slug `recursos` no sobrevivió en los enum, va None.
+
     LA FECHA VA ÚLTIMA, y eso no es estético: es lo único del prompt que cambia a cada
     minuto. Los proveedores cachean el prefijo del pedido y cobran (y tardan) sólo por lo
     que viene después del primer carácter distinto, así que con el bloque de fecha en el
     medio —donde estaba— los ~7.000 tokens que le seguían se reprocesaban en frío en cada
     turno. Al fondo, el prefijo cacheable pasa a ser el prompt entero: todo lo demás es
     byte por byte igual entre turno y turno para una misma combinación de
-    `escribe`/`ve_personas`/`ve_fotos`.
+    `escribe`/`ve_personas`/`ve_fotos`/`inventario` — el nombre del inventario entra
+    arriba de todo, así que cada uno tiene su propio prefijo cacheado, que es lo que se
+    paga por que el modelo no confunda un taller con el de al lado.
 
     El resto del orden es el que tenía el prompt de una sola pieza.
     """
-    bloques = [_IDENTIDAD, _areas(escribe, ve_personas), _COMO_TRABAJAS, _NO_AFIRMES, _IDS]
+    bloques = [_IDENTIDAD, _areas(escribe, ve_personas, inventario), _COMO_TRABAJAS,
+               _NO_AFIRMES, _IDS]
     if escribe:
         hitos = ''
         if historia.ACTIVA:

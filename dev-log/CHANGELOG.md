@@ -6,6 +6,23 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-09-04] — El chat elige en qué inventario trabaja
+
+**Archivos**: `gestion.py`, `agente/rutas.py`, `agente/llm.py`, `agente/prompt.py`, `templates/agente/agente_chat.html`, `static/gestion-agente.js`, `static/gestion.css`
+
+`gestion` expone `abribles()` (los inventarios que esta sesión abre) y `activar(slug)` (fija
+`inv_activo`, validando contra la anterior). Nuevo `POST /agente/inventario`, que es el selector
+de la barra del chat y **reinicia la conversación** al cambiar. `construir_system_prompt` toma
+`inventario=` (el nombre del abierto): el prompt ya no dice "el inventario" a secas.
+
+## [2026-09-04] — `/agente/revisar` acepta varias fichas
+
+**Archivos**: `agente/rutas.py`, `static/gestion-agente.js`
+
+Además de `{token, estado, nota?}` acepta `{tokens: [...], estado}`. Ahí un token que ya no
+está se saltea en vez de cortar con 409; de a uno sigue siendo 409. `FICHAS_MAX` pasó de 20
+a 100 (`agente/db.py`) y `db._foto_lote_leer()` es el `_foto_lote_tomar()` que no borra.
+
 ## [2026-09-03] — Todas las bases se mudaron a `database/`
 
 **Archivos**: `config.py`, `horarios/config.py`, `app.py`, `actualizar.py`, `accesos.py`, `gestion.py`, `historia.py`, `salidas.py`, `estudiantes.py`, `respaldos.py`, `horarios/datos.py`, `database/LEEME.md`

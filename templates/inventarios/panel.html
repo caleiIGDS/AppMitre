@@ -26,6 +26,31 @@
 <p class="g-help">Cada inventario es independiente: tiene su propia gente y su propia
     clave. Tener acceso a uno no da acceso a ninguno de los otros.</p>
 
+{% if puede('inventarios.admin') %}
+{# El alta no ocupa la página: lo de todos los días acá es mirar la lista, no crear un
+   inventario. El <summary> es el botón y el formulario sale de abajo. #}
+<details class="g-desplegable">
+<summary class="g-btn">+ NUEVO INVENTARIO</summary>
+
+<form method="post" action="{{ url_for('inventarios.crear') }}" class="g-form">
+    <div class="g-field">
+        <label for="campo-nombre">NOMBRE</label>
+        <input id="campo-nombre" type="text" name="nombre" required
+               placeholder="Taller de Electrónica, Laboratorio, Pañol…">
+    </div>
+    <div class="g-field">
+        <label for="campo-clave">CLAVE PARA EL ENCARGADO</label>
+        <input id="campo-clave" type="text" name="clave" required>
+        <span class="g-help">Con esta clave el encargado entra al inventario y decide quién
+            más entra. Vos no vas a ver lo que carguen adentro.</span>
+    </div>
+    <div class="g-form-actions">
+        <button type="submit" class="g-btn">CREAR INVENTARIO</button>
+    </div>
+</form>
+</details>
+{% endif %}
+
 <div class="g-cards">
     {% for i in inventarios %}
     <div class="g-card">
@@ -42,7 +67,9 @@
 
         <div class="g-card-actions">
             {% if i.abre %}
-            <a class="g-btn" href="{{ url_for('gestion.home', inv=i.slug) }}">ABRIR</a>
+            {# Directo a la lista de recursos: el inicio de tarjetas es una escala de
+               más, y a un inventario se entra para ver lo que tiene adentro. #}
+            <a class="g-btn" href="{{ url_for('gestion.lista', inv=i.slug, slug='recursos') }}">ABRIR</a>
             {% elif not i.sin_clave %}
             <a class="g-btn-outline-dark" href="{{ url_for('gestion.login', inv=i.slug) }}">ENTRAR CON CLAVE</a>
             {% endif %}
@@ -101,26 +128,5 @@
     <p class="g-help">Todavía no hay ningún inventario.</p>
     {% endfor %}
 </div>
-
-{% if puede('inventarios.admin') %}
-<div class="g-toolbar"><h2>NUEVO INVENTARIO</h2></div>
-
-<form method="post" action="{{ url_for('inventarios.crear') }}" class="g-form">
-    <div class="g-field">
-        <label for="campo-nombre">NOMBRE</label>
-        <input id="campo-nombre" type="text" name="nombre" required
-               placeholder="Taller de Electrónica, Laboratorio, Pañol…">
-    </div>
-    <div class="g-field">
-        <label for="campo-clave">CLAVE PARA EL ENCARGADO</label>
-        <input id="campo-clave" type="text" name="clave" required>
-        <span class="g-help">Con esta clave el encargado entra al inventario y decide quién
-            más entra. Vos no vas a ver lo que carguen adentro.</span>
-    </div>
-    <div class="g-form-actions">
-        <button type="submit" class="g-btn">CREAR INVENTARIO</button>
-    </div>
-</form>
-{% endif %}
 
 {% endblock %}

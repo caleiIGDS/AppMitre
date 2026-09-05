@@ -132,9 +132,11 @@ Las dependencias van en una sola dirección y **no hay ciclos**:
   la guarda sin pasar por el modelo. Es el camino de **una sola ficha**. `409` si el token ya se
   usó, se reinició la conversación, o quedó desplazado por fichas más nuevas. Ver "Alta con ficha
   de confirmación".
-- **`POST /agente/revisar`** — acepta `{token, estado, nota?}` y marca una ficha del lote como
-  `ok` / `observada` / `descartada`. **No escribe en el inventario ni llama al modelo.** `400` si
-  el estado no existe, `409` si la ficha ya no está. Ver "Cargar de a muchas: el lote".
+- **`POST /agente/revisar`** — acepta `{token, estado, nota?}` o `{tokens: [...], estado}` y
+  marca una o varias fichas del lote como `ok` / `observada` / `descartada`. **No escribe en el
+  inventario ni llama al modelo.** `400` si el estado no existe; `409` si la ficha ya no está,
+  sólo en la forma de a una — en la masiva un token caducado se saltea, para que una de sesenta
+  no invalide las otras. Ver "Cargar de a muchas: el lote".
 - **`POST /agente/editar_ficha`** — acepta `{token, campos}` y aplica una edición manual desde
   la tarjeta del chat. **No escribe en el inventario ni llama al modelo**: recalcula el token
   (es el hash del contenido) y reemplaza la ficha en la sesión bajo el token nuevo, con el
@@ -149,6 +151,9 @@ Las dependencias van en una sola dirección y **no hay ciclos**:
 - **`POST /agente/reset`** — limpia `session['agente_historial']` y
   `session['agente_entidad_actual']`; usado por el botón ↺ del widget para arrancar una
   conversación nueva sin arrastrar contexto viejo.
+- **`POST /agente/inventario`** — acepta `{inventario: '<slug>'}` y cambia en cuál de los
+  inventarios trabaja el chat (el selector de la barra, ver "En qué inventario trabaja").
+  `403` si no es uno de los que este acceso abre. **Reinicia la conversación** (`_conv_borrar`).
 - **`GET /agente/`** (`chat_page`) — la pestaña del chat a pantalla completa
   (`templates/agente/agente_chat.html`, extiende `base.html`).
 - **`GET /agente/log`** — tabla de auditoría (últimas 50 escrituras), con snapshot
@@ -187,6 +192,30 @@ el login. Siete casos piden más que el permiso base:
 El de `/chat` es un chequeo dentro de la vista y no un decorador porque la ruta **sí** está
 permitida — lo que no está permitido es un campo del body. Un acceso sin `agente.vision` chatea
 normalmente; sólo mandar una imagen le da `403`, que el front ya traduce a un mensaje legible.
+
+### En qué inventario trabaja el chat
+
+Gestión son **varios inventarios estancos** (`agent_docs/gestion-conocimiento.md`), y el
+asistente trabaja en UNO: el de `session['inv_activo']`, que es lo que resuelve `db_path()` y
+lo que hace que `gestion.leer` valga (sin inventario abierto, `recursos` se cae de los enum y
+las siete tools de entidades no viajan).
+
+En el widget flotante eso no se elige: el widget se abre adentro de `/gestion/<inv>/…` y ahí
+manda la URL. En la **pestaña `/agente` no hay URL que lo diga**, así que la barra de arriba
+tiene un `<select>` con los inventarios que este acceso abre — `gestion.abribles()`, la misma
+lista del panel del registro — y `POST /agente/inventario` lo cambia (`gestion.activar()`
+revalida el slug: uno ajeno da `403`). Si no hay ninguno abierto el selector arranca en un
+placeholder, y con cero inventarios abribles no se pinta.
+
+**Cambiar de inventario reinicia la conversación**, y no es prolijidad: en el historial quedan
+ids de recursos y fichas sin confirmar del inventario anterior, y un id no significa lo mismo
+en el archivo de al lado — confirmar una ficha armada en el taller después de cambiar al
+laboratorio daría de alta el recurso en el laboratorio. El front avisa antes de cambiar.
+
+El prompt además **nombra el inventario abierto** (`_areas()` en `prompt.py`, con el nombre que
+le pasa `llm.py` si el slug `recursos` sobrevivió en los enum): "el inventario" a secas invita
+a contestar por uno cuando le preguntaron por otro. Cada inventario tiene entonces su propio
+prefijo cacheado en el proveedor — es lo que se paga por que no los mezcle.
 
 **Context processor propio**: `agente.bp` construye su `_contexto_base()` localmente
 (`escuela_nombre`/`escuela_logo`/`escuela_version` salen de `config.py`). No usa el context
@@ -253,10 +282,10 @@ Comparten markup y JS; lo único que cambia es el contenedor.
 | `templates/agente/base.html` | Layout propio del área: header con links cruzados a horarios / `/gestion` / `/historia`, nav ASISTENTE + AUDITORÍA. No incluye el widget flotante. |
 | `templates/agente/_agente_chat_core.html` | El chat en sí: `#agente-messages` + área de input (texto, 📷 imagen, enviar, link a auditoría). **Único lugar donde se edita el markup del chat.** |
 | `templates/agente/_agente_widget.html` | Widget flotante = header propio (↺ reiniciar, ⤢ abrir a pantalla completa, ✕ cerrar) + el core. Lo incluyen `gestion/base.html` e `historia/base.html`. |
-| `templates/agente/agente_chat.html` | Pestaña = barra de título + el core, dentro de `agente/base.html`. |
+| `templates/agente/agente_chat.html` | Pestaña = barra de título + selector de inventario + el core, dentro de `agente/base.html`. |
 | `templates/agente/agente_log.html` | Auditoría, dentro de `agente/base.html`. |
 | `templates/agente/login.html` | Login del área. |
-| `static/gestion-agente.js` | Sirve a las dos vistas. Las URLs (`/agente/chat`, `/agente/historial`, `/agente/confirmar`, `/agente/reset`) están hardcodeadas ahí: si cambia el prefijo del blueprint, hay que tocarlas. |
+| `static/gestion-agente.js` | Sirve a las dos vistas. Las URLs (`/agente/chat`, `/agente/historial`, `/agente/confirmar`, `/agente/reset`, `/agente/inventario`) están hardcodeadas ahí: si cambia el prefijo del blueprint, hay que tocarlas. |
 
 Los IDs del core (`agente-messages`, `agente-input`, `agente-send-btn`, `agente-reset-btn`…)
 son únicos y el JS los busca con `getElementById` — por eso **las dos vistas nunca se
@@ -626,8 +655,12 @@ daba de alta una sola sin que nada avisara. Tres reglas sostienen el caso:
   escribe nada: guardar es siempre un click explícito.
 - Si dos fichas pendientes son la **misma alta** (el usuario pidió un cambio y el modelo la
   rearmó), la nueva **reemplaza** a la vieja en la sesión, en `_fusionar_fichas()`. La
-  identidad es el número de foto cuando salió de una, y si no el nombre (`_identidad_ficha()`,
-  que usan también los botones). No alcanza con esconder la vieja al mostrar: si sigue viva en
+  identidad es el nombre, más el número de foto cuando salió de una (`_identidad_ficha()`, que
+  usan también los botones): el nombre va siempre porque **una foto puede ser N altas** —el
+  índice de una colección, un remito— y con la identidad puesta sólo en el número, esas N
+  colapsaban a una. El caso que cubría —la corrección que le cambia el nombre a la única ficha
+  de una etiqueta— lo sostiene el reemplazo 1-a-1 de `_reemplazo_uno_a_uno()`: si la foto tenía
+  UNA ficha viva y vuelve con UNA sola, la nueva pisa a la vieja aunque cambie el nombre. No alcanza con esconder la vieja al mostrar: si sigue viva en
   la sesión, al guardar la nueva reaparece sola en el turno siguiente y un segundo click da de
   alta el mismo recurso dos veces.
 
@@ -636,9 +669,10 @@ seguidos, "Guardar persona" repetido no dice cuál es cuál.
 
 ### Cargar de a muchas: el lote
 
-Es el flujo de vaciar una estantería en el inventario: se mandan hasta ocho fotos, sale una
-ficha por foto, **se revisan todas antes de que se escriba nada**, y un botón al final guarda
-las aprobadas y manda las acotadas de vuelta al asistente.
+Es el flujo de vaciar una estantería en el inventario: se mandan hasta ocho fotos y sale una
+ficha por foto —o decenas de una sola, si la foto es una lista de ítems sueltos—, **se revisan
+todas antes de que se escriba nada**, y un botón al final guarda las aprobadas y manda las
+acotadas de vuelta al asistente.
 
 El botón que guardaba al toque no servía para esto por dos razones concretas: obligaba a
 decidir de a una y sin vuelta atrás, y pedir una corrección escribiendo se llevaba puesto lo
@@ -653,7 +687,7 @@ botón verde directo — meterle dos pasos al caso de siempre sería un click de
 |---|---|---|
 | ✅ está bien | `ok` | se escribe, con su foto y sus vínculos |
 | ✏️ corregir + qué está mal | `observada` | **no se escribe**: vuelve al modelo para que la rearme |
-| ✕ no va | `descartada` | se tira, junto con su foto pendiente |
+| ✕ no va | `descartada` | se tira, y con ella la foto si no queda otra ficha que la use |
 
 Marcar pega en **`POST /agente/revisar`**, que no toca el inventario ni llama al modelo. El
 estado vive en la DB y no en el DOM: por eso sobrevive a recargar la página, a navegar a
@@ -664,6 +698,11 @@ dos o más fichas el front ya no las quita al enviar un mensaje, las repinta con
 **El botón de cerrar se habilita recién cuando no queda ninguna pendiente.** La idea del lote
 es mirar las ocho antes de tocar nada; con el botón vivo desde el principio es fácil mandar
 media tanda sin querer. Mientras falten, dice "faltan 3 por revisar".
+
+Al lado hay un **"✅ las N"** que aprueba de una las que siguen pendientes, en un solo
+`/revisar` con la lista de tokens. No es un atajo de comodidad: con sesenta fichas —una foto
+de una lista— la regla de arriba pide sesenta clicks para poder cerrar. Marcar no escribe
+nada, así que aprobarlas todas y después bajar las tres que no van sigue siendo reversible.
 
 **`POST /agente/lote`** hace las tres cosas en una: escribe las `ok` (con `_guardar_ficha()`,
 el mismo camino que `/confirmar`), borra las `descartada` con su foto, y arma **un solo
@@ -703,8 +742,9 @@ hash ya se mostró en un turno **anterior**. Consecuencias buscadas:
   vez de duplicar el recurso.
 
 Los hashes viven en la columna `fichas` de `agente_conversaciones` — un dict
-`{token: {slug, campos, estado, nota?, foto?}}`, tope `FICHAS_MAX` = 20, que es lo que hace
-falta para un lote de ocho más su segunda vuelta. `_turno()` lo carga en
+`{token: {slug, campos, estado, nota?, foto?}}`, tope `FICHAS_MAX` = 100: no alcanza con el
+lote de ocho más su segunda vuelta, porque una sola foto de una lista son decenas de altas y
+el recorte se lleva las últimas **sin avisar**. `_turno()` lo carga en
 `contexto_turno['fichas_previas']` antes de llamar al modelo y lo vuelve a guardar después;
 `/confirmar`, `/revisar` y `/lote` leen de ahí.
 **Tiene que ser la conversación y no el turno**: los resultados de tools no se persisten en

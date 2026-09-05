@@ -14,6 +14,7 @@ from flask import (Response, jsonify, redirect, render_template, request,
 
 import accesos
 import crud
+import gestion
 import texto
 from config import (DIAS, ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION,
                     PRODUCCION, ahora)
@@ -21,8 +22,8 @@ from config import (DIAS, ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION,
 from . import (PERMISO_ESCRITURA, PERMISO_LECTURA, PERMISO_NOTAS, PERMISO_VISION,
                bp)
 from .db import (FICHAS_MAX, FOTOS_MAX, HISTORIAL_AL_MODELO, _conv_borrar, _conv_cargar,
-                 _conv_guardar, _foto_lote_tomar, _fotos_lote_borrar, _fotos_lote_guardar,
-                 _sid, _sin_imagenes, conectar)
+                 _conv_guardar, _foto_lote_leer, _foto_lote_tomar, _fotos_lote_borrar,
+                 _fotos_lote_guardar, _sid, _sin_imagenes, conectar)
 from .dominio import _modulo, ve_entidad
 from .enlaces import enlace_comparacion, enlazar
 from .filtros import (AVISO_NO_EJECUTADO, _es_pregunta_relativa, _escritura_no_ejecutada,
@@ -104,6 +105,30 @@ def _aviso_foto_actual(numeros):
             "distintas salvo que el usuario diga lo contrario: una ficha por foto, y en cada "
             "crear_entidad pasá el número de la foto de la que salió. Si no sabés para qué te "
             "las mandaron, preguntale.]")
+
+
+def _aviso_foto_directa(numeros):
+    """Lo que el modelo lee cuando ve la foto directamente en este mensaje (proveedor con
+    visión y sin lector aparte configurado, ver `_turno_stream`).
+
+    A diferencia de `_aviso_foto_actual`, acá no hace falta leer_foto: la imagen ya está
+    arriba, en el mismo mensaje. El aviso sólo recuerda que no vuelve a viajar en turnos
+    siguientes (se limpia en `_sin_imagenes`), así que si algo de lo que ve hace falta más
+    adelante en la conversación, tiene que quedar anotado en la respuesta de este turno —
+    sin este aviso, el turno siguiente sólo encontraba en el historial un genérico "adjuntó
+    una imagen" y el modelo terminaba diciendo que no la podía ver.
+    """
+    if len(numeros) == 1:
+        return ("[El usuario adjuntó una foto en este turno (es la número "
+                f"{numeros[0]}), y la tenés arriba en este mismo mensaje: no hace falta "
+                "leer_foto, mirala directamente. Sólo está disponible en este turno — si algo "
+                "de lo que ves hace falta más adelante en la conversación, anotalo en tu "
+                "respuesta ahora.]")
+    lista = ', '.join(str(n) for n in numeros)
+    return (f"[El usuario adjuntó {len(numeros)} fotos en este turno, numeradas {lista}, y las "
+            "tenés arriba en este mismo mensaje: no hace falta leer_foto, miralas "
+            "directamente. Sólo están disponibles en este turno — si algo de lo que ves hace "
+            "falta más adelante en la conversación, anotalo en tu respuesta ahora.]")
 
 
 def _aviso_foto_vieja(numeros, lecturas=None):
@@ -204,7 +229,39 @@ def chat_page():
     Pensada para el celular, que es donde más se usa: el widget de 380px flotando
     sobre una página que igual scrollea es incómodo en una pantalla chica.
     """
-    return render_template('agente/agente_chat.html', activo='agente')
+    inventarios = gestion.abribles()
+    # El activo se manda sólo si es uno de los que este acceso abre: `slug_activo()` puede
+    # traer el último que se visitó con una clave que ya venció, y ahí el selector tiene
+    # que quedar en el placeholder y no marcando un inventario que en realidad no está.
+    activo_inv = gestion.slug_activo()
+    if activo_inv not in [f['slug'] for f in inventarios]:
+        activo_inv = None
+    return render_template('agente/agente_chat.html', activo='agente',
+                           inventarios=inventarios, inv_activo=activo_inv)
+
+
+@bp.route('/inventario', methods=['POST'])
+def elegir_inventario():
+    """Cambia el inventario en el que trabaja el chat (el selector de la barra de arriba).
+
+    Sin esto, en `/agente` el inventario era el último que la sesión hubiera visitado por
+    la web y no había forma de verlo ni de cambiarlo desde el chat: con varios inventarios
+    estancos eso es preguntarle a Emilio por un taller y que conteste con el de al lado.
+
+    CAMBIAR REINICIA LA CONVERSACIÓN, y no es prolijidad: en el historial quedan ids de
+    recursos y fichas sin confirmar del inventario anterior, y los ids no significan lo
+    mismo en el archivo de al lado. Confirmar una ficha armada en el taller después de
+    cambiar al laboratorio daría de alta el recurso en el laboratorio.
+
+    Quién puede: el gate del blueprint (`agente.leer`) más `gestion.abribles()`, que sólo
+    devuelve los que esta sesión abre de verdad. Un slug ajeno da 403.
+    """
+    slug = (request.get_json(silent=True) or {}).get('inventario') or ''
+    fila = gestion.activar(slug)
+    if fila is None:
+        return jsonify({'ok': False, 'error': 'No podés abrir ese inventario.'}), 403
+    _conv_borrar()
+    return jsonify({'ok': True, 'inventario': fila['nombre'], 'slug': fila['slug']})
 
 
 def _normalizar_imagenes(data):
@@ -351,7 +408,13 @@ def _turno_stream(mensaje_usuario, fotos=(), mandadas=0, origen='chat'):
     # a arrastrar en `crear_entidad(foto=N)` para que cada imagen termine en su ficha, y
     # tiene que estar disponible cuando confirme, que puede ser mucho después.
     numeros = _fotos_lote_guardar(fotos)
-    aviso_actual = _aviso_foto_actual(numeros) if numeros else ''
+    # Se decide acá y no en el `if` de más abajo porque también elige QUÉ aviso arma: el de
+    # visión directa no menciona leer_foto (el modelo ya la tiene arriba, en el mensaje).
+    visto_directo = bool(fotos) and _get_config()['vision'] and not _get_vision_config()
+    if numeros:
+        aviso_actual = _aviso_foto_directa(numeros) if visto_directo else _aviso_foto_actual(numeros)
+    else:
+        aviso_actual = ''
     if aviso_actual and mandadas > len(fotos):
         aviso_actual += _aviso_recorte(mandadas)
 
@@ -372,7 +435,12 @@ def _turno_stream(mensaje_usuario, fotos=(), mandadas=0, origen='chat'):
     # comía el caso más común: ADJUNTAR una foto no necesita verla, y con el corte
     # `adjuntar_foto` era inalcanzable. Ahora el turno corre siempre y la distinción la hace
     # el modelo; si pide leer sin lector, se lo dice el error de `leer_foto`.
-    if fotos and _get_config()['vision'] and not _get_vision_config():
+    if visto_directo:
+        # El aviso viaja pegado al texto (y no sólo como bloques `image`) para que quede en
+        # `content` y `_foto_en_pasado` lo pueda encontrar y reemplazar al persistir — si no,
+        # el turno siguiente sólo ve el genérico "[el usuario adjuntó una imagen]" de
+        # `_sin_imagenes`, sin ninguna pista de que ya no está disponible.
+        contenido[0]['text'] = f"{msg_procesado}\n\n{aviso_actual}"
         for b64, tipo in fotos:
             contenido.append({
                 'type': 'image',
@@ -480,14 +548,52 @@ def _identidad_ficha(pendiente):
     """Qué hace que dos fichas sean la MISMA alta y no dos.
 
     El token es el hash del CONTENIDO, así que rearmar una ficha con un campo corregido da
-    otro token: sin una identidad aparte, la vieja y la nueva quedan las dos vivas. La foto
-    de la que salió es la identidad confiable cuando la hay; para las altas de texto queda
-    el nombre, que es lo único que las distingue.
+    otro token: sin una identidad aparte, la vieja y la nueva quedan las dos vivas. Lo que
+    las distingue es el nombre; el número de foto se le suma cuando la ficha salió de una,
+    para que dos objetos que se llaman igual en dos fotos distintas sigan siendo dos altas.
+
+    El nombre va SIEMPRE, también del lado de la foto: una sola foto puede ser N altas (el
+    índice de una colección, un remito con productos sueltos), y con la identidad puesta
+    solo en el número, las 66 fichas de una lista colapsaban a una — el usuario veía una
+    tarjeta de 66 y las otras 65 se descartaban sin aviso. El caso que cubría esa identidad
+    —la corrección que cambia el nombre de la única ficha de una etiqueta— lo resuelve el
+    reemplazo 1-a-1 de `_fusionar_fichas`.
     """
-    if pendiente.get('foto'):
-        return ('foto', pendiente['foto'])
     slug = pendiente['slug']
-    return (slug, texto.norm(_nombre_de(slug, pendiente['campos'])))
+    nombre = texto.norm(_nombre_de(slug, pendiente['campos']))
+    if pendiente.get('foto'):
+        return ('foto', pendiente['foto'], nombre)
+    return (slug, nombre)
+
+
+def _fichas_por_foto(fichas):
+    """Cuántas fichas hay de cada número de foto. Las de texto no cuentan."""
+    conteo = {}
+    for f in fichas.values():
+        n = f.get('foto')
+        if n:
+            conteo[n] = conteo.get(n, 0) + 1
+    return conteo
+
+
+def _reemplazo_uno_a_uno(previas, mostradas):
+    """`previas` sin las fichas que la corrección de una etiqueta acaba de reemplazar.
+
+    Es lo que sostiene el caso "no es un Taladro Bosch, es un Rotomartillo Makita": el
+    modelo rearma la ficha con OTRO nombre, así que la identidad no coincide y sin esto
+    quedan dos tarjetas para la misma etiqueta. Antes lo cubría la identidad-por-foto, que
+    se llevaba puestas las altas múltiples de una misma imagen (ver `_identidad_ficha`).
+
+    La condición es estricta a propósito: la foto tenía UNA ficha pendiente y vuelve con
+    UNA sola. Con 40 libros vivos de la foto 1 no se cumple y no se borra nada — ahí una
+    ficha nueva es una más, no el reemplazo de ninguna.
+    """
+    viejas = _fichas_por_foto(previas)
+    nuevas = _fichas_por_foto(mostradas)
+    reemplazadas = {n for n, c in nuevas.items() if c == 1 and viejas.get(n) == 1}
+    if not reemplazadas:
+        return previas
+    return {t: f for t, f in previas.items() if f.get('foto') not in reemplazadas}
 
 
 def _fusionar_fichas(previas, mostradas):
@@ -502,6 +608,7 @@ def _fusionar_fichas(previas, mostradas):
     Se colapsa el dict entero y no solo lo que pisan las nuevas, para que una sesión que ya
     venía con la ficha repetida se limpie en el próximo turno.
     """
+    previas = _reemplazo_uno_a_uno(previas, mostradas)
     fichas = dict(previas)
     fichas.update(mostradas)
     ultimo = {_identidad_ficha(f): t for t, f in fichas.items()}
@@ -768,13 +875,17 @@ def _adjuntar_foto_pendiente(pendiente, slug, id_nuevo):
     desde `leer_foto`), no por el token: el token cambia en cuanto la ficha se rearma con
     una corrección, y ahí la imagen se perdía. Ver `db._fotos_lote_guardar`.
 
+    Se COPIA, no se consume: una foto de una lista puede ser el origen de decenas de fichas
+    y si la primera en guardarse se lleva la imagen, las demás se crean sin ella. La borra
+    después `_soltar_foto`, cuando ya no queda ninguna ficha pendiente que la use.
+
     Devuelve el texto a sumarle al "✅ Guardado" (vacío si no había foto). Si la escritura
     falla no se toca el alta: el registro ya está creado y el token ya se consumió, así que
     lo único razonable es avisar que la foto quedó afuera.
     """
     if not id_nuevo:
         return ''
-    foto = _foto_lote_tomar(pendiente.get('foto'))
+    foto = _foto_lote_leer(pendiente.get('foto'))
     if not foto:
         return ''
     b64, tipo = foto
@@ -846,10 +957,24 @@ def _guardar_ficha(token, fichas):
         return False, nombre, resultado.get('error', 'error desconocido')
 
     detalle = _adjuntar_foto_pendiente(pendiente, slug, resultado.get('id'))
+    # `ejecutar_tool` ya sacó el token de `fichas` al escribir, así que acá `fichas` es lo
+    # que queda pendiente: si ninguna otra ficha salió de esta foto, la imagen ya no sirve.
+    _soltar_foto(pendiente.get('foto'), fichas)
     if slug == 'hitos':
         detalle += _enlazar_protagonistas(resultado.get('id'),
                                           pendiente['campos'].get('protagonistas'))
     return True, nombre, detalle
+
+
+def _soltar_foto(n, fichas):
+    """Tira la foto N sólo si ya no queda ninguna ficha pendiente que la use.
+
+    Una imagen puede ser el origen de varias altas (una lista, un remito): borrarla al
+    resolver la primera —guardándola o descartándola— dejaba a las hermanas sin foto.
+    `fichas` es el estado DESPUÉS de sacar la que se acaba de resolver.
+    """
+    if n and not any(f.get('foto') == n for f in fichas.values()):
+        _foto_lote_tomar(n)
 
 
 def _cerrar_lote(fichas):
@@ -948,7 +1073,7 @@ def descartar():
     pendiente = fichas.pop(token)
     slug = pendiente['slug']
     nombre = _nombre_de(slug, pendiente['campos'])
-    _foto_lote_tomar(pendiente.get('foto'))
+    _soltar_foto(pendiente.get('foto'), fichas)
     _cerrar_lote(fichas)
 
     respuesta = f"🗑️ Descarté: **{nombre}**. No se guardó nada."
@@ -963,18 +1088,29 @@ ESTADOS_REVISION = ('pendiente', 'ok', 'observada', 'descartada')
 @bp.route('/revisar', methods=['POST'])
 @accesos.requiere(PERMISO_ESCRITURA, como_json=True)
 def revisar():
-    """Marca una ficha del lote como aprobada, observada o descartada. NO escribe nada.
+    """Marca fichas del lote como aprobadas, observadas o descartadas. NO escribe nada.
 
     Es el paso que faltaba para poder cargar de a muchas: con ocho fichas en pantalla, el
     botón que guarda al toque obliga a decidir de a una y sin vuelta atrás, y cualquier
     corrección se llevaba puesto lo ya revisado. Acá la marca es reversible y no cuesta
     nada — ni una escritura en el inventario ni una llamada al modelo.
 
+    Acepta `token` (un botón de fila) o `tokens` (el "✅ todas" de la barra, con el mismo
+    estado para todas). La lista existe porque el lote dejó de ser de ocho: una foto de una
+    lista son decenas de fichas, y el botón de cerrar pide que no quede ninguna pendiente —
+    de a una eso son sesenta clicks y sesenta requests. En la marcación masiva un token que
+    ya no está se saltea en silencio: que una de sesenta haya caducado no puede invalidar
+    las otras cincuenta y nueve. Con `token` solo sigue siendo 409, que es lo que espera el
+    botón de la fila.
+
     Pide `agente.escribir` igual que `/confirmar`: no toca el dominio, pero es el circuito
     de alta, y quien no puede escribir no tiene fichas que revisar.
     """
     data = request.get_json() or {}
-    token = data.get('token', '')
+    tokens = data.get('tokens')
+    en_lote = isinstance(tokens, list)
+    if not en_lote:
+        tokens = [data.get('token', '')]
     estado = data.get('estado', '')
     nota = (data.get('nota') or '').strip()
 
@@ -983,21 +1119,24 @@ def revisar():
 
     conv = _conv_cargar()
     fichas = dict(conv['fichas'])
-    if token not in fichas:
+    if not en_lote and tokens[0] not in fichas:
         return jsonify({'ok': False,
                         'respuesta': 'Esa ficha ya no está pendiente. Pedile al asistente que '
                                      'la vuelva a armar.'}), 409
 
-    ficha = dict(fichas[token])
-    ficha['estado'] = estado
-    # La nota solo tiene sentido en una ficha observada: si el usuario la aprueba después de
-    # haberla acotado, el texto viejo no tiene que quedar dando vueltas ni terminar en el
-    # mensaje que se le manda al modelo.
-    if estado == 'observada' and nota:
-        ficha['nota'] = nota
-    else:
-        ficha.pop('nota', None)
-    fichas[token] = ficha
+    for token in tokens:
+        if token not in fichas:
+            continue
+        ficha = dict(fichas[token])
+        ficha['estado'] = estado
+        # La nota solo tiene sentido en una ficha observada: si el usuario la aprueba después
+        # de haberla acotado, el texto viejo no tiene que quedar dando vueltas ni terminar en
+        # el mensaje que se le manda al modelo.
+        if estado == 'observada' and nota:
+            ficha['nota'] = nota
+        else:
+            ficha.pop('nota', None)
+        fichas[token] = ficha
 
     # No se persiste ningún turno: los clicks de revisión no son conversación, y meter ocho
     # mensajes de "marqué esta" en el historial le costaría contexto al modelo sin decirle
@@ -1129,8 +1268,10 @@ def lote():
                 fallados.append(f'- {nombre} ({detalle})')
         elif estado == 'descartada':
             descartados.append(fila['nombre'])
-            _foto_lote_tomar(fichas[token].get('foto'))   # la imagen tampoco hace falta ya
+            foto = fichas[token].get('foto')
             fichas.pop(token, None)
+            # La imagen tampoco hace falta ya, salvo que otra ficha de la misma foto siga viva.
+            _soltar_foto(foto, fichas)
         elif estado == 'observada':
             observadas.append(fila)
             fichas.pop(token, None)

@@ -907,6 +907,32 @@ def _puede_abrir(fila):
     return accesos.tiene(accesos.permisos_en(f"inv:{fila['id']}"), PERMISO_LECTURA)
 
 
+def abribles():
+    """Los inventarios que esta sesión abre sin tipear la clave, por nombre.
+
+    Lo mismo que muestra el panel del registro, pero como lista y no como página: lo
+    necesita el selector del chat (`/agente`), donde no hay `<inv>` en la URL y el
+    inventario sale de la sesión. Vive acá y no en el agente porque nombra el registro y
+    el ámbito de `accesos`, que son de esta área.
+    """
+    return [f for f in listar_inventarios() if _puede_abrir(f)]
+
+
+def activar(slug):
+    """Deja `slug` como el inventario de esta sesión, si es uno que se puede abrir.
+
+    Es la misma anotación que hace `_recordar_inventario` al navegar `/gestion/<inv>/…`,
+    pero pedida desde afuera del área. Valida contra `abribles()` y no contra el registro
+    a secas: sin eso, cualquiera podría fijarse un inventario ajeno como activo y, aunque
+    los permisos del ámbito igual lo dejarían sin tools, ya estaría apuntando a otro .db.
+    """
+    fila = inventario(slug)
+    if fila is None or not _puede_abrir(fila):
+        return None
+    session['inv_activo'] = fila['slug']
+    return fila
+
+
 @bp_inv.route('/')
 def panel():
     """La lista. Para el admin general es el tablero de altas y bajas; para el resto es

@@ -142,6 +142,14 @@
 
 .g-toolbar-actions form { margin: 0; }
 
+/* Panel que se abre desde un botón: el <summary> se ve y se toca como botón, sin el
+   triángulo nativo al lado. Lo usa el alta de inventarios. */
+.g-desplegable { margin-bottom: 24px; }
+.g-desplegable > summary { list-style: none; }
+.g-desplegable > summary::-webkit-details-marker { display: none; }
+.g-desplegable > summary::marker { content: ''; }
+.g-desplegable[open] > summary { margin-bottom: 16px; }
+
 .g-breadcrumb {
     font-size: 12px;
     letter-spacing: 1px;
@@ -2201,6 +2209,30 @@ textarea.agente-ficha-input {
     cursor: not-allowed;
 }
 
+.agente-lote-acciones {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Atajo, no acción principal: mismo alto que el botón verde pero en outline, para que
+   "guardar todo" siga siendo el único que se lee como definitivo. */
+.agente-lote-todas {
+    min-height: 44px;
+    padding: 8px 14px;
+    border: 1px solid var(--g-border);
+    background: transparent;
+    color: var(--g-muted);
+    font-family: var(--g-font);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.agente-lote-todas:hover:not(:disabled) { border-color: #16a34a; color: #16a34a; }
+.agente-lote-todas:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .agente-lote-nota {
     font-size: 11px;
     color: var(--g-muted);
@@ -2265,8 +2297,88 @@ textarea.agente-ficha-input {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
     border-bottom: 4px solid var(--g-accent);
     flex-shrink: 0;
+}
+
+/* En qué inventario trabaja el chat. Va en el medio de la barra, entre el título y el
+   ↺: es lo único de la barra que cambia lo que el asistente ve, así que se lee sin
+   buscarlo. `min-width: 0` para que el nombre largo se recorte y no empuje al ↺ afuera. */
+.agente-inv {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin-left: auto;
+}
+
+.agente-inv-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    opacity: 0.75;
+    white-space: nowrap;
+}
+
+/* `appearance: none` + flecha propia: con el widget nativo, Chromium pinta el select
+   claro y se ignoran estos colores — quedaba una caja gris en el medio de la barra azul.
+   El padding derecho es el lugar de la flecha. */
+.agente-inv-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: rgba(0, 0, 0, 0.25) no-repeat right 8px center;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23fff'/%3E%3C/svg%3E");
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    color: white;
+    font-family: var(--g-font);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 24px 4px 8px;
+    max-width: 220px;
+    min-width: 0;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.agente-inv-select:hover,
+.agente-inv-select:focus {
+    border-color: var(--g-accent);
+    outline: none;
+}
+
+/* El desplegable lo pinta el sistema y hereda el fondo oscuro del <select>: sin esto,
+   en Windows las opciones salen blancas sobre blanco. */
+.agente-inv-select option {
+    background: var(--g-primary);
+    color: white;
+}
+
+.agente-inv-select:disabled {
+    opacity: 0.6;
+    cursor: progress;
+}
+
+/* En celular el selector se va a su propio renglón, a lo ancho: en una barra de 390px
+   no entra al lado del título y el ↺, y achicándolo el nombre del inventario —que es
+   justamente lo que hay que poder leer— quedaba en tres letras. */
+@media (max-width: 700px) {
+    .agente-inv {
+        order: 3;
+        flex: 1 1 100%;
+        margin-left: 0;
+    }
+
+    .agente-inv-label {
+        display: none;
+    }
+
+    .agente-inv-select {
+        flex: 1;
+        max-width: none;
+    }
 }
 
 .agente-page-title {

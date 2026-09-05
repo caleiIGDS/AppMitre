@@ -95,6 +95,32 @@ document.addEventListener('DOMContentLoaded', function() {
   // Restaurar estado del widget al cargar la página
   restaurarEstadoWidget();
 
+  // La pantalla de arranque, con una segunda línea opcional. La usan el ↺ y el cambio de
+  // inventario, que dejan el chat en el mismo estado: sin historial y sin lote abierto.
+  function pantallaLimpia(nota) {
+    // El server borró las fichas y sus fotos: si el lote quedara marcado acá, el próximo
+    // turno pintaría botones de fichas que ya no existen.
+    loteAbierto = [];
+    const texto = nota || 'Preguntá sobre horarios, recursos, historia de la escuela o cualquier otra cosa.';
+    messagesDiv.innerHTML = '';
+    const div = document.createElement('div');
+    div.className = 'agente-welcome';
+    const icono = document.createElement('span');
+    icono.className = 'agente-welcome-icon';
+    icono.setAttribute('aria-hidden', 'true');
+    const cuerpo = document.createElement('div');
+    cuerpo.className = 'agente-welcome-text';
+    const titulo = document.createElement('strong');
+    titulo.textContent = 'Asistente en línea';
+    cuerpo.appendChild(titulo);
+    cuerpo.appendChild(document.createElement('br'));
+    // textContent: el nombre del inventario lo escribió una persona, no se interpreta.
+    cuerpo.appendChild(document.createTextNode(texto));
+    div.appendChild(icono);
+    div.appendChild(cuerpo);
+    messagesDiv.appendChild(div);
+  }
+
   if (resetBtn) {
     resetBtn.addEventListener('click', function(e) {
       e.preventDefault();
@@ -103,19 +129,55 @@ document.addEventListener('DOMContentLoaded', function() {
       fetch('/agente/reset', { method: 'POST' })
         .catch(() => {})
         .finally(() => {
-          // El server borró las fichas y sus fotos: si el lote quedara marcado acá, el
-          // próximo turno pintaría botones de fichas que ya no existen.
-          loteAbierto = [];
-          messagesDiv.innerHTML = `
-            <div class="agente-welcome">
-              <span class="agente-welcome-icon" aria-hidden="true"></span>
-              <div class="agente-welcome-text">
-                <strong>Asistente en línea</strong><br>
-                Preguntá sobre horarios, recursos, historia de la escuela o cualquier otra cosa.
-              </div>
-            </div>`;
+          pantallaLimpia();
           enfocarInput();
         });
+    });
+  }
+
+  // Selector de inventario (sólo la pestaña /agente: en el widget el inventario lo fija
+  // la URL de la página). Cambiarlo REINICIA la conversación, y por eso se pregunta: en
+  // el historial quedan ids y fichas sin confirmar del inventario anterior, que en el
+  // archivo de al lado significan otra cosa.
+  const invSelect = document.getElementById('agente-inv-select');
+  if (invSelect) {
+    let invActual = invSelect.value;
+
+    invSelect.addEventListener('change', function() {
+      const elegido = invSelect.value;
+      if (!elegido || elegido === invActual) return;
+
+      const hayCharla = !messagesDiv.querySelector('.agente-welcome');
+      if (enviando || (hayCharla && !confirm(
+            'Cambiar de inventario reinicia la conversación. ¿Seguir?'))) {
+        invSelect.value = invActual;
+        return;
+      }
+
+      const nombre = invSelect.options[invSelect.selectedIndex].textContent;
+      invSelect.disabled = true;
+      fetch('/agente/inventario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inventario: elegido })
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (!data.ok) throw new Error(data.error || '');
+          invActual = elegido;
+          // El placeholder deja de tener sentido en cuanto hay uno abierto: no se vuelve
+          // a "ningún inventario" desde acá.
+          const vacio = invSelect.querySelector('option[value=""]');
+          if (vacio) vacio.remove();
+          pantallaLimpia('Ahora estás trabajando en ' + nombre.trim()
+                         + '. La conversación anterior se cerró.');
+          enfocarInput();
+        })
+        .catch(() => {
+          invSelect.value = invActual;
+          alert('No se pudo cambiar de inventario.');
+        })
+        .finally(() => { invSelect.disabled = false; });
     });
   }
 
@@ -754,15 +816,26 @@ document.addEventListener('DOMContentLoaded', function() {
   // pueden pisarse y perder una marca: el usuario la ve marcada y el server no.
   let colaRevision = Promise.resolve();
 
-  function revisarFicha(token, estado, nota) {
+  function pedirRevision(cuerpo) {
     const pedido = colaRevision.then(() => fetch('/agente/revisar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: token, estado: estado, nota: nota || '' })
+      body: JSON.stringify(cuerpo)
     }).then(r => r.json()));
     // La cola no se corta si uno falla; el error lo recibe igual quien llamó.
     colaRevision = pedido.catch(() => {});
     return pedido;
+  }
+
+  function revisarFicha(token, estado, nota) {
+    return pedirRevision({ token: token, estado: estado, nota: nota || '' });
+  }
+
+  // Todas de una. Va en UN request y no en N: el lote dejó de ser de ocho —una foto de una
+  // lista son decenas de fichas— y encolar sesenta lee-modifica-escribe sobre la misma fila
+  // de la conversación es lento y frágil. El server saltea las que ya no están.
+  function revisarFichas(tokens, estado) {
+    return pedirRevision({ tokens: tokens, estado: estado, nota: '' });
   }
 
   function filaRevision(conf, caja) {
@@ -876,6 +949,11 @@ document.addEventListener('DOMContentLoaded', function() {
     fila.appendChild(botones);
     fila.appendChild(cajaNota);
     pintarEstado(conf.estado || 'pendiente', conf.nota);
+    // El "✅ todas" de la barra marca en el server y muta las `conf`, pero lo que pinta cada
+    // fila es este closure: sin registrarlo, la marca masiva no se vería hasta recargar.
+    (caja._repintar = caja._repintar || []).push(function() {
+      pintarEstado(conf.estado || 'pendiente', conf.nota);
+    });
     return fila;
   }
 
@@ -884,6 +962,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const barra = caja.querySelector('.agente-lote');
     if (!barra) return;
     const btn = barra.querySelector('.agente-lote-btn');
+    const todas = barra.querySelector('.agente-lote-todas');
     const nota = barra.querySelector('.agente-lote-nota');
 
     const fichas = caja._fichas || [];
@@ -905,6 +984,13 @@ document.addEventListener('DOMContentLoaded', function() {
     nota.textContent = pendientes
       ? 'falta' + (pendientes > 1 ? 'n ' : ' ') + pendientes + ' por revisar'
       : 'nada se guardó todavía — esto lo escribe todo junto';
+
+    // El atajo sólo mientras haya algo pendiente: marcar no escribe nada, así que aprobarlas
+    // todas y después bajar las tres que no van sigue siendo reversible.
+    if (todas) {
+      todas.hidden = pendientes === 0;
+      todas.textContent = '✅ las ' + pendientes;
+    }
   }
 
   function barraLote(caja) {
@@ -913,9 +999,40 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const btn = document.createElement('button');
     btn.className = 'agente-lote-btn';
+
+    // "✅ las N": aprueba de una las que siguen pendientes. Con ocho fichas marcar de a una
+    // es el flujo; con sesenta —una foto de una lista de libros— son sesenta clicks para
+    // habilitar el botón de cerrar, que pide cero pendientes.
+    const todas = document.createElement('button');
+    todas.className = 'agente-lote-todas';
+    todas.type = 'button';
+    todas.addEventListener('click', function() {
+      if (enviando || todas.disabled) return;
+      const fichas = (caja._fichas || []).filter(f => (f.estado || 'pendiente') === 'pendiente');
+      if (!fichas.length) return;
+      todas.disabled = true;
+      revisarFichas(fichas.map(f => f.token), 'ok')
+        .then(data => {
+          if (data.ok === false) {
+            agregarMensaje(data.respuesta || 'No se pudieron marcar las fichas', 'error');
+            return;
+          }
+          fichas.forEach(f => { f.estado = 'ok'; f.nota = ''; });
+          (caja._repintar || []).forEach(fn => fn());
+          actualizarBarra(caja);
+        })
+        .catch(error => agregarMensaje('Error de conexión: ' + error.message, 'error'))
+        .finally(() => { todas.disabled = false; });
+    });
+
     const nota = document.createElement('span');
     nota.className = 'agente-lote-nota';
-    barra.appendChild(btn);
+
+    const acciones = document.createElement('div');
+    acciones.className = 'agente-lote-acciones';
+    acciones.appendChild(btn);
+    acciones.appendChild(todas);
+    barra.appendChild(acciones);
     barra.appendChild(nota);
 
     btn.addEventListener('click', function() {
