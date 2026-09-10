@@ -543,6 +543,29 @@
 .g-form-kit .g-help { display: block; margin: 4px 0 12px; }
 .g-form-kit .g-table-wrap { margin-bottom: 12px; }
 
+/* Bloque UNIDADES de EDITAR: los chips de los números que existen, el alta por IDs y la
+   baja por número con motivo. Reusa .g-ficha-unidad (chips) y .g-checks (la grilla). */
+.g-form-unidades .g-uni-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+.g-uni-agregar { margin-bottom: 16px; }
+.g-uni-linea {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+.g-uni-agregar label { font-size: 13px; }
+.g-uni-agregar input[name="cuantas"] { width: 4.5em; }
+.g-uni-agregar input[name="numeros"] { width: 12em; }
+.g-uni-error { display: block; margin-top: 6px; color: var(--g-alert, #dc2626); }
+.g-uni-eliminar { padding-top: 12px; border-top: 1px dashed var(--g-border); }
+.g-uni-eliminar .g-checks { margin: 8px 0 12px; }
+.g-uni-eliminar .g-field { max-width: 320px; }
+
 /* Pie del formulario de edición: la única puerta para dar de baja un recurso.
    Separado de GUARDAR por el borde rojo para que no se confundan. */
 .g-form-peligro {

@@ -10,6 +10,9 @@
 
 <form method="post" class="g-form">
     {% for c in cfg.campos %}
+    {# `solo_alta`: campo que sólo se setea al crear (gestión: `cantidad`, que en edición
+       se maneja por unidades). En un alta `fila` es None, así que se muestra igual. #}
+    {% if not (c.solo_alta and fila) %}
     <div class="g-field">
         <label for="campo-{{ c.nombre }}">{{ c.label | upper }}{% if c.requerido %} *{% endif %}</label>
         {% if c.tipo == 'textarea' %}
@@ -52,6 +55,7 @@
         {% endif %}
         {% if c.ayuda %}<span class="g-help">{{ c.ayuda }}</span>{% endif %}
     </div>
+    {% endif %}
     {% endfor %}
 
     {# `relaciones` y no `cfg.relaciones`: crud.py ya sacó las que apuntan a una entidad

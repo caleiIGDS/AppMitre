@@ -6,6 +6,17 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-09-09] — `recursos.cantidad` deja de editarse a mano: es el COUNT de `recurso_unidades`
+
+**Archivos**: `gestion.py`, `crud.py`, `templates/crud/form.html`, `templates/gestion/{form,bajas}.html`, `agente/tools/entidades.py`, `static/gestion.css`
+
+`cantidad` es el COUNT espejo de `recurso_unidades` (lo escribe `_sincronizar_cantidad`); el campo va
+`solo_alta` (flag genérico nuevo en `crud`: no se renderiza ni se guarda en edición). Unidades se
+agregan/eliminan **por número** desde EDITAR: rutas nuevas `/recursos/<id>/unidades/agregar` y `/eliminar`
+(exige `motivo`, una fila por unidad en `recurso_bajas`, que gana columna `numero`) +
+`/bajas/<baja_id>/revertir-unidad`. `_asegurar_unidades` ya no rellena huecos de `1..cantidad` (sólo
+siembra si el recurso no tiene ninguna); el agente usa `reconciliar_unidades` al cambiar `cantidad`. `migrar()` siembra lo que falte y alinea `cantidad`.
+
 ## [2026-09-04] — El chat elige en qué inventario trabaja
 
 **Archivos**: `gestion.py`, `agente/rutas.py`, `agente/llm.py`, `agente/prompt.py`, `templates/agente/agente_chat.html`, `static/gestion-agente.js`, `static/gestion.css`

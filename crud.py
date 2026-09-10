@@ -447,8 +447,15 @@ def _seleccion_relaciones(relaciones, id, cur):
 
 
 def _guardar_form(area, slug, cfg_ent, cur, id=None):
-    """Inserta o actualiza desde request.form y sincroniza las M2M. Devuelve el id."""
-    nombres = [c['nombre'] for c in cfg_ent['campos']]
+    """Inserta o actualiza desde request.form y sincroniza las M2M. Devuelve el id.
+
+    `solo_alta`: un campo así se escribe sólo al crear; en edición ni se renderiza (ver
+    templates/crud/form.html) ni se toca acá, para que el input ausente no vacíe la columna.
+    Lo usa `gestion.recursos.cantidad`, que en edición pasa a manejarse por unidades.
+    """
+    editando = id is not None
+    nombres = [c['nombre'] for c in cfg_ent['campos']
+               if not (editando and c.get('solo_alta'))]
     valores = {n: request.form.get(n, '').strip() for n in nombres}
 
     derivados = _hook(area, 'derivados')
@@ -695,7 +702,9 @@ def registrar_rutas(bp, area):
         if fila is None:
             con.close()
             abort(404)
-        error = None
+        # Una acción propia del área (ej. gestion.unidad_agregar) puede redirigir de vuelta
+        # al form con un motivo de rechazo en la query. Jinja lo autoescapea al pintarlo.
+        error = request.args.get('error') if request.method == 'GET' else None
         if request.method == 'POST':
             if not request.form.get(campo_nombre(cfg_ent), '').strip():
                 error = 'El nombre es obligatorio.'

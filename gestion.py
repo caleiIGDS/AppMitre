@@ -413,7 +413,12 @@ ENTIDADES = {
         'campos': [
             {'nombre': 'nombre', 'label': 'Nombre', 'tipo': 'text', 'requerido': True},
             {'nombre': 'tipo', 'label': 'Tipo', 'tipo': 'text', 'ayuda': 'Ej: Instrumento, Equipo, Estructura, Material'},
-            {'nombre': 'cantidad', 'label': 'Cantidad', 'tipo': 'number'},
+            # `solo_alta`: en el alta se escribe cuántas unidades hay (salen 1..N). Después
+            # `cantidad` es el COUNT espejo de `recurso_unidades` y NO se edita a mano: se
+            # ajusta con + / − por número desde EDITAR (ver el bloque "UNIDADES" de
+            # templates/gestion/form.html y las rutas unidad_agregar / unidad_eliminar).
+            {'nombre': 'cantidad', 'label': 'Cantidad', 'tipo': 'number', 'solo_alta': True,
+             'ayuda': 'Cuántas unidades hay. Después del alta se ajusta con + / − desde EDITAR'},
             {'nombre': 'descripcion', 'label': 'Descripción', 'tipo': 'textarea'},
             # No hay campo `ubicacion`: la ubicación de un recurso es siempre la lista de sus
             # unidades (recurso_unidades), incluso para uno con una sola unidad. Se carga desde
@@ -490,6 +495,7 @@ CREATE TABLE IF NOT EXISTS recurso_bajas (
     motivo TEXT NOT NULL,
     detalle TEXT DEFAULT '',
     fecha TEXT DEFAULT '',
+    numero INTEGER,
     revertida INTEGER DEFAULT 0
 );
 """
@@ -556,6 +562,30 @@ def migrar(cur):
                 "INSERT INTO recurso_unidades (recurso_id, numero, ubicacion) VALUES (?,?,?)",
                 [(r['id'], i, r['ubicacion'] or '') for i in range(1, n + 1)])
         cur.execute("ALTER TABLE recursos DROP COLUMN ubicacion")
+
+    # `recurso_bajas` gana `numero`: NULL = baja del recurso entero (como siempre); con
+    # valor = esa unidad puntual, eliminada desde EDITAR con motivo. 2026-09-09.
+    bajas_cols = {c[1] for c in cur.execute("PRAGMA table_info(recurso_bajas)").fetchall()}
+    if 'numero' not in bajas_cols:
+        cur.execute("ALTER TABLE recurso_bajas ADD COLUMN numero INTEGER")
+
+    # `recurso_unidades` pasa a ser la fuente de verdad de QUÉ unidades existen (antes lo
+    # era sólo de dónde está cada una) y `recursos.cantidad` su COUNT espejo. Hasta el
+    # 2026-09-09 `_asegurar_unidades` rellenaba 1..cantidad en cada lectura, así que borrar
+    # una unidad puntual no servía (volvía a aparecer). Ahora sólo siembra si el recurso no
+    # tiene ninguna. Este pase deja a cada recurso con sus unidades explícitas y `cantidad`
+    # alineada para que el cambio de regla no altere nada al primer arranque. Idempotente.
+    sin_unidades = cur.execute(
+        "SELECT id, cantidad FROM recursos WHERE id NOT IN "
+        "(SELECT DISTINCT recurso_id FROM recurso_unidades)").fetchall()
+    for r in sin_unidades:
+        n = max(_int(r['cantidad']), 1)
+        cur.executemany(
+            "INSERT INTO recurso_unidades (recurso_id, numero, ubicacion) VALUES (?,?,'')",
+            [(r['id'], i) for i in range(1, n + 1)])
+    cur.execute(
+        "UPDATE recursos SET cantidad = (SELECT COUNT(*) FROM recurso_unidades "
+        "WHERE recurso_id = recursos.id)")
 
     # Hasta el 2026-09-02 "Dado de baja" era un estado más del desplegable y no dejaba
     # rastro de qué le había pasado al recurso. Los que ya estaban dados de baja entran al
@@ -670,9 +700,13 @@ def extras_template(vista, slug, id=None):
         return {'lugares_recurso': LUGARES_RECURSO}
     if slug == 'recursos' and vista == 'editar':
         con = conectar()
-        items = kit_items_recurso(con.cursor(), id)
+        cur = con.cursor()
+        items = kit_items_recurso(cur, id)
+        unidades = unidades_recurso(cur, id)
+        libres = _numeros_libres(cur, id, 1)
+        con.commit()  # unidades_recurso puede sembrar unidades que faltaban
         con.close()
-        return {'kit_items': items}
+        return {'kit_items': items, 'unidades': unidades, 'numeros_libres': libres}
     if slug == 'recursos' and vista == 'lista':
         con = conectar()
         cur = con.cursor()
@@ -1089,7 +1123,7 @@ def bajas_registro(cur):
     baja. `existe` es False si la fila del recurso desapareció igual (una baja de antes de
     esta regla, o un borrado desde sqlite a mano): la entrada se muestra sin link."""
     filas = cur.execute(
-        "SELECT b.id, b.recurso_id, b.recurso_nombre, b.motivo, b.detalle, b.fecha, b.revertida, "
+        "SELECT b.id, b.recurso_id, b.recurso_nombre, b.motivo, b.detalle, b.fecha, b.numero, b.revertida, "
         "r.nombre AS nombre_actual, r.estado AS estado_actual "
         "FROM recurso_bajas b LEFT JOIN recursos r ON r.id = b.recurso_id "
         "ORDER BY b.id DESC").fetchall()
@@ -1147,20 +1181,66 @@ def bajas_lista():
 # dev-log/DECISIONS.md 2026-08-11, 2026-08-21 y 2026-08-22).
 
 def _asegurar_unidades(cur, rid):
-    """Crea las unidades 1..cantidad que todavía no existan (sin ubicación, `''`). Un recurso
-    siempre tiene al menos la unidad 1, aunque `cantidad` esté vacía o en 0: sin esto no habría
-    ninguna fila donde guardar su ubicación. No borra unidades de más si `cantidad` bajó
-    después: mismo criterio de no perder datos. No hace nada si el recurso no existe."""
+    """Siembra 1..max(cantidad,1) SÓLO si el recurso todavía no tiene ninguna unidad.
+
+    Una vez que tiene al menos una, no vuelve a fabricar: `recurso_unidades` es la fuente de
+    verdad de qué unidades existen y sus números pueden tener huecos a propósito (se eliminó
+    la #2). `cantidad` es sólo el COUNT espejo. Hasta el 2026-09-09 esto rellenaba cualquier
+    hueco de 1..cantidad en cada lectura, con lo cual borrar una unidad puntual no servía.
+    No hace nada si el recurso no existe. Se agregan/eliminan unidades por número desde
+    EDITAR (unidad_agregar / unidad_eliminar)."""
     fila = cur.execute("SELECT cantidad FROM recursos WHERE id = ?", (rid,)).fetchone()
     if fila is None:
         return
-    cantidad = max(_int(fila['cantidad']), 1)
-    existentes = {f['numero'] for f in
-                  cur.execute("SELECT numero FROM recurso_unidades WHERE recurso_id = ?", (rid,)).fetchall()}
-    faltantes = [n for n in range(1, cantidad + 1) if n not in existentes]
-    if faltantes:
-        cur.executemany("INSERT INTO recurso_unidades (recurso_id, numero, ubicacion) VALUES (?,?,'')",
-                        [(rid, n) for n in faltantes])
+    if cur.execute("SELECT 1 FROM recurso_unidades WHERE recurso_id = ? LIMIT 1", (rid,)).fetchone():
+        return
+    n = max(_int(fila['cantidad']), 1)
+    cur.executemany("INSERT INTO recurso_unidades (recurso_id, numero, ubicacion) VALUES (?,?,'')",
+                    [(rid, i) for i in range(1, n + 1)])
+    _sincronizar_cantidad(cur, rid)
+
+
+def _sincronizar_cantidad(cur, rid):
+    """`recursos.cantidad` es el COUNT espejo de `recurso_unidades`. Único lugar que lo
+    escribe fuera del alta de un recurso."""
+    cur.execute(
+        "UPDATE recursos SET cantidad = (SELECT COUNT(*) FROM recurso_unidades WHERE recurso_id = ?) "
+        "WHERE id = ?", (rid, rid))
+
+
+def _numeros_libres(cur, rid, n):
+    """Los `n` enteros positivos más bajos que no usa ninguna unidad de este recurso.
+    El default de los IDs al agregar unidades (ver templates/gestion/form.html)."""
+    usados = {f['numero'] for f in
+              cur.execute("SELECT numero FROM recurso_unidades WHERE recurso_id = ?", (rid,)).fetchall()}
+    libres, i = [], 1
+    while len(libres) < n:
+        if i not in usados:
+            libres.append(i)
+        i += 1
+    return libres
+
+
+def reconciliar_unidades(cur, rid):
+    """Ajusta las unidades para que sean exactamente `cantidad`: agrega los números libres
+    más bajos si faltan, elimina las de número más alto si sobran. Lo usa el AGENTE cuando
+    cambia `cantidad` por el chat (el form web ya no la deja tocar en edición). No registra
+    bajas — el borrado fino con motivo es sólo desde la web (unidad_eliminar)."""
+    fila = cur.execute("SELECT cantidad FROM recursos WHERE id = ?", (rid,)).fetchone()
+    if fila is None:
+        return
+    _asegurar_unidades(cur, rid)
+    objetivo = max(_int(fila['cantidad']), 1)
+    nums = sorted(f['numero'] for f in
+                  cur.execute("SELECT numero FROM recurso_unidades WHERE recurso_id = ?", (rid,)).fetchall())
+    if len(nums) < objetivo:
+        cur.executemany(
+            "INSERT INTO recurso_unidades (recurso_id, numero, ubicacion) VALUES (?,?,'')",
+            [(rid, n) for n in _numeros_libres(cur, rid, objetivo - len(nums))])
+    elif len(nums) > objetivo:
+        cur.executemany("DELETE FROM recurso_unidades WHERE recurso_id = ? AND numero = ?",
+                        [(rid, n) for n in nums[objetivo:]])
+    _sincronizar_cantidad(cur, rid)
 
 
 def unidades_recurso(cur, rid):
@@ -1289,6 +1369,112 @@ def unidad_quitar(id):
         con.commit()
         con.close()
     return redirect(url_for('gestion.detalle', slug='recursos', id=id))
+
+
+# --- Alta / baja de unidades por número (desde EDITAR) ------------------------
+# `cantidad` es el COUNT espejo de `recurso_unidades`: no se edita a mano. Se suman unidades
+# eligiendo qué números (IDs) van a tener, y se eliminan por número diciendo qué les pasó
+# (cada una queda en `recurso_bajas` con su `numero`). Ver el bloque "UNIDADES" de
+# templates/gestion/form.html.
+
+@bp.route('/recursos/<int:id>/unidades/agregar', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
+def unidad_agregar(id):
+    """Agrega unidades con los números (IDs) que se pidan en `numeros` (CSV). El form ya no
+    deja escribir un número usado; acá se rechaza igual como red de seguridad — si alguno
+    choca, es <= 0 o está repetido, no se inserta nada y se vuelve a EDITAR con el error."""
+    pedidos = [_int(n) for n in request.form.get('numeros', '').split(',') if n.strip()]
+    if not pedidos:
+        return redirect(url_for('gestion.editar', slug='recursos', id=id))
+    con = conectar()
+    cur = con.cursor()
+    if not cur.execute("SELECT 1 FROM recursos WHERE id = ?", (id,)).fetchone():
+        con.close()
+        abort(404)
+    _asegurar_unidades(cur, id)  # persistir 1..cantidad si el recurso todavía no las tenía
+    usados = {f['numero'] for f in
+              cur.execute("SELECT numero FROM recurso_unidades WHERE recurso_id = ?", (id,)).fetchall()}
+    choque = sorted(set(pedidos) & usados)
+    if any(n <= 0 for n in pedidos):
+        error = 'Los IDs tienen que ser números mayores a 0.'
+    elif len(pedidos) != len(set(pedidos)):
+        error = 'Hay IDs repetidos en la lista.'
+    elif choque:
+        error = ('Ya ' + ('existen las unidades ' if len(choque) > 1 else 'existe la unidad ')
+                 + ', '.join('#' + str(n) for n in choque) + '.')
+    else:
+        error = None
+    if error:
+        con.close()
+        return redirect(url_for('gestion.editar', slug='recursos', id=id, error=error))
+    cur.executemany("INSERT INTO recurso_unidades (recurso_id, numero, ubicacion) VALUES (?,?,'')",
+                    [(id, n) for n in pedidos])
+    _sincronizar_cantidad(cur, id)
+    con.commit()
+    con.close()
+    return redirect(url_for('gestion.editar', slug='recursos', id=id))
+
+
+@bp.route('/recursos/<int:id>/unidades/eliminar', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
+def unidad_eliminar(id):
+    """Elimina unidades puntuales (se rompieron, se perdieron). Exige `motivo` y anota una
+    fila por unidad en `recurso_bajas` con su `numero`. Nunca borra la última unidad que
+    queda: para sacar el recurso entero está la baja de recurso (`recurso_baja`)."""
+    nums = [_int(n) for n in request.form.getlist('numeros') if str(n).strip()]
+    motivo = (request.form.get('motivo') or '').strip()
+    detalle = (request.form.get('detalle') or '').strip()
+    if not nums or not motivo:
+        return redirect(url_for('gestion.editar', slug='recursos', id=id))
+    con = conectar()
+    cur = con.cursor()
+    fila = cur.execute("SELECT nombre FROM recursos WHERE id = ?", (id,)).fetchone()
+    if fila is None:
+        con.close()
+        abort(404)
+    _asegurar_unidades(cur, id)  # persistir 1..cantidad si el recurso todavía no las tenía
+    todas = {f['numero'] for f in
+             cur.execute("SELECT numero FROM recurso_unidades WHERE recurso_id = ?", (id,)).fetchall()}
+    aeliminar = sorted(n for n in set(nums) if n in todas)
+    if len(aeliminar) >= len(todas):
+        aeliminar = aeliminar[:max(len(todas) - 1, 0)]
+    if aeliminar:
+        hoy = ahora().strftime(FORMATO_FECHA_REVISION)
+        cur.executemany(
+            "INSERT INTO recurso_bajas (recurso_id, recurso_nombre, motivo, detalle, fecha, numero) "
+            "VALUES (?,?,?,?,?,?)",
+            [(id, fila['nombre'], motivo, detalle, hoy, n) for n in aeliminar])
+        cur.executemany("DELETE FROM recurso_unidades WHERE recurso_id = ? AND numero = ?",
+                        [(id, n) for n in aeliminar])
+        _sincronizar_cantidad(cur, id)
+        con.commit()
+    con.close()
+    return redirect(url_for('gestion.editar', slug='recursos', id=id))
+
+
+@bp.route('/bajas/<int:baja_id>/revertir-unidad', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
+def unidad_baja_revertir(baja_id):
+    """Revierte la baja de UNA unidad desde el registro (`/gestion/bajas`): re-crea la fila
+    de `recurso_unidades` si ese número está libre y marca la baja como revertida. Si el
+    número se reusó con un `+` posterior, no hace nada."""
+    con = conectar()
+    cur = con.cursor()
+    b = cur.execute(
+        "SELECT recurso_id, numero, revertida FROM recurso_bajas WHERE id = ?", (baja_id,)).fetchone()
+    if b and b['numero'] is not None and not b['revertida']:
+        libre = not cur.execute(
+            "SELECT 1 FROM recurso_unidades WHERE recurso_id = ? AND numero = ?",
+            (b['recurso_id'], b['numero'])).fetchone()
+        existe = cur.execute("SELECT 1 FROM recursos WHERE id = ?", (b['recurso_id'],)).fetchone()
+        if libre and existe:
+            cur.execute("INSERT INTO recurso_unidades (recurso_id, numero, ubicacion) VALUES (?,?,'')",
+                        (b['recurso_id'], b['numero']))
+            cur.execute("UPDATE recurso_bajas SET revertida = 1 WHERE id = ?", (baja_id,))
+            _sincronizar_cantidad(cur, b['recurso_id'])
+            con.commit()
+    con.close()
+    return redirect(url_for('gestion.bajas_lista'))
 
 
 # --- Kits: sub-recursos de un recurso ------------------------------------------

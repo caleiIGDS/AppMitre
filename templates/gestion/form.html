@@ -7,6 +7,102 @@
 {% block form_extra %}
 {% if fila and puede(permiso_escritura) %}
 
+{# UNIDADES: `cantidad` es el COUNT de recurso_unidades y no se edita a mano. Se agregan
+   eligiendo qué números (IDs) van a tener, y se eliminan por número diciendo qué les pasó
+   (cada una va al registro de bajas). Dos <form> aparte del de arriba, cada uno con su
+   POST, como los renglones de kit. #}
+{% if unidades is defined %}
+{% set usados = unidades | map(attribute='numero') | list %}
+<section class="g-form-kit g-form-unidades">
+    <h3>UNIDADES · <span data-uni-total>{{ unidades | length }}</span></h3>
+    <p class="g-help">
+        Cada unidad tiene su número propio. La cantidad del recurso es cuántas unidades hay
+        — se ajusta acá, no en el campo de arriba.
+    </p>
+
+    <div class="g-uni-chips" data-usados="{{ usados | join(',') }}">
+        {% for u in unidades %}
+        <span class="g-ficha-unidad is-lectura">#{{ u.numero }}{% if u.ubicacion %} · {{ u.ubicacion }}{% endif %}</span>
+        {% endfor %}
+    </div>
+
+    <form method="post" class="g-uni-agregar"
+          action="{{ url_for('gestion.unidad_agregar', id=fila['id']) }}">
+        <span class="g-uni-linea">
+            <label>Agregar <input type="number" name="cuantas" min="1" value="1" inputmode="numeric"></label>
+            <label>con los IDs <input type="text" name="numeros" value="{{ numeros_libres | join(',') }}" autocomplete="off"></label>
+            <button type="submit" class="g-btn-mini">+ Agregar</button>
+        </span>
+        <span class="g-uni-error g-help" role="alert" hidden></span>
+    </form>
+
+    <form method="post" class="g-uni-eliminar"
+          action="{{ url_for('gestion.unidad_eliminar', id=fila['id']) }}"
+          onsubmit="return confirm('¿Eliminar las unidades marcadas? Queda anotado en el registro de bajas.');">
+        <p class="g-help">Eliminar unidades (se rompieron, se perdieron):</p>
+        <div class="g-checks">
+            {% for u in unidades %}
+            <label class="g-check">
+                <input type="checkbox" name="numeros" value="{{ u.numero }}">
+                #{{ u.numero }}{% if u.ubicacion %} · {{ u.ubicacion }}{% endif %}
+            </label>
+            {% endfor %}
+        </div>
+        <div class="g-field">
+            <label for="uni-motivo">QUÉ LES PASÓ *</label>
+            <select id="uni-motivo" name="motivo">
+                {% for op in motivos_baja %}<option value="{{ op }}">{{ op }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="g-field">
+            <label for="uni-detalle">DETALLE</label>
+            <textarea id="uni-detalle" name="detalle" rows="2"
+                      placeholder="Ej: se quemó en la práctica del 3° B"></textarea>
+        </div>
+        <button type="submit" class="g-btn-mini g-btn-danger">− Eliminar marcadas</button>
+    </form>
+
+    <script>
+    (function () {
+        var form = document.querySelector('.g-uni-agregar');
+        var chips = document.querySelector('.g-uni-chips');
+        if (!form || !chips) return;
+        var usados = (chips.dataset.usados || '').split(',').filter(Boolean).map(Number);
+        var cuantas = form.querySelector('input[name="cuantas"]');
+        var ids = form.querySelector('input[name="numeros"]');
+        var aviso = form.querySelector('.g-uni-error');
+        var enviar = form.querySelector('button[type="submit"]');
+        var tocado = false;
+
+        function libres(n) {
+            var out = [], i = 1;
+            while (out.length < n) { if (usados.indexOf(i) === -1) out.push(i); i++; }
+            return out;
+        }
+        function autorrellenar() {
+            if (tocado) return;
+            var n = parseInt(cuantas.value, 10) || 0;
+            ids.value = n > 0 ? libres(n).join(',') : '';
+            validar();
+        }
+        function validar() {
+            var nums = ids.value.split(',').map(function (s) { return s.trim(); })
+                .filter(Boolean).map(Number);
+            var malo = nums.some(function (x) { return !Number.isInteger(x) || x <= 0; })
+                || nums.some(function (x, i) { return nums.indexOf(x) !== i; })
+                || nums.some(function (x) { return usados.indexOf(x) !== -1; });
+            aviso.hidden = !malo;
+            aviso.textContent = malo ? 'Hay un ID inválido o que ya existe.' : '';
+            enviar.disabled = malo || nums.length === 0;
+        }
+        ids.addEventListener('input', function () { tocado = true; validar(); });
+        cuantas.addEventListener('input', autorrellenar);
+        validar();
+    })();
+    </script>
+</section>
+{% endif %}
+
 {% if kit_items is defined %}
 <section class="g-form-kit">
     <h3>SUB-RECURSOS (KIT)</h3>

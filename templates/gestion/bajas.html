@@ -15,7 +15,8 @@
         </div>
     </div>
     <p class="g-help">
-        Los recursos no se borran: se dan de baja desde EDITAR, diciendo qué les pasó.
+        Los recursos no se borran: se dan de baja desde EDITAR, diciendo qué les pasó. Una
+        baja de <strong>unidad #N</strong> es una unidad puntual que se sacó del inventario.
         Acá queda cada baja con su motivo y su fecha.
     </p>
 </div>
@@ -29,6 +30,7 @@
                 <th>MOTIVO</th>
                 <th>DETALLE</th>
                 <th>FECHA</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
@@ -40,6 +42,7 @@
                     {% else %}
                     {{ f.recurso_nombre }}
                     {% endif %}
+                    {%- if f.numero %}<span class="g-recurso-sub">unidad #{{ f.numero }}</span>{% endif %}
                     {# El nombre de la baja es el que tenía ese día: si lo renombraron después,
                        se muestran los dos para no perder de vista de qué ficha se trata. #}
                     {%- if f.existe and f.nombre_actual != f.recurso_nombre %}
@@ -50,6 +53,14 @@
                 <td data-label="MOTIVO"><span class="g-badge">{{ f.motivo }}</span></td>
                 <td data-label="DETALLE">{{ f.detalle }}</td>
                 <td data-label="FECHA">{{ f.fecha }}</td>
+                <td>
+                    {%- if f.numero and not f.revertida and f.existe and puede(permiso_escritura) %}
+                    <form method="post" class="g-inline-form"
+                          action="{{ url_for('gestion.unidad_baja_revertir', baja_id=f.id) }}">
+                        <button type="submit" class="g-btn-mini g-btn-outline-dark">Revertir</button>
+                    </form>
+                    {%- endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>

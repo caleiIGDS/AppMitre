@@ -116,11 +116,19 @@ columnas que el código ya no declara: `migrar` no puede saber qué sobra en la 
 **`campo_alias`**, **`permiso`** y **`sin_eliminar`**.
 
 Cada campo de `campos` declara `nombre`, `label`, `tipo` (`text`, `number`, `textarea`, `select`
-con `opciones`, `text_datalist`), y opcionales `requerido`, `ayuda` y **`boton_hoy`**. `boton_hoy`
-es el formato strftime de una fecha guardada como texto libre: `templates/crud/form.html` le pone
-al lado un botón **HOY** que la completa con la fecha del día (la calcula el server con
-`config.ahora()` y llega al template por el helper `hoy(formato)` de `crud.contexto_base`, así el
-motor no conoce ni el campo ni el formato). Hoy la declara `gestion.recursos.fecha_revision`.
+con `opciones`, `text_datalist`), y opcionales `requerido`, `ayuda`, **`boton_hoy`** y
+**`solo_alta`**. `boton_hoy` es el formato strftime de una fecha guardada como texto libre:
+`templates/crud/form.html` le pone al lado un botón **HOY** que la completa con la fecha del día
+(la calcula el server con `config.ahora()` y llega al template por el helper `hoy(formato)` de
+`crud.contexto_base`, así el motor no conoce ni el campo ni el formato). Hoy la declara
+`gestion.recursos.fecha_revision`.
+
+`solo_alta`: un campo así se muestra y se escribe **sólo al crear**. En edición
+`templates/crud/form.html` no lo renderiza y `_guardar_form` lo saca de las columnas del UPDATE,
+para que el input ausente no vacíe la columna. Es para un valor que después del alta lo maneja
+otra cosa: hoy `gestion.recursos.cantidad`, que pasa a ser el COUNT espejo de `recurso_unidades`
+y se ajusta por unidades desde EDITAR (ver `agent_docs/gestion-conocimiento.md`). `crud.guardar_entidad`
+(el camino del agente) **sí** lo escribe: el agente puede cambiar `cantidad` por el chat.
 
 `campo_nombre` (default `'nombre'`) existe porque `historia.hitos` llama `titulo` a su columna de
 nombre. **Todas las lecturas van por `crud.select(cfg)`**, que agrega `titulo AS nombre`, así que

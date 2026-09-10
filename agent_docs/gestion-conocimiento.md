@@ -124,17 +124,32 @@ lo único que cambia es CSS, más un script que reubica bloques. Es común a las
 | Tabla | Campos |
 |-------|--------|
 | `recursos` | id, nombre, tipo, descripcion, estado, cantidad, valor, fecha_revision, **fotos**, **alias** |
-| `recurso_unidades` | recurso_id, numero, ubicacion (`UNIQUE(recurso_id, numero)`) — la ubicación de CADA unidad, ver abajo |
+| `recurso_unidades` | recurso_id, numero, ubicacion (`UNIQUE(recurso_id, numero)`) — **qué unidades existen** y dónde está cada una, ver abajo |
 | `kit_items` | id, recurso_id, titulo, cantidad, recurso_asignado — los sub-recursos de un kit, ver abajo |
-| `recurso_bajas` | id, recurso_id, recurso_nombre, motivo, detalle, fecha, revertida — el registro de bajas, ver abajo |
+| `recurso_bajas` | id, recurso_id, recurso_nombre, motivo, detalle, fecha, numero, revertida — el registro de bajas; `numero` NULL = recurso entero, con valor = esa unidad puntual, ver abajo |
 
-**Ubicación** (`recurso_unidades`): `recursos` no tiene columna `ubicacion` — nunca hay "un lugar
-principal" separado del desglose, la ubicación de un recurso ES la lista de sus unidades, aunque
-tenga una sola. Cada unidad tiene su propio número (1..cantidad, auto-completado al leer — no hace
-falta "generarlas" a mano, mínimo 1 aunque `cantidad` esté vacía) y su propia `ubicacion` (`''` =
-sin ubicar). **Nunca es obligatorio que esté completo**: una unidad sin ubicación no es un error —
-a propósito, para no bloquear un movimiento por no tener el desglose previo cargado. Helpers en
-`gestion.py`: `unidades_recurso()` (unidades de un recurso, por número), `lugares_recurso_agrupado()`
+**Unidades y `cantidad`** (`recurso_unidades`): `recurso_unidades` es la **fuente de verdad de qué
+unidades existen** (una fila por unidad, con su `numero` propio) y de dónde está cada una
+(`ubicacion`, `''` = sin ubicar). **`recursos.cantidad` es su COUNT espejo**, no un valor
+independiente: lo escribe sólo `_sincronizar_cantidad()` (y el alta). `recursos` no tiene columna
+`ubicacion` — la ubicación de un recurso ES la lista de sus unidades, aunque tenga una sola, y
+**nunca es obligatorio que esté completa**: una unidad sin ubicación no es un error, para no
+bloquear un movimiento por no tener el desglose cargado.
+
+Los números **pueden tener huecos a propósito**: si se rompe la pinza 2, se elimina la unidad #2 y
+quedan 1, 3, 4, 5. `_asegurar_unidades()` sólo siembra `1..max(cantidad,1)` cuando el recurso
+**todavía no tiene ninguna** unidad — una vez que tiene, no vuelve a fabricar (hasta el 2026-09-09
+rellenaba cualquier hueco en cada lectura, con lo cual borrar una unidad puntual no servía).
+Se agregan y eliminan **por número desde EDITAR** (`templates/gestion/form.html`, bloque
+"UNIDADES"): `+` elige cuántas y con qué IDs (default = los primeros libres, `_numeros_libres()`;
+el form no deja escribir un ID usado y `unidad_agregar` lo rechaza igual); `−` marca cuáles y
+**exige motivo** (`MOTIVOS_BAJA`) — cada unidad eliminada va a `recurso_bajas` con su `numero`
+(`unidad_eliminar`), y nunca se borra la última que queda (para sacar el recurso entero está la
+baja de recurso). El agente no tiene tool por unidad, pero si cambia `cantidad` por el chat
+(`editar_entidad`) `reconciliar_unidades()` ajusta las unidades para que el espejo no mienta
+(agrega los libres más bajos / saca las de número más alto, sin registrar bajas).
+
+Helpers en `gestion.py`: `unidades_recurso()` (unidades de un recurso, por número), `lugares_recurso_agrupado()`
 (las mismas agrupadas por lugar, para la ficha y para el chat), `lugares_por_recurso()` (la misma
 agrupación para TODOS los recursos de una, para el listado), `mover_unidades()` (mueve por número
 puntual o por cantidad genérica, avisando si algo no coincidía con lo registrado), `_stock()`
@@ -180,6 +195,13 @@ de la baja, para que renombrar el recurso después no reescriba la historia. `MO
 Desgaste / Extravío / Rotura / Otro, y el detalle libre es lo que la explica. El registro completo
 se ve en `/gestion/bajas` (`bajas_registro()`), solo con `gestion.auditoria`.
 
+**Baja de una unidad puntual**: eliminar la unidad #N de un recurso (bloque "UNIDADES" de EDITAR,
+`unidad_eliminar`) también anota en `recurso_bajas`, una fila por unidad, con su `numero` — así
+"se rompió la pinza 2" queda con motivo y fecha igual que la baja de un recurso entero. En
+`/gestion/bajas` esas filas dicen "unidad #N" y traen un botón **Revertir** (`unidad_baja_revertir`):
+re-crea la fila de `recurso_unidades` si ese número quedó libre y marca la baja `revertida`. La
+baja del recurso entero no toca `recurso_unidades` (sigue siendo sólo `estado = ESTADO_BAJA`).
+
 **Galería de fotos** (`fotos`): array JSON con objetos `{id, tipo, fecha}`. La imagen en sí
 NO vive en la fila: es un archivo en `database/fotos/<id><ext>` (ver `fotos_disco.py`,
 capa 0).
@@ -215,8 +237,10 @@ Estados (`ESTADOS_RECURSO`): recursos = Funcional / Dañado usable / Roto. `"Dad
 el chat (la lista es también el enum de las tools), lo pone sólo la baja — ver "Bajas" más arriba.
 Valor (recursos): "" / Básico / Secundario / Alto valor — es la *importancia* del recurso
 dentro del inventario, no su precio (se llamaba `utilidad`, renombrada 2026-08-08).
-`cantidad` y `fecha_revision` son TEXT. **`fecha_revision` se precarga con la fecha de hoy
-en todo alta de recurso**, por los dos caminos: el form web (`valores_iniciales()` en el
+`cantidad` y `fecha_revision` son TEXT. **`cantidad` es `solo_alta`** (ver `agent_docs/crud-motor.md`):
+se escribe en el alta y después NO se edita a mano — es el COUNT espejo de `recurso_unidades` y se
+ajusta por unidades desde EDITAR (ver "Unidades y `cantidad`" más arriba). **`fecha_revision` se
+precarga con la fecha de hoy en todo alta de recurso**, por los dos caminos: el form web (`valores_iniciales()` en el
 GET de `/recursos/nuevo`, donde sí es un campo editable) y el chat (`_normalizar_borrador()` en
 `agente/tools/fichas.py`, antes de calcular el token). En la ficha del chat **ya no se muestra**
 (`CAMPOS_OCULTOS_FICHA`): siempre es hoy y no se pregunta. Dar de alta un recurso es un control de inventario; antes quedaba vacía y casi
@@ -290,6 +314,9 @@ unidad y los sub-recursos de un kit, pero el mecanismo de limpieza es idéntico)
 | `/gestion/alias` | GET | Solo lectura, solo admin (`gestion.alias`): tabla NOMBRE / ALIAS de todos los recursos. Único lugar de la web donde se ve el alias oculto — no hay edición acá |
 | `/gestion/recursos/<id>/baja` | POST | Da de baja el recurso: exige `motivo` (sin motivo vuelve al form), guarda `detalle` y la fecha de hoy |
 | `/gestion/recursos/<id>/baja/revertir` | POST | Devuelve el recurso al inventario y marca esa baja como revertida |
+| `/gestion/recursos/<id>/unidades/agregar` | POST | Crea unidades nuevas con los `numeros` (IDs) que se piden; rechaza los usados/inválidos |
+| `/gestion/recursos/<id>/unidades/eliminar` | POST | Elimina unidades por `numeros` con `motivo` — cada una va a `recurso_bajas` con su `numero`. Nunca borra la última |
+| `/gestion/bajas/<baja_id>/revertir-unidad` | POST | Revierte la baja de una unidad: re-crea la fila si el número quedó libre |
 | `/gestion/recursos/<id>/unidades/mover` | POST | Fija un lugar para unidades puntuales (`numeros`) o una cantidad de ellas |
 | `/gestion/recursos/<id>/unidades/quitar` | POST | Marca una unidad puntual como "sin ubicar" |
 | `/gestion/recursos/<id>/kit/agregar` | POST | Agrega un sub-recurso (`titulo`, `cantidad`, `recurso_asignado`) |

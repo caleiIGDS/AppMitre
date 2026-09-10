@@ -370,6 +370,14 @@ def _editar_entidad(slug, id, campos_dict, sub_recursos=None):
     # Guardar
     id_result = crud.guardar_entidad(modulo, slug, campos_merge, id=id, con=con)
 
+    # `recursos.cantidad` es el COUNT espejo de `recurso_unidades`. El form web ya no la deja
+    # tocar en edición (se maneja por unidades), pero por el chat sí ("subí el stock a 8"):
+    # se reconcilian las unidades para que el espejo no mienta. Sólo si el modelo la mandó
+    # explícitamente (no en cada merge, donde `cantidad` viaja igual sin haber cambiado).
+    if id_result and slug == 'recursos' and 'cantidad' in (campos_dict or {}):
+        gestion.reconciliar_unidades(con.cursor(), id_result)
+        con.commit()
+
     agregados = None
     if id_result and slug == 'recursos' and sub_recursos:
         items = _normalizar_sub_recursos(sub_recursos)

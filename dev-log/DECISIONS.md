@@ -6,6 +6,17 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-09-09] — `recursos.cantidad` pasa a ser derivada de `recurso_unidades`
+
+`cantidad` era un entero libre y `_asegurar_unidades` rellenaba `1..cantidad` en cada
+lectura, así que eliminar "la pinza 2" no servía: reaparecía. Ahora `recurso_unidades` es
+la fuente de verdad de qué unidades existen (números con huecos a propósito) y `cantidad`
+su COUNT espejo — un solo escritor, la regla de "no dos fuentes que se desincronizan" que
+ya estaba (2026-08-11, 2026-08-22) y que el backfill violaba de hecho. Eliminar una unidad
+exige motivo y va a `recurso_bajas` con su `numero`, igual que la baja de un recurso entero.
+
+---
+
 ## [2026-09-09] — Las fotos en disco no rotan con `respaldos.py`
 
 Las fotos de recursos pasaron de base64-en-la-columna a archivos en `database/fotos/`
