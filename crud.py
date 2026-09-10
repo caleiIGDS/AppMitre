@@ -50,9 +50,10 @@ import json
 import os
 import sqlite3
 
-from flask import abort, jsonify, redirect, render_template, request, url_for
+from flask import abort, jsonify, redirect, render_template, request, send_file, url_for
 
 import accesos
+import fotos_disco
 import respaldos
 import texto
 from config import ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, ahora
@@ -393,11 +394,15 @@ def quitar_relacion_m2m(area, tabla, col_propia, col_ajena, id_propio, id_ajeno,
 
 
 def agregar_foto(area, slug, id, b64, tipo):
-    """Agrega una foto ya en base64 a la galería de una entidad.
+    """Agrega una foto ya en base64 a la galería de una entidad: la decodifica y la
+    escribe en `database/fotos/` (ver `fotos_disco.py`) — en la fila sólo queda
+    {id, tipo, fecha}, nunca el base64.
 
     Vive suelta y no dentro de `subir_foto` porque el agente también escribe la galería:
     cuando el alta de un recurso salió de una foto del chat, esa foto termina acá por el
-    mismo camino que la que se sube desde el detalle (ver `agente.confirmar`).
+    mismo camino que la que se sube desde el detalle (ver `agente.confirmar`). La firma
+    no cambia aunque adentro sí: quien la llama sigue mandando b64 + tipo, y no necesita
+    saber que ahora eso termina en disco.
     """
     cfg_ent = cfg(area, slug)
     con = conectar(area)
@@ -406,8 +411,9 @@ def agregar_foto(area, slug, id, b64, tipo):
     if fila is None:
         con.close()
         return False
+    foto_id = fotos_disco.guardar(b64, tipo)
     fotos = json.loads(fila['fotos'] or '[]')
-    fotos.append({'b64': b64, 'tipo': tipo, 'fecha': ahora().isoformat()})
+    fotos.append({'id': foto_id, 'tipo': tipo, 'fecha': ahora().isoformat()})
     cur.execute(f"UPDATE {cfg_ent['tabla']} SET fotos = ? WHERE id = ?", (json.dumps(fotos), id))
     con.commit()
     con.close()
@@ -733,7 +739,8 @@ def registrar_rutas(bp, area):
     @bp.route('/<slug>/<int:id>/foto', methods=['POST'])
     @accesos.requiere(escritura)
     def subir_foto(slug, id):
-        """Sube una foto, la convierte a base64 y la guarda en el JSON de fotos."""
+        """Sube una foto (ya comprimida client-side, ver `_detalle_fotos.html`), la
+        convierte a base64 y la manda a `agregar_foto`, que la escribe en disco."""
         cfg(area, slug)  # 404 temprano si el slug no existe
 
         if 'file' not in request.files:
@@ -754,14 +761,40 @@ def registrar_rutas(bp, area):
         except Exception as e:
             return jsonify({'ok': False, 'error': str(e)}), 500
 
-    @bp.route('/<slug>/<int:id>/foto/<int:indice>/eliminar', methods=['POST'])
-    @accesos.requiere(escritura)
-    def eliminar_foto(slug, id, indice):
-        """Borra una foto de la galería por su posición en el array JSON.
+    @bp.route('/<slug>/<int:id>/foto/<foto_id>')
+    def foto_archivo(slug, id, foto_id):
+        """Sirve el archivo de una foto (ver `fotos_disco.py`).
 
-        Las fotos no tienen id propio (son objetos dentro de un array), así que la
-        posición es la única referencia posible. Un índice fuera de rango no es error:
-        se ignora y se vuelve a la ficha (pasa si dos pestañas borran a la vez).
+        No usa `/static` porque la galería es privada: no lleva su propio decorador de
+        permiso, cae bajo el mismo `_gate_entidad` (`before_request`, filtra por `slug`)
+        que `detalle`/`lista` — mismo nivel de acceso. Además valida acá que `foto_id`
+        pertenezca a ESTA fila: el uuid random no alcanza solo como control de acceso,
+        porque no es secreto frente a alguien que ya tiene lectura de otra entidad del
+        área.
+        """
+        cfg_ent = cfg(area, slug)
+        con = conectar(area)
+        cur = con.cursor()
+        fila = cur.execute(f"SELECT fotos FROM {cfg_ent['tabla']} WHERE id = ?", (id,)).fetchone()
+        con.close()
+        if fila is None:
+            abort(404)
+        fotos = json.loads(fila['fotos'] or '[]')
+        foto = next((f for f in fotos if f.get('id') == foto_id), None)
+        if foto is None:
+            abort(404)
+        archivo = fotos_disco.ruta(foto['id'], foto['tipo'])
+        if not os.path.exists(archivo):
+            abort(404)
+        return send_file(archivo, mimetype=foto['tipo'])
+
+    @bp.route('/<slug>/<int:id>/foto/<foto_id>/eliminar', methods=['POST'])
+    @accesos.requiere(escritura)
+    def eliminar_foto(slug, id, foto_id):
+        """Borra una foto de la galería (fila + archivo en disco) por su `id` (uuid).
+
+        Un `foto_id` que no está no es error: se ignora y se vuelve a la ficha (pasa si
+        dos pestañas borran a la vez, o un doble click).
         """
         cfg_ent = cfg(area, slug)
         con = conectar(area)
@@ -771,25 +804,27 @@ def registrar_rutas(bp, area):
             con.close()
             abort(404)
         fotos = json.loads(fila['fotos'] or '[]')
-        if 0 <= indice < len(fotos):
-            fotos.pop(indice)
+        borrada = next((f for f in fotos if f.get('id') == foto_id), None)
+        if borrada is not None:
+            fotos_disco.eliminar(borrada['id'], borrada['tipo'])
+            restantes = [f for f in fotos if f.get('id') != foto_id]
             cur.execute(f"UPDATE {cfg_ent['tabla']} SET fotos = ? WHERE id = ?",
-                        (json.dumps(fotos), id))
+                        (json.dumps(restantes), id))
             con.commit()
         con.close()
         return redirect(url_for(f'{nombre}.detalle', slug=slug, id=id))
 
-    @bp.route('/<slug>/<int:id>/foto/<int:indice>/rotar', methods=['POST'])
+    @bp.route('/<slug>/<int:id>/foto/<foto_id>/rotar', methods=['POST'])
     @accesos.requiere(rotar)
-    def rotar_foto(slug, id, indice):
-        """Reemplaza una foto por la misma imagen girada.
+    def rotar_foto(slug, id, foto_id):
+        """Reemplaza el ARCHIVO de una foto por la misma imagen girada, conservando su
+        `id` (y su `fecha`).
 
         El giro lo hace el navegador (un canvas en `crud/_detalle_fotos.html`) y acá llega
         la imagen ya girada, cruda en el body con su `Content-Type`: así no hace falta
-        Pillow ni ninguna dependencia nueva en el server, y no se pagan ni el 33% de más
-        de base64 ni el string gigante de un JSON. Como la ruta acepta el contenido que le
-        mandan, pide el permiso que declaró el área (`PERMISO_ROTAR_FOTO`), que puede ser
-        más alto que el de escritura.
+        Pillow ni ninguna dependencia nueva en el server. Como la ruta acepta el contenido
+        que le mandan, pide el permiso que declaró el área (`PERMISO_ROTAR_FOTO`), que
+        puede ser más alto que el de escritura.
         """
         cfg_ent = cfg(area, slug)
         tipo = (request.content_type or '').split(';')[0].strip()
@@ -800,7 +835,6 @@ def registrar_rutas(bp, area):
             return jsonify({'ok': False, 'error': 'Imagen vacía'}), 400
         if len(crudo) > 24 * 1024 * 1024:
             return jsonify({'ok': False, 'error': 'Imagen demasiado grande'}), 400
-        b64 = base64.b64encode(crudo).decode('utf-8')
 
         con = conectar(area)
         cur = con.cursor()
@@ -809,10 +843,12 @@ def registrar_rutas(bp, area):
             con.close()
             abort(404)
         fotos = json.loads(fila['fotos'] or '[]')
-        if not (0 <= indice < len(fotos)):
+        foto = next((f for f in fotos if f.get('id') == foto_id), None)
+        if foto is None:
             con.close()
             return jsonify({'ok': False, 'error': 'No existe esa foto'}), 404
-        fotos[indice] = dict(fotos[indice], b64=b64, tipo=tipo)
+        fotos_disco.reemplazar(foto['id'], foto['tipo'], crudo, tipo)
+        foto['tipo'] = tipo
         cur.execute(f"UPDATE {cfg_ent['tabla']} SET fotos = ? WHERE id = ?",
                     (json.dumps(fotos), id))
         con.commit()

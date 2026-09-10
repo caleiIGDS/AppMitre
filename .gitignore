@@ -13,6 +13,10 @@ agente.md.bak
 # PDFs generados por Salidas educativas (contienen DNI y datos de salud)
 salidas_pdfs/
 
+# Fotos de recursos (database/fotos/): archivos binarios, no viajan por git (ver
+# database/LEEME.md)
+database/fotos/
+
 # Padrón de estudiantes (DNI) — fuente para cargar estudiantes.db, nunca se commitea
 *.xlsx
 

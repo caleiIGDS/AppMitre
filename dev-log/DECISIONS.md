@@ -6,6 +6,40 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-09-09] — Las fotos en disco no rotan con `respaldos.py`
+
+Las fotos de recursos pasaron de base64-en-la-columna a archivos en `database/fotos/`
+(uno por foto, nombre = uuid, ver `fotos_disco.py`). No entran en la rotación de 20
+copias de `respaldos.py` a propósito: son inmutables (rotar reemplaza el archivo, esa
+rotación es para una DB que muta fila a fila) y ya alcanzaba con que PythonAnywhere free
+se quedara sin disco copiando el mismo blob veinte veces — justo lo que esto resuelve.
+
+---
+
+## [2026-09-09] — Los seguros del Anexo IX vuelven a un solo PDF
+
+Revierte "Más de un seguro escolar: copias completas" (2026-08-15): en vez de una Declaración
+Jurada entera por póliza (`AnexoIX_2.pdf`, URL `IX_<n>`, su fila en `detalle()`), ahora se
+repite adentro del mismo PDF sólo el bloque "Datos del seguro escolar" — título y sus 4
+campos — una vez por póliza (`_dibujar_seguros_ix`). Pedido de la escuela: firmar y archivar
+una declaración por seguro era papeleo repetido. `observaciones` salió de `CAMPOS_SEGURO_IX`
+porque es del anexo, no de la póliza, y va una sola vez al final.
+
+---
+
+## [2026-09-04] — La foto pendiente sobrevive a su turno, para poder releerla por número
+
+Revierte la mitad de "La foto dura un turno" (2026-08-12): ya no se borra al final del turno
+si ninguna ficha la reclama, ni el aviso le dice al modelo que `leer_foto`/`adjuntar_foto` van
+a fallar. Ahora `_fotos_del_turno()` cae a `agente_fotos_pendientes` cuando piden un número
+puntual que no es de este turno, así que una foto sigue disponible mientras dure la
+conversación (`CONVERSACION_MINUTOS`), no sólo mientras dura el turno en que llegó. Sin
+número explícito (`leer_foto()` a secas) se sigue mirando SOLO lo de este turno — no hay
+relectura automática, sigue siendo una tool que el modelo llama cuando hace falta, no un
+paso por las dudas. El costo es que una foto adjuntada y nunca reclamada por una ficha ocupa
+la DB hasta el barrido por tiempo en vez de irse al toque; para el volumen de esta escuela
+no pesa.
+
 ## [2026-09-04] — Una foto puede ser N altas: la ficha se identifica por nombre
 
 La identidad-por-foto de `_identidad_ficha()` (ver la entrada del 2026-08-13, que la anota

@@ -24,7 +24,7 @@ Las áreas **no duplican código**: comparten un motor. Las dependencias van sie
 capa 2   gestion.py   historia.py   agente/                            ← nombran tablas reales
 capa 1      crud.py + templates/crud/   ·   accesos.py                 ← saben "entidad" y "permiso",
                                                                          no cuáles
-capa 0        config.py    texto.py    respaldos.py                    ← no nombran nada del dominio
+capa 0        config.py    texto.py    respaldos.py    fotos_disco.py  ← no nombran nada del dominio
 ```
 
 El sistema de horarios (`horarios/`) queda **fuera de este esquema**: es un paquete
@@ -34,7 +34,7 @@ autónomo con su propia config, su propio gate y sus propios datos. No importa `
 
 **La pregunta para ubicar cualquier función es una sola: ¿qué nombra?** Si nombra una tabla, un slug o una ruta, es del área y quien la necesite la importa de ahí. Si no nombra nada del dominio, sube. Lo específico de un área entra al motor por **hooks declarados** (`migrar`, `seed`, `derivados`, `secciones_detalle`, …), nunca por un `if slug == '...'` dentro de `crud.py`. Detalle completo en `agent_docs/crud-motor.md`.
 
-También se comparte lo que no es lógica de dominio: `static/global.css` (paleta, reset y escudo del header), `static/gestion.css` (estilos específicos de gestión/historia/agente/salidas), `static/gestion-agente.js`, `static/mobile-nav.js` (menú lateral de celular) y el widget del chat.
+También se comparte lo que no es lógica de dominio: `static/global.css` (paleta, reset y escudo del header), `static/gestion.css` (estilos específicos de gestión/historia/agente/salidas), `static/img-utils.js` (compresión de imágenes client-side, la usan el chat y la galería de fotos), `static/gestion-agente.js`, `static/mobile-nav.js` (menú lateral de celular) y el widget del chat.
 
 **Usuarios principales:** alumnos, docentes, preceptores y administración.  
 **Stack:** Flask + SQLite + Vanilla JS (sin frameworks). Sin tests, sin linter, sin build step.
@@ -72,6 +72,7 @@ Google Sheets (CSV export por año: 1ro–7mo + preceptores + personal)
 | `config.py` | Branding, `ahora()` (el reloj de la escuela), `PRODUCCION`, `SESION_DIAS` (capa 0). Compartido por gestión/historia/agente/salidas/accesos. **No lo usa horarios** (tiene `horarios/config.py`). Nadie llama a `datetime.now()`: el server de producción corre en UTC |
 | `texto.py` | Normalización de texto y búsqueda difusa (capa 0). Único dueño de `UMBRAL_SIMILITUD` |
 | `respaldos.py` | Respaldos rotativos de SQLite, parametrizados por área (capa 0) |
+| `fotos_disco.py` | Archivo en disco de cada foto de entidad (`database/fotos/<uuid><ext>`), capa 0: no nombra ninguna tabla, sólo guarda/sirve/borra por uuid. No entra en la rotación de `respaldos.py` (son inmutables) |
 | `crud.py` | Motor CRUD genérico + rutas (capa 1). No importa ningún área |
 | `accesos.py` | Motor de accesos y permisos (capa 1), hermano de `crud.py`: gate, catálogo de permisos, perfiles, links de invitación y panel `/accesos`. DB propia `accesos.db`. No nombra ningún permiso de área. **Horarios no pasa por acá** |
 | `actualizar.py` | Script de consola para el deploy: pone al día una `gestion.db`/`historia.db` vieja. Hace lo que `migrar()` no puede porque cruza las dos DBs (mudanza de hitos/personas, `proyectos` → hitos) y limpia tablas y columnas que el código ya no declara. Idempotente, con `--dry-run`. No toca `escuela.db` |

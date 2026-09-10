@@ -183,46 +183,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Manejo de imágenes
   //
-  // La foto se achica ANTES de mandarla. Una foto de celular sale de 3-8 MB y en base64
-  // pesa un tercio más: no entra en el límite de la API de visión y encima tarda una
-  // eternidad por el wifi de la escuela. 1568 px de lado largo es lo que el modelo llega
-  // a aprovechar; más grande lo reescala él y solo se paga el envío. Alcanza de sobra
-  // para leer la letra chica de un datasheet.
-  const IMAGEN_LADO_MAX = 1568;
-  const IMAGEN_CALIDAD = 0.85;
-
-  function achicarImagen(file) {
-    return new Promise(function(resolve, reject) {
-      const reader = new FileReader();
-      reader.onerror = reject;
-      reader.onload = function(evt) {
-        const dataUrl = evt.target.result;
-        const img = new Image();
-        // Si el navegador no puede decodificarla (HEIC de iPhone, formato raro), se manda
-        // tal cual: que decida el servidor, mejor que perder la foto.
-        img.onerror = function() { resolve(dataUrl); };
-        img.onload = function() {
-          const lado = Math.max(img.width, img.height);
-          if (lado <= IMAGEN_LADO_MAX) {
-            resolve(dataUrl);
-            return;
-          }
-          const escala = IMAGEN_LADO_MAX / lado;
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.round(img.width * escala);
-          canvas.height = Math.round(img.height * escala);
-          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-          try {
-            resolve(canvas.toDataURL('image/jpeg', IMAGEN_CALIDAD));
-          } catch (e) {
-            resolve(dataUrl);
-          }
-        };
-        img.src = dataUrl;
-      };
-      reader.readAsDataURL(file);
-    });
-  }
+  // achicarImagen vive en img-utils.js (capa 0, cargado antes que este archivo): la usa
+  // también el botón 📷 de la galería de fotos (crud/_detalle_fotos.html), con la misma
+  // calidad/lado máximo — un solo código, no dos copias.
+  const achicarImagen = window.ImgUtils.achicarImagen;
 
   if (imageBtn) {
     imageBtn.addEventListener('click', function(e) {
@@ -599,11 +563,14 @@ document.addEventListener('DOMContentLoaded', function() {
       btn.disabled = true;
       btn.textContent = 'Guardando…';
 
-      fetch('/agente/confirmar', {
+      // Si quedó una edición en vuelo (el usuario tocó un campo y clickeó antes de que
+      // volviera la respuesta), esperarla: si no, este fetch sale con el token VIEJO —
+      // el server ya lo reemplazó por el de la edición — y da 409 con la ficha viva.
+      colaEdicion.then(() => fetch('/agente/confirmar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: conf.token })
-      })
+      }))
         .then(r => r.json().then(data => ({ ok: r.ok, data })))
         .then(({ data }) => {
           caja.remove();
@@ -638,11 +605,13 @@ document.addEventListener('DOMContentLoaded', function() {
       btn.disabled = true;
       btn.textContent = 'Cancelando…';
 
-      fetch('/agente/descartar', {
+      // Mismo motivo que en botonConfirmar: esperar una edición en vuelo para no cancelar
+      // con un token que el server ya reemplazó.
+      colaEdicion.then(() => fetch('/agente/descartar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: conf.token })
-      })
+      }))
         .then(r => r.json().then(data => ({ ok: r.ok, data })))
         .then(({ data }) => {
           caja.remove();
@@ -817,7 +786,9 @@ document.addEventListener('DOMContentLoaded', function() {
   let colaRevision = Promise.resolve();
 
   function pedirRevision(cuerpo) {
-    const pedido = colaRevision.then(() => fetch('/agente/revisar', {
+    // Espera también `colaEdicion`: si un token de `cuerpo` corresponde a una ficha con una
+    // edición en vuelo, el server ya la reemplazó y este request saldría con el token viejo.
+    const pedido = Promise.all([colaRevision, colaEdicion]).then(() => fetch('/agente/revisar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(cuerpo)

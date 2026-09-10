@@ -162,14 +162,9 @@ def _ruta_pdf(id, anexo):
     return os.path.join(_carpeta_pdfs(id), f'Anexo{anexo}.pdf')
 
 
-# El Anexo IX es el único con copias extra: si la escuela carga más de un seguro escolar
-# (ver `_seguros_adicionales` en formulario.html), cada uno genera su propia Declaración
-# Jurada completa — en el papel real no hay lugar para más de una póliza por copia. La
-# primera sigue siendo `_ruta_pdf(id, 'IX')`; ésta es para la 2ª en adelante.
-def _ruta_pdf_ix_extra(id, indice):
-    return os.path.join(_carpeta_pdfs(id), f'AnexoIX_{indice}.pdf')
-
-
+# Hasta 2026-09-09 cada seguro escolar adicional del Anexo IX generaba su propia copia
+# completa, `AnexoIX_2.pdf` en adelante; ahora todos van en el mismo PDF. El patrón queda
+# para poder limpiar las copias que hayan quedado en disco (ver _limpiar_pdfs_ix_extra).
 _RE_PDF_IX_EXTRA = re.compile(r'^AnexoIX_(\d+)\.pdf$')
 
 
@@ -190,13 +185,13 @@ class _PDFAnexo(FPDF):
     fuente_doc = ''
 
     def header(self):
-        # fpdf2 dibuja SVG directo (VectorImageInfo) — no hace falta rasterizar el escudo.
-        self.image('static/images/escudo.svg', x=10, y=8, h=14)
+        # Sin escudo de la escuela: estos PDF imitan un formulario oficial de la provincia
+        # (el único logo es el de PBA, en el pie). El set_y deja el mismo margen superior.
         self.set_y(28)
 
     def footer(self):
         self.set_y(-24)
-        self.set_font('helvetica', '', 7)
+        self.set_font('helvetica', '', 9)
         self.set_text_color(80, 80, 80)
         self.cell(0, 4, self.fuente_doc, align='R')
         self.set_text_color(0, 0, 0)
@@ -331,6 +326,10 @@ CAMPOS_MISMA_LINEA = {
     ],
     'V': [('institucion_educativa', 'numero_institucion'), ('lugar_a_visitar', 'fecha')],
     'VII': [('firma', 'dni_firma')],  # "Firma: ____ DNI: ____" es un solo renglón en el papel
+    'IX': [
+        ('numero_establecimiento', 'cue'),  # "N°____ CUE____", debajo del nombre del establecimiento
+        ('domicilio', 'distrito'),
+    ],
 }
 
 # `notas` de un campo (ver Salidas/README_campos.md) puede ser una aclaración real del
@@ -443,6 +442,16 @@ LABELS_MAYUSCULA = {
 TAM_TEXTO = 11
 ALTO_LINEA = 7
 RENGLONES_TEXTAREA = 5  # renglones en blanco para completar a mano cuando el campo no vino con valor
+# Campos que se apartan de ese default, por id. Además de fijar la cantidad de renglones,
+# estar acá alcanza para que un campo `text` se dibuje como bloque (label arriba, renglones
+# abajo) en vez de "label: ____" en un solo renglón: es lo que necesita
+# `autoridad_que_completo`, cuyo label es tan largo que la línea de _escribir_par arrancaba
+# pasado el margen derecho y se salía de la hoja.
+RENGLONES_BLANCO = {
+    'observaciones_fechas': 4,
+    'gastos_estimativos': 4,
+    'autoridad_que_completo': 1,
+}
 GROSOR_TRAZO_VALOR = 0.25  # mm — trazo fino sobre el relleno de valores destacados
 # Donde el destacado va en el label (ANEXOS_LABEL_DESTACADO), el valor se diferencia con una
 # fuente de peso liviano, no tocando el glifo de la helvetica. Descartados en el camino: afinarlo
@@ -452,6 +461,19 @@ GROSOR_TRAZO_VALOR = 0.25  # mm — trazo fino sobre el relleno de valores desta
 FUENTE_VALOR = 'roboto-light'  # embebida en _crear_pdf; helvetica core no tiene peso Light
 ANCHO_BLANCO_PAR = 70  # mm — línea en blanco para completar a mano, campo solo en su renglón
 ANCHO_BLANCO_PAR_EXTRA = 35  # mm — ídem, cuando comparte renglón con otro campo (CAMPOS_MISMA_LINEA)
+# Anchos por id que se apartan de esos dos defaults. El bloque de hospedaje del Anexo IV
+# ("sólo para salidas de más de 24 horas") va de a dos campos por renglón, y con los 35mm
+# parejos no entraba a mano ni el nombre de un hotel ni una dirección; el renglón tiene lugar
+# de sobra hasta el margen derecho, así que se los ensancha.
+# Los renglones de tres campos ("Fecha de regreso ___ Hora ___ Lugar ___") no entran con los
+# 35mm parejos: la última línea arrancaba pasada la margen derecha y se cortaba fuera de la
+# hoja. Se reparten según lo que hay que escribir — una fecha y una hora son cortas, el lugar no.
+ANCHOS_BLANCO_PAR = {
+    'hospedaje_nombre': 45, 'hospedaje_telefono': 45,
+    'hospedaje_domicilio': 45, 'hospedaje_localidad': 45,
+    'fecha_salida': 24, 'hora_salida': 16, 'lugar_salida': 38,
+    'fecha_regreso': 24, 'hora_regreso': 16, 'lugar_regreso': 38,
+}
 ANCHO_BLANCO_NARRATIVA = 45  # mm — ídem, para un placeholder {id} vacío dentro del párrafo corrido
 # Nombre completo y domicilio necesitan más lugar que un DNI o un distrito para escribir a mano.
 ANCHOS_BLANCO_NARRATIVA = {
@@ -459,19 +481,36 @@ ANCHOS_BLANCO_NARRATIVA = {
 }
 
 
-def _label_campo(campo, anexo):
-    label = campo['label']
+# Labels que en el papel traen las dos variantes juntas para tachar la que no corresponde
+# ("... de la Salida Educativa/Salida de Representación Institucional"). Como `tipo_salida`
+# ya se eligió una sola vez en Datos Comunes, se imprime sólo la que va — mismo criterio que
+# los `mapeos` de PARRAFOS_NARRATIVA en el VI/VII. El `label` del JSON queda como está en el
+# papel: el que elige es el renderer. Sin `tipo_salida` cargado (formulario en blanco para
+# completar a mano) cae al label completo, que es justamente el que se tacha.
+LABELS_SEGUN_TIPO_SALIDA = {
+    'IX': {
+        'fecha_lugar_realizacion': {
+            'educativa': 'Fecha y lugar de realización de la Salida Educativa',
+            'representacion_institucional':
+                'Fecha y lugar de realización de la Salida de Representación Institucional',
+        },
+    },
+}
+
+
+def _label_campo(campo, anexo, valores=None):
+    variantes = LABELS_SEGUN_TIPO_SALIDA.get(anexo, {}).get(campo['id'])
+    label = (variantes or {}).get((valores or {}).get('tipo_salida')) or campo['label']
     return label.upper() if campo['id'] in LABELS_MAYUSCULA.get(anexo, ()) else label
 
 
 # Delta de tamaño (pt) del valor destacado respecto de `tam_base` — el default (+1, más
-# grande) funciona en los anexos con párrafos narrativos, donde el trazo de semi-negrita
-# resalta unas pocas palabras sueltas. El IX es casi todo "label: valor" seguido, así que
-# el mismo tratamiento satura la página entera; ahí el valor va 1pt más CHICO que el label
-# en vez de más grande, para que siga leyéndose destacado (por el trazo) sin dominar la hoja.
-# El VI es el otro caso aparte: como el destacado lo lleva el LABEL (ANEXOS_LABEL_DESTACADO),
-# este delta agranda el label y toda la separación con el valor se hace por acá.
-ANEXOS_VALOR_TAM_DELTA = {'IX': -1, 'VI': 1}
+# grande) rige en todos los anexos: el IX lo tuvo en -1 (valor más chico que el label) por
+# ser casi todo "label: valor" seguido, pero terminaba leyéndose como un anexo en letra
+# chica al lado de los otros seis. El VI es el único caso aparte: como el destacado lo lleva
+# el LABEL (ANEXOS_LABEL_DESTACADO), este delta agranda el label y toda la separación con el
+# valor se hace por acá.
+ANEXOS_VALOR_TAM_DELTA = {'VI': 1}
 
 # Cuerpo extra (pt) del título de sección respecto de TAM_TEXTO, por anexo — default 0. En el
 # VI arma la escalera completa: título de sección > label > valor, cada escalón 1pt.
@@ -479,18 +518,25 @@ ANEXOS_SECCION_TAM_DELTA = {'VI': 2}
 
 
 @contextmanager
+def _trazo_valor(pdf):
+    """Trazo fino (fill+stroke) sobre el texto, sin tocar la fuente.
+
+    Va por `local_context` (q/Q en el stream) y no asignando `pdf.text_mode`: fpdf2 emite
+    el operador `Tr` sólo cuando el modo no es FILL, pero nunca emite el `2 Tr` -> `0 Tr` de
+    vuelta. Como `Tr` es estado gráfico y persiste entre BT/ET, el trazo quedaba pegado y
+    todo lo que se dibujaba después salía semi-negrita (los labels incluidos)."""
+    with pdf.local_context(text_mode="FILL_STROKE", line_width=GROSOR_TRAZO_VALOR):
+        yield
+
+
+@contextmanager
 def _valor_destacado(pdf, tam_base=TAM_TEXTO, delta=1):
     """Contexto para dibujar un valor cargado por el usuario: `delta` puntos de diferencia
     respecto de `tam_base` y con un trazo fino (fill+stroke) que da un efecto de
     semi-negrita, sin depender de una fuente Bold real."""
-    pdf.set_font('helvetica', '', tam_base + delta)
-    pdf.set_line_width(GROSOR_TRAZO_VALOR)
-    pdf.text_mode = "FILL_STROKE"
-    try:
+    with pdf.local_context(text_mode="FILL_STROKE", line_width=GROSOR_TRAZO_VALOR,
+                           font_family='helvetica', font_style='', font_size_pt=tam_base + delta):
         yield
-    finally:
-        pdf.text_mode = "FILL"
-        pdf.set_font('helvetica', '', tam_base)
 
 
 @contextmanager
@@ -533,14 +579,15 @@ def _dibujar_campo(pdf, campo, valores, anexo, extra=()):
     negrita = anexo in ANEXOS_LABEL_NEGRITA
     texto_valor = _texto_valor(campo, valores.get(campo['id']))
     nota = campo.get('notas') if campo['id'] in NOTAS_A_IMPRIMIR.get(anexo, ()) else None
-    ancho_blanco = ANCHO_BLANCO_PAR_EXTRA if extra else ANCHO_BLANCO_PAR
-    _escribir_par(pdf, _label_campo(campo, anexo), texto_valor, negrita, anexo, ancho_blanco)
+    ancho_blanco = ANCHOS_BLANCO_PAR.get(campo['id'], ANCHO_BLANCO_PAR_EXTRA if extra else ANCHO_BLANCO_PAR)
+    _escribir_par(pdf, _label_campo(campo, anexo, valores), texto_valor, negrita, anexo, ancho_blanco)
     if nota:
         pdf.write(ALTO_LINEA, f" ({nota})")
     for campo_extra in extra:
         texto_extra = _texto_valor(campo_extra, valores.get(campo_extra['id']))
         pdf.write(ALTO_LINEA, '     ')
-        _escribir_par(pdf, _label_campo(campo_extra, anexo), texto_extra, negrita, anexo, ANCHO_BLANCO_PAR_EXTRA)
+        _escribir_par(pdf, _label_campo(campo_extra, anexo, valores), texto_extra, negrita, anexo,
+                      ANCHOS_BLANCO_PAR.get(campo_extra['id'], ANCHO_BLANCO_PAR_EXTRA))
     pdf.ln(ALTO_LINEA)
     pdf.ln(2)
 
@@ -566,7 +613,7 @@ def _dibujar_textarea(pdf, campo, valores, anexo):
     else:
         texto_valor = _texto_valor(campo, valor_raw)
     nota = campo.get('notas') if campo['id'] in NOTAS_A_IMPRIMIR.get(anexo, ()) else None
-    label = _label_campo(campo, anexo)
+    label = _label_campo(campo, anexo, valores)
     if nota and anexo in NOTAS_ANTES_DE_DOSPUNTOS:
         encabezado = f"{label} ({nota}):"
     else:
@@ -588,7 +635,7 @@ def _dibujar_textarea(pdf, campo, valores, anexo):
             with _valor_destacado(pdf, TAM_TEXTO, delta):
                 pdf.multi_cell(0, ALTO_LINEA, texto_valor, align='L', new_x='LMARGIN', new_y='NEXT')
     else:
-        renglones = 1 if anexo == 'VI' else RENGLONES_TEXTAREA
+        renglones = RENGLONES_BLANCO.get(campo['id'], 1 if anexo == 'VI' else RENGLONES_TEXTAREA)
         for _ in range(renglones):
             pdf.cell(0, ALTO_LINEA, '', border='B', new_x='LMARGIN', new_y='NEXT')
     pdf.ln(2)
@@ -639,10 +686,8 @@ def _dibujar_narrativa(pdf, bloque, valores, campos_por_id):
                     # Sin valor: línea en blanco para completar a mano, igual que _escribir_par.
                     valor = valores_texto.get(parte, '')
                     if valor:
-                        pdf.set_line_width(GROSOR_TRAZO_VALOR)
-                        pdf.text_mode = "FILL_STROKE"
-                        pdf.write(ALTO_LINEA, valor)
-                        pdf.text_mode = "FILL"
+                        with _trazo_valor(pdf):  # sin cambiar la fuente: conserva `estilo`
+                            pdf.write(ALTO_LINEA, valor)
                     else:
                         pdf.cell(ANCHOS_BLANCO_NARRATIVA.get(parte, ANCHO_BLANCO_NARRATIVA), ALTO_LINEA, '', border='B')
                     pdf.set_font('helvetica', estilo, TAM_TEXTO)
@@ -685,18 +730,54 @@ def _dibujar_obra_social(pdf, valores):
     pdf.ln(2)
 
 
-def _dibujar_docentes(pdf, campo, valores):
+def _dibujar_titulo_seccion(pdf, anexo, titulo):
+    pdf.set_font('helvetica', 'B', TAM_TEXTO + ANEXOS_SECCION_TAM_DELTA.get(anexo, 0))
+    pdf.ln(2)
+    pdf.multi_cell(0, ALTO_LINEA, titulo, align='L', new_x='LMARGIN', new_y='NEXT')
+    pdf.ln(1)
+    pdf.set_font('helvetica', '', TAM_TEXTO)
+
+
+# Los 4 campos de póliza del bloque "Datos del seguro escolar" del Anexo IX. Son los que se
+# repiten cuando la escuela tiene más de un seguro vigente (ver `_seguros_adicionales` en
+# formulario.html): el bloque entero, con su título, una vez por póliza. `observaciones`
+# queda afuera a propósito — es del anexo, no de la póliza, y va una sola vez al final.
+CAMPOS_SEGURO_IX = ('compania_aseguradora', 'tipo_seguro', 'numero_poliza', 'vigencia_poliza')
+
+
+def _dibujar_seguros_ix(pdf, valores, campos_por_id):
+    # El primer seguro son los campos sueltos del anexo; los demás, cada entrada de
+    # `_seguros_adicionales`, que trae esas mismas 4 claves.
+    for i, seguro in enumerate([valores] + list(valores.get('_seguros_adicionales') or [])):
+        if i:  # el título de la primera repetición ya lo puso el loop general
+            _dibujar_titulo_seccion(pdf, 'IX', SECCION_TITULOS['IX']['seguro_escolar'])
+        for id_campo in CAMPOS_SEGURO_IX:
+            _dibujar_campo(pdf, campos_por_id[id_campo], seguro, 'IX')
+
+
+# Anchos (mm) de las dos líneas en blanco del renglón de un docente. Sobra hoja hasta el margen,
+# así que en vez del ANCHO_BLANCO_PAR_EXTRA parejo van con la proporción del papel: el nombre
+# completo escrito a mano necesita bastante más lugar que "Preceptor" o "Prof. de Historia".
+# El papel además deja debajo dos renglones anchos más para los titulares y uno para los
+# reemplazantes; acá no se dibujan porque el Anexo IV en blanco ya termina a 3mm del pie de la
+# página 2 y cualquiera de ellos lo empuja a una tercera hoja con un solo campo.
+ANCHO_BLANCO_DOCENTE = {'apellido_nombre': 60, 'cargo': 40}
+
+
+def _dibujar_docentes(pdf, campo, valores, anexo):
+    negrita = anexo in ANEXOS_LABEL_NEGRITA
     pdf.set_font('helvetica', '', TAM_TEXTO)
     pdf.multi_cell(0, ALTO_LINEA, f"{campo['label']}:", align='L', new_x='LMARGIN', new_y='NEXT')
-    filas = valores.get(campo['id']) or [{}]  # sin docentes, el original igual deja un renglón para completar
+    filas = valores.get(campo['id']) or [{}]  # sin docentes, el original igual deja el renglón para completar
     for fila in filas:
-        pdf.set_font('helvetica', '', TAM_TEXTO)
-        pdf.write(ALTO_LINEA, "Apellido y Nombre: ")
-        with _valor_destacado(pdf, TAM_TEXTO):
-            pdf.write(ALTO_LINEA, fila.get('apellido_nombre', ''))
-        pdf.write(ALTO_LINEA, "    Cargo: ")
-        with _valor_destacado(pdf, TAM_TEXTO):
-            pdf.write(ALTO_LINEA, fila.get('cargo', ''))
+        # Por `_escribir_par` y no escribiendo el valor derecho: sin dato, deja la línea en
+        # blanco donde anotarlo. Antes se escribía la cadena vacía y el renglón salía
+        # "Apellido y Nombre:     Cargo:", todo junto y sin lugar para completar a mano.
+        _escribir_par(pdf, 'Apellido y Nombre', fila.get('apellido_nombre', ''), negrita, anexo,
+                      ANCHO_BLANCO_DOCENTE['apellido_nombre'])
+        pdf.write(ALTO_LINEA, '     ')
+        _escribir_par(pdf, 'Cargo', fila.get('cargo', ''), negrita, anexo,
+                      ANCHO_BLANCO_DOCENTE['cargo'])
         pdf.ln(ALTO_LINEA)
     pdf.ln(1)
 
@@ -770,11 +851,13 @@ def _generar_pdf_anexo(anexo, valores, destino):
     # hoja real que una sola línea larga centrada.
     pdf.set_font('helvetica', 'BU', 14)
     pdf.multi_cell(0, 8, f"ANEXO {anexo}", align='C', new_x='LMARGIN', new_y='NEXT')
-    pdf.ln(2)
+    pdf.ln(6)
     pdf.set_font('helvetica', 'B', TAM_TEXTO)
-    for parte in schema['titulo'].split(' — '):
+    for i, parte in enumerate(schema['titulo'].split(' — ')):
         # En mayúscula: así está el título en todos los anexos del original (verificado en
         # los 7) — el JSON lo guarda en caja de oración porque es más legible como dato.
+        if i:
+            pdf.ln(6)  # renglón en blanco entre las dos líneas del título, como en el papel
         pdf.multi_cell(0, 6, parte.upper(), align='C', new_x='LMARGIN', new_y='NEXT')
     pdf.ln(6)
 
@@ -796,19 +879,18 @@ def _generar_pdf_anexo(anexo, valores, destino):
             seccion_actual = campo.get('seccion')
             titulo = titulos_seccion.get(seccion_actual)
             if titulo:
-                pdf.set_font('helvetica', 'B', TAM_TEXTO + ANEXOS_SECCION_TAM_DELTA.get(anexo, 0))
-                pdf.ln(2)
-                pdf.multi_cell(0, ALTO_LINEA, titulo, align='L', new_x='LMARGIN', new_y='NEXT')
-                pdf.ln(1)
-                pdf.set_font('helvetica', '', TAM_TEXTO)
+                _dibujar_titulo_seccion(pdf, anexo, titulo)
 
         if campo['id'] in narrativa_por_disparador:
             _dibujar_narrativa(pdf, narrativa_por_disparador[campo['id']], valores, campos_por_id)
         elif campo['id'] == 'tiene_obra_social':
             _dibujar_obra_social(pdf, valores)
             procesados.update(CAMPOS_OBRA_SOCIAL)
+        elif anexo == 'IX' and campo['id'] == CAMPOS_SEGURO_IX[0]:
+            _dibujar_seguros_ix(pdf, valores, campos_por_id)
+            procesados.update(CAMPOS_SEGURO_IX)
         elif campo['id'] in CAMPOS_DOCENTES:
-            _dibujar_docentes(pdf, campo, valores)
+            _dibujar_docentes(pdf, campo, valores, anexo)
         elif campo['id'] in CAMPOS_FIRMA_IX:
             _dibujar_firmas_ix(pdf, valores)
             procesados.update(CAMPOS_FIRMA_IX)
@@ -816,7 +898,7 @@ def _generar_pdf_anexo(anexo, valores, destino):
             _dibujar_tabla(pdf, campo, valores)
         elif campo['tipo'] == 'nota':
             _dibujar_nota(pdf, campo)
-        elif campo['tipo'] == 'textarea':
+        elif campo['tipo'] == 'textarea' or campo['id'] in RENGLONES_BLANCO:
             _dibujar_textarea(pdf, campo, valores, anexo)
         elif campo['id'] in grupo_por_disparador:
             _dibujar_campo(pdf, campo, valores, anexo,
@@ -826,8 +908,10 @@ def _generar_pdf_anexo(anexo, valores, destino):
 
     if anexo in NOTAS_GENERALES_A_IMPRIMIR and schema.get('notas_generales'):
         pdf.ln(2)
-        pdf.set_font('helvetica', '', TAM_TEXTO - 2)
-        pdf.multi_cell(0, ALTO_LINEA - 2, schema['notas_generales'], align='L', new_x='LMARGIN', new_y='NEXT')
+        # Mismo cuerpo e interlineado que una nota del cuerpo (_dibujar_nota): en el papel
+        # es un párrafo más del formulario, no una letra chica al pie.
+        pdf.set_font('helvetica', '', TAM_TEXTO)
+        pdf.multi_cell(0, ALTO_LINEA, schema['notas_generales'], align='L', new_x='LMARGIN', new_y='NEXT')
 
     if destino is None:
         # El PDF de una familia por el link público no se cachea en disco (ver
@@ -836,11 +920,6 @@ def _generar_pdf_anexo(anexo, valores, destino):
         return bytes(pdf.output())
     os.makedirs(os.path.dirname(destino), exist_ok=True)
     pdf.output(destino)
-
-
-# Los 5 campos del bloque "Seguro escolar" del Anexo IX — los que pisa cada entrada de
-# `_seguros_adicionales` para generar su propia copia (ver _generar_pdfs).
-CAMPOS_SEGURO_IX = ('compania_aseguradora', 'tipo_seguro', 'numero_poliza', 'vigencia_poliza', 'observaciones')
 
 
 def _limpiar_pdfs_ix_extra(id):
@@ -860,13 +939,11 @@ def _anexo_vacio(valores):
 def _generar_pdfs(id, anexos):
     """Un PDF por anexo (III a IX), guardado en disco — nunca se descargan solos.
 
-    El Anexo IX es especial: la escuela puede cargar más de un seguro escolar (distinto
-    para estudiantes menores/mayores de edad, por ejemplo — ver `_seguros_adicionales` en
-    formulario.html). El papel real sólo tiene lugar para una póliza por Declaración
-    Jurada, así que cada seguro adicional genera su propia copia completa del Anexo IX
-    (mismos datos de identificación, sólo cambia el bloque de seguro), no una fila más en
-    una tabla. Se borran las copias extra viejas antes de regenerar, para que editar una
-    salida y sacar un seguro no deje un PDF viejo huérfano dando vueltas.
+    Los seguros escolares adicionales del Anexo IX (ver `_seguros_adicionales` en
+    formulario.html) van todos en ese mismo PDF, repitiendo el bloque "Datos del seguro
+    escolar" una vez por póliza (`_dibujar_seguros_ix`). Hasta 2026-09-09 cada uno generaba
+    una copia completa aparte (`AnexoIX_2.pdf`, ...); se siguen borrando las que hayan
+    quedado en disco de salidas guardadas antes de ese cambio.
     """
     for n in ANEXOS_NUMEROS:
         valores = anexos.get(n) or {}
@@ -881,9 +958,6 @@ def _generar_pdfs(id, anexos):
         _generar_pdf_anexo(n, valores, ruta)
         if n == 'IX':
             _limpiar_pdfs_ix_extra(id)
-            for indice, seguro in enumerate(valores.get('_seguros_adicionales') or [], start=2):
-                valores_extra = dict(valores, **{campo: seguro.get(campo, '') for campo in CAMPOS_SEGURO_IX})
-                _generar_pdf_anexo('IX', valores_extra, _ruta_pdf_ix_extra(id, indice))
 
 
 # --- Link público: familias/estudiantes completan el VI/VII solos -------------
@@ -1129,16 +1203,6 @@ def detalle(id):
     disponibles = [n for n in ANEXOS_NUMEROS if os.path.exists(_ruta_pdf(id, n))]
     titulos = {n: _cargar_schema(n)['titulo'] for n in disponibles}
     etiquetas = {n: n for n in disponibles}
-    # Copias extra del Anexo IX, una por seguro escolar adicional (ver _generar_pdfs) —
-    # se detectan por archivo en disco, no por releer datos_json, para mostrar siempre lo
-    # que hay realmente generado.
-    indice = 2
-    while os.path.exists(_ruta_pdf_ix_extra(id, indice)):
-        clave = f'IX_{indice}'
-        disponibles.append(clave)
-        titulos[clave] = titulos['IX']
-        etiquetas[clave] = f'IX (seguro {indice})'
-        indice += 1
 
     # Token de respaldo por si la migración todavía no corrió en este arranque (no debería
     # pasar: init_db migra antes de servir el primer request) — no deja el link roto.
@@ -1175,9 +1239,6 @@ def regenerar_pdfs(id):
     return redirect(url_for('salidas.detalle', id=id))
 
 
-_RE_ANEXO_IX_EXTRA = re.compile(r'^IX_(\d+)$')
-
-
 @bp.route('/<int:id>/pdf/<anexo>')
 def ver_pdf(id, anexo):
     con = conectar()
@@ -1187,16 +1248,10 @@ def ver_pdf(id, anexo):
     if fila is None:
         abort(404)
 
-    if anexo in ANEXOS_NUMEROS:
-        ruta = _ruta_pdf(id, anexo)
-    else:
-        # 'IX_2', 'IX_3', ... — copias extra por seguro escolar adicional. Allowlist
-        # explícita por regex, no simplemente "no está en ANEXOS_NUMEROS": `anexo` viene
-        # de la URL y arma una ruta de archivo, no puede aceptar cualquier cosa.
-        m = _RE_ANEXO_IX_EXTRA.match(anexo)
-        if not m:
-            abort(404)
-        ruta = _ruta_pdf_ix_extra(id, int(m.group(1)))
+    # Allowlist explícita: `anexo` viene de la URL y arma una ruta de archivo.
+    if anexo not in ANEXOS_NUMEROS:
+        abort(404)
+    ruta = _ruta_pdf(id, anexo)
     if not os.path.exists(ruta):
         abort(404)
 
@@ -1303,7 +1358,7 @@ def completar(token, anexo):
             return valores_base.get(cid + '_texto', '')
         return _texto_valor(campos_por_id[cid], valores_base.get(cid))
 
-    resumen = [(_label_campo(campos_por_id[cid], anexo), _texto_resumen(cid))
+    resumen = [(_label_campo(campos_por_id[cid], anexo, valores_base), _texto_resumen(cid))
               for cid in sorted((c['id'] for c in schema['campos']), key=lambda cid: campos_por_id[cid]['orden'])
               if cid not in ids_familia and campos_por_id[cid]['tipo'] != 'nota' and valores_base.get(cid)]
 

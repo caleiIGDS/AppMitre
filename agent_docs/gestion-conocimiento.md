@@ -180,24 +180,31 @@ de la baja, para que renombrar el recurso después no reescriba la historia. `MO
 Desgaste / Extravío / Rotura / Otro, y el detalle libre es lo que la explica. El registro completo
 se ve en `/gestion/bajas` (`bajas_registro()`), solo con `gestion.auditoria`.
 
-**Galería de fotos** (`fotos`): array JSON con objetos `{b64, tipo, fecha}`.
-- `b64`: imagen codificada en base64 (embedded, sin servicios externos)
-- `tipo`: content-type (ej: `image/png`)
+**Galería de fotos** (`fotos`): array JSON con objetos `{id, tipo, fecha}`. La imagen en sí
+NO vive en la fila: es un archivo en `database/fotos/<id><ext>` (ver `fotos_disco.py`,
+capa 0).
+- `id`: uuid4 hex, también es la base del nombre del archivo en disco
+- `tipo`: content-type (ej: `image/png`), decide la extensión del archivo
 - `fecha`: timestamp ISO de cuándo se subió
-- Upload: botón en ficha de detalle → POST `/<slug>/<id>/foto` → sube imagen, convierte a base64, guarda en DB
+- Upload: botón en ficha de detalle → se comprime client-side (`window.ImgUtils.achicarImagen`,
+  1568px/JPEG q0.85, mismo criterio que el chat) → POST `/<slug>/<id>/foto` → se decodifica y
+  se escribe en disco (`crud.agregar_foto`)
+- Servido: `GET /<slug>/<id>/foto/<foto_id>` (`crud.foto_archivo`) — no pasa por `/static`
+  porque la galería es privada; valida que `foto_id` pertenezca a esa fila antes de mandar
+  el archivo
 - Renderizado: galería grid responsive (120px minmax) de miniaturas recortadas (`object-fit: cover`)
 - **Visor**: click en una miniatura abre un lightbox a pantalla completa (`.g-lightbox`, CSS en
   `gestion.css`, JS inline en el partial `templates/crud/_detalle_fotos.html`) con la foto
   entera, contador `n / total`, flechas
   ‹ › (y ← → del teclado), cierre con Esc o click en el fondo, y los botones **ROTAR** y
   **ELIMINAR**
-- Borrado: `POST /<slug>/<id>/foto/<indice>/eliminar` (con `confirm()`) → saca la foto del array
-  y redirige a la ficha. **La referencia es la posición en el array**: las fotos no tienen id
-  propio. Un índice fuera de rango no es error, se ignora (dos pestañas borrando a la vez)
-- Rotación: `POST /<slug>/<id>/foto/<indice>/rotar` con la imagen **cruda en el body** y su
+- Borrado: `POST /<slug>/<id>/foto/<foto_id>/eliminar` (con `confirm()`) → saca la foto del
+  array y borra el archivo, y redirige a la ficha. Un `foto_id` que no existe no es error,
+  se ignora (dos pestañas borrando a la vez)
+- Rotación: `POST /<slug>/<id>/foto/<foto_id>/rotar` con la imagen **cruda en el body** y su
   `Content-Type`. El giro de 90° lo hace un `<canvas>` en el navegador y al server llega la
-  imagen ya girada (así no hace falta Pillow ni ninguna dependencia nueva); reemplaza
-  `b64`/`tipo` de esa posición y conserva `fecha`. El visor muestra la foto girada apenas
+  imagen ya girada (así no hace falta Pillow ni ninguna dependencia nueva); reemplaza el
+  ARCHIVO de esa foto (mismo `id`) y conserva `fecha`. El visor muestra la foto girada apenas
   termina de codificarla y **guarda en segundo plano** (botón en `GUARDANDO…`): si el POST
   falla vuelve a la imagen que sigue en la DB. Pide `gestion.rotar` — **solo admin**, a
   diferencia de subir y borrar
@@ -276,9 +283,10 @@ unidad y los sub-recursos de un kit, pero el mecanismo de limpieza es idéntico)
 | `/gestion/<slug>/<id>/editar` | GET/POST | Edición |
 | `/gestion/<slug>/<id>/eliminar` | POST | Borra fila + sus filas de `LIMPIEZA_M2M` (confirm en el browser). **404 en `recursos`**, que declara `sin_eliminar`: se dan de baja |
 | `/gestion/bajas` | GET | Registro de bajas (solo `gestion.auditoria`): qué salió del inventario, con qué motivo y cuándo |
-| `/gestion/<slug>/<id>/foto` | POST | Sube una imagen a la galería (multipart → base64). Devuelve JSON |
-| `/gestion/<slug>/<id>/foto/<indice>/eliminar` | POST | Borra la foto de esa posición y vuelve a la ficha |
-| `/gestion/<slug>/<id>/foto/<indice>/rotar` | POST | Reemplaza esa foto por la versión girada que manda el navegador (imagen cruda en el body). Solo admin (`gestion.rotar`) |
+| `/gestion/<slug>/<id>/foto` | POST | Sube una imagen (ya comprimida client-side) a la galería (multipart → se decodifica y se escribe en `database/fotos/`). Devuelve JSON |
+| `/gestion/<slug>/<id>/foto/<foto_id>` | GET | Sirve el archivo de esa foto |
+| `/gestion/<slug>/<id>/foto/<foto_id>/eliminar` | POST | Borra la foto (fila + archivo) y vuelve a la ficha |
+| `/gestion/<slug>/<id>/foto/<foto_id>/rotar` | POST | Reemplaza el ARCHIVO de esa foto por la versión girada que manda el navegador (imagen cruda en el body), mismo `id`. Solo admin (`gestion.rotar`) |
 | `/gestion/alias` | GET | Solo lectura, solo admin (`gestion.alias`): tabla NOMBRE / ALIAS de todos los recursos. Único lugar de la web donde se ve el alias oculto — no hay edición acá |
 | `/gestion/recursos/<id>/baja` | POST | Da de baja el recurso: exige `motivo` (sin motivo vuelve al form), guarda `detalle` y la fecha de hoy |
 | `/gestion/recursos/<id>/baja/revertir` | POST | Devuelve el recurso al inventario y marca esa baja como revertida |

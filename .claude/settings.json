@@ -73,7 +73,8 @@
       "Bash(node --check static/gestion.js)",
       "Bash(python -c \"import crud, gestion; print\\('py OK'\\)\")",
       "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\f57006ae-019d-4fa7-82e3-e1bc23aeb96f\\\\scratchpad\\\\test_ambito.py\")",
-      "PowerShell($env:PYTHONIOENCODING='utf-8'; python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\628de037-dab8-4373-bbeb-446fdf048299\\\\scratchpad\\\\test_fichas.py\")"
+      "PowerShell($env:PYTHONIOENCODING='utf-8'; python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\628de037-dab8-4373-bbeb-446fdf048299\\\\scratchpad\\\\test_fichas.py\")",
+      "Bash(python -m py_compile fotos_disco.py crud.py actualizar.py)"
     ],
     "additionalDirectories": [
       "C:\\Users\\calei\\projects\\AppMitre\\static\\vendor\\pdfjs\\build",

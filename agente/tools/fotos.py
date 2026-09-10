@@ -4,12 +4,16 @@ Leer es una tool y no un paso automático: la primera versión leía toda foto a
 chat, y pagaba una llamada de visión también cuando lo único que querían era adjuntar —
 que es el caso más común y el que menos la necesita.
 
-Las dos sacan las imágenes de `contexto_turno['fotos_turno']`, nunca de un parámetro: el
-modelo no ve la foto, así que pedirle el base64 sería pedirle que lo invente. Lo único que
-maneja es el NÚMERO de cada foto, que es lo que le permite decir de cuál salió cada ficha.
+Las dos sacan las imágenes de `contexto_turno['fotos_turno']` (las de ESTE turno) o, si
+piden un número puntual que no es de ahora, de `agente_fotos_pendientes` (las de un turno
+anterior de la MISMA conversación, todavía vivas). Nunca de un parámetro: el modelo no ve
+la foto, así que pedirle el base64 sería pedirle que lo invente. Lo único que maneja es el
+NÚMERO de cada foto, que es lo que le permite decir de cuál salió cada ficha o pedir releer
+una de más atrás.
 """
 import crud
 
+from ..db import _foto_lote_leer
 from ..dominio import SLUGS_ENTIDAD, _modulo
 from ..proveedores import _get_vision_config
 from ..vision import MODO_DEFAULT, _leer_imagen
@@ -23,35 +27,51 @@ from ..vision import MODO_DEFAULT, _leer_imagen
 # no necesita leer nada: necesita saber a qué recurso va, y eso lo dice el usuario.
 # Leer por las dudas era pagar una llamada de visión en cada foto para tirarla a la basura.
 #
-# En los dos casos las imágenes salen de `contexto_turno['fotos_turno']` y no de un
-# parámetro: el modelo nunca ve la foto (ve, como mucho, su lectura en texto), así que
-# pedirle el base64 sería pedirle que lo invente.
+# Sin número de foto ("leé lo que mandé"), las imágenes salen SOLO de las de este turno —
+# no hay auto-relectura del historial. Con un número puntual (`foto=N`), si no es de este
+# turno se busca en `agente_fotos_pendientes` por si es de un mensaje anterior de la misma
+# conversación: sobrevive ahí hasta que la conversación se cierra o vence (ver db.py).
 
 SIN_FOTOS = ('En este turno el usuario no adjuntó ninguna foto. Si querés que te mande una, '
-             'pedísela; no llames a esta tool de nuevo hasta que la mande.')
+             'pedísela; no llames a esta tool de nuevo hasta que la mande. Si te referís a una '
+             'foto de un mensaje anterior de esta conversación, pasá su NÚMERO en `foto`.')
 
 
 def _fotos_del_turno(contexto_turno, foto=None):
-    """Las fotos de este turno, o sólo la número `foto` si la pidieron.
+    """Las fotos de este turno, o la número `foto` (de este turno o de uno anterior).
 
-    Devuelve `(lista, error)`. Un número que no existe se cuenta con los que sí, en vez de
-    fallar en seco: el modelo elige el número y una confusión no tiene por qué costar el turno.
+    Devuelve `(lista, error)`. Sin `foto`, sólo mira las de ESTE turno: no hay relectura
+    automática de fotos viejas. Con un número puntual que no está en este turno, cae a
+    `agente_fotos_pendientes` por si es de un mensaje anterior de la misma conversación —
+    ahí sobreviven bastante más que un turno (ver db.py). Un número que no existe en
+    ningún lado se cuenta con los que sí, en vez de fallar en seco: el modelo elige el
+    número y una confusión no tiene por qué costar el turno.
     """
     fotos = (contexto_turno or {}).get('fotos_turno') or []
-    if not fotos:
-        return [], SIN_FOTOS
     if foto is None:
+        if not fotos:
+            return [], SIN_FOTOS
         return fotos, None
     try:
         n = int(foto)
     except (TypeError, ValueError):
         return fotos, None
     elegidas = [f for f in fotos if f['n'] == n]
-    if not elegidas:
+    if elegidas:
+        return elegidas, None
+
+    vieja = _foto_lote_leer(n)
+    if vieja:
+        b64, tipo = vieja
+        return [{'n': n, 'b64': b64, 'tipo': tipo}], None
+
+    if fotos:
         disponibles = ', '.join(str(f['n']) for f in fotos)
-        return [], (f'En este turno no hay ninguna foto número {n}. Las que mandó el usuario '
-                    f'son la {disponibles}.')
-    return elegidas, None
+        return [], (f'No hay ninguna foto número {n}. Las de este turno son la {disponibles}; '
+                    'si es de un mensaje anterior, ya no está disponible — pedile al usuario '
+                    'que la mande de nuevo.')
+    return [], (f'No hay ninguna foto número {n} disponible, ni de este turno ni de un mensaje '
+               'anterior de esta conversación. Pedile al usuario que la mande de nuevo.')
 
 
 def _leer_foto_fmt(contexto_turno=None, modo=MODO_DEFAULT, foto=None):

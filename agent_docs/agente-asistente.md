@@ -1423,7 +1423,7 @@ mensaje vacío no es un turno válido para el modelo— y el mensaje que arma `/
 Por eso `historial()` filtra por `texto or imagenes` y no sólo por `texto`: si filtrara por
 texto, ese mensaje desaparecería del chat.
 
-#### La foto dura un turno, la lectura y el número no
+#### La foto no vuelve a aparecer arriba, pero se puede releer por número
 
 **Son dos avisos, no uno**, y esto es lo que hace que un alta se pueda terminar en el turno
 siguiente:
@@ -1431,12 +1431,21 @@ siguiente:
 | Función | Cuándo | Qué dice |
 |---|---|---|
 | `_aviso_foto_actual(numeros)` | Durante el turno, con las imágenes en `contexto_turno` | "hay N fotos, numeradas X, Y, Z, todavía no las vio nadie, llamá a `leer_foto` UNA vez" |
-| `_aviso_foto_vieja(numeros, lecturas)` | Al **persistir**, vía `_foto_en_pasado()` | "esas fotos YA NO ESTÁN, no llames a `leer_foto`" + **las lecturas completas** + "los números sí siguen valiendo" |
+| `_aviso_foto_vieja(numeros, lecturas)` | Al **persistir**, vía `_foto_en_pasado()` | "esas fotos ya no están arriba, pero seguís pudiendo llamar a `leer_foto`/`adjuntar_foto` con su NÚMERO" + **las lecturas completas**, si las hubo |
 
 El aviso en presente quedaba guardado tal cual, y en el turno siguiente el modelo leía "hay
-una foto sin ver, llamá a `leer_foto`", llamaba, y la tool le contestaba que no hay ninguna —
-porque la foto muere con el turno. Un "dale, creá" después de una ficha se iba entero en esa
-vuelta perdida.
+una foto sin ver, llamá a `leer_foto`" como si la tuviera arriba del mensaje. Por eso el
+segundo aviso reemplaza al primero al persistir: aclara que ya no está en el mensaje, pero
+que el NÚMERO se puede seguir pasando.
+
+**La foto en sí sobrevive a su turno.** `agente_fotos_pendientes` la guarda por conversación
+(`sid:n`), no por turno, y `_fotos_del_turno()` (en `agente/tools/fotos.py`) cae a esa tabla
+cuando piden un número puntual (`foto=N`) que no es de este turno. Así que `leer_foto` y
+`adjuntar_foto` siguen funcionando sobre una foto de varios mensajes atrás, mientras la
+conversación no haya vencido (`CONVERSACION_MINUTOS`) y nadie la haya confirmado/descartado
+ya (`_soltar_foto`/`_cerrar_lote` la liberan en ese momento). Sin un número explícito
+(`leer_foto()` a secas) sigue mirando SOLO las de este turno — no hay relectura automática
+del historial completo.
 
 Son **funciones y no constantes** desde el lote: el texto lleva los números de las fotos de
 ese turno. Por eso `_foto_en_pasado()` recibe el aviso que se armó, en vez de mirar una

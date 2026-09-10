@@ -75,14 +75,15 @@ def _contexto_base():
 # es solo de tono: el corte fijo se disparaba ANTES de llamar al modelo, así que también
 # bloqueaba adjuntar, que no necesita lector.
 
-# El aviso de que hay fotos viaja pegado al mensaje del usuario, y son DOS textos porque
-# la foto dura un solo turno. El primero es el que ve el modelo mientras las imágenes están
-# en `contexto_turno`; el segundo es el que queda GUARDADO en el historial.
+# El aviso de que hay fotos viaja pegado al mensaje del usuario, y son DOS textos porque la
+# imagen deja de estar arriba del mensaje después de este turno (aunque sigue viva en
+# `agente_fotos_pendientes` y se puede volver a pedir por número, ver `_fotos_del_turno`).
+# El primero es el que ve el modelo mientras las imágenes están en `contexto_turno`; el
+# segundo es el que queda GUARDADO en el historial.
 #
 # Sin esa distinción el aviso quedaba en presente para siempre: en el turno siguiente el
-# modelo leía "adjuntó una foto en este turno, todavía no la vio nadie, llamá a leer_foto",
-# llamaba, y `leer_foto` le contestaba que no hay ninguna foto — porque efectivamente ya no
-# estaba. Un "crea" después de una ficha se iba en esa vuelta perdida en vez de dar el alta.
+# modelo leía "adjuntó una foto en este turno, todavía no la vio nadie, llamá a leer_foto"
+# como si la tuviera arriba, en vez de tener que pasar el número explícito.
 #
 # Los dos llevan los NÚMEROS de las fotos, que es lo que el modelo arrastra después en
 # `crear_entidad(foto=N)` para que cada imagen termine en su ficha (ver db._fotos_lote_guardar).
@@ -134,23 +135,28 @@ def _aviso_foto_directa(numeros):
 def _aviso_foto_vieja(numeros, lecturas=None):
     """El aviso en pasado, con las lecturas pegadas si esas fotos llegaron a leerse.
 
-    Guardar la lectura es lo que permite terminar un alta en el turno siguiente: los
-    resultados de las tools no se persisten, así que sin esto los datos de la etiqueta se
-    perdían apenas el modelo terminaba de contestar.
+    Guardar la lectura es lo que permite terminar un alta en el turno siguiente sin gastar
+    otra llamada de visión: los resultados de las tools no se persisten, así que sin esto
+    los datos de la etiqueta se perdían apenas el modelo terminaba de contestar. La imagen
+    en sí sigue viva en `agente_fotos_pendientes` (`_fotos_del_turno` la encuentra por
+    número), así que releerla o adjuntarla más adelante sigue siendo posible — esto sólo
+    avisa que ya no está arriba, en este mensaje.
     """
     cuantas = ('una foto' if len(numeros) == 1
                else f"{len(numeros)} fotos (números {', '.join(str(n) for n in numeros)})")
-    aviso = (f"[En ese turno el usuario adjuntó {cuantas}, que YA NO ESTÁ disponible para "
-             "mirar: las fotos duran un solo turno. No llames a leer_foto ni a adjuntar_foto "
-             "por esto — te van a decir que no hay ninguna. Si necesitás datos que estaban ahí "
-             "y no los tenés escritos más abajo en esta conversación, pedile al usuario que las "
-             "mande de nuevo. El NÚMERO de cada foto sí sigue valiendo: si rearmás una ficha "
-             "que salió de una de ellas, seguí pasando su número en crear_entidad.]")
+    aviso = (f"[En ese turno el usuario adjuntó {cuantas}, que ya no está arriba en este "
+             "mensaje. Si necesitás volver a mirarla o guardarla en una ficha, podés llamar "
+             "a leer_foto o adjuntar_foto pasando ese mismo NÚMERO en `foto` — sigue "
+             "disponible mientras dure esta conversación, salvo que ya se haya usado y "
+             "descartado (ahí te van a avisar que no hay ninguna, y recién ahí pedile al "
+             "usuario que la mande de nuevo). El NÚMERO de cada foto también es lo que "
+             "seguís pasando en crear_entidad si rearmás una ficha que salió de una de "
+             "ellas.]")
     if not lecturas:
         return aviso
     detalle = '\n'.join(f"- Foto {l['foto']}: {l['lectura']}" for l in lecturas)
-    return (f"{aviso}\n[Esto es lo que se leyó, y es TODO lo que se sabe de esas fotos — "
-            f"usalo en vez de pedirlas de nuevo:\n{detalle}]")
+    return (f"{aviso}\n[Esto es lo que ya se leyó de esas fotos — usalo antes de gastar otra "
+            f"lectura si alcanza:\n{detalle}]")
 
 
 # Lo que se le pone al modelo cuando mandan fotos sin escribir nada: un mensaje vacío no
@@ -486,14 +492,10 @@ def _turno_stream(mensaje_usuario, fotos=(), mandadas=0, origen='chat'):
     fichas = _fusionar_fichas(contexto_turno.get('fichas_previas', {}),
                               contexto_turno.get('fichas_mostradas', {}))
 
-    # Las fotos de este turno que no terminaron en ninguna ficha se tiran acá mismo. La
-    # mayoría de las fotos no son un alta —"¿qué es esto?", "guardala en el taladro"— y sin
-    # esto cada una de esas dejaría cientos de KB esperando en la DB una confirmación que no
-    # va a llegar nunca, hasta el barrido de los CONVERSACION_MINUTOS.
-    reclamadas = {f.get('foto') for f in fichas.values() if f.get('foto')}
-    for n in numeros:
-        if n not in reclamadas:
-            _foto_lote_tomar(n)
+    # Las fotos de este turno que no terminaron en ninguna ficha YA NO se tiran acá: quedan
+    # en `agente_fotos_pendientes` por si el usuario pide releerlas o adjuntarlas más
+    # adelante en la misma conversación (`_fotos_del_turno` las busca por número). Se van
+    # solas con el barrido de CONVERSACION_MINUTOS, igual que el resto de la conversación.
 
     # Red de seguridad: si anunció un cambio que no ejecutó, avisarlo (ver comentario
     # en _escritura_no_ejecutada — la regla equivalente en el system prompt no alcanza).
@@ -1026,10 +1028,14 @@ def confirmar():
 
     if token not in fichas:
         # Pasa si se reinició la conversación, si ya se confirmó, o si la ficha quedó
-        # desplazada por otras más nuevas (tope FICHAS_MAX).
+        # desplazada por otras más nuevas (tope FICHAS_MAX). `confirmaciones` va igual: el
+        # token que llegó puede estar viejo (una edición que llegó después lo reemplazó) sin
+        # que la ficha se haya ido de verdad, y sin esto el front la borraba de la pantalla
+        # aunque siguiera pendiente.
         return jsonify({'ok': False,
                         'respuesta': 'Esa ficha ya no está pendiente. Pedile al asistente que '
-                                     'la vuelva a armar y confirmala de nuevo.'}), 409
+                                     'la vuelva a armar y confirmala de nuevo.',
+                        'confirmaciones': _confirmaciones(fichas)}), 409
 
     ok, nombre, detalle = _guardar_ficha(token, fichas)
 
@@ -1068,7 +1074,8 @@ def descartar():
 
     if token not in fichas:
         return jsonify({'ok': False,
-                        'respuesta': 'Esa ficha ya no está pendiente.'}), 409
+                        'respuesta': 'Esa ficha ya no está pendiente.',
+                        'confirmaciones': _confirmaciones(fichas)}), 409
 
     pendiente = fichas.pop(token)
     slug = pendiente['slug']
@@ -1122,7 +1129,8 @@ def revisar():
     if not en_lote and tokens[0] not in fichas:
         return jsonify({'ok': False,
                         'respuesta': 'Esa ficha ya no está pendiente. Pedile al asistente que '
-                                     'la vuelva a armar.'}), 409
+                                     'la vuelva a armar.',
+                        'confirmaciones': _confirmaciones(fichas)}), 409
 
     for token in tokens:
         if token not in fichas:

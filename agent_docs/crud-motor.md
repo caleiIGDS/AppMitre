@@ -192,7 +192,8 @@ crud.registrar_rutas(bp, sys.modules[__name__])
 ```
 
 `registrar_rutas` monta `home`, `lista`, `nuevo`, `detalle`, `editar`, `eliminar`, `subir_foto`,
-`eliminar_foto` y `rotar_foto`, más el context processor. **Los endpoints y las carpetas de templates salen de
+`foto_archivo` (sirve el archivo de una foto, sin permiso propio: cae bajo el mismo
+`_gate_entidad` que `detalle`), `eliminar_foto` y `rotar_foto`, más el context processor. **Los endpoints y las carpetas de templates salen de
 `bp.name`** (`url_for(f'{bp.name}.detalle')`, `render_template(f'{bp.name}/lista.html')`), que ya
 coincide con el nombre de la carpeta en `templates/` — no hay nada que configurar. Las rutas
 que escriben las decora con `accesos.requiere(area.PERMISO_ESCRITURA)` (salvo `rotar_foto`, que usa

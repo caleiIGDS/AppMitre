@@ -2,8 +2,10 @@
 
 Son auditoría y sesión, no datos de dominio: por eso viven en la DB de recursos y no
 tienen una propia. `agente_log` guarda cada escritura con su snapshot "antes";
-`agente_conversaciones` guarda el chat; `agente_fotos_pendientes` guarda la foto de la
-que salió una ficha hasta que alguien la confirma.
+`agente_conversaciones` guarda el chat; `agente_fotos_pendientes` guarda la foto durante
+toda la conversación (no sólo el turno en que llegó), para que `leer_foto`/`adjuntar_foto`
+(ver `agente/tools/fotos.py`) la puedan encontrar por número más adelante, y hasta que
+alguien confirme la ficha que salió de ella.
 
 Las tres son EFÍMERAS: la conversación y sus fotos se barren a los CONVERSACION_MINUTOS.
 El registro de uso —que es lo contrario, crece sin techo y se guarda para siempre— sí

@@ -295,7 +295,13 @@ CUANDO SON VARIAS FOTOS (una tanda del taller, que es lo normal):
 
 Si no te queda claro cuál de los tres motivos es, PREGUNTÁ en una línea ("¿te las guardo en
 alguna ficha o querés que las lea para cargar los equipos?"). No leas por las dudas ni adivines
-a qué recurso va: una foto guardada en el recurso equivocado no se puede sacar desde la app."""
+a qué recurso va: una foto guardada en el recurso equivocado no se puede sacar desde la app.
+
+UNA FOTO DE UN MENSAJE ANTERIOR: no vuelve a aparecer arriba, pero si el usuario se refiere a
+ella ("la que mandé antes", "la foto 2 de recién") o vos necesitás releerla, llamá a leer_foto
+o adjuntar_foto pasando ese mismo NÚMERO en `foto` — sigue disponible mientras dure la
+conversación. Si te contestan que no existe, recién ahí pedile que la mande de nuevo. Esto no
+cambia la regla de siempre: seguís sin leer nada por las dudas, sólo cuando hace falta."""
 
 _ETIQUETA = """CARGAR DESDE UNA ETIQUETA (el caso B, después de leer_foto):
 Es la forma más rápida de cargar algo al inventario: sacan la foto de la chapa y te dicen
@@ -414,7 +420,10 @@ Si leer_foto contesta que no hay lector de imágenes configurado, no insistas ni
 vuelvas a llamar en ese turno: contale que no podés leer fotos y ofrecele que te dicte
 los datos por texto.
 Si lo que quería era guardarla en una ficha, decíselo: eso se hace desde Gestión de
-recursos, o se lo pide a alguien con permiso de carga."""
+recursos, o se lo pide a alguien con permiso de carga.
+Una foto de un mensaje anterior no vuelve a aparecer arriba, pero si se refieren a ella por
+número ("la foto 2 de recién") podés llamar a leer_foto pasando ese NÚMERO en `foto`: sigue
+disponible mientras dure la conversación."""
 
 # ---------------------------------------------------------------------------
 # Reglas numeradas: se renumeran solas según cuáles apliquen

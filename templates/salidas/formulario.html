@@ -1614,21 +1614,21 @@ function copiarPreset(destinoObj, preset){
   destinoObj.vigencia_poliza = preset.vigencia_poliza;
 }
 
-/* Seguros escolares además del principal (Anexo IX.compania_aseguradora y compañía). En
-   el papel real cada Declaración Jurada sólo tiene lugar para una póliza, así que cada
-   entrada acá genera su propia copia completa del Anexo IX al guardar (mismos datos de
-   identificación, sólo cambia el seguro) — ver `_seguros_adicionales` en salidas.py. */
+/* Seguros escolares además del principal (Anexo IX.compania_aseguradora y compañía).
+   Cada entrada repite el bloque "Datos del seguro escolar" dentro del mismo Anexo IX, con
+   su propio título — las Observaciones son del anexo, no de la póliza, y van una sola vez
+   al final del último bloque. Ver `_dibujar_seguros_ix` en salidas.py. */
 function segurosAdicionales(){
   const caja = el("div", {style:"margin-top:18px"});
   caja.appendChild(el("div", {class:"subtitulo", text:"Otros seguros escolares"}));
   caja.appendChild(el("p", {class:"nota-anexo", text:
-    "Si la escuela tiene más de una póliza vigente (ej. una para estudiantes menores de edad y otra para mayores), agregalas acá: cada una imprime su propia copia del Anexo IX, con los mismos datos de identificación y esa póliza."}));
+    "Si la escuela tiene más de una póliza vigente (ej. una para estudiantes menores de edad y otra para mayores), agregalas acá: cada una suma su propio bloque de datos del seguro dentro del mismo Anexo IX."}));
   caja.appendChild(el("div", {id:"lista-seguros-extra"}));
   const btn = el("button", {type:"button", class:"btn-chico", text:"+ Agregar otro seguro"});
   btn.addEventListener("click", () => {
     if (!estado.anexos.IX._seguros_adicionales) estado.anexos.IX._seguros_adicionales = [];
     estado.anexos.IX._seguros_adicionales.push(
-      {compania_aseguradora:"", tipo_seguro:"", numero_poliza:"", vigencia_poliza:"", observaciones:""});
+      {compania_aseguradora:"", tipo_seguro:"", numero_poliza:"", vigencia_poliza:""});
     marcarCambio();
     pintarSegurosAdicionales();
   });
@@ -1643,7 +1643,7 @@ function pintarSegurosAdicionales(){
   const extras = (estado.anexos.IX && estado.anexos.IX._seguros_adicionales) || [];
   extras.forEach((seg, i) => {
     const encabezado = el("div", {class:"tarjeta-seguro-head"},
-      el("strong", {text:`Seguro adicional #${i + 2} (imprime su propio Anexo IX)`}));
+      el("strong", {text:`Seguro adicional #${i + 2}`}));
     const btnQuitar = el("button", {type:"button", class:"btn-borrar", text:"✕", title:"Quitar este seguro"});
     btnQuitar.addEventListener("click", () => { extras.splice(i, 1); marcarCambio(); pintarSegurosAdicionales(); });
     encabezado.appendChild(btnQuitar);
@@ -1659,14 +1659,6 @@ function pintarSegurosAdicionales(){
       wrap.appendChild(inp);
       grilla.appendChild(wrap);
     });
-    const wrapObs = el("div", {class:"campo ancho"});
-    wrapObs.appendChild(el("label", {}, el("span", {text:"Observaciones"})));
-    const ta = el("textarea", {});
-    ta.value = seg.observaciones || "";
-    ta.addEventListener("input", () => { seg.observaciones = ta.value; marcarCambio(); });
-    wrapObs.appendChild(ta);
-    grilla.appendChild(wrapObs);
-
     cont.appendChild(el("div", {class:"tarjeta-seguro"},
       encabezado,
       campoPresetSeguro("Usar un seguro conocido", preset => {

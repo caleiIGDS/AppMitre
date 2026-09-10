@@ -31,9 +31,8 @@ rutas propias, escritas a mano, reutilizando sólo lo compartido (`accesos`,
 - **`salidas_pdfs/`** — carpeta en la raíz, al lado del módulo y NO adentro de
   `database/`, que es sólo para bases. Fuera de `static/`: no listable ni adivinable
   por URL. Un PDF por anexo
-  por salida: `salidas_pdfs/<id>/AnexoIII.pdf` … `AnexoIX.pdf`. En `.gitignore` porque
-  contienen DNI y datos de salud. El Anexo IX puede tener copias extra
-  (`AnexoIX_2.pdf`, `AnexoIX_3.pdf`, ...) — ver "Más de un seguro escolar" más abajo. El
+  por salida: `salidas_pdfs/<id>/AnexoIII.pdf` … `AnexoIX.pdf`, sin excepciones. En
+  `.gitignore` porque contienen DNI y datos de salud. El
   PDF que completa una familia por el link público **no** se cachea acá — se genera en
   memoria y se sirve directo (ver "Link público" más abajo).
 - **`Salidas/AnexoN.json`** (III a IX) — la referencia completa del formulario en papel
@@ -134,11 +133,20 @@ imita esa estructura. `_generar_pdf_anexo(anexo, valores, destino)` recorre el
   `CAMPOS_FIRMA_IX` más abajo), Anexo IV los tiene en peso normal y caja de oración. Van por
   permiso explícito por anexo/id, igual criterio que `NOTAS_A_IMPRIMIR` — nunca un default
   global, porque no lo es en el papel.
+- **Label que depende de `tipo_salida`** (`LABELS_SEGUN_TIPO_SALIDA`, por anexo/id): donde el
+  papel trae las dos variantes juntas para tachar la que no corresponde (`IX.fecha_lugar_realizacion`,
+  "…de la Salida Educativa/Salida de Representación Institucional"), `_label_campo` imprime sólo la
+  elegida en Datos Comunes — mismo criterio que los `mapeos` de `PARRAFOS_NARRATIVA` en el VI/VII.
+  Sin `tipo_salida` cargado cae al label completo del JSON, que es el que se tacha a mano.
 - **`tipo == "textarea"`** (`_dibujar_textarea`): con valor, se imprime el texto. Sin valor,
   se dibujan `RENGLONES_TEXTAREA` (5) renglones en blanco con borde inferior — en el papel
   estos campos (Observaciones, Itinerario, etc.) son varias líneas para escribir a mano, no
   una sola línea corta como firma/lugar-y-fecha; sin los renglones, un campo vacío se veía
   igual que uno que simplemente no aplica, y no comunicaba "esto se completa acá".
+  `RENGLONES_BLANCO` ajusta esa cantidad por id de campo, y además **fuerza este layout de
+  bloque en un campo `text`**: es la salida para un label largo como
+  `autoridad_que_completo`, donde la línea en blanco de `_escribir_par` (70mm a la derecha
+  del label) arrancaba pasado el margen y se iba de la hoja.
 - **`tipo == "tabla"`** (`_dibujar_tabla`): sólo se usa para `V.listado_personas`, que en
   el original **sí** es una grilla con bordes, sin ningún título arriba (arranca directo
   después del último campo de identificación) — `_dibujar_tabla` no imprime `label`. Arma
@@ -272,11 +280,12 @@ de tener números sueltos.
 no tiene un weight "semibold" real (sólo Regular/Bold), así que se usa el modo de texto
 `FILL_STROKE` de PDF (relleno + contorno fino con el mismo color), que engrosa visualmente
 sin llegar a negrita completa. Además cambian 1pt de tamaño respecto de `TAM_TEXTO`
-(`_valor_destacado(pdf, tam_base, delta)`) — por default **más grandes** (`delta=1`, 12pt en
-vez de 11), pero el Anexo IX es casi enteramente pares "label: valor" sin párrafos
-narrativos que corten el texto, así que el mismo tratamiento satura la página entera; ahí
-`ANEXOS_VALOR_TAM_DELTA = {'IX': -1}` lo hace **más chico** (10pt) en cambio, para que siga
-leyéndose destacado (por el trazo) sin dominar la hoja. Esto afecta a: `_escribir_par` (la
+(`_valor_destacado(pdf, tam_base, delta)`): **más grandes** (`delta=1`, 12pt en vez de 11)
+en los siete anexos. El IX tuvo hasta 2026-09-09 un `ANEXOS_VALOR_TAM_DELTA` de `-1` —por
+ser casi enteramente pares "label: valor", donde el destacado de todos satura la hoja—, pero
+al lado de los otros seis se leía como un anexo impreso en letra chica, así que volvió al
+default. `ANEXOS_VALOR_TAM_DELTA` queda sólo para el VI (ver el piloto más abajo). Esto
+afecta a: `_escribir_par` (la
 mayoría de campos), `_dibujar_textarea` (observaciones, itinerarios, etc.),
 `_dibujar_narrativa` (párrafos con `{placeholders}` interpolados en Anexos III, VI, VII —
 siempre con el delta default, no hay narrativa en IX), y `_dibujar_docentes`
@@ -334,9 +343,10 @@ las pise.
 La escuela puede tener más de una póliza de seguro escolar vigente a la vez (ej. una
 Responsabilidad Civil para estudiantes menores de edad y otra para mayores, más una de
 accidentes personales). El papel real del Anexo IX sólo tiene lugar para **una** póliza
-por Declaración Jurada — no es una tabla — así que cada seguro adicional que se carga
-genera su **propia copia completa** del Anexo IX (misma identificación/declaración, sólo
-cambia el bloque "Datos del seguro escolar"), no una fila más en una lista.
+y no es una tabla, así que cada seguro adicional **repite el bloque "Datos del seguro
+escolar" entero** — su título y sus 4 campos — dentro del mismo PDF, uno abajo del otro,
+en vez de ser una fila más en una lista. `observaciones` es del anexo y no de la póliza:
+va **una sola vez**, después del último bloque.
 
 - **`formulario.html`**: el bloque `compania_aseguradora`/`tipo_seguro`/`numero_poliza`/
   `vigencia_poliza` del Anexo IX ya no es `auto:true` (dejó de precargarse solo desde
@@ -352,22 +362,19 @@ cambia el bloque "Datos del seguro escolar"), no una fila más en una lista.
   un campo del schema de `Salidas/Anexo9.json` (`_generar_pdf_anexo` sólo itera
   `schema['campos']`, así que esta clave extra en `valores` no le afecta para nada al
   render del Anexo IX principal).
-- **`salidas.py` — `_generar_pdfs`**: después de generar `AnexoIX.pdf` con el seguro
-  principal, recorre `anexos['IX']['_seguros_adicionales']` y por cada uno arma una copia
-  de `valores` con los 5 campos del seguro (`CAMPOS_SEGURO_IX`) pisados por esa entrada,
-  y llama a `_generar_pdf_anexo('IX', ...)` de nuevo — mismo renderer, sin código nuevo de
-  layout — guardando en `AnexoIX_2.pdf`, `AnexoIX_3.pdf`, etc. (`_ruta_pdf_ix_extra`).
-  Antes de generar las copias, `_limpiar_pdfs_ix_extra` borra las que ya hubiera en la
-  carpeta: si se edita una salida y se saca un seguro, no queda un PDF viejo huérfano.
-- **`ver_pdf`**: además del allowlist exacto de `ANEXOS_NUMEROS`, acepta `anexo` con forma
-  `IX_<n>` vía un regex (`_RE_ANEXO_IX_EXTRA`) — sigue siendo un allowlist estricto, no
-  "cualquier cosa que no esté en la lista", porque `anexo` viene de la URL y arma una ruta
-  de archivo en disco.
-- **`detalle()`** detecta las copias extra **por archivo en disco** (`while
-  os.path.exists(...)`), no releyendo `datos_json` — así la lista siempre refleja lo que
-  hay realmente generado, incluso si el JSON guardado y los PDF quedaran desincronizados
-  por algún motivo. Se muestran como "Anexo IX (seguro 2)", etc. (`etiquetas`, separado de
-  `titulos` para no repetir el título completo en la columna del anexo).
+- **`salidas.py` — `_dibujar_seguros_ix`**: el dispatcher de `_generar_pdf_anexo` lo
+  engancha en `compania_aseguradora` (el primero de `CAMPOS_SEGURO_IX`, ahora los 4 de
+  póliza, sin `observaciones`) y marca los otros 3 como `procesados` para que el loop no
+  los repita. Dibuja el bloque una vez con los campos sueltos del anexo y otra por cada
+  entrada de `_seguros_adicionales`, repitiendo el título con
+  `_dibujar_titulo_seccion` — el mismo helper que usa el loop general, para que un bloque
+  repetido no se dibuje distinto del primero. `observaciones` sigue el camino normal: cae
+  después, en su sección, sin título repetido.
+- Antes de 2026-09-09 cada póliza generaba una copia completa aparte del anexo
+  (`AnexoIX_2.pdf`, ...), con su propia entrada en `detalle()` y su URL `IX_<n>` en
+  `ver_pdf`. Eso ya no existe: `ver_pdf` volvió al allowlist exacto de `ANEXOS_NUMEROS` y
+  `_generar_pdfs` sólo conserva `_limpiar_pdfs_ix_extra`, que borra de la carpeta las
+  copias que hayan quedado de salidas guardadas antes del cambio.
 
 ## Link público: familias y estudiantes completan el VI/VII solos
 

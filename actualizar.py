@@ -53,6 +53,7 @@ load_dotenv(os.path.join(RAIZ, '.env'))
 
 import accesos
 import estudiantes
+import fotos_disco
 import gestion
 import historia
 import agente
@@ -702,6 +703,86 @@ def migraciones_de_schema(dry):
 
 
 # ---------------------------------------------------------------------------
+# Paso 4.5 — fotos: de base64 en la columna a archivos en database/fotos/
+# ---------------------------------------------------------------------------
+
+def _dbs_bajo_database():
+    """Todas las .db bajo database/ (recursivo), salvo `backups/` — ahí viven copias
+    históricas de la rotación de `respaldos.py`, no algo que migrar. Genérico a
+    propósito: no nombra `gestion` ni `historia`, así alcanza también
+    `inventarios/*.db` y cualquier .db que se agregue en el futuro sin tocar este
+    archivo."""
+    encontradas = []
+    for raiz, dirs, archivos in os.walk(DIR_DATOS):
+        dirs[:] = [d for d in dirs if d != 'backups']
+        encontradas.extend(os.path.join(raiz, a) for a in archivos if a.endswith('.db'))
+    return sorted(encontradas)
+
+
+def migrar_fotos_a_disco(dry):
+    """Decodifica las fotos guardadas como base64 en la columna `fotos` (formato viejo:
+    {'b64', 'tipo', 'fecha'}) y las escribe en database/fotos/, dejando en la fila sólo
+    {'id', 'tipo', 'fecha'} (ver fotos_disco.py). Genérico: recorre CUALQUIER .db bajo
+    database/ buscando tablas con columna `fotos`, así que un área nueva con fotos no
+    necesita un paso aparte acá. Idempotente: una fila sin ningún elemento con `b64` no
+    se reescribe.
+    """
+    import json
+
+    print("\n" + "=" * 70)
+    print("PASO 4.5 · Fotos: de base64 en la DB a archivos en database/fotos/")
+    print("=" * 70)
+
+    total_filas = total_fotos = 0
+    for db_ruta in _dbs_bajo_database():
+        con = _conectar(db_ruta)
+        try:
+            tablas = [t for t in _tablas(con) if _tiene_columna(con, t, 'fotos')]
+            if not tablas:
+                continue
+            nombre_db = os.path.relpath(db_ruta, DIR_DATOS)
+            for tabla in tablas:
+                filas = con.execute(
+                    f'SELECT id, fotos FROM "{tabla}" WHERE fotos IS NOT NULL').fetchall()
+                for fila in filas:
+                    try:
+                        fotos = json.loads(fila['fotos'] or '[]')
+                    except (TypeError, ValueError):
+                        continue
+                    if not any('b64' in f for f in fotos):
+                        continue
+                    total_filas += 1
+                    if dry:
+                        print(f"  [dry-run] {nombre_db}: {tabla}.id={fila['id']} — "
+                              f"{sum('b64' in f for f in fotos)} foto(s) en base64 a migrar")
+                        continue
+                    nuevas = []
+                    for f in fotos:
+                        if 'b64' in f:
+                            foto_id = fotos_disco.guardar(f['b64'], f.get('tipo', 'image/jpeg'))
+                            nuevas.append({'id': foto_id, 'tipo': f.get('tipo', 'image/jpeg'),
+                                           'fecha': f.get('fecha', ahora().isoformat())})
+                            total_fotos += 1
+                        else:
+                            nuevas.append(f)
+                    con.execute(f'UPDATE "{tabla}" SET fotos = ? WHERE id = ?',
+                                (json.dumps(nuevas), fila['id']))
+            if not dry:
+                con.commit()
+        finally:
+            con.close()
+
+    if total_filas == 0:
+        print("  · No hay fotos en formato viejo (base64) en ninguna DB. Nada que hacer.")
+    elif dry:
+        print(f"  [dry-run] migraría {total_filas} fila(s) con fotos en base64.")
+    else:
+        print(f"  ✓ {total_filas} fila(s) migradas, {total_fotos} archivo(s) escritos en "
+              f"database/fotos/.")
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Paso 5 — limpieza de sobras (tablas y columnas que el código ya no declara)
 # ---------------------------------------------------------------------------
 
@@ -873,7 +954,8 @@ def main():
     copia_de_seguridad(args.dry_run)
 
     pasos = (mudar_a_historia, migrar_proyectos, mudar_a_inventarios,
-             migraciones_de_schema, lambda dry: limpiar_sobras(dry, args.limpiar))
+             migraciones_de_schema, migrar_fotos_a_disco,
+             lambda dry: limpiar_sobras(dry, args.limpiar))
     for paso in pasos:
         if not paso(args.dry_run):
             print("\n" + "=" * 70)
