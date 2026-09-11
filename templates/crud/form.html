@@ -8,12 +8,20 @@
 
 {% if error %}<div class="g-error">{{ error }}</div>{% endif %}
 
+{# `.g-editor`: la pantalla de alta/edición es una columna de tarjetas a ancho completo.
+   El <form> es la primera; los bloques que guardan por su cuenta (ver form_extra) son
+   tarjetas hermanas, no contenido suelto abajo. #}
+<div class="g-editor">
+
 <form method="post" class="g-form">
+    {# Los campos van en grilla: los cortos de a dos por fila y los largos (textarea) a
+       todo el ancho. Quién es largo sale del `tipo`, que es lo único que el motor sabe. #}
+    <div class="g-campos">
     {% for c in cfg.campos %}
     {# `solo_alta`: campo que sólo se setea al crear (gestión: `cantidad`, que en edición
        se maneja por unidades). En un alta `fila` es None, así que se muestra igual. #}
     {% if not (c.solo_alta and fila) %}
-    <div class="g-field">
+    <div class="g-field{% if c.tipo == 'textarea' %} g-campo-ancho{% endif %}">
         <label for="campo-{{ c.nombre }}">{{ c.label | upper }}{% if c.requerido %} *{% endif %}</label>
         {% if c.tipo == 'textarea' %}
         <textarea id="campo-{{ c.nombre }}" name="{{ c.nombre }}" rows="4">{{ valores[c.nombre] or '' }}</textarea>
@@ -57,6 +65,7 @@
     </div>
     {% endif %}
     {% endfor %}
+    </div>
 
     {# `relaciones` y no `cfg.relaciones`: crud.py ya sacó las que apuntan a una entidad
        que este acceso no puede ver (ver crud.relaciones_visibles). #}
@@ -95,6 +104,8 @@
 {# Acciones que no son "guardar" y no pueden ir dentro del <form> de arriba (un form
    no anida): gestión mete acá la baja del recurso. El área que no lo usa no ve nada. #}
 {% block form_extra %}{% endblock %}
+
+</div>{# /.g-editor #}
 
 <script>
 // Botón "HOY" de los campos con `boton_hoy`: la fecha ya viene armada por el server (en

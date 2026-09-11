@@ -28,27 +28,47 @@
 
 {% if puede('inventarios.admin') %}
 {# El alta no ocupa la página: lo de todos los días acá es mirar la lista, no crear un
-   inventario. El <summary> es el botón y el formulario sale de abajo. #}
-<details class="g-desplegable">
-<summary class="g-btn">+ NUEVO INVENTARIO</summary>
+   inventario. El botón abre el <dialog> de abajo en vez de desplegar el formulario en línea. #}
+<div class="g-nuevo-inv"><button type="button" class="g-btn" data-abre-nuevo-inv>+ NUEVO INVENTARIO</button></div>
 
-<form method="post" action="{{ url_for('inventarios.crear') }}" class="g-form">
-    <div class="g-field">
-        <label for="campo-nombre">NOMBRE</label>
-        <input id="campo-nombre" type="text" name="nombre" required
-               placeholder="Taller de Electrónica, Laboratorio, Pañol…">
-    </div>
-    <div class="g-field">
-        <label for="campo-clave">CLAVE PARA EL ENCARGADO</label>
-        <input id="campo-clave" type="text" name="clave" required>
-        <span class="g-help">Con esta clave el encargado entra al inventario y decide quién
-            más entra. Vos no vas a ver lo que carguen adentro.</span>
-    </div>
-    <div class="g-form-actions">
-        <button type="submit" class="g-btn">CREAR INVENTARIO</button>
-    </div>
-</form>
-</details>
+{# Sin JS del todo un <dialog> cerrado no se puede abrir: ahí se muestra como una caja
+   más de la página, que es exactamente lo que es. #}
+<noscript><style>.g-modal { display: block; position: static; }</style></noscript>
+<dialog class="g-modal" id="dialogo-nuevo-inv">
+    <form method="post" action="{{ url_for('inventarios.crear') }}" class="g-modal-form">
+        <div class="g-modal-head">
+            <h3>NUEVO INVENTARIO</h3>
+            <button type="button" class="g-modal-close" data-cierra-nuevo-inv aria-label="Cerrar">&times;</button>
+        </div>
+        <div class="g-field">
+            <label for="campo-nombre">NOMBRE</label>
+            <input id="campo-nombre" type="text" name="nombre" required
+                   placeholder="Taller de Electrónica, Laboratorio, Pañol…">
+        </div>
+        <div class="g-field">
+            <label for="campo-clave">CLAVE PARA EL ENCARGADO</label>
+            <input id="campo-clave" type="text" name="clave" required>
+            <span class="g-help">Con esta clave el encargado entra al inventario y decide quién
+                más entra. Vos no vas a ver lo que carguen adentro.</span>
+        </div>
+        <div class="g-modal-actions">
+            <button type="submit" class="g-btn">CREAR INVENTARIO</button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+(function () {
+    var dlg = document.getElementById('dialogo-nuevo-inv');
+    var abrir = document.querySelector('[data-abre-nuevo-inv]');
+    if (!dlg || !abrir) return;
+    if (!dlg.showModal) { dlg.setAttribute('open', ''); abrir.hidden = true; return; }
+    abrir.addEventListener('click', function () { dlg.showModal(); });
+    dlg.addEventListener('click', function (e) {
+        if (e.target.closest('[data-cierra-nuevo-inv]')) dlg.close();
+    });
+})();
+</script>
 {% endif %}
 
 <div class="g-cards">

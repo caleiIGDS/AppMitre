@@ -142,13 +142,8 @@
 
 .g-toolbar-actions form { margin: 0; }
 
-/* Panel que se abre desde un botón: el <summary> se ve y se toca como botón, sin el
-   triángulo nativo al lado. Lo usa el alta de inventarios. */
-.g-desplegable { margin-bottom: 24px; }
-.g-desplegable > summary { list-style: none; }
-.g-desplegable > summary::-webkit-details-marker { display: none; }
-.g-desplegable > summary::marker { content: ''; }
-.g-desplegable[open] > summary { margin-bottom: 16px; }
+/* Separa el botón de alta (abre el modal) de la grilla de tarjetas de abajo. */
+.g-nuevo-inv { margin-bottom: 24px; }
 
 .g-breadcrumb {
     font-size: 12px;
@@ -397,6 +392,28 @@
     gap: 18px;
 }
 
+/* Pantalla de alta/edición (templates/crud/form.html). Es una columna de tarjetas: el
+   <form> y los bloques que guardan por su cuenta (unidades, kit, baja) son hermanos y
+   se ven como lo que son, cajas del mismo editor. Acá el formulario suelta el ancho de
+   760px — ése es para los formularios cortos sueltos (login, alta de inventario), no
+   para una ficha de 6 campos más tres bloques abajo. */
+.g-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.g-editor > .g-form { max-width: none; }
+
+/* Los campos cortos de a dos por fila; los largos (textarea) ocupan la fila entera. */
+.g-campos {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.g-campo-ancho { grid-column: 1 / -1; }
+
 .g-field {
     display: flex;
     flex-direction: column;
@@ -525,17 +542,19 @@
     font-size: 14px;
 }
 
-/* Sub-recursos de un kit: se cargan dentro de EDITAR, no en la ficha. Van fuera del
-   <form> principal y cada fila guarda sola, así que el bloque se separa a la vista. */
+/* Sub-recursos de un kit y unidades: se cargan dentro de EDITAR, no en la ficha. Van
+   fuera del <form> principal y cada fila guarda sola, así que son tarjetas aparte (la
+   separación la da el gap de .g-editor). */
 .g-form-kit {
-    margin-top: 28px;
-    padding-top: 16px;
-    border-top: 1px solid var(--g-border);
+    background: var(--g-surface);
+    border: 1px solid var(--g-border);
+    border-top: 4px solid var(--g-primary);
+    padding: 20px 22px;
 }
 
 .g-form-kit h3 {
     margin: 0;
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 1px;
     color: var(--g-primary);
 }
@@ -543,41 +562,84 @@
 .g-form-kit .g-help { display: block; margin: 4px 0 12px; }
 .g-form-kit .g-table-wrap { margin-bottom: 12px; }
 
-/* Bloque UNIDADES de EDITAR: los chips de los números que existen, el alta por IDs y la
-   baja por número con motivo. Reusa .g-ficha-unidad (chips) y .g-checks (la grilla). */
+/* Bloque UNIDADES de EDITAR: los chips de los números que existen (se tocan para la baja,
+   que pide motivo) y los números libres (se tocan para el alta). Reusa .g-ficha-unidad. */
 .g-form-unidades .g-uni-chips {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     margin-bottom: 14px;
 }
-.g-uni-agregar { margin-bottom: 16px; }
-.g-uni-linea {
+/* Las unidades que existen se tocan para darlas de baja: elegidas van en rojo, no en el
+   naranja de "mover" de la ficha, porque acá lo que sigue es eliminarlas. */
+.g-uni-chips .g-ficha-unidad[aria-pressed="true"] {
+    background: var(--g-alert);
+    border-color: var(--g-alert);
+}
+.g-uni-ayuda { margin: 0 0 14px; }
+.g-uni-eliminar {
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    border: 1px dashed var(--g-alert);
+    background: rgba(220, 38, 38, 0.04);
+}
+.g-uni-eliminar[hidden] { display: none; }
+.g-uni-ultima { display: block; margin-top: 6px; color: var(--g-alert); }
+.g-uni-ultima[hidden] { display: none; }
+
+.g-uni-agregar {
+    padding-top: 14px;
+    border-top: 1px dashed var(--g-border);
+}
+.g-uni-libres {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
+    margin-bottom: 12px;
 }
-.g-uni-agregar label { font-size: 13px; }
-.g-uni-agregar input[name="cuantas"] { width: 4.5em; }
-.g-uni-agregar input[name="numeros"] { width: 12em; }
-.g-uni-error { display: block; margin-top: 6px; color: var(--g-alert, #dc2626); }
-.g-uni-eliminar { padding-top: 12px; border-top: 1px dashed var(--g-border); }
-.g-uni-eliminar .g-checks { margin: 8px 0 12px; }
-.g-uni-eliminar .g-field { max-width: 320px; }
+/* Número que todavía no existe: punteado, para que no se confunda con las unidades de
+   arriba. Elegido, toma el naranja de .g-ficha-unidad[aria-pressed] con borde lleno. */
+.g-ficha-unidad.is-libre {
+    border-style: dashed;
+    background: var(--g-surface);
+    color: var(--g-muted);
+}
+.g-ficha-unidad.is-libre[aria-pressed="true"] { border-style: solid; }
+.g-uni-mas {
+    appearance: none;
+    background: none;
+    border: none;
+    padding: 3px 4px;
+    font-family: inherit;
+    font-size: 11px;
+    color: var(--g-accent);
+    text-decoration: underline;
+    cursor: pointer;
+}
 
-/* Pie del formulario de edición: la única puerta para dar de baja un recurso.
-   Separado de GUARDAR por el borde rojo para que no se confundan. */
+/* El motivo es una lista corta y el detalle es texto libre: en escritorio van a la par
+   en vez de dejar dos campos angostos uno abajo del otro. */
+.g-uni-motivo {
+    display: grid;
+    grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+    align-items: start;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+/* Pie del formulario de edición: la única puerta para dar de baja un recurso. Es otra
+   tarjeta del editor, con el borde rojo arriba para que no se confunda con GUARDAR. */
 .g-form-peligro {
     display: flex;
     gap: 16px;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    margin-top: 28px;
-    padding: 14px 16px;
-    border: 1px solid var(--g-alert);
-    background: rgba(220, 38, 38, 0.05);
+    padding: 18px 22px;
+    border: 1px solid var(--g-border);
+    border-top: 4px solid var(--g-alert);
+    background: rgba(220, 38, 38, 0.04);
 }
 
 .g-form-peligro .g-help { display: block; margin-top: 2px; }
@@ -618,6 +680,25 @@
     letter-spacing: 1px;
     color: var(--g-primary);
 }
+
+.g-modal-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.g-modal-close {
+    background: none;
+    border: none;
+    padding: 0;
+    line-height: 1;
+    font-size: 24px;
+    color: var(--g-muted);
+    cursor: pointer;
+}
+
+.g-modal-close:hover { color: var(--g-alert); }
 
 .g-modal-form .g-field { margin-top: 14px; }
 
@@ -2919,6 +3000,20 @@ body.g-sidebar-abierto { overflow: hidden; }
         padding: 16px;
         gap: 14px;
     }
+
+    /* En celular no hay lugar para dos columnas de campos ni para los márgenes anchos
+       de las tarjetas del editor. */
+    .g-campos {
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+
+    .g-editor { gap: 14px; }
+
+    .g-form-kit,
+    .g-form-peligro { padding: 16px; }
+
+    .g-uni-motivo { grid-template-columns: 1fr; }
 
     .g-checks { grid-template-columns: 1fr; }
 

@@ -66,8 +66,9 @@ el motor genérico `crud.py`, que no importa a ninguno de los dos — ver `agent
   `recurso_unidades`, `kit_items` y `recurso_bajas`. **No** se regeneran desde Sheets y
   `/api/actualizar` no las toca. El `slug` sale del nombre y no se renombra nunca (es la
   URL); el ámbito de los permisos va por **id**, así que renombrar no rompe nada.
-- **`templates/gestion/`** — `base.html` (layout + nav), `home.html`, `lista.html`,
-  `form.html`, `detalle.html`, `alias_lista.html`. `lista.html`/`form.html` son **genéricos**:
+- **`templates/gestion/`** — `base.html` (layout + nav), `lista.html`,
+  `form.html`, `detalle.html`, `alias_lista.html`. No hay `home.html`: la raíz de un
+  inventario redirige a la lista de recursos (hook `inicio()`). `lista.html`/`form.html` son **genéricos**:
   se renderizan a partir de la config declarativa de la entidad. `detalle.html` en cambio
   reescribe entero el bloque `contenido` de `crud/detalle.html` para dar a la ficha de
   recurso su maqueta propia (tarjeta de título con chips de estado, contenedor con borde y
@@ -141,8 +142,8 @@ quedan 1, 3, 4, 5. `_asegurar_unidades()` sólo siembra `1..max(cantidad,1)` cua
 **todavía no tiene ninguna** unidad — una vez que tiene, no vuelve a fabricar (hasta el 2026-09-09
 rellenaba cualquier hueco en cada lectura, con lo cual borrar una unidad puntual no servía).
 Se agregan y eliminan **por número desde EDITAR** (`templates/gestion/form.html`, bloque
-"UNIDADES"): `+` elige cuántas y con qué IDs (default = los primeros libres, `_numeros_libres()`;
-el form no deja escribir un ID usado y `unidad_agregar` lo rechaza igual); `−` marca cuáles y
+"UNIDADES"): `+` se tocan los números libres que se quieren (los huecos y los 10 siguientes al
+más alto, "más…" suma de a 10; nada se escribe) y `unidad_agregar` rechaza igual un ID usado; `−` marca cuáles y
 **exige motivo** (`MOTIVOS_BAJA`) — cada unidad eliminada va a `recurso_bajas` con su `numero`
 (`unidad_eliminar`), y nunca se borra la última que queda (para sacar el recurso entero está la
 baja de recurso). El agente no tiene tool por unidad, pero si cambia `cantidad` por el chat

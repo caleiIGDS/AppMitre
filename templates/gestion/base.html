@@ -51,7 +51,6 @@
 
         <div class="g-container g-shell">
             <nav class="g-nav">
-                <a href="{{ url_for('gestion.home') }}" class="g-nav-tag {{ 'active' if activo == 'home' }}">INICIO</a>
                 {% for slug, plural in nav_entidades %}
                 <a href="{{ url_for('gestion.lista', slug=slug) }}" class="g-nav-tag {{ 'active' if activo == slug }}">{{ plural | upper }}</a>
                 {% endfor %}

@@ -35,6 +35,8 @@ concreta entra por un **hook opcional**, nunca por un `if slug == '...'` acá ad
       extras_template(vista, slug, id)  kwargs extra para render_template (`id` sólo en
                                       las vistas de una fila: detalle y editar; si no, None)
       tarjetas_extra(cur)             tarjetas del home que no salen de ENTIDADES
+      inicio()                        URL a la que redirige la raíz del área en vez del
+                                      home de tarjetas (el área no tiene home.html)
       contexto_extra()                claves extra del context processor
       NAV_EXTRA                       [(slug, label)] extra para la nav
       ERROR_DUPLICADO                 {slug: mensaje} cuando un UNIQUE rechaza el guardado
@@ -566,6 +568,9 @@ def registrar_rutas(bp, area):
 
     @bp.route('/')
     def home():
+        inicio = _hook(area, 'inicio')
+        if inicio:
+            return redirect(inicio())
         con = conectar(area)
         cur = con.cursor()
         tarjetas = []

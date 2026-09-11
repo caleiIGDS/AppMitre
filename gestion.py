@@ -703,10 +703,9 @@ def extras_template(vista, slug, id=None):
         cur = con.cursor()
         items = kit_items_recurso(cur, id)
         unidades = unidades_recurso(cur, id)
-        libres = _numeros_libres(cur, id, 1)
         con.commit()  # unidades_recurso puede sembrar unidades que faltaban
         con.close()
-        return {'kit_items': items, 'unidades': unidades, 'numeros_libres': libres}
+        return {'kit_items': items, 'unidades': unidades}
     if slug == 'recursos' and vista == 'lista':
         con = conectar()
         cur = con.cursor()
@@ -719,6 +718,13 @@ def extras_template(vista, slug, id=None):
                           key=texto.norm)
         return {'vencidos_recurso': vencidos, 'lugares_filtro': lugares, 'ubicaciones_recurso': ubicaciones}
     return {}
+
+
+def inicio():
+    """La raíz de un inventario (`/gestion/<inv>/`) va directo a la lista de recursos: con
+    una sola entidad, el home de tarjetas era una escala de más. La ruta sigue existiendo
+    porque el login del inventario vuelve ahí por defecto (y por los links viejos)."""
+    return url_for('gestion.lista', slug='recursos')
 
 
 def contexto_extra():
@@ -1209,8 +1215,7 @@ def _sincronizar_cantidad(cur, rid):
 
 
 def _numeros_libres(cur, rid, n):
-    """Los `n` enteros positivos más bajos que no usa ninguna unidad de este recurso.
-    El default de los IDs al agregar unidades (ver templates/gestion/form.html)."""
+    """Los `n` enteros positivos más bajos que no usa ninguna unidad de este recurso."""
     usados = {f['numero'] for f in
               cur.execute("SELECT numero FROM recurso_unidades WHERE recurso_id = ?", (rid,)).fetchall()}
     libres, i = [], 1
@@ -1380,8 +1385,8 @@ def unidad_quitar(id):
 @bp.route('/recursos/<int:id>/unidades/agregar', methods=['POST'])
 @accesos.requiere(PERMISO_ESCRITURA)
 def unidad_agregar(id):
-    """Agrega unidades con los números (IDs) que se pidan en `numeros` (CSV). El form ya no
-    deja escribir un número usado; acá se rechaza igual como red de seguridad — si alguno
+    """Agrega unidades con los números (IDs) que se pidan en `numeros` (CSV). El form sólo
+    ofrece números libres; acá se rechaza igual como red de seguridad — si alguno
     choca, es <= 0 o está repetido, no se inserta nada y se vuelve a EDITAR con el error."""
     pedidos = [_int(n) for n in request.form.get('numeros', '').split(',') if n.strip()]
     if not pedidos:
@@ -1421,7 +1426,8 @@ def unidad_eliminar(id):
     """Elimina unidades puntuales (se rompieron, se perdieron). Exige `motivo` y anota una
     fila por unidad en `recurso_bajas` con su `numero`. Nunca borra la última unidad que
     queda: para sacar el recurso entero está la baja de recurso (`recurso_baja`)."""
-    nums = [_int(n) for n in request.form.getlist('numeros') if str(n).strip()]
+    nums = [_int(n) for v in request.form.getlist('numeros')
+            for n in str(v).split(',') if n.strip()]
     motivo = (request.form.get('motivo') or '').strip()
     detalle = (request.form.get('detalle') or '').strip()
     if not nums or not motivo:

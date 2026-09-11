@@ -94,6 +94,7 @@ acá, nunca por un `if slug == '...'` dentro de `crud.py`.
 | `valores_iniciales(slug)` | defaults del form de alta | `gestion` (`fecha_revision` = hoy) |
 | `extras_template(vista, slug, id)` | kwargs extra para `render_template`; `id` sólo en `detalle` y `editar`, si no `None` | `gestion`: lugares y vencidos del listado, y los sub-recursos del kit en `editar` |
 | `tarjetas_extra(cur)` | tarjetas del home que no salen de `ENTIDADES` | ninguna hoy (ídem, la tarjeta de Préstamos) |
+| `inicio()` | URL a la que redirige la raíz del área en vez de renderizar el home de tarjetas; el área no necesita `home.html` | `gestion` (la raíz de un inventario va a la lista de recursos) |
 | `contexto_extra()` | claves extra del context processor | ninguna hoy (ídem, `carrito_count`) |
 | `NAV_EXTRA` | `[(slug, label)]` extra para la nav | ninguna hoy (ídem, el ítem "Préstamos") |
 | `ERROR_DUPLICADO` | `{slug: mensaje}` cuando un UNIQUE rechaza el guardado | `historia` (personas) |

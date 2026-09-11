@@ -20,84 +20,116 @@
         — se ajusta acá, no en el campo de arriba.
     </p>
 
-    <div class="g-uni-chips" data-usados="{{ usados | join(',') }}">
+    {# Baja: las unidades que existen se tocan acá mismo (como el mover de la ficha) y
+       recién ahí aparece el motivo. Sin lista aparte de checkboxes que repita los números. #}
+    <div class="g-uni-chips">
         {% for u in unidades %}
-        <span class="g-ficha-unidad is-lectura">#{{ u.numero }}{% if u.ubicacion %} · {{ u.ubicacion }}{% endif %}</span>
+        <button type="button" class="g-ficha-unidad" data-numero="{{ u.numero }}" aria-pressed="false">#{{ u.numero }}</button>
         {% endfor %}
     </div>
+    <p class="g-help g-uni-ayuda">Tocá una unidad para eliminarla (se rompió, se perdió).</p>
 
-    <form method="post" class="g-uni-agregar"
-          action="{{ url_for('gestion.unidad_agregar', id=fila['id']) }}">
-        <span class="g-uni-linea">
-            <label>Agregar <input type="number" name="cuantas" min="1" value="1" inputmode="numeric"></label>
-            <label>con los IDs <input type="text" name="numeros" value="{{ numeros_libres | join(',') }}" autocomplete="off"></label>
-            <button type="submit" class="g-btn-mini">+ Agregar</button>
-        </span>
-        <span class="g-uni-error g-help" role="alert" hidden></span>
-    </form>
-
-    <form method="post" class="g-uni-eliminar"
+    <form method="post" class="g-uni-eliminar" hidden
           action="{{ url_for('gestion.unidad_eliminar', id=fila['id']) }}"
           onsubmit="return confirm('¿Eliminar las unidades marcadas? Queda anotado en el registro de bajas.');">
-        <p class="g-help">Eliminar unidades (se rompieron, se perdieron):</p>
-        <div class="g-checks">
-            {% for u in unidades %}
-            <label class="g-check">
-                <input type="checkbox" name="numeros" value="{{ u.numero }}">
-                #{{ u.numero }}{% if u.ubicacion %} · {{ u.ubicacion }}{% endif %}
-            </label>
+        <input type="hidden" name="numeros" value="">
+        <div class="g-uni-motivo">
+            <div class="g-field">
+                <label for="uni-motivo">QUÉ LES PASÓ *</label>
+                <select id="uni-motivo" name="motivo">
+                    {% for op in motivos_baja %}<option value="{{ op }}">{{ op }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="g-field">
+                <label for="uni-detalle">DETALLE</label>
+                <textarea id="uni-detalle" name="detalle" rows="2"
+                          placeholder="Ej: se quemó en la práctica del 3° B"></textarea>
+            </div>
+        </div>
+        <button type="submit" class="g-btn-mini g-btn-danger">− Eliminar</button>
+        {# unidad_eliminar nunca borra la última: el form lo avisa en vez de mandar algo
+           que el server va a ignorar. #}
+        <span class="g-help g-uni-ultima" hidden>Tiene que quedar al menos una unidad: para
+            sacar el recurso entero está DAR DE BAJA, abajo.</span>
+    </form>
+
+    {# Alta: los números no se escriben, se tocan. Se ofrecen los huecos y los 10
+       siguientes al más alto; "más…" suma de a 10. Como sólo se ven números libres, no
+       hay nada que validar acá: unidad_agregar lo revisa igual. #}
+    {% set tope = usados | max if usados else 0 %}
+    <form method="post" class="g-uni-agregar"
+          action="{{ url_for('gestion.unidad_agregar', id=fila['id']) }}">
+        <p class="g-help">Agregar unidades: tocá los números libres que van a tener.</p>
+        <div class="g-uni-libres">
+            {% for n in range(1, tope + 11) if n not in usados %}
+            <button type="button" class="g-ficha-unidad is-libre" data-numero="{{ n }}" aria-pressed="false">#{{ n }}</button>
             {% endfor %}
+            <button type="button" class="g-uni-mas" data-uni-mas>más…</button>
         </div>
-        <div class="g-field">
-            <label for="uni-motivo">QUÉ LES PASÓ *</label>
-            <select id="uni-motivo" name="motivo">
-                {% for op in motivos_baja %}<option value="{{ op }}">{{ op }}</option>{% endfor %}
-            </select>
-        </div>
-        <div class="g-field">
-            <label for="uni-detalle">DETALLE</label>
-            <textarea id="uni-detalle" name="detalle" rows="2"
-                      placeholder="Ej: se quemó en la práctica del 3° B"></textarea>
-        </div>
-        <button type="submit" class="g-btn-mini g-btn-danger">− Eliminar marcadas</button>
+        <input type="hidden" name="numeros" value="">
+        <button type="submit" class="g-btn-mini" disabled>+ Agregar</button>
     </form>
 
     <script>
     (function () {
-        var form = document.querySelector('.g-uni-agregar');
-        var chips = document.querySelector('.g-uni-chips');
-        if (!form || !chips) return;
-        var usados = (chips.dataset.usados || '').split(',').filter(Boolean).map(Number);
-        var cuantas = form.querySelector('input[name="cuantas"]');
-        var ids = form.querySelector('input[name="numeros"]');
-        var aviso = form.querySelector('.g-uni-error');
-        var enviar = form.querySelector('button[type="submit"]');
-        var tocado = false;
+        // Una tira de chips que se prenden y apagan, y lo elegido viaja como CSV en el
+        // hidden `numeros` del form. `al_cambiar(nums)` ajusta el resto de la UI.
+        function tira_seleccionable(tira, form, al_cambiar) {
+            var campo = form.querySelector('input[name="numeros"]');
+            tira.addEventListener('click', function (e) {
+                var chip = e.target.closest('button.g-ficha-unidad');
+                if (!chip) return;
+                chip.setAttribute('aria-pressed',
+                    chip.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+                var nums = Array.prototype.map.call(
+                    tira.querySelectorAll('.g-ficha-unidad[aria-pressed="true"]'),
+                    function (b) { return b.dataset.numero; });
+                campo.value = nums.join(',');
+                al_cambiar(nums);
+            });
+        }
+        function rotulo(verbo, nums) {
+            return nums.length > 1 ? verbo + ' ' + nums.length + ' unidades'
+                : nums.length === 1 ? verbo + ' #' + nums[0] : verbo;
+        }
 
-        function libres(n) {
-            var out = [], i = 1;
-            while (out.length < n) { if (usados.indexOf(i) === -1) out.push(i); i++; }
-            return out;
+        var baja = document.querySelector('.g-uni-eliminar');
+        var existentes = document.querySelector('.g-uni-chips');
+        if (baja && existentes) {
+            var total = existentes.querySelectorAll('.g-ficha-unidad').length;
+            var botonBaja = baja.querySelector('button[type="submit"]');
+            var ultima = baja.querySelector('.g-uni-ultima');
+            tira_seleccionable(existentes, baja, function (nums) {
+                baja.hidden = nums.length === 0;
+                var todas = nums.length >= total;
+                ultima.hidden = !todas;
+                botonBaja.disabled = todas;
+                botonBaja.textContent = rotulo('− Eliminar', nums);
+            });
         }
-        function autorrellenar() {
-            if (tocado) return;
-            var n = parseInt(cuantas.value, 10) || 0;
-            ids.value = n > 0 ? libres(n).join(',') : '';
-            validar();
-        }
-        function validar() {
-            var nums = ids.value.split(',').map(function (s) { return s.trim(); })
-                .filter(Boolean).map(Number);
-            var malo = nums.some(function (x) { return !Number.isInteger(x) || x <= 0; })
-                || nums.some(function (x, i) { return nums.indexOf(x) !== i; })
-                || nums.some(function (x) { return usados.indexOf(x) !== -1; });
-            aviso.hidden = !malo;
-            aviso.textContent = malo ? 'Hay un ID inválido o que ya existe.' : '';
-            enviar.disabled = malo || nums.length === 0;
-        }
-        ids.addEventListener('input', function () { tocado = true; validar(); });
-        cuantas.addEventListener('input', autorrellenar);
-        validar();
+
+        var form = document.querySelector('.g-uni-agregar');
+        if (!form) return;
+        var tira = form.querySelector('.g-uni-libres');
+        var mas = form.querySelector('[data-uni-mas]');
+        var enviar = form.querySelector('button[type="submit"]');
+        tira_seleccionable(tira, form, function (nums) {
+            enviar.disabled = nums.length === 0;
+            enviar.textContent = rotulo('+ Agregar', nums);
+        });
+        mas.addEventListener('click', function () {
+            // Todo lo que está después del último chip ya es libre.
+            var ultimo = Number(mas.previousElementSibling.dataset.numero);
+            for (var n = ultimo + 1; n <= ultimo + 10; n++) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'g-ficha-unidad is-libre';
+                b.dataset.numero = n;
+                b.setAttribute('aria-pressed', 'false');
+                b.textContent = '#' + n;
+                tira.insertBefore(b, mas);
+            }
+        });
     })();
     </script>
 </section>
