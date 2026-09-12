@@ -142,6 +142,9 @@ tbody tr:nth-child(even){background:#fafbfc}
   border-radius:4px; padding:2px 7px;
 }
 .vacio{text-align:center; color:var(--tinta-suave); padding:22px; font-size:12px; font-style:italic}
+.vacio a{color:inherit}
+/* Estado del padrón del navegador, bajo "+ Agregar por curso" (ver estadoPadron()) */
+.nota-padron{margin:0 0 10px; color:var(--tinta-suave); font-size:11px}
 
 .modal-fondo{
   position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:2000;
@@ -236,6 +239,9 @@ tbody tr:nth-child(even){background:#fafbfc}
 {% endblock %}
 
 {% block scripts %}
+{# SIN `defer`: todo el JS de abajo es un <script> inline, y un `defer` correría DESPUÉS
+   de él — `Padron` no existiría cuando lo llaman renderPasoChipsCurso y compañía. #}
+<script src="{{ static_v('salidas-padron.js') }}"></script>
 <script>
 /* ============================================================================
    DATOS FIJOS DE LA ESCUELA
@@ -583,10 +589,10 @@ Object.assign(AYUDA_COMUN, AYUDA_SEGURO);
 /* Normativa — referencias a la Resolución 3871/24 para cada campo/aviso */
 const NORMATIVA = {{ normativa | tojson }};
 
-/* Padrón de estudiantes (estudiantes.db, vía estudiantes.py) — alimenta el autocompletado
-   de "Apellido y Nombre" en la tabla de Personas. Sólo vive en esta computadora: nunca
-   sale de acá ni se guarda con la salida (ver agent_docs/salidas-educativas.md). */
-const ESTUDIANTES = {{ estudiantes | tojson }};
+/* El padrón de estudiantes ya no viene del servidor: lo lee `Padron` de
+   static/salidas-padron.js, que lo guarda en este navegador y en ningún otro lado. Si
+   este dispositivo no lo tiene cargado, `Padron.listar()` devuelve [] y todo lo que
+   depende de él degrada a tipeo manual (ver agent_docs/salidas-educativas.md). */
 
 // Mismo criterio que normalize() de static/js/script.js (sin acentos, minúsculas,
 // espacios colapsados) — duplicado a propósito porque este formulario es autocontenido
@@ -968,6 +974,9 @@ function renderPersonas(){
 
   cuerpo.appendChild(el("div", {style:"margin-bottom:10px"},
     el("button", {class:"btn-chico", type:"button", onclick:() => abrirModalPorCurso()}, "+ Agregar por curso")));
+  // Estado del padrón siempre visible: sin esto, un dispositivo sin padrón se ve igual
+  // que uno con padrón hasta que alguien tipea un nombre y no pasa nada.
+  cuerpo.appendChild(estadoPadron());
   cuerpo.appendChild(el("div", {class:"tabla-scroll"}, tabla));
   cuerpo.appendChild(el("div", {style:"margin-top:12px; display:flex; gap:8px; flex-wrap:wrap"},
     el("button", {class:"btn-chico", type:"button", onclick:() => agregarPersona()}, "+ Agregar persona"),
@@ -1011,11 +1020,36 @@ function abrirModalPorCurso(){
   renderPasoChipsCurso(caja);
 }
 
-// Paso 1: chips por año/división, agrupados a partir de ESTUDIANTES.
+// Aviso único para cuando este dispositivo no tiene el padrón cargado. El link abre en
+// una pestaña nueva SIEMPRE: `estado` vive sólo en memoria, así que navegar fuera del
+// formulario perdería todo lo que se venía cargando.
+// Línea chica bajo el botón "+ Agregar por curso", en la sección Personas.
+function estadoPadron(){
+  const info = Padron.info();
+  return el("p", {class:"nota-padron"}, info
+    ? `Padrón en este dispositivo: ${info.cantidad} estudiantes.`
+    : "Sin padrón en este dispositivo: el autocompletado de estudiantes está apagado, se tipea a mano.");
+}
+
+function avisoSinPadron(){
+  return el("p", {class:"vacio"},
+    "Este dispositivo no tiene el padrón cargado. Cargalo desde ",
+    el("a", {href:"{{ url_for('salidas.lista') }}", target:"_blank", rel:"noopener"},
+       "Salidas guardadas → ACTUALIZAR PADRÓN DE ESTUDIANTES"),
+    " (queda sólo en este dispositivo).");
+}
+
+// Paso 1: chips por año/división, agrupados a partir del padrón del navegador.
 function renderPasoChipsCurso(caja){
   caja.textContent = "";
+  const alumnos = Padron.listar();
+  if (!alumnos.length){
+    caja.appendChild(el("h3", {text:"Agregar por curso"}));
+    caja.appendChild(avisoSinPadron());
+    return;
+  }
   const grupos = {};
-  ESTUDIANTES.forEach(al => {
+  alumnos.forEach(al => {
     (grupos[al.curso] ||= {});
     grupos[al.curso][al.division] = (grupos[al.curso][al.division] || 0) + 1;
   });
@@ -1044,7 +1078,7 @@ function renderPasoChipsCurso(caja){
 function renderPasoListaCurso(caja, curso, division){
   caja.textContent = "";
   const yaCargados = new Set(estado.personas.map(p => p.documento).filter(Boolean));
-  const alumnos = ESTUDIANTES
+  const alumnos = Padron.listar()
     .filter(al => al.curso === curso && al.division === division)
     .sort((a, b) => a.apellido_nombre.localeCompare(b.apellido_nombre, 'es'));
 
@@ -1145,7 +1179,9 @@ function mostrarSugerenciasEstudiante(inpNombre, p, inpDoc){
   cerrarSugerenciasEstudiante();
   const q = normTexto(inpNombre.value);
   if (p.rol !== "estudiante" || q.length < 2) return;
-  const coincidencias = ESTUDIANTES
+  // Sin padrón en este dispositivo, listar() devuelve [] y la función sale sin sugerir
+  // nada: exactamente el comportamiento que había antes de que existiera el padrón.
+  const coincidencias = Padron.listar()
     .map(al => ({al, puntaje: puntajeBusqueda(q, al.apellido_nombre)}))
     .filter(m => m.puntaje !== null)
     .sort((a, b) => b.puntaje - a.puntaje)

@@ -17,8 +17,11 @@ salidas_pdfs/
 # database/LEEME.md)
 database/fotos/
 
-# Padrón de estudiantes (DNI) — fuente para cargar estudiantes.db, nunca se commitea
+# Padrón de estudiantes (DNI de menores). Ya no hay ninguna DB del padrón: se carga en el
+# navegador y vive sólo ahí (ver static/salidas-padron.js). Lo que sigue existiendo es el
+# archivo fuente, Excel o CSV, y ése no se commitea nunca.
 *.xlsx
+padron*.csv
 
 # Python
 __pycache__/

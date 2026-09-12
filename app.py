@@ -8,9 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import accesos
-import estudiantes
 import gestion
-import historia
 import agente
 import salidas
 import horarios
@@ -24,7 +22,7 @@ from config import DIR_DATOS, PRODUCCION, RAIZ, SESION_DIAS
 # Dónde vivía cada cosa antes de que todas las bases se mudaran a `database/`.
 _LAYOUT_VIEJO = (
     [os.path.join(RAIZ, os.path.basename(m.DB_PATH))
-     for m in (gestion, historia, accesos, salidas, estudiantes)]
+     for m in (gestion, accesos, salidas)]
     + [os.path.join(RAIZ, 'agente.db'),
        os.path.join(RAIZ, 'horarios', 'escuela.db'),
        os.path.join(RAIZ, 'inventarios'),
@@ -129,12 +127,6 @@ app.register_blueprint(gestion.bp_inv)
 app.register_blueprint(gestion.bp)
 gestion.init_db()
 
-# Historia institucional (/historia) — módulo hermano de gestion, DB propia (historia.db).
-# Un área con `ACTIVA = False` no se monta: hoy es el caso de historia (ver historia.py).
-if historia.ACTIVA:
-    app.register_blueprint(historia.bp)
-    historia.init_db()
-
 # Asistente conversacional (/agente) — blueprint independiente con su propio gate.
 app.register_blueprint(agente.bp)
 agente.init_db()
@@ -156,7 +148,7 @@ horarios.init_db()
 # globals de Jinja y monta el canje de invitaciones + el panel /accesos. `horarios` NO
 # está en la lista: tiene su propia contraseña, fuera de este sistema.
 accesos.init_db()
-accesos.registrar_app(app, [m for m in (gestion, historia, agente, salidas)
+accesos.registrar_app(app, [m for m in (gestion, agente, salidas)
                             if getattr(m, 'ACTIVA', True)])
 
 

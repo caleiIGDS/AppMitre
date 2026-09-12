@@ -14,8 +14,6 @@ Este archivo contesta una sola pregunta, que es la que importa parado en esta ca
 | `fotos/` | Los archivos de las fotos de recursos (`fotos/<uuid>.<ext>`, uno por foto), referenciados por `id` desde la columna `fotos` de cada inventario — ver `fotos_disco.py` | Las fichas quedan sin sus fotos (404 al servir), pero el resto del recurso sigue intacto | **ninguno, a propósito** — no rota con `respaldos.py`: son archivos inmutables (rotar reemplaza, no versiona), pensada para una DB que muta fila a fila, ver `dev-log/DECISIONS.md` |
 | `accesos.db` | Dispositivos habilitados, invitaciones y los permisos de cada uno | Hay que volver a invitar a todo el mundo. El admin sigue entrando con `GESTION_CLAVE`, que no está acá sino en el entorno | `accesos-*` |
 | `salidas.db` | Los legajos de salidas educativas (Anexos III–IX), con vigencia de un año | Se pierden los legajos cargados. Los PDF de `salidas_pdfs/` quedan sin su fila y no se regeneran solos | `salidas-*` |
-| `estudiantes.db` | El padrón, con DNI de menores. **Es el archivo más sensible de la carpeta** | Se recarga entero desde el CSV del padrón, que no vive acá | `estudiantes-*` |
-| `historia.db` | Hitos y personas. El área está **apagada** (`historia.ACTIVA = False`): nadie escribe acá hoy | Nada, mientras siga apagada. Se conserva porque prenderla es cambiar un flag | `historia-*` |
 | `agente.db` | Telemetría del asistente: una fila por turno (`/agente/uso`) | Se pierde el historial de uso y nada más | **ninguno, a propósito** — crece sin techo y 20 copias rotativas se comerían el disco |
 | `escuela.db` | Los horarios: clases, preceptores y personal no docente | Nada permanente: se regenera desde Google Sheets, sola al arrancar o con `POST /horarios/api/actualizar` | **ninguno, a propósito** — la fuente de verdad es la planilla |
 
@@ -25,6 +23,11 @@ La rotación de `respaldos.py`: **las últimas 20 copias de cada base, más la p
 día**. Se escribe una en cada arranque de la app, antes de cualquier migración de schema, y
 sólo si la base tiene datos — un respaldo vacío encima de los buenos sería justo lo que
 arruinaría la recuperación.
+
+"La primera de cada día" no caduca nunca, **salvo que el área le ponga un techo**: hoy sólo
+lo hace `salidas.db` (`BACKUP_MAX_DIAS = 60`), porque sus filas vencen al año y se purgan
+solas — sin ese techo, una salida purgada seguiría viva para siempre en `salidas-*.db` y la
+purga no purgaría nada. Las últimas 20 se conservan igual, por viejas que sean.
 
 Restaurar es copiar el archivo encima del original y reiniciar. El prefijo dice de quién es
 cada copia; los `gestion-*.db` viejos (sin `-registro`) son de cuando gestión era **un** solo

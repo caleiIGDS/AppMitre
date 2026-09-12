@@ -5,7 +5,7 @@ entidad concreta, éste conoce el concepto de **permiso**, **perfil** y **dispos
 pero **no sabe qué permisos existen**. Los declara cada área, como declara sus
 `ENTIDADES`, y acá se agregan en un catálogo:
 
-    capa 2 (gestion, historia, agente, app)  ->  capa 1 (accesos, crud)  ->  capa 0
+    capa 2 (gestion, agente, salidas, app)  ->  capa 1 (accesos, crud)  ->  capa 0
 
 Eso es lo que hace que sumar un área nueva mañana no obligue a tocar nada de acá: declara
 sus `PERMISOS` con su verbo y entra sola en los perfiles.

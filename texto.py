@@ -1,8 +1,8 @@
 """Normalización de texto y búsqueda tolerante — capa 0, sin dominio.
 
-No conoce ninguna tabla, ninguna entidad ni Flask: sólo stdlib. Lo usan `gestion`,
-`historia` y el asistente. (El sistema de horarios es un paquete aparte y lleva su propia
-copia de `sin_acentos` en `horarios/datos.py`.)
+No conoce ninguna tabla, ninguna entidad ni Flask: sólo stdlib. Lo usan `gestion` y el
+asistente. (El sistema de horarios es un paquete aparte y lleva su propia copia de
+`sin_acentos` en `horarios/datos.py`.)
 
 El nombre del archivo describe lo que hay adentro a propósito, en vez de `util.py`: un
 archivo llamado "util" no tiene forma de decirte que algo no pertenece ahí, y termina

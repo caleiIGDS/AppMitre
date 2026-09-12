@@ -4,22 +4,27 @@ Cómo está organizado el código compartido entre áreas, y **dónde va cada co
 
 ## Las tres capas
 
-La app tiene cuatro áreas (horarios, `/gestion`, `/historia`, `/agente`) y **tres bases de datos
-independientes**, que siguen siéndolo: no se fusionaron ni hay FK que crucen de una a otra. Lo que
-se comparte es el **código**, no los datos, y está ordenado en capas donde las dependencias van
-siempre hacia arriba:
+La app tiene tres áreas que pasan por acá (`/gestion`, `/agente`, y horarios sólo de lectura)
+más **varias bases de datos independientes**, que siguen siéndolo: no se fusionaron ni hay FK
+que crucen de una a otra. Lo que se comparte es el **código**, no los datos, y está ordenado
+en capas donde las dependencias van siempre hacia arriba:
 
 El sistema de horarios (`horarios/`) queda **fuera** de este esquema: paquete autónomo, no
 usa `crud` ni `accesos`. `agente/` lo importa para leer (`horarios.datos`); nunca al revés.
 
 ```
-capa 2   gestion.py   historia.py   agente/                          ← nombran tablas reales
-              │            │             │
+capa 2   gestion.py   agente/                                        ← nombran tablas reales
+              │            │
 capa 1   crud.py + templates/crud/  ·  accesos.py + templates/accesos/
               │                                    │                   ← saben "entidad" y "permiso",
               └────────────────┬───────────────────┘                     no cuáles
 capa 0        config.py    texto.py    respaldos.py                    ← no nombran nada del dominio
 ```
+
+> Hasta 2026-09 había una segunda área de dominio, `historia.py` (hitos y personas), que
+> ejercitaba el motor como segundo usuario real. Se extrajo del código — ver
+> `dev-log/DECISIONS.md` — así que varios hooks de acá quedaron sin un consumidor actual;
+> se documentan igual porque el motor sigue soportándolos para la próxima área que aparezca.
 
 `accesos.py` es el hermano de `crud.py`: mismo criterio, otro concepto. `crud.py` lo importa (para
 decorar sus rutas de escritura), nunca al revés. Ver `agent_docs/accesos.md`.
@@ -30,9 +35,9 @@ decorar sus rutas de escritura), nunca al revés. Ver `agent_docs/accesos.md`.
 |---|---|---|
 | No nombra tablas, ni entidades, ni rutas, ni Flask | **capa 0** | `texto.norm`, `respaldos.respaldar` |
 | Nombra el *concepto* de entidad (slug, `ENTIDADES`, relación M2M) pero ninguna concreta | **capa 1** | `crud.select`, `crud.registrar_rutas` |
-| Nombra una tabla, un slug o una ruta reales | **capa 2** | `gestion.secciones_detalle`, `historia.clave_persona` |
+| Nombra una tabla, un slug o una ruta reales | **capa 2** | `gestion.secciones_detalle`, `gestion.mover_unidades` |
 
-`crud.py` **nunca importa `gestion` ni `historia`**: las recibe como argumento (`area`). Eso es lo
+`crud.py` **nunca importa un área**: la recibe como argumento (`area`). Eso es lo
 que evita el import circular y lo que mantiene el criterio legible — si algún día `crud.py` necesita
 importar un área, la función que lo obligó está en la capa equivocada.
 
@@ -50,7 +55,7 @@ pared de la escuela (`ZONA_HORARIA = "America/Argentina/Buenos_Aires"`) como **d
   cae a un offset fijo `-3`. Argentina no aplica horario de verano desde 2009, así que da igual.
 
 Consumidores: `agente/llm.py` (hora del system prompt), `agente/rutas.py` (sello de hora por
-mensaje), `agente/db.py`, `gestion._ahora` y `valores_iniciales`, `historia.derivados`,
+mensaje), `agente/db.py`, `gestion._ahora` y `valores_iniciales`,
 `crud.py` (fecha de foto) y `respaldos.py` (nombre del archivo). El sistema de horarios
 tiene su propia `ahora()` en `horarios/config.py` (no importa este `config.py`).
 
@@ -86,18 +91,19 @@ acá, nunca por un `if slug == '...'` dentro de `crud.py`.
 
 | hook | cuándo se llama | quién lo usa hoy |
 |---|---|---|
+| `BACKUP_MAX_DIAS` | atributo, no función: techo de antigüedad de sus respaldos. Sin él, el "primero de cada día" de `respaldos.py` no caduca nunca — lo declara un área cuyos datos vencen, para que purgar la fila purgue de verdad | `salidas` (60 días, su vigencia es de 365) |
 | `PERMISO_ROTAR_FOTO` | atributo, no función: quién puede girar una foto ya cargada (`rotar_foto` y el botón del visor). Si el área no lo declara, es `PERMISO_ESCRITURA` | `gestion` (`gestion.rotar`, solo admin) |
-| `migrar(cur)` | en cada `init_db`, después del SCHEMA | los dos |
-| `seed(cur)` | sólo si la DB arranca vacía | `gestion` (historia arranca vacía a propósito) |
-| `secciones_detalle(slug, id, cur)` | al armar la ficha de detalle | los dos |
-| `derivados(slug, valores)` | antes de cada INSERT/UPDATE; devuelve columnas calculadas | `historia` (`nombre_norm`, `fecha_actualizada`) |
+| `migrar(cur)` | en cada `init_db`, después del SCHEMA | `gestion` |
+| `seed(cur)` | sólo si la DB arranca vacía | ninguna hoy (`gestion` arranca vacía a propósito) |
+| `secciones_detalle(slug, id, cur)` | al armar la ficha de detalle | `gestion` |
+| `derivados(slug, valores)` | antes de cada INSERT/UPDATE; devuelve columnas calculadas | ninguna hoy |
 | `valores_iniciales(slug)` | defaults del form de alta | `gestion` (`fecha_revision` = hoy) |
 | `extras_template(vista, slug, id)` | kwargs extra para `render_template`; `id` sólo en `detalle` y `editar`, si no `None` | `gestion`: lugares y vencidos del listado, y los sub-recursos del kit en `editar` |
 | `tarjetas_extra(cur)` | tarjetas del home que no salen de `ENTIDADES` | ninguna hoy (ídem, la tarjeta de Préstamos) |
 | `inicio()` | URL a la que redirige la raíz del área en vez de renderizar el home de tarjetas; el área no necesita `home.html` | `gestion` (la raíz de un inventario va a la lista de recursos) |
 | `contexto_extra()` | claves extra del context processor | ninguna hoy (ídem, `carrito_count`) |
 | `NAV_EXTRA` | `[(slug, label)]` extra para la nav | ninguna hoy (ídem, el ítem "Préstamos") |
-| `ERROR_DUPLICADO` | `{slug: mensaje}` cuando un UNIQUE rechaza el guardado | `historia` (personas) |
+| `ERROR_DUPLICADO` | `{slug: mensaje}` cuando un UNIQUE rechaza el guardado | ninguna hoy (`gestion.ERROR_DUPLICADO = {}`) |
 
 #### Lo que NO entra por `migrar(cur)`
 
@@ -105,10 +111,10 @@ acá, nunca por un `if slug == '...'` dentro de `crud.py`.
 renombres puertas adentro, y con eso alcanza para casi todo: corre en cada `init_db`, o sea en cada
 arranque, así que una instalación vieja se pone al día sola con un `git pull` + reload.
 
-Una migración que **cruza las dos DBs** no cabe ahí, porque ningún área importa a la otra. Esas van
-a `actualizar.py`, un script de consola que sí puede mirar las dos (mudanza de `hitos`/`personas` de
-`gestion.db` a `historia.db`, y `proyectos` → hitos). Mismo criterio para la limpieza de tablas y
-columnas que el código ya no declara: `migrar` no puede saber qué sobra en la DB de al lado.
+Una migración que **cruza DBs** no cabe ahí, porque ningún área importa a la otra. Esas van a
+`actualizar.py`, un script de consola que sí puede mirar varias a la vez (hoy: separar
+`recursos` en un archivo por inventario). Mismo criterio para la limpieza de tablas y columnas
+que el código ya no declara: `migrar` no puede saber qué sobra en la DB de al lado.
 
 ### Config de cada entidad (`ENTIDADES[slug]`)
 
@@ -131,9 +137,10 @@ otra cosa: hoy `gestion.recursos.cantidad`, que pasa a ser el COUNT espejo de `r
 y se ajusta por unidades desde EDITAR (ver `agent_docs/gestion-conocimiento.md`). `crud.guardar_entidad`
 (el camino del agente) **sí** lo escribe: el agente puede cambiar `cantidad` por el chat.
 
-`campo_nombre` (default `'nombre'`) existe porque `historia.hitos` llama `titulo` a su columna de
-nombre. **Todas las lecturas van por `crud.select(cfg)`**, que agrega `titulo AS nombre`, así que
-templates, búsqueda y el agente leen siempre `fila['nombre']` sin enterarse. Las escrituras y la
+`campo_nombre` (default `'nombre'`) existe para una entidad cuya columna de nombre se llame
+distinto (hasta 2026-09 fue el caso de `historia.hitos`, que la llamaba `titulo`). **Todas las
+lecturas van por `crud.select(cfg)`**, que agregaría `titulo AS nombre`, así que templates,
+búsqueda y el agente leerían siempre `fila['nombre']` sin enterarse. Las escrituras y la
 validación de obligatorio usan `crud.campo_nombre(cfg)`.
 
 `campo_alias` (default `None`, mismo criterio que `campo_nombre`) declara una columna extra de
@@ -149,24 +156,26 @@ completa el asistente y el humano nunca ve ni edita — ver `agent_docs/gestion-
 había descartado y por qué el override).
 
 `sin_eliminar` (default `False`) marca la entidad que **no se borra nunca**: la ruta `eliminar`
-devuelve 404 para ese slug, `templates/crud/detalle.html` no dibuja el botón y
-`agente/tools/entidades.py::_eliminar_entidad` mira el mismo flag antes de tocar la fila, así que
-no queda puerta abierta ni por URL ni por el chat. Lo declara `gestion.recursos`, que en vez de
-borrarse se **da de baja** (ver `agent_docs/gestion-conocimiento.md`). Una entidad así necesita su
-propia salida del listado: el flag sólo cierra la puerta, no la reemplaza.
+devuelve 404 para ese slug y `templates/crud/detalle.html` no dibuja el botón. El agente ni
+siquiera tiene una tool que borre entidades — no hace falta que rechace nada del lado del
+chat. Lo declara `gestion.recursos`, que en vez de borrarse se **da de baja** (ver
+`agent_docs/gestion-conocimiento.md`). Una entidad así necesita su propia salida del listado:
+el flag sólo cierra la puerta, no la reemplaza.
 
 ### `permiso`: una entidad que pide más que el área
 
-`permiso` es un permiso **extra**, además del base del área, para ver esa entidad y nada más. Hoy lo
-usa una sola: `historia.personas` pide `historia.personas`, que sólo tiene el admin.
+`permiso` es un permiso **extra**, además del base del área, para ver esa entidad y nada más.
+Ninguna entidad lo usa hoy (hasta 2026-09 lo usaba `historia.personas`, que pedía
+`historia.personas` — sólo lo tenía el admin), pero el mecanismo se conserva para la próxima
+que lo necesite:
 
 ```python
-'personas': {..., 'permiso': 'historia.personas'},
+'una_entidad': {..., 'permiso': 'area.algo'},
 ```
 
 Con eso, sin ese permiso desaparecen de una vez **la tarjeta del home, la entrada de la nav, el
 listado, la ficha, los dos formularios, las dos rutas de fotos y el bloque de esa entidad dentro de
-la ficha de otra** (un hito deja de listar sus personas). El motor lo resuelve en tres lugares:
+la ficha de otra** (una entidad relacionada deja de listarla). El motor lo resuelve en tres lugares:
 
 | función | qué corta |
 |---|---|
@@ -180,9 +189,9 @@ de sesión porque el área monta `registrar_acceso` primero. Devuelve `accesos.d
 slug de la URL, que recién existe en tiempo de request.
 
 Lo de `relaciones_visibles` **no es cosmético**: el form postea la lista entera de cada relación, así
-que un fieldset que se esconde y no se saca también de `_guardar_form` haría que guardar un hito
-desde un acceso sin el permiso le borrara los vínculos con personas. Por eso `form.html` itera
-`relaciones` (la lista ya filtrada que pasa la vista) y no `cfg.relaciones`.
+que un fieldset que se esconde y no se saca también de `_guardar_form` haría que guardar una
+entidad desde un acceso sin el permiso le borrara los vínculos con la relacionada. Por eso
+`form.html` itera `relaciones` (la lista ya filtrada que pasa la vista) y no `cfg.relaciones`.
 
 `crud.guardar_entidad` — el camino del agente, sin `request.form` — ya era seguro: sólo toca las
 relaciones que vengan explícitas en el dict.
@@ -239,7 +248,7 @@ propia de `gestion` comparten). Se adaptan a cualquier área con dos variables q
 siga funcionando y para que cualquier excepción sea explícita:
 
 ```jinja
-{# templates/historia/lista.html — usa el genérico tal cual #}
+{# templates/gestion/lista.html — usa el genérico tal cual #}
 {% extends 'crud/lista.html' %}
 ```
 
@@ -264,7 +273,7 @@ la galería y su visor.
 **…una entidad a un área**: una entrada en `ENTIDADES`, su tabla en `SCHEMA`, su fila en
 `LIMPIEZA_M2M`, y si tiene relaciones que mostrar, una rama en `secciones_detalle`. Las rutas salen
 solas. Si la entidad debe ser visible para el asistente, no hay nada más que hacer:
-`agente.SLUGS_ENTIDAD` se deriva de las `ENTIDADES` de los dos módulos.
+`agente.dominio.SLUGS_ENTIDAD` se deriva de `gestion.ENTIDADES`.
 
 **…una entidad que no vea todo el mundo**: declarar el permiso en los `PERMISOS` del área (con el
 verbo que corresponda — `'admin'` si es sólo del admin) y colgárselo a la entidad con la clave
@@ -276,7 +285,9 @@ ruta, ningún template ni el gate.
 `app.register_blueprint(...)` + `init_db()` en `app.py`. Sumarla también a la lista de
 `accesos.registrar_app(app, [...])`, que está ahí al lado: con eso sus `PERMISOS` entran solos al
 catálogo y a los perfiles, **sin tocar el gate ni migrar los accesos ya dados**. Si además tiene que
-entrar al asistente, sumarla a `agente._modulo()`.
+entrar al asistente, sumarla a `agente.dominio._modulo()` (hoy devuelve siempre `gestion`;
+con una segunda área de dominio vuelve a resolver por `ENTIDADES`, como antes de 2026-09) y a
+`SLUGS_ENTIDAD`.
 
 **…algo compartido**: pasarlo por el filtro de la primera sección. Si nombra una tabla, no es
 compartido — es del área, y quien lo necesite lo importa de ahí (como el paquete `agente/` importa
@@ -292,6 +303,5 @@ y vive con su área. (Hasta el 2026-08-21 acá también vivía el bloque de pré
 retiro interno de recursos con ítems y un ciclo prestado→devuelto — que se sacó del todo; ver
 `dev-log/DECISIONS.md` 2026-08-21.)
 
-Ver también: `agent_docs/gestion-conocimiento.md`, `agent_docs/historia-institucional.md`,
-`agent_docs/agente-asistente.md`, y `dev-log/DECISIONS.md` 2026-08-10 (por qué capas y no
-duplicación).
+Ver también: `agent_docs/gestion-conocimiento.md`, `agent_docs/agente-asistente.md`, y
+`dev-log/DECISIONS.md` 2026-08-10 (por qué capas y no duplicación).

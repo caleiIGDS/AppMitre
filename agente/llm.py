@@ -365,10 +365,7 @@ def chat_with_tools_stream(mensajes_usuario, trazas=None, contexto_turno=None,
     # viajaron. Una sola fuente para las dos mitades del mismo mensaje.
     nombres = {t['name'] for t in tools}
     escribe = bool(TOOLS_ESCRITURA & nombres)
-    # Mismo criterio para las fichas de personas: si `personas` no sobrevivió en los enum
-    # de slug, el prompt tampoco describe el área ni ofrece darlas de alta.
-    ve_personas = slug_visible(tools, 'personas')
-    # Y para las fotos: sin `agente.vision` no viajan `leer_foto` ni `adjuntar_foto`, así que
+    # Para las fotos: sin `agente.vision` no viajan `leer_foto` ni `adjuntar_foto`, así que
     # el prompt tampoco explica qué hacer con una foto — que además el usuario no puede mandar.
     ve_fotos = bool(TOOLS_FOTO & nombres)
     # Y para `agente.md`: sin `agente.notas` no viaja `escribir_notas`, así que el prompt no
@@ -380,7 +377,7 @@ def chat_with_tools_stream(mensajes_usuario, trazas=None, contexto_turno=None,
     # inventario del que no le mandamos ni una tool.
     inv = gestion.inventario_activo() if slug_visible(tools, 'recursos') else None
     system_prompt = construir_system_prompt(hoy, dia_semana,
-                                            escribe=escribe, ve_personas=ve_personas,
+                                            escribe=escribe,
                                             ve_fotos=ve_fotos, ve_notas=ve_notas,
                                             notas=_notas_del_admin() if ve_notas else '',
                                             inventario=inv['nombre'] if inv else None)

@@ -1,5 +1,5 @@
 // mobile-nav.js — El panel lateral (☰) de las áreas que comparten el shell de
-// gestion.css: /gestion, /historia, /agente y /accesos.
+// gestion.css: /gestion, /agente y /accesos.
 //
 // Mueve DOS clases de bloque al panel, con reglas distintas:
 //

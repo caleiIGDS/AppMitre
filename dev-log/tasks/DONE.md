@@ -6,6 +6,21 @@ _Solo leer si se pide explícitamente._
 
 ---
 
+## [2026-09-11] — Extracción de `/historia` (hitos, personas) y del lore de Emilio del código
+Se sacaron del árbol vivo: `historia.py`, `agente/lore.py`, `agente/tools/hitos.py`,
+`historias/*.json`, `historia_indice.json`, `HISTORIAS_PROCEDIMIENTO.md`,
+`agent_docs/historia-institucional.md`, `templates/historia/`, y `historia.db` (código y datos
+movidos a un archivo fuera del repo, con guía de reimplementación). Se editaron ~11 archivos
+de `agente/` (el agente pasa de ~24 a 20 tools, sin `consultar_historia`/`buscar_hitos`/
+`vincular_entidad`/`desvincular_entidad`/`eliminar_entidad`, sin campos de hito en
+`crear_entidad`/`editar_entidad`, `agente.dominio._modulo()` colapsado a `gestion`, sin la
+maquinaria anti-acotaciones de `filtros.py`), `app.py`, `actualizar.py` (PASO 2 y 3 enteros),
+5 `base.html` y toda la documentación (`CLAUDE.md`, `agent_docs/agente-asistente.md`,
+`agent_docs/crud-motor.md`, `agent_docs/accesos.md`, `agent_docs/gestion-conocimiento.md`,
+`agent_docs/frontend-ui.md`, `agent_docs/salidas-educativas.md`). Verificado: `python app.py`
+arranca, `actualizar.py --dry-run` corre limpio, el prompt dice "2 áreas". Ver
+`dev-log/DECISIONS.md`.
+
 ## [2026-08-21] — #21 Alias oculto por recurso, completado por el agente (cierra #21, diseño distinto al planeado)
 `recursos.alias` (no `otros_nombres`): columna oculta que **nunca** se edita a mano ni se ve en el form/ficha — el asistente la completa sola en cada alta, y hoy además se hizo el backfill de los ~80 recursos ya cargados que tenían un alias razonable. `crud.buscar_entidad()`/`lista()` la usan en una segunda pasada cuando nombre/descripción no matchean. Reemplaza el diseño original de la tarea (columna visible editable en el form + script offline `generar_alias.py` de una sola corrida): el pedido real terminó siendo que el usuario **nunca** interactúe con el campo, así que no hay form ni script — el agente lo mantiene vivo. Ver CHANGELOG y DECISIONS 2026-08-21, y `agent_docs/gestion-conocimiento.md`.
 

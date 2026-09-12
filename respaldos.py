@@ -14,10 +14,15 @@ import glob
 import hashlib
 import os
 import sqlite3
+from datetime import timedelta
 from config import DIR_DATOS, ahora
 
 BACKUP_DIR = os.path.join(DIR_DATOS, 'backups')
 BACKUP_MAX = 20
+# Sin techo de antigüedad: el "primero de cada día" se conserva para siempre. Un área
+# puede pedir lo contrario declarando su propio `BACKUP_MAX_DIAS` (ver `_a_borrar`), que
+# es lo que hace salidas.py porque sus datos vencen.
+BACKUP_MAX_DIAS = None
 
 
 def tiene_datos(ruta, tabla):
@@ -48,12 +53,12 @@ def listar(prefijo):
     fecha, así que el orden alfabético ya es el cronológico.
 
     El prefijo separa los respaldos de cada área dentro de la misma carpeta
-    (`gestion-*.db` / `historia-*.db`): sin él, la rotación de una se comería a la otra.
+    (`gestion-*.db` / `salidas-*.db`): sin él, la rotación de una se comería a la otra.
     """
     return sorted(glob.glob(os.path.join(BACKUP_DIR, f'{prefijo}-*.db')))
 
 
-def respaldar(db_path, prefijo, tabla_testigo, max_copias=BACKUP_MAX):
+def respaldar(db_path, prefijo, tabla_testigo, max_copias=BACKUP_MAX, max_dias=BACKUP_MAX_DIAS):
     """Copia `db_path` a backups/ y conserva las últimas `max_copias`.
 
     Se llama desde el init_db de cada área, o sea en cada arranque de la app: el respaldo
@@ -87,9 +92,22 @@ def respaldar(db_path, prefijo, tabla_testigo, max_copias=BACKUP_MAX):
         os.remove(destino)
         return previos[-1]
 
-    for viejo in _a_borrar(listar(prefijo), max_copias):
-        os.remove(viejo)
+    podar(prefijo, max_copias, max_dias)
     return destino
+
+
+def podar(prefijo, max_copias=BACKUP_MAX, max_dias=BACKUP_MAX_DIAS, dry=False):
+    """Borra los respaldos de `prefijo` que ya no hay que conservar y devuelve cuáles.
+
+    La usa `respaldar` en cada arranque, pero también `actualizar.py`: con `dry=True`
+    devuelve los que borraría sin tocar nada, que es lo que permite previsualizar en el
+    `--dry-run` un cambio de retención antes de aplicarlo.
+    """
+    sobran = _a_borrar(listar(prefijo), max_copias, max_dias)
+    if not dry:
+        for viejo in sobran:
+            os.remove(viejo)
+    return sobran
 
 
 def _dia(ruta):
@@ -97,17 +115,28 @@ def _dia(ruta):
     return os.path.basename(ruta).split('-')[1]
 
 
-def _a_borrar(existentes, max_copias):
+def _a_borrar(existentes, max_copias, max_dias=None):
     """Qué respaldos sobran.
 
     Conserva los últimos `max_copias` MÁS el primero de cada día anterior. Sin esa
     segunda regla, una tarde de reinicios depurando (cada arranque escribe en la DB,
     así que cada arranque genera un respaldo nuevo) alcanzaba para empujar fuera de
     la rotación todo lo viejo, que es justo lo que uno querría recuperar.
+
+    Con `max_dias`, el "primero de cada día" deja de conservarse pasado ese plazo: sirve
+    para un área cuyos datos vencen, donde guardar el respaldo para siempre haría que
+    purgar la fila no purgara nada. Los últimos `max_copias` NO caducan nunca, pase el
+    tiempo que pase — si no, una base que no se escribe hace un año se quedaría sin
+    ningún respaldo, que es exactamente lo contrario de para lo que existe este archivo.
     """
     recientes = set(existentes[-max_copias:])
     primero_del_dia = {}
     for r in existentes:
         primero_del_dia.setdefault(_dia(r), r)
+    if max_dias is not None:
+        # `_dia` devuelve 'YYYYMMDD', de ancho fijo: comparar como string ya es comparar
+        # cronológicamente, sin parsear ninguna fecha.
+        corte = (ahora() - timedelta(days=max_dias)).strftime('%Y%m%d')
+        primero_del_dia = {d: r for d, r in primero_del_dia.items() if d >= corte}
     conservar = recientes | set(primero_del_dia.values())
     return [r for r in existentes if r not in conservar]

@@ -1,7 +1,7 @@
 // gestion-agente.js — Asistente IA
 //
 // Sirve a las DOS vistas del chat, que comparten markup (_agente_chat_core.html):
-//   - el widget flotante que se abre desde el header en /gestion o /historia
+//   - el widget flotante que se abre desde el header en /gestion
 //   - la pestaña a pantalla completa en /agente
 // Nunca se renderizan juntas (base.html omite el widget en esa pestaña), así que los
 // getElementById de abajo siempre encuentran uno solo. Los elementos exclusivos del
@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // El server borró las fichas y sus fotos: si el lote quedara marcado acá, el próximo
     // turno pintaría botones de fichas que ya no existen.
     loteAbierto = [];
-    const texto = nota || 'Preguntá sobre horarios, recursos, historia de la escuela o cualquier otra cosa.';
+    const texto = nota || 'Preguntá sobre horarios o recursos del inventario.';
     messagesDiv.innerHTML = '';
     const div = document.createElement('div');
     div.className = 'agente-welcome';
@@ -299,6 +299,45 @@ document.addEventListener('DOMContentLoaded', function() {
     return payload;
   }
 
+  // Ante un turno que no llegó a buen puerto (se cortó el stream, no hay red, la sesión
+  // venció), lo que el usuario tipeó y las fotos que había elegido vuelven al compose en vez
+  // de perderse: antes había que retipear todo, y en la telemetría se ve el mismo mensaje
+  // mandado dos veces seguidas por eso (ver dev-log/DECISIONS.md). Sólo pisa el input si
+  // sigue vacío — si el usuario ya escribió otra cosa mientras esperaba, no se la borra.
+  function restaurarEnvioFallido(mensaje, imagenes) {
+    if (!inputField.value.trim()) {
+      inputField.value = mensaje;
+      inputField.style.height = 'auto';
+      inputField.style.height = inputField.scrollHeight + 'px';
+    }
+    if (imagenes.length && !imagenesSeleccionadas.length) {
+      imagenesSeleccionadas = imagenes;
+      if (imagePreview) {
+        imagePreview.textContent = textoChip();
+        imagePreview.classList.add('active');
+      }
+    }
+  }
+
+  // Mensaje de error con un botón para reintentar sin retipear nada: para cuando se clickea,
+  // `restaurarEnvioFallido` ya dejó el texto y las fotos en el compose (o el usuario los
+  // editó), así que alcanza con volver a llamar a `enviarMensaje`.
+  function agregarMensajeError(texto) {
+    const wrap = agregarMensaje(texto, 'error');
+    if (!wrap) return;
+    const msgDiv = wrap.querySelector('.agente-message-error');
+    if (!msgDiv) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'agente-confirm-btn';
+    btn.textContent = 'Reenviar';
+    btn.addEventListener('click', function() {
+      wrap.remove();
+      enviarMensaje();
+    });
+    msgDiv.appendChild(btn);
+  }
+
   // Enviar mensaje
   function enviarMensaje() {
     if (enviando) return;
@@ -316,10 +355,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (loteAbierto.length < 2) quitarConfirmaciones();
     const wrapUsuario = agregarMensaje(mensaje, 'user', imagenesSeleccionadas);
 
-    // Preparar payload
+    // Preparar payload. `imagenesEnviadas` es la copia que sobrevive a `limpiarImagenes()`
+    // de acá abajo: si el turno falla, es lo que vuelve al compose (ver `restaurarEnvioFallido`).
+    const imagenesEnviadas = imagenesSeleccionadas.slice();
     const payload = { mensaje };
-    if (imagenesSeleccionadas.length) {
-      payload.imagenes = imagenesSeleccionadas;
+    if (imagenesEnviadas.length) {
+      payload.imagenes = imagenesEnviadas;
     }
 
     // Limpiar UI. Lo de la imagen puede no existir: sin `agente.vision` el template no
@@ -366,7 +407,8 @@ document.addEventListener('DOMContentLoaded', function() {
         limpiarSiReiniciada(data, wrapUsuario);
 
         if (data.error) {
-          agregarMensaje('Error: ' + data.error, 'error');
+          restaurarEnvioFallido(mensaje, imagenesEnviadas);
+          agregarMensajeError('Error: ' + data.error);
         } else {
           const wrap = agregarMensaje(data.respuesta, 'assistant');
           agregarConfirmaciones(data.confirmaciones, wrap);
@@ -377,7 +419,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const loader = messagesDiv.querySelector('.agente-message-loading');
         if (loader) (loader.closest('.agente-message-wrap') || loader).remove();
 
-        agregarMensaje('Error de conexión: ' + error.message, 'error');
+        restaurarEnvioFallido(mensaje, imagenesEnviadas);
+        agregarMensajeError('Error de conexión: ' + error.message);
       })
       .finally(() => {
         enviando = false;

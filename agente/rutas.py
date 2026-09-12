@@ -1,8 +1,8 @@
 """Los endpoints Flask de /agente.
 
-El gate de acceso es el mismo motor que /gestion e /historia (`accesos.registrar_acceso`),
-pero acá el blueprint mezcla páginas HTML con endpoints JSON: sólo las páginas redirigen
-al login y el resto contesta 401, que es lo que el fetch del chat sabe leer.
+El gate de acceso es el mismo motor que /gestion (`accesos.registrar_acceso`), pero acá el
+blueprint mezcla páginas HTML con endpoints JSON: sólo las páginas redirigen al login y el
+resto contesta 401, que es lo que el fetch del chat sabe leer.
 """
 import json
 import re
@@ -24,19 +24,17 @@ from . import (PERMISO_ESCRITURA, PERMISO_LECTURA, PERMISO_NOTAS, PERMISO_VISION
 from .db import (FICHAS_MAX, FOTOS_MAX, HISTORIAL_AL_MODELO, _conv_borrar, _conv_cargar,
                  _conv_guardar, _foto_lote_leer, _foto_lote_tomar, _fotos_lote_borrar,
                  _fotos_lote_guardar, _sid, _sin_imagenes, conectar)
-from .dominio import _modulo, ve_entidad
+from .dominio import _modulo
 from .enlaces import enlace_comparacion, enlazar
 from .filtros import (AVISO_NO_EJECUTADO, _es_pregunta_relativa, _escritura_no_ejecutada,
-                      _extraer_entidad_mencionada, _ocultar_ids, _quitar_acotaciones)
+                      _extraer_entidad_mencionada, _ocultar_ids)
 from .llm import chat_with_tools_stream
 from .notas import (LARGO_MAX as NOTAS_LARGO_MAX, deshacer as _notas_deshacer,
                     escribir as _notas_escribir, hay_deshacer as _notas_hay_deshacer,
                     leer as _notas_leer, modificado as _notas_modificado)
-from .padrones import _personas_nombradas_en
 from .proveedores import _es_pico, _get_config, _get_vision_config, costo
 from .registro import agrupado, conversaciones, registrar_turno, ultimos
 from .tools import ejecutar_tool
-from .tools.entidades import _vincular_entidad
 from .tools.fichas import (_campos_para_editar, _campos_validos, _nombre_de,
                            _normalizar_borrador, _token_ficha)
 
@@ -47,9 +45,9 @@ from .tools.fichas import (_campos_para_editar, _campos_validos, _nombre_de,
 _ENDPOINTS_PAGINA = ('agente.chat_page', 'agente.agente_log', 'agente.agente_uso',
                      'agente.agente_notas')
 
-# Gate de acceso: el mismo motor que /gestion y /historia, pero acá el blueprint mezcla
-# páginas HTML con endpoints JSON, así que sólo las páginas redirigen al login y el resto
-# contesta 401 — que es lo que el fetch del chat sabe leer.
+# Gate de acceso: el mismo motor que /gestion, pero acá el blueprint mezcla páginas HTML
+# con endpoints JSON, así que sólo las páginas redirigen al login y el resto contesta 401
+# — que es lo que el fetch del chat sabe leer.
 #
 # `agente.leer` es el piso: alcanza para chatear y consultar. Las rutas que escriben
 # (`/confirmar`) o auditan (`/log`) piden más, marcadas con `accesos.requiere`.
@@ -252,7 +250,7 @@ def elegir_inventario():
 
     Sin esto, en `/agente` el inventario era el último que la sesión hubiera visitado por
     la web y no había forma de verlo ni de cambiarlo desde el chat: con varios inventarios
-    estancos eso es preguntarle a Emilio por un taller y que conteste con el de al lado.
+    estancos eso es preguntarle al agente por un taller y que conteste con el de al lado.
 
     CAMBIAR REINICIA LA CONVERSACIÓN, y no es prolijidad: en el historial quedan ids de
     recursos y fichas sin confirmar del inventario anterior, y los ids no significan lo
@@ -464,6 +462,15 @@ def _turno_stream(mensaje_usuario, fotos=(), mandadas=0, origen='chat'):
         mensaje_usuario_msg['imagenes'] = [{'b64': b64, 'tipo': tipo} for b64, tipo in fotos]
     mensajes.append(mensaje_usuario_msg)
 
+    # Persistir el mensaje del usuario YA, antes de llamar al modelo: si el turno se cae a
+    # mitad de camino (se corta el stream, se acaba el saldo, tope de iteraciones que revienta
+    # antes de llegar al final), lo que escribió no desaparece sin dejar rastro. Esta escritura
+    # queda pisada por la de más abajo cuando el turno termina bien —ahí se persiste la versión
+    # final, con la respuesta y el aviso de fotos ya en pasado (ver `_foto_en_pasado`)—, así que
+    # no duplica nada: el peor caso es escribir dos veces la misma fila.
+    _conv_guardar(conv['historial'] + _sin_imagenes([mensaje_usuario_msg]),
+                  conv['entidad_actual'], conv['fichas'])
+
     # Obtener respuesta del agente.
     # `fichas_previas` son las fichas de alta que el usuario YA vio en turnos anteriores;
     # sin esto no habría forma de confirmar un alta, porque los resultados de las tools no
@@ -483,10 +490,8 @@ def _turno_stream(mensaje_usuario, fotos=(), mandadas=0, origen='chat'):
     respuesta = yield from chat_with_tools_stream(
         mensajes_llm, trazas=trazas, contexto_turno=contexto_turno,
         permisos=accesos.permisos())
-    # Se filtra ANTES de guardar, así el historial repintado tampoco muestra ids — y, en el
-    # caso de las acotaciones, el modelo no las tiene como ejemplo a imitar en el turno que viene.
+    # Se filtra ANTES de guardar, así el historial repintado tampoco muestra ids.
     respuesta = _ocultar_ids(respuesta)
-    respuesta = _quitar_acotaciones(respuesta)
 
     # Lo que quedó pendiente de revisar + lo que se mostró recién.
     fichas = _fusionar_fichas(contexto_turno.get('fichas_previas', {}),
@@ -679,16 +684,11 @@ ETIQUETA_TOOL = {
     'listar_todos': 'revisando el inventario',
     'listar_alias': 'revisando los alias',
     'detalle_entidad': 'leyendo la ficha',
-    'consultar_historia': 'buscando en la memoria de la casa',
-    'buscar_hitos': 'revisando la línea del tiempo',
     'crear_entidad': 'armando la ficha',
     'leer_foto': 'leyendo las fotos',
     'adjuntar_foto': 'guardando la foto',
     'editar_entidad': 'guardando los cambios',
-    'vincular_entidad': 'vinculando',
-    'desvincular_entidad': 'desvinculando',
     'mover_ubicacion': 'moviendo el recurso',
-    'eliminar_entidad': 'eliminando',
 }
 
 ETIQUETA_PENSANDO = 'pensando'
@@ -899,49 +899,12 @@ def _adjuntar_foto_pendiente(pendiente, slug, id_nuevo):
     return ' (La foto no se pudo adjuntar; podés subirla desde la ficha.)'
 
 
-def _enlazar_protagonistas(hito_id, protagonistas):
-    """Vincula el hito recién creado con las personas nombradas en `protagonistas`.
-
-    Devuelve el texto a sumarle al "✅ Guardado" (vacío si no vinculó a nadie).
-
-    Va del lado del código y no como instrucción al modelo porque el botón de confirmar
-    NO pasa por el LLM: cuando el hito se escribe, el agente no tiene ningún turno para
-    llamar a vincular_entidad, y el vínculo navegable (el que hace que el hito aparezca en
-    la ficha de la persona) no lo creaba nadie. `protagonistas` seguía siendo texto suelto.
-
-    Solo vincula personas YA cargadas y con el nombre completo: no crea personas nuevas ni
-    adivina con un nombre de pila suelto.
-
-    Y sólo con permiso para ver `personas`: el vínculo se escribe mirando el padrón de
-    fichas, y el texto que devuelve nombra a quién se enlazó. Sin el permiso, el hito se
-    guarda igual con sus `protagonistas` en texto — lo que no se crea es el vínculo.
-    """
-    if not hito_id or not (protagonistas or '').strip():
-        return ''
-    if not ve_entidad('personas', accesos.permisos()):
-        return ''
-    try:
-        nombradas = _personas_nombradas_en(protagonistas)
-        enlazadas = []
-        for pid, nombre in nombradas:
-            # La relación está declarada del lado de personas (ver historia.ENTIDADES).
-            if _vincular_entidad('personas', pid, 'hitos', hito_id).get('ok'):
-                enlazadas.append(nombre)
-    except Exception:
-        return ''
-    if not enlazadas:
-        return ''
-    if len(enlazadas) == 1:
-        return f' Lo vinculé con la ficha de {enlazadas[0]}.'
-    return ' Lo vinculé con las fichas de ' + ', '.join(enlazadas[:-1]) + f' y {enlazadas[-1]}.'
-
-
 def _guardar_ficha(token, fichas):
     """Escribe una ficha aprobada. Devuelve `(ok, nombre, detalle)`.
 
     Es el alta de verdad: `ejecutar_tool` consume el token de `fichas` al escribir, y
-    después se le cuelgan las dos cosas que no puede hacer el modelo porque acá no hay
-    ningún turno suyo — la foto de la que salió y el vínculo con las personas del hito.
+    después se le cuelga lo que el modelo no puede hacer porque acá no hay ningún turno
+    suyo — la foto de la que salió.
 
     Está afuera de `/confirmar` porque `/lote` hace exactamente esto N veces. `detalle` es
     lo que se le suma a la línea de esa ficha ("Le guardé también la foto.").
@@ -952,7 +915,10 @@ def _guardar_ficha(token, fichas):
 
     entrada = dict(pendiente['campos'])
     entrada['slug'] = slug
-    resultado = ejecutar_tool('crear_entidad', entrada, {'fichas_previas': fichas},
+    # `confirmado_por_usuario` es lo ÚNICO que habilita la escritura en `_crear_entidad`:
+    # se pone acá, que es el camino de los botones, y nunca en el turno del modelo.
+    resultado = ejecutar_tool('crear_entidad', entrada,
+                              {'fichas_previas': fichas, 'confirmado_por_usuario': True},
                               permisos=accesos.permisos())
 
     if not resultado.get('ok'):
@@ -962,9 +928,6 @@ def _guardar_ficha(token, fichas):
     # `ejecutar_tool` ya sacó el token de `fichas` al escribir, así que acá `fichas` es lo
     # que queda pendiente: si ninguna otra ficha salió de esta foto, la imagen ya no sirve.
     _soltar_foto(pendiente.get('foto'), fichas)
-    if slug == 'hitos':
-        detalle += _enlazar_protagonistas(resultado.get('id'),
-                                          pendiente['campos'].get('protagonistas'))
     return True, nombre, detalle
 
 

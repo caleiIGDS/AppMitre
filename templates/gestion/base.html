@@ -74,9 +74,6 @@
        aparece en celular (para el nav y las acciones). #}
     {% if acceso_actual() %}
     <nav class="g-areas" aria-label="Áreas">
-        {% if 'historia' in areas and puede('historia.leer') %}
-        <a href="{{ url_for('historia.home') }}">HISTORIA INSTITUCIONAL</a>
-        {% endif %}
         {% if puede('agente.leer') %}
         <a href="{{ url_for('agente.chat_page') }}">🤖 ASISTENTE</a>
         {% endif %}

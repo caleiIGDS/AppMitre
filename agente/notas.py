@@ -1,6 +1,6 @@
 """`agente.md`: el archivo de notas del asistente, en la raíz del proyecto.
 
-Es el equivalente de un CLAUDE.md / AGENTS.md para Emilio: un markdown suelto con lo que
+Es el equivalente de un CLAUDE.md / AGENTS.md para el agente: un markdown suelto con lo que
 tiene que saber ESTOS DÍAS — que el pañol está en el aula 12 mientras arreglan el techo,
 que la máquina de café no se carga como recurso, quién coordina las salidas este año, la
 lista que la administración quiere tener a mano un par de semanas. Si viviera en
@@ -8,7 +8,7 @@ lista que la administración quiere tener a mano un par de semanas. Si viviera e
 
 QUÉ ENTRA lo decide quien escribe, no el modelo. Es la libreta del administrador: si le
 piden anotar algo, se anota y no se discute dónde "corresponde" que vaya. Lo único que
-Emilio no hace es anotar por su cuenta lo que nadie le pidió.
+el agente no hace es anotar por su cuenta lo que nadie le pidió.
 
 NO VA EN GIT (está en `.gitignore`, como los `.db`) y eso no es un detalle: el agente lo
 ESCRIBE con la tool `escribir_notas`, así que la copia del servidor se separa de la del

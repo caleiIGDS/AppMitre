@@ -1,17 +1,20 @@
 """Asistente conversacional con tool-calling (`/agente`).
 
-Cuarta área de la app, al mismo nivel que horarios, `/gestion` e `/historia`, y la única
-transversal: lee las tres y escribe en dos. Antes era un único `agente.py` de ~4.000
-líneas; se abrió a paquete conservando el mismo blueprint y la misma superficie pública
-(`bp` e `init_db`, que es todo lo que usa `app.py`).
+Área de la app al mismo nivel que horarios y `/gestion`, y la única transversal: lee
+horarios y escribe en gestión. Antes era un único `agente.py` de ~4.000 líneas; se abrió a
+paquete conservando el mismo blueprint y la misma superficie pública (`bp` e `init_db`, que
+es todo lo que usa `app.py`).
+
+(Hasta 2026-09 también leía y escribía `/historia`, hitos y personas, y tenía un lore de la
+escuela narrado por un personaje. Se extrajo del código junto con esa área — ver
+`dev-log/DECISIONS.md`.)
 
 Mapa del paquete:
-    dominio.py      RAIZ del proyecto + qué módulo (gestion/historia) es dueño de cada slug
+    dominio.py      RAIZ del proyecto + qué módulo de dominio es dueño de cada slug
     proveedores.py  config del LLM del chat y del lector de imágenes (son independientes)
     db.py           tablas propias en gestion.db: auditoría, conversación, fotos pendientes
     notas.py        la libreta del admin: lo que el agente tiene que saber esta semana
-    padrones.py     los dos padrones de personas y el cruce entre ellos
-    lore.py         la historia de la escuela contada por Emilio
+    padrones.py     el padrón de horarios (docentes + no docentes) y los preceptores
     vision.py       el lector de etiquetas (una llamada suelta, sin tools)
     prompt.py       el system prompt
     llm.py          clientes por proveedor + los dos loops de tool-calling
@@ -53,9 +56,9 @@ bp = Blueprint('agente', __name__, url_prefix='/agente')
 
 # Permisos que declara el área al catálogo de `accesos`.
 #
-# El asistente tiene permisos PROPIOS y no reusa `gestion.editar` / `historia.editar`
-# porque sus tools genéricas por slug (crear_entidad, eliminar_entidad, buscar_entidad…)
-# cruzan las dos áreas: no hay forma de mapear una tool a un área desde el esquema. El
+# El asistente tiene permisos PROPIOS y no reusa `gestion.editar` porque sus tools
+# genéricas por slug (crear_entidad, buscar_entidad…) están escritas para poder cruzar
+# varias áreas de dominio: no hay forma de mapear una tool a un área desde el esquema. El
 # corte que importa acá es otro — leer contra escribir — y es el que se declara.
 #
 # `agente.vision` va con verbo 'admin' —como `agente.auditar`— y no con 'leer': mandar una

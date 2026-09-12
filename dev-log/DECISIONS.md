@@ -6,6 +6,70 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-09-12] — El modelo no confirma altas: sólo escriben los botones
+
+`crear_entidad` escribe únicamente si `contexto_turno['confirmado_por_usuario']` está puesto,
+y eso lo pone sólo `rutas._guardar_ficha` (`/confirmar` y `/lote`). Antes alcanzaba con que el
+modelo reenviara una ficha idéntica en el turno siguiente: eso se leía como "el usuario
+aprobó", y el modelo lo hace apenas cree que le dijeron que sí. La marca no es un parámetro
+de la tool, así que el modelo no puede ponerla. Si le piden "dale, guardalo" por chat, repite
+la ficha y manda al botón.
+
+---
+
+## [2026-09-12] — El chat no borra el mensaje del usuario si el turno falla
+
+Dos cambios juntos, mismo objetivo (no perder trabajo del usuario en un turno que se cae):
+
+- **Backend**: en `agente/rutas.py::_turno_stream`, el mensaje del usuario se persiste ANTES
+  de llamar al modelo, además de la escritura final de siempre. No es redundante: si el
+  turno revienta a mitad de camino (stream cortado, sin saldo, excepción), antes se perdía
+  sin dejar rastro. Si el turno termina bien, la escritura final pisa la temprana — no
+  queda duplicado.
+- **Frontend**: `static/gestion-agente.js::enviarMensaje` ya no limpia el input/las fotos
+  de forma irreversible. Si el turno falla (`.catch` o `data.error`), `restaurarEnvioFallido`
+  las devuelve al compose (sin pisar si el usuario ya escribió otra cosa) y el mensaje de
+  error trae un botón "Reenviar" que vuelve a llamar `enviarMensaje` sin retipear nada.
+
+Queda pendiente (deliberadamente, es un cambio más grande y de más riesgo sin tests):
+pasar `agente_conversaciones.historial` de un blob JSON reescrito entero por turno a una
+tabla append-only.
+
+---
+
+## [2026-09-12] — El padrón de estudiantes no va en el servidor
+
+`estudiantes.py` decía en un comentario que el padrón "sólo vive en la computadora de la
+escuela", pero la app corre en PythonAnywhere: el CSV se subía ahí y los 1452 DNI de menores
+quedaban en disco, más 139 KB de nombre+DNI embebidos en el HTML de cada carga del
+formulario. Ahora el CSV se parsea en el navegador y vive en `localStorage`; el servidor no
+lo ve nunca. Se asume la contra: el padrón deja de ser compartido y cada dispositivo carga
+el suyo. Se eligió `localStorage` y no IndexedDB porque los tres consumidores son handlers
+síncronos y 139 KB contra 5 MB de cuota no justifica volverlos `async`.
+
+Junto con eso, dos cosas que hacían de la retención un teatro: `salidas_familias` seguía en
+la base con datos de salud (el código dejó de escribirla en 2026-08-16 y delegó el borrado a
+un paso de `actualizar.py` que nunca se escribió — ahora existe, es el 4.7), y `respaldos.py`
+conservaba "el primero de cada día" para siempre, así que una salida purgada al año seguía
+viva en `backups/`. De ahí `BACKUP_MAX_DIAS`, que sólo declara el área cuyos datos vencen.
+A los respaldos que sí se conservan el 4.7 les saca la tabla de adentro (DROP + VACUUM, sin
+el VACUUM las filas quedan legibles en páginas libres) en vez de borrar el archivo entero:
+el respaldo existe para poder recuperar salidas, y eso se pierde si se tira la copia.
+
+---
+
+## [2026-09-11] — `/historia` (hitos, personas) y el lore de Emilio se extraen del código
+
+No es que el área se haya "roto" o alguien haya olvidado terminarla: se sacó a propósito,
+código y datos, a una carpeta fuera del repo con guía de reimplementación. Pausarla
+(`ACTIVA = False`, 2026-09-02) dejaba el agente cargando 24 tools, un `_modulo()` de dos
+vías y una persona ficticia (Emilio Mitre) para un área que no se iba a retomar en el corto
+plazo — costo de mantenimiento sin uso. Si hace falta reactivarla, no es "poner `ACTIVA =
+True`": el código ya no está en el árbol, hay que traerlo del archivo. `estudiantes.db` NO
+es parte de esto (es de `salidas.py`) y no se tocó.
+
+---
+
 ## [2026-09-09] — `recursos.cantidad` pasa a ser derivada de `recurso_unidades`
 
 `cantidad` era un entero libre y `_asegurar_unidades` rellenaba `1..cantidad` en cada

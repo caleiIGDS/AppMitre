@@ -53,10 +53,12 @@ ya hay que tocar el `register_blueprint`) y listo. `laboratorio.leer` entra solo
 tienen ese permiso hasta que el admin lo tilde.
 
 **`areas`, el otro global de Jinja.** Junto a `puede`/`acceso_actual`, `registrar_app` deja
-el conjunto de nombres de blueprint que quedaron montados. Los headers preguntan
-`{% if 'historia' in areas and puede('historia.leer') %}` y no sólo por el permiso, porque el
-admin tiene el comodín `'*'`: le diría que sí a un permiso que ya no está en el catálogo y el
-`url_for` de un blueprint que nadie registró reventaría la página entera.
+el conjunto de nombres de blueprint que quedaron montados. Un header que linkeara a un área
+con `ACTIVA = False` (el mecanismo que usó `/historia` hasta que se extrajo del código, en
+vez de sólo desmontarla) tiene que preguntar `{% if 'laboratorio' in areas and
+puede('laboratorio.leer') %}` y no sólo por el permiso, porque el admin tiene el comodín
+`'*'`: le diría que sí a un permiso que ya no está en el catálogo y el `url_for` de un
+blueprint que nadie registró reventaría la página entera.
 
 ## Ámbitos: el mismo permiso, pero sólo acá
 
@@ -104,8 +106,6 @@ inventario y ninguna otra: un encargado no puede cortarle a nadie el acceso al a
 | `inventarios.admin` | admin | `gestion.py` — administrar la LISTA de inventarios, sin ver ninguno |
 | `gestion.leer` / `gestion.editar` | leer / escribir | `gestion.py`, **con ámbito** |
 | `gestion.alias` / `gestion.auditoria` / `gestion.rotar` / `gestion.accesos` | admin | `gestion.py`, **con ámbito** |
-| ~~`historia.leer` / `historia.editar`~~ | leer / escribir | `historia.py` — **fuera del catálogo**: el área está apagada (`historia.ACTIVA = False`) y `app.py` no la pasa a `registrar_app` |
-| ~~`historia.personas`~~ | admin | ídem |
 | `agente.leer` / `agente.escribir` | leer / escribir | `agente/__init__.py` |
 | `agente.vision` | admin | `agente/__init__.py` |
 | `agente.auditar` | admin | `agente/__init__.py` |
@@ -115,6 +115,12 @@ inventario y ninguna otra: un encargado no puede cortarle a nadie el acceso al a
 `accesos.admin` es la única clave que nombra este archivo, y es correcta: es el permiso de su propia
 funcionalidad, no el de un área.
 
+Hasta 2026-09 el catálogo también tenía `historia.leer` / `historia.editar` / `historia.personas`
+(`/historia` se extrajo del código, ver `dev-log/DECISIONS.md`). Si algún dispositivo viejo
+tiene esas claves guardadas en `accesos.db`, quedan **inertes**: `accesos.tiene()` devuelve
+`False` para cualquier clave fuera del catálogo, y el comodín `'*'` no las resucita — no hizo
+falta migrar nada.
+
 **El verbo `'admin'` no es un cuarto perfil**: es lo que hace que un permiso NO entre en ningún
 preset de interno, porque `PERFILES` sólo enumera `'leer'` y `'escribir'`. Quien lo tiene es el admin
 por el comodín `'*'`. El admin igual puede tildarlo a mano en el formulario de invitación, y ahí el
@@ -122,15 +128,17 @@ acceso queda como perfil `custom` — el conjunto de permisos es la verdad, el p
 
 ### Permisos de una entidad sola
 
-`historia.personas` es el primero que no protege un área entera sino **una entidad**: `/historia` se
-sigue viendo con `historia.leer`, pero `personas` desaparece para quien no tenga ese permiso.
+El catálogo también soporta un permiso que no protege un área entera sino **una entidad** —
+hasta 2026-09 lo usaba `historia.personas`: `/historia` se seguía viendo con `historia.leer`,
+pero `personas` desaparecía para quien no tuviera ese permiso extra. Ninguna entidad lo usa
+hoy, pero el mecanismo sigue ahí para la próxima que lo necesite.
 
 No hace falta partir el área en dos ni escribir rutas nuevas: la entidad lo declara con la clave
 `permiso` de su cfg y el motor CRUD hace el resto — tarjeta del home, nav, listado, ficha, formularios,
-fotos y el bloque de personas dentro de un hito. El detalle del mecanismo (y por qué el guardado del
-formulario también tiene que saberlo) está en `agent_docs/crud-motor.md`. El asistente respeta lo
-mismo con `agente.dominio.ve_entidad`: lee las mismas tablas, así que esconderlo sólo en la web no
-serviría de nada.
+fotos y el bloque de esa entidad dentro de otra ficha relacionada. El detalle del mecanismo (y por
+qué el guardado del formulario también tiene que saberlo) está en `agent_docs/crud-motor.md`. El
+asistente respeta lo mismo con `agente.dominio.ve_entidad`: lee las mismas tablas, así que
+esconderlo sólo en la web no serviría de nada.
 
 ## Cómo entra un interno: link → dispositivo
 
@@ -248,7 +256,7 @@ sesión de `accesos`. `/` (a nivel app) sólo redirige a `/horarios/`.
 
 ### Cómo se llega a las áreas internas
 
-Cada área (gestión, historia, agente, salidas, accesos) tiene su `/salir` que vuelve a su
+Cada área (gestión, agente, salidas, accesos) tiene su `/salir` que vuelve a su
 propio login, y `/salir` a nivel app (`salir_general` en `accesos.py`) que cierra todo y
 vuelve a `/`. El menú ☰ que salta entre estas áreas vive en sus `base.html` (no en el SPA
 de horarios, que ya no tiene puente al resto). Detalle en `agent_docs/frontend-ui.md`.

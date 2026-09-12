@@ -1,68 +1,52 @@
 # Asistente conversacional con tool-calling (`/agente`)
 
-Cuarta área de la app, al mismo nivel que horarios, `/gestion` (recursos) e `/historia`
-(línea del tiempo institucional) — y la única transversal: lee las demás y escribe en las
-que se dejan escribir (los horarios son solo de consulta). Vive en su propio
-paquete (`agente/`), su propio prefijo (`/agente`) y su propia carpeta de templates
-(`templates/agente/`).
+Área de la app al mismo nivel que horarios y `/gestion` (recursos) — y la única
+transversal: lee horarios y escribe en gestión (los horarios son solo de consulta). Vive en
+su propio paquete (`agente/`), su propio prefijo (`/agente`) y su propia carpeta de
+templates (`templates/agente/`).
 
-> **`/historia` está apagada** (`historia.ACTIVA = False`). Lo que este documento cuenta de
-> `hitos` y `personas` sigue siendo cierto del código, pero hoy no llega al modelo: sin esos
-> slugs no viajan `buscar_hitos`, `vincular_entidad`, `desvincular_entidad` ni
-> `eliminar_entidad` (su único blanco eran hitos y personas: un recurso se da de baja, no se
-> borra), los campos de hito salen de `crear_entidad`/`editar_entidad` y el prompt pasa de
-> cinco áreas a tres. El interruptor está en `historia.py`; lo condicional del agente cuelga
-> de `esquemas.HISTORIA` y de `historia.ACTIVA` en `prompt.py`.
+> Hasta 2026-09 también leía y escribía `/historia` (hitos y personas) y tenía un lore de
+> la escuela narrado por un personaje (`consultar_historia`). Se extrajo del código junto
+> con esa área — ver `dev-log/DECISIONS.md` — así que lo que sigue ya no lo menciona.
 
 Es **un solo asistente** para todas las áreas, no uno por área: en la misma conversación se
-pregunta un horario, se da de alta un recurso y se carga un hito. Separarlo en varios
-rompería justamente eso.
+pregunta un horario y se da de alta un recurso. Separarlo en varios rompería justamente eso.
 
 Expone un chat conversacional contra el LLM configurado (DeepSeek por defecto,
 Anthropic/OpenAI/Groq/Ollama según `AGENTE_PROVIDER` — ver "Configuración"). El usuario puede
 hablar con la app en lenguaje natural en vez de hacer click en formularios: consultar
-horarios, crear recursos, fotografiar etiquetas y cargarlas, cargar hitos y personas. Todo
-con auditoría de escrituras en `agente_log`.
+horarios, crear recursos, fotografiar etiquetas y cargarlas. Todo con auditoría de
+escrituras en `agente_log`.
 
 **Acceso**: dos vistas del mismo chat, ambas detrás del gate de `accesos.py`
 (`accesos.registrar_acceso(bp, 'agente.leer', ...)`). El asistente declara **cuatro permisos
 propios** —`agente.leer`, `agente.escribir`, `agente.vision`, `agente.auditar`— y **con cuáles tenga
-cambia lo que el agente es**: con solo `agente.leer` las siete tools de escritura ni se le mandan al
+cambia lo que el agente es**: con solo `agente.leer` las tools de escritura ni se le mandan al
 modelo, y sin `agente.vision` no hay botón para adjuntar fotos ni tools que las miren. Ver
 "Permisos" más abajo y `agent_docs/accesos.md`.
-- Botón "🤖 ASISTENTE" en el header de `/gestion` y `/historia` → widget flotante, para
+- Botón "🤖 ASISTENTE" en el header de `/gestion` → widget flotante, para
   consultar sin salir de la página en la que se está.
 - `/agente/`, el chat a pantalla completa. Es la vista pensada para el celular, que es donde
   más se usa el asistente.
 
 ## A qué datos llega (`SLUGS_ENTIDAD` y `_modulo`)
 
-El agente cruza **dos DBs de dominio** más los horarios:
+El agente cruza **`gestion.db`** más los horarios:
 
 | Fuente | Slugs / datos | Acceso |
 |---|---|---|
 | `escuela.db` (horarios) | profesores, cursos, aulas | solo lectura |
 | `gestion.db` (recursos) | `recursos` | lectura y escritura |
-| `historia.db` (institucional) | `hitos`, `personas` | lectura y escritura |
-| `historias/*.json` (lore) | anécdotas de Emilio Mitre | solo lectura |
 
-- **`SLUGS_ENTIDAD = list(gestion.ENTIDADES) + list(historia.ENTIDADES)`** — se deriva, no se
-  escribe a mano. Es el enum de `slug` de todos los esquemas de tools; cuando estaba
-  hardcodeado, agregar una entidad la dejaba invisible para el chat sin que nada fallara.
-- **`_modulo(slug)`** devuelve `gestion` o `historia` según en cuál `ENTIDADES` está el slug.
+- **`SLUGS_ENTIDAD = list(gestion.ENTIDADES)`** — se deriva, no se escribe a mano. Es el enum
+  de `slug` de todos los esquemas de tools; cuando estaba hardcodeado, agregar una entidad la
+  dejaba invisible para el chat sin que nada fallara.
+- **`_modulo(slug)`** devuelve el módulo de dominio dueño del slug — hoy siempre `gestion`.
   Todas las tools genéricas (`buscar_entidad`, `listar_todos`, `detalle_entidad`,
-  `crear_entidad`, `editar_entidad`, `eliminar_entidad`, `vincular_entidad`,
-  `desvincular_entidad`, `adjuntar_foto`) pasan por ahí y le entregan ese módulo al motor:
-  `crud.buscar_entidad(_modulo(slug), slug, q)`, `crud.guardar_entidad(...)`, etc. **El área es
-  siempre el primer argumento de `crud`.** Los dos módulos cumplen el mismo contrato de área
-  (ver `agent_docs/crud-motor.md`), así que el agente los trata igual sin saber en cuál está
-  parado.
-- **Las relaciones M2M son siempre intra-módulo**: desde que se eliminó `proyecto_recursos` no
-  hay ninguna que cruce recursos ↔ historia, así que `_vincular_entidad` resuelve todo con el
-  módulo del slug de origen.
-- **Una entidad puede pedir un permiso propio** y entonces no está en `SLUGS_ENTIDAD` *para ese
-  acceso*: `personas` sale de los enum y del prompt sin `historia.personas`. Lo resuelve
-  `dominio.ve_entidad(slug, permisos)` — ver "El segundo eje" más abajo.
+  `crear_entidad`, `editar_entidad`, `adjuntar_foto`) pasan por ahí y le entregan ese módulo
+  al motor: `crud.buscar_entidad(_modulo(slug), slug, q)`, `crud.guardar_entidad(...)`, etc.
+  **El área es siempre el primer argumento de `crud`.** Se conserva como función (en vez de
+  usar `gestion` directo) para que un área de dominio nueva entre sin tocar acá.
 - **`agente.DB_PATH` sigue siendo `gestion.db`**: las tablas propias del agente
   (`agente_log`, `agente_conversaciones`, `agente_fotos_pendientes`) viven ahí — son
   auditoría y sesión, no datos de dominio. La excepción es el **registro de uso**, que
@@ -82,12 +66,11 @@ toda la superficie pública.
 | `proveedores.py` | Config del LLM del chat **y** del lector de imágenes, que son independientes. Se llama así y no `config` para no confundirse con el `config.py` de la raíz. |
 | `db.py` | Las tres tablas propias en `gestion.db`: auditoría, conversación, fotos pendientes. |
 | `registro.py` | El registro de uso y de chats, en `agente.db` (DB propia). Un INSERT por turno + las consultas del panel `/agente/uso`. |
-| `padrones.py` | Los dos padrones de personas y el cruce entre ellos. Fuera de `tools/` porque lo usan las tools **y** el system prompt. |
-| `lore.py` | La historia de la escuela y la voz de Emilio (`QUIEN_ES_EMILIO`, `COMO_CUENTA_EMILIO`, `EXCUSA_SIN_HISTORIA`). |
+| `padrones.py` | El padrón de gente de los horarios (docentes + no docentes) y los preceptores. Fuera de `tools/` porque lo usan las tools **y** el system prompt. |
 | `vision.py` | El lector de etiquetas y listas: una llamada suelta, sin tools. |
-| `prompt.py` | `construir_system_prompt()` — ~280 líneas de contenido, aparte del motor. Lo que cambia en cada turno va al **final** (ver "El orden de los bloques es el cache"). |
+| `prompt.py` | `construir_system_prompt()` — ~200 líneas de contenido, aparte del motor. Lo que cambia en cada turno va al **final** (ver "El orden de los bloques es el cache"). |
 | `llm.py` | Clientes por proveedor y los **dos** loops de tool-calling. `chat_with_tools_stream()` es un **generador**: larga el progreso y devuelve la respuesta. |
-| `filtros.py` | `_ocultar_ids`, `_quitar_acotaciones` y las utilidades de contexto. |
+| `filtros.py` | `_ocultar_ids` y las utilidades de contexto. |
 | `enlaces.py` | Convierte en link al calendario los docentes, preceptores y cursos que la respuesta nombra, y le pega el link de la comparación cuando corrió `coincidencias`. Es filtro de **presentación**: se aplica al salir por la API (payload del turno + historial repintado), nunca a lo que se guarda. El de la comparación es el único que no vuelve al repintar: se arma con lo que cruzó la tool en ese turno. |
 | `rutas.py` | Los endpoints Flask + el gate de acceso + el context processor. |
 | `tools/` | Lo que el agente sabe hacer: `esquemas.py` (lo único que el modelo ve) y un módulo por área con los ejecutores. `tools/__init__.py` tiene `ejecutar_tool`, el dispatch. |
@@ -98,7 +81,7 @@ eso no hay un "archivo de descripciones" separado de un "archivo de código" —
 tocar dos archivos para agregar una tool en vez de uno. Ver `dev-log/DECISIONS.md` 2026-08-10.
 
 Las dependencias van en una sola dirección y **no hay ciclos**:
-`dominio → proveedores/db → padrones/lore/vision → tools → prompt/llm → rutas`.
+`dominio → proveedores/db → padrones/vision → tools → prompt/llm → rutas`.
 - **`POST /agente/chat`** — acepta `{mensaje, imagenes?}` (lista de hasta `FOTOS_MAX`=10 fotos
   en base64 o data URL; también acepta `imagen` singular, el contrato viejo);
   retorna `{respuesta, confirmaciones, reiniciada}`. `reiniciada` es `true` cuando la
@@ -176,7 +159,7 @@ a `/agente/login?next=...`, porque entrar por link directo a `/agente` desde el 
 caso normal y un 401 pelado ahí es un callejón sin salida.
 
 Mismo motor de accesos y mismo `next` scopeado al prefijo propio (contra open redirect) que
-`/gestion` e `/historia`. Con acceso pero **sin** el permiso de la ruta la respuesta es **403**, no
+`/gestion`. Con acceso pero **sin** el permiso de la ruta la respuesta es **403**, no
 el login. Siete casos piden más que el permiso base:
 
 | ruta | permiso | por qué |
@@ -279,9 +262,9 @@ Comparten markup y JS; lo único que cambia es el contenedor.
 
 | Archivo | Rol |
 |---|---|
-| `templates/agente/base.html` | Layout propio del área: header con links cruzados a horarios / `/gestion` / `/historia`, nav ASISTENTE + AUDITORÍA. No incluye el widget flotante. |
+| `templates/agente/base.html` | Layout propio del área: header con links cruzados a horarios / `/gestion`, nav ASISTENTE + AUDITORÍA. No incluye el widget flotante. |
 | `templates/agente/_agente_chat_core.html` | El chat en sí: `#agente-messages` + área de input (texto, 📷 imagen, enviar, link a auditoría). **Único lugar donde se edita el markup del chat.** |
-| `templates/agente/_agente_widget.html` | Widget flotante = header propio (↺ reiniciar, ⤢ abrir a pantalla completa, ✕ cerrar) + el core. Lo incluyen `gestion/base.html` e `historia/base.html`. |
+| `templates/agente/_agente_widget.html` | Widget flotante = header propio (↺ reiniciar, ⤢ abrir a pantalla completa, ✕ cerrar) + el core. Lo incluye `gestion/base.html`. |
 | `templates/agente/agente_chat.html` | Pestaña = barra de título + selector de inventario + el core, dentro de `agente/base.html`. |
 | `templates/agente/agente_log.html` | Auditoría, dentro de `agente/base.html`. |
 | `templates/agente/login.html` | Login del área. |
@@ -290,7 +273,7 @@ Comparten markup y JS; lo único que cambia es el contenedor.
 Los IDs del core (`agente-messages`, `agente-input`, `agente-send-btn`, `agente-reset-btn`…)
 son únicos y el JS los busca con `getElementById` — por eso **las dos vistas nunca se
 renderizan juntas**. Hoy la invariante se cumple sola porque viven en layouts distintos: el
-widget solo lo incluyen `gestion/base.html` e `historia/base.html`, y `agente/base.html` (el
+widget solo lo incluye `gestion/base.html`, y `agente/base.html` (el
 de la pestaña) no lo incluye. Si se agrega otra vista del chat, mantener esa invariante.
 
 Progressive enhancement: con JS es fluido, sin JS el chat no funciona pero el resto del
@@ -347,9 +330,7 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
 **Lectura** — `agente.leer` (no se auditan):
 - `buscar_profesor(query)` — resolución difusa de nombre, **sobre el padrón de los
   horarios**: docentes de `clases` **y personal no docente** (ver abajo). Cada candidato lleva
-  su `rol` si tiene cargo no docente. Si el nombre también
-  coincide con una persona con ficha, devuelve
-  `{docentes, personas_con_ficha, aviso}` en vez de la lista pelada (ver "Dos padrones"); si
+  su `rol` si tiene cargo no docente. Si
   coincide con un preceptor, agrega `preceptores` + `aviso_preceptores`. Si **no** coincide
   nadie devuelve `padron_completo`, ver "Cuando no coincide nadie"
 - `buscar_por_rol(rol?)` — personal no docente **por cargo**, no por nombre ("¿qué EMATP hay?").
@@ -383,9 +364,8 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
   calendario sabe dibujar —cursos y docentes con clases; preceptores y no docentes puros
   quedan afuera y se aclaran en el texto—, y con eso `enlaces.enlace_comparacion` le pega a
   la respuesta el link que las abre superpuestas en `/horarios`
-- `buscar_entidad(slug, query)` — búsqueda de recursos (gestion.db) y
-  de hitos/personas (historia.db); el módulo lo resuelve `_modulo(slug)`
-  (calidad del match explícita, ver abajo)
+- `buscar_entidad(slug, query)` — búsqueda de recursos (gestion.db); el módulo lo resuelve
+  `_modulo(slug)` (calidad del match explícita, ver abajo)
 - `listar_todos(slug, con_descripcion?)` — lista completa de nombres + id, y en `recursos`
   también `ubicacion` (cada lugar con cuántas unidades hay ahí). **Fallback** de
   `buscar_entidad` cuando no hay ningún match `exacto`, y la **única** entrada por ubicación
@@ -394,7 +374,6 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
 - `listar_alias(slug)` — **solo admin** (`gestion.alias`, igual que `/gestion/alias`): todos los
   recursos con su alias en texto, para que el asistente los audite/mejore. Es la única tool que
   expone ese texto — `buscar_entidad` sólo marca `match:"alias"` sin mostrarlo
-- `consultar_historia(tema)` — lore de la escuela y guiños internos, ver abajo
 - `leer_foto(modo?, foto?)` — mira las fotos adjuntadas en ESTE turno y las devuelve en texto,
   cada lectura con el número de su foto. **Sin `foto` lee todas de una sola llamada**, que es
   como hay que usarla. `modo`
@@ -434,7 +413,6 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
 - `adjuntar_foto(slug, id, foto?)` — guarda las fotos de ESTE turno en la galería de un registro
   que ya existe (sin `foto` van todas, con `foto` sólo esa). Sin ficha de confirmación (es
   aditivo); las imágenes salen de `contexto_turno`, no de un parámetro
-- `vincular_entidad` / `desvincular_entidad` — gestionar M2M
 - `mover_ubicacion(recurso, destino, numeros?, cantidad?, origen?)` — la forma de mover un recurso
   que **ya existe** (en el alta, la ubicación va por el parámetro `ubicacion` de `crear_entidad`).
   No hay un campo `ubicacion` en `editar_entidad`: la ubicación es siempre la lista de unidades en
@@ -445,13 +423,13 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
   con menos registrado, igual mueve lo que se puede y avisa (`avisos`) — ver
   `agent_docs/gestion-conocimiento.md`. `origen` sólo aplica junto con `cantidad` y es opcional
   (unidades sin lugar registrado antes)
-- `eliminar_entidad` — **requiere confirmación en turno separado** (el system prompt instruye
-  a Claude a no ejecutar en el mismo turno en que se solicita, sino responder primero qué va
-  a borrar y esperar confirmación)
+
+No hay tool que elimine una entidad: un recurso no se borra nunca, sale del inventario
+dándolo de baja desde la web (ver `agent_docs/gestion-conocimiento.md`).
 
 ### Permisos: no tener la tool, no tenerla prohibida
 
-Un acceso de consulta **no recibe** los esquemas de las siete tools de escritura. La diferencia con
+Un acceso de consulta **no recibe** los esquemas de las tools de escritura. La diferencia con
 prohibírselas no es cosmética: una tool que no está en la lista el modelo no la anuncia, no la
 promete y no alucina haberla usado. Prohibida, en cambio, la intenta, se come el error y a veces
 igual contesta "✅ listo".
@@ -466,69 +444,48 @@ desarrollo**.
 
 Tres capas, de afuera hacia adentro:
 
-1. **Filtrado del esquema** — `tools_permitidas()`. El modelo ve 12 tools o 20.
+1. **Filtrado del esquema** — `tools_permitidas()`. El modelo ve entre menos de 10 tools (sólo
+   lectura, sin inventario abierto) y las 20 (admin, con inventario abierto y visión).
 2. **`ejecutar_tool(..., permisos=None)`** — chequea igual. Cubre `/agente/confirmar`, que escribe
    sin pasar por el LLM, y el caso de que el modelo invente un nombre de tool. El default `None` es
    **fail-closed**: un call site nuevo que se olvide de pasar permisos falla cerrado y ruidoso, no
    abierto y en silencio. Un rechazo de escritura **se audita**: si aparece en `/agente/log`, o
    alguien forjó el request o el filtrado tiene un agujero.
-3. **El system prompt** — `construir_system_prompt(..., escribe=, ve_personas=, ve_fotos=)`, ver abajo.
+3. **El system prompt** — `construir_system_prompt(..., escribe=, ve_fotos=)`, ver abajo.
 
 Los cuatro call sites de `ejecutar_tool` pasan permisos: los dos del loop Anthropic, el de
 `_loop_openai` y el de `rutas.confirmar`.
 
-Las tools genéricas por slug (`crear_entidad`, `eliminar_entidad`, `buscar_entidad`…) cruzan gestión
-e historia, así que **no** se pueden mapear a `gestion.editar`/`historia.editar` desde el esquema —
-de ahí que el agente tenga permisos propios.
+Las tools genéricas por slug (`crear_entidad`, `buscar_entidad`…) están escritas para poder
+cruzar varias áreas de dominio, así que **no** se pueden mapear a `gestion.editar` desde el
+esquema — de ahí que el agente tenga permisos propios.
 
-#### El segundo eje: la ENTIDAD, no la tool
-
-`agente.leer` habilita `buscar_entidad`; no dice **sobre qué**. Un área puede pedir un permiso extra
-para una entidad sola (hoy `personas`, que es sólo del admin — ver `agent_docs/crud-motor.md`), y eso
-no se puede expresar en `PERMISO_POR_TOOL` porque no depende de la tool sino del slug que venga en
-el input. El agente lee las mismas tablas que la web, así que esconder `personas` sólo en `/historia`
-no serviría de nada: alcanzaría con preguntárselo a Emilio.
-
-`agente.dominio.ve_entidad(slug, permisos)` es la pregunta, y va por `crud.permiso_entidad`: acá
-tampoco se nombra ninguna clave. Se aplica en las mismas tres capas:
-
-| dónde | qué hace |
-|---|---|
-| `tools_permitidas()` | recorta el slug de **los enum** de cada esquema (`_sin_slugs`, que copia — `TOOLS_SCHEMA` es global) |
-| `ejecutar_tool` | rechaza `slug` / `slug_origen` / `slug_destino` prohibidos, antes del `try` |
-| `construir_system_prompt(ve_personas=)` | saca el área 5 (PERSONAS) y los dos bullets de `_HITOS` que hablan de fichas |
-
-Además hay cuatro lugares que devuelven nombres de personas **sin recibir el slug**, y por eso toman
-`permisos` explícito: `_buscar_profesor` (el cruce `personas_con_ficha`), `_detalle_entidad_fmt` (las
-personas de un hito), `_recordatorio_hito` (el padrón completo en el aviso de `crear_entidad`) y
-`rutas._enlazar_protagonistas` (que además escribe el vínculo al confirmar un hito). Sin el permiso,
-los cuatro se comportan como antes de que existiera el cruce con `personas`.
+El mecanismo de permiso-por-entidad (`agente.dominio.ve_entidad(slug, permisos)`, vía
+`crud.permiso_entidad`) sigue existiendo por si una entidad futura pide un permiso propio
+además del área — hoy ninguna lo hace. Se aplica en las mismas capas: `tools_permitidas()`
+recorta el slug de los enum, y `ejecutar_tool` rechaza `slug`/`slug_origen`/`slug_destino`
+prohibidos antes del `try`.
 
 ### El system prompt se recorta con las tools (`prompt.py`)
 
 `prompt.py` está partido en bloques y `construir_system_prompt(..., escribe=)` arma la lista.
-Con `escribe=False` no van el circuito de alta, el bloque de hitos, el de carga desde etiqueta ni
-las reglas de borrado; sí va `_SOLO_LECTURA`, que le dice explícitamente que esas herramientas
-**no existen** para él y que no escriba "✅". Las reglas numeradas se renumeran solas: saltar del 1
+Con `escribe=False` no van el circuito de alta, el de carga desde etiqueta ni las reglas de
+borrado; sí va `_SOLO_LECTURA`, que le dice explícitamente que esas herramientas **no
+existen** para él y que no escriba "✅". Las reglas numeradas se renumeran solas: saltar del 1
 al 3 le marcaría al modelo que hay reglas que no está viendo.
 
 `escribe` lo decide `llm.chat_with_tools_stream` mirando **las tools que efectivamente se
 mandaron**, no los permisos del usuario: así es imposible que el prompt hable de dar de alta
 mientras las tools de alta no viajaron.
 
-`ve_personas` sale del mismo lugar y por la misma razón, con `esquemas.slug_visible(tools,
-'personas')`: si el slug no sobrevivió en ningún enum, el prompt no describe el área 5 ni ofrece dar
-de alta una persona. El encabezado pasa a decir "Tenés cuatro áreas a cargo" — el número también es
-parte de lo que el modelo lee.
+`ve_fotos` sale del mismo lugar y por la misma razón, de `TOOLS_FOTO & {las tools que se
+mandaron}`: sin `agente.vision` no van `_FOTOS`, `_ETIQUETA`, `_FOTOS_SOLO_LECTURA` ni
+`_REGLA_FOTO`. No es sólo ahorro de tokens — explicarle qué hacer con una foto a un acceso
+que **no tiene el botón para mandarla** lo llevaría a ofrecer algo imposible. Las reglas se
+renumeran solas también acá.
 
-`ve_fotos` es el tercero, y sale de `TOOLS_FOTO & {las tools que se mandaron}`: sin `agente.vision`
-no van `_FOTOS`, `_ETIQUETA`, `_FOTOS_SOLO_LECTURA` ni `_REGLA_FOTO`. No es sólo ahorro de tokens —
-explicarle qué hacer con una foto a un acceso que **no tiene el botón para mandarla** lo llevaría a
-ofrecer algo imposible. Las reglas se renumeran solas también acá.
-
-`ve_notas` es el cuarto, y sale de `TOOLS_NOTAS & {las tools que se mandaron}`: sin
-`agente.notas` el prompt no nombra el archivo de notas ni muestra una sola línea (ver
-"`agente.md`").
+`ve_notas` sale de `TOOLS_NOTAS & {las tools que se mandaron}`: sin `agente.notas` el prompt
+no nombra el archivo de notas ni muestra una sola línea (ver "`agente.md`").
 
 Esto también apaga un problema conocido: `_escritura_no_ejecutada` (`filtros.py`) marca cualquier
 "✅" sin escritura exitosa. Para un acceso de consulta **ninguna** escritura corre nunca, así que
@@ -550,7 +507,7 @@ del usuario, y el propio bloque lo dice.
 Hoy no queda ningún bloque intermedio que interpole datos del turno: los dos que interpolan van
 al fondo, y en ese orden — primero `_notas()`, que cambia sólo cuando alguien anota o borra algo,
 y último `_fecha()`, que cambia a cada minuto. Para una misma combinación de
-`escribe`/`ve_personas`/`ve_fotos`/`ve_notas`, todo lo que va antes de las notas es idéntico byte
+`escribe`/`ve_fotos`/`ve_notas`, todo lo que va antes de las notas es idéntico byte
 a byte entre turnos. **La regla para cualquier bloque nuevo que interpole algo del turno es la
 misma: al final**, o rompe el cache de todo lo que tenga debajo.
 
@@ -562,14 +519,14 @@ primero. Cada vuelta que se ahorra es todo el razonamiento de esa vuelta.
 
 ### `agente.md`: las notas del asistente (`notas.py`, `/agente/notas`)
 
-El CLAUDE.md de Emilio: un markdown suelto en la raíz del proyecto con lo que tiene que saber
+El CLAUDE.md del agente: un markdown suelto en la raíz del proyecto con lo que tiene que saber
 **estos días** — "el pañol está en el aula 12 hasta que arreglen el techo", "las salidas de este
 año las coordina Vanesa", "no cargues la máquina de café como recurso", la lista que la
 administración quiere tener a mano un par de semanas. Si viviera en `prompt.py`, cada aviso
 costaría un deploy.
 
 **Qué entra lo decide quien escribe, no el modelo.** Es la libreta del administrador: si le
-piden anotar algo, Emilio lo anota y no discute si "corresponde" que vaya a una ficha; si el
+piden anotar algo, el agente lo anota y no discute si "corresponde" que vaya a una ficha; si el
 dato además tendría lugar en el inventario, lo ofrece después y en una línea. Lo único que no
 hace es anotar por su cuenta lo que nadie le pidió. La regla vive en la descripción de
 `escribir_notas` y en `_NOTAS_VACIA` / `_notas()` de `prompt.py`.
@@ -612,13 +569,12 @@ quedar guardado. Circuito:
 
 1. El asistente llama a `crear_entidad`. **La primera llamada con un juego de campos no
    escribe nada**: devuelve `{requiere_confirmacion: true, ficha, campos_vacios,
-   redactados_por_vos, instruccion}` (y `tipos_en_uso` si el slug es `recursos`, o
-   `antes_de_mostrar` si es `hitos` y la ficha salió con agujeros evitables).
+   redactados_por_vos, instruccion}` (y `tipos_en_uso`, que es de `recursos`).
 2. El asistente **no repite la ficha en el texto**: `gestion-agente.js` la pinta debajo del
    mensaje como una **tarjeta editable** (`tarjetaFicha()`), un input por campo, con
    `confirmaciones[].campos` (`[{nombre, label, tipo, valor, opciones?, redactado?}, …]`,
    armado por `fichas._campos_para_editar()` reusando el mismo `tipo`/`opciones` que declara
-   `ENTIDADES` para el form de /gestion o /historia). El asistente sólo agrega, debajo, 1 a 3
+   `ENTIDADES` para el form de /gestion). El asistente sólo agrega, debajo, 1 a 3
    preguntas cortas por lo que falta ("¿de qué medida es?", "¿sabés la marca?"). **No son
    bloqueantes**: si el usuario no contesta, se guarda igual — está en el prompt y en el
    `instruccion` de la ficha.
@@ -639,9 +595,11 @@ quedar guardado. Circuito:
    tarjeta). **Con dos o más** entra el circuito de revisión en lote (ver abajo). El
    resultado se agrega al historial como un turno más, con el nombre de lo que se guardó,
    para que el asistente sepa después que eso ya está y qué sigue pendiente.
-5. Escribir "dale, guardalo" también funciona: el modelo llama **otra vez con exactamente
-   los mismos campos** y el hash coincide. Los tres caminos —tocar el botón, editar la
-   tarjeta y escribir "dale"— terminan en el mismo lugar.
+5. **El modelo nunca guarda un alta**: mostrar la ficha es lo último que hace con ella. Si el
+   usuario escribe "dale, guardalo", `crear_entidad` vuelve a devolver la ficha y no escribe.
+   Lo único que escribe es `rutas._guardar_ficha()` —o sea `/confirmar` y `/lote`—, que pasa
+   `contexto_turno['confirmado_por_usuario']`; el modelo no puede ponerla porque no es un
+   parámetro de la tool.
 
 **Varias altas en un turno** (`_confirmaciones`). "Creá a Pablo y a Ezequiel" son dos
 llamadas a `crear_entidad` en la misma respuesta y **dos fichas con dos juegos de botones**.
@@ -664,8 +622,8 @@ daba de alta una sola sin que nada avisara. Tres reglas sostienen el caso:
   la sesión, al guardar la nueva reaparece sola en el turno siguiente y un segundo click da de
   alta el mismo recurso dos veces.
 
-El nombre va **dentro** del botón ("✅ Guardar persona: Pablo Errio"): con dos o tres
-seguidos, "Guardar persona" repetido no dice cuál es cuál.
+El nombre va **dentro** del botón ("✅ Guardar recurso: Multímetro Fluke 117"): con dos o
+tres seguidos, "Guardar recurso" repetido no dice cuál es cuál.
 
 ### Cargar de a muchas: el lote
 
@@ -770,31 +728,6 @@ usuario los lea sabiendo que son propuestos. `tipo` es texto libre, así que la 
 `recursos` incluye `tipos_en_uso` (`SELECT DISTINCT tipo`) para que reuse una categoría
 existente en vez de inventar un sinónimo nuevo por cada alta.
 
-**`antes_de_mostrar` — la ficha de hito que se revisa sola.** La ficha de `hitos` puede
-volver con una lista extra de avisos dirigidos al modelo (`_recordatorio_hito()`), que el
-prompt le manda resolver **antes** de escribirle nada al usuario. Existe porque el modelo
-armaba el hito "Pablo Errio y Ezequiel Toñanes — Certamen Nacional OMA" con
-`protagonistas` **vacío** (los nombres quedaban solo en el título, así que el vínculo con
-las personas no lo creaba nadie) y con `nivel` vacío pese a que el usuario acababa de decir
-"crítico" — y encima se lo volvía a preguntar. Los avisos son dos:
-- Si `protagonistas` está vacío, se cruzan `titulo` + `descripcion` contra la tabla
-  `personas` (`_personas_nombradas_en()`, ver abajo) y el aviso **nombra a las que
-  encontró**: es un dato concreto, no un "acordate de completar".
-- Si ese cruce no encuentra a nadie, el aviso lista **el padrón entero de personas con
-  ficha** (hasta `PADRON_EN_AVISO` = 40; más que eso lo manda a `buscar_entidad`). Es para
-  que un "nati" o un "el Errio" lo resuelva con los nombres a la vista en vez de irse a
-  buscar docentes a los horarios, que es otro padrón.
-- Si falta `nivel`, `fecha` o `tipo`, el aviso le recuerda cargarlo si el usuario ya lo dijo
-  y preguntar solo si no.
-
-**`_personas_nombradas_en(frase)`** compara con `texto.norm` y exige que estén **todas**
-las palabras del nombre (>2 letras), en cualquier orden — matchea "Errio Pablo" pero un
-"Pablo" suelto no alcanza: con dos Pablos, vincular al equivocado es peor que no vincular.
-**`_personas_parecidas(query)`** es su complemento suelto: acepta coincidencia parcial
-("nati" → "Natalia Boo Fiad"). Se puede permitir porque su resultado es un **aviso para que
-el modelo pregunte**, no un vínculo que se escriba solo — quien decide a quién se vincula
-sigue siendo la regla estricta.
-
 ### El padrón de horarios son dos tablas: docentes y no docentes
 
 `escuela.db` guarda a la gente de los horarios en tablas distintas: los que dan clase en
@@ -812,10 +745,8 @@ tablas, igual que ya hacía el autocompletado del SPA. De ahí comen `_buscar_pr
 **El rol viaja con el nombre.** `_buscar_profesor_scored` devuelve `(puntaje, nombre, rol)` y
 no `(puntaje, nombre)`: el padrón ya tenía el cargo y tirarlo era el bug — CALEI aparecía como
 un candidato más entre los docentes, sin nada que dijera que es la EMATP de renovables. Por eso
-`buscar_profesor` marca a cada candidato con su `rol`, y `buscar_entidad('personas', …)` lo pone
-en `en_horarios` y lo nombra en el aviso ("CALEI (EMATP EERR)"). Por lo mismo
-`_docentes_parecidos` pasó a llamarse **`_gente_horarios_parecida`** y devuelve `[(nombre, rol)]`:
-el nombre viejo empujaba a los avisos a decirle "docente" a un EMATP.
+`buscar_profesor` marca a cada candidato con su `rol` (así lo nombra el aviso: "CALEI (EMATP
+EERR)").
 
 **`horario_profesor` devuelve los dos horarios, no uno u otro**, porque los cargos conviven:
 
@@ -875,12 +806,8 @@ Tres cosas que sostienen el caso:
 - **Tope `LIMITE_PADRON` (400)**, el mismo de `LIMITE_LISTADO_COMPLETO`: arriba de eso va la
   `nota` sin la lista, y el texto se adapta (`if padron else ''`). Hoy son 344 y el margen es
   chico.
-- **La nota nombra los otros dos padrones** (`_otros_padrones`). El de horarios es uno de tres,
-  y decir "no está" habiendo mirado solo éste repite el mismo error un escalón más arriba. El
-  puntero a `buscar_entidad('personas', …)` sale **solo con permiso para verlas**
-  (`ve_entidad('personas', permisos)`): mandar al modelo a una tool que no se le entregó es
-  peor que callarse. Por eso `_horario_profesor_fmt` recibe `permisos` — no cambia **qué**
-  horario devuelve (los horarios son consulta abierta), solo cómo redacta esta nota.
+- **La nota nombra el otro padrón** (`_otros_padrones`). El de horarios es uno de dos, y
+  decir "no está" habiendo mirado solo éste repite el mismo error un escalón más arriba.
 
 El guardrail es de prompt y por eso vive en tres lugares que se refuerzan, igual que el de
 `listar_todos`: la `nota` de cada tool, la descripción del esquema (un campo que llega sin estar
@@ -953,57 +880,14 @@ Y para que la gente se **encuentre** sin entrar al padrón difuso, `buscar_profe
 esta tool. Los preceptores siguen sin tener horario de clases: eso no se responde con
 `horario_profesor`.
 
-### Dos padrones de personas, y el cruce en las dos direcciones
-
-Los docentes salen de **`escuela.db`** (los horarios) y las fichas de personas de
-**`gestion.db`**. Son padrones que **no se superponen**: un alumno que ganó una olimpiada, un
-egresado o un ex director tienen ficha y no dan clases; una profesora que nadie cargó todavía
-da clases y no tiene ficha. El modelo los mezclaba, priorizando los horarios y sin mostrar
-nunca las fichas de personas. Ante "nati fue quien lo logró" llamaba a `buscar_profesor`, veía
-tres docentes llamadas Natalia y ofrecía esas tres, mientras "Natalia Boo Fiad" estaba cargada
-con ficha.
-
-**Buscar una persona mira siempre los dos padrones**, entre por donde entre:
-
-| Se llama | Busca en | Cruza y agrega |
-|---|---|---|
-| `buscar_profesor(query)` | horarios | `personas_con_ficha` + `aviso` (la respuesta pasa de lista a dict) |
-| `buscar_entidad('personas', query)` | fichas | `en_horarios` + `aviso_horarios` |
-
-Y si **ninguno** de los dos encuentra nada, ninguna de las dos devuelve una lista vacía a secas:
-`buscar_entidad` manda a `listar_todos`, `buscar_profesor` adjunta el padrón (ver "Cuando no
-coincide nadie").
-
-Las dos solo agregan la clave **cuando hay coincidencia real**, así que los turnos normales
-—horarios por un lado, inventario por el otro— no cambian ni suman ruido. Y los dos avisos
-son distintos según el caso: si `personas` no encontró nada pero los horarios sí, el aviso le
-prohíbe explícitamente decir "no la tengo" y le ofrece dos salidas (resolver el horario con
-ese nombre, o proponer crearle la ficha).
-
-Va en el resultado de las tools y no (solo) en el system prompt porque para cuando el modelo
-llamó **ya eligió**: lo único que lo corrige a tiempo es lo que la herramienta le conteste.
-
-**`_coincide_fuerte(q_norm, nombre)`** es el filtro de todos los cruces laterales —los dos de
-persona, el de preceptores y el de cargos de `buscar_por_rol`—, y es más estricto que
-las búsquedas normales: substring, o similitud **palabra por palabra** ≥ `UMBRAL_SIMILITUD`
-(0.68). No usa el 0.6 de `_buscar_profesor_scored`, que ofrece candidatos a propósito: con
-0.6 el cruce de "nati" traía PETRATE MATIAS (0.60 contra "matias") y el de "calei" traía
-PRIETO VALERIA. Tampoco alcanza con substring solo — los apodos del castellano no son
-prefijos: "nati" **no** es substring de "natalia" (0.73 de similitud, sí pasa el umbral), y
-ése era justo el caso a resolver.
-
-**`/confirmar` crea el vínculo persona↔hito solo** (`_enlazar_protagonistas()`): al guardar
-un hito cruza su `protagonistas` contra `personas` con la misma función y escribe
-`persona_hitos` para cada match, sumándole al mensaje " Lo vinculé con la ficha de X.".
-**Tiene que ser código y no una instrucción al modelo**: el botón de confirmar no pasa por
-el LLM, así que en el momento en que el hito se escribe el agente no tiene ningún turno para
-llamar a `vincular_entidad`, y el vínculo no lo creaba nadie. Solo vincula personas ya
-cargadas; nunca crea una ficha de persona nueva.
-
-**Todo este cruce vive detrás de `historia.personas`**: sin ese permiso, `_buscar_profesor` devuelve
-sólo los docentes, el aviso del padrón en `_recordatorio_hito` no sale y `_enlazar_protagonistas` no
-escribe ni un vínculo (el hito se guarda igual, con sus `protagonistas` en texto). Es el mismo dato
-que esconde `personas` de `/historia` — ver "El segundo eje: la ENTIDAD, no la tool".
+**`_coincide_fuerte(q_norm, nombre)`** es el filtro de los cruces laterales de horarios —el
+de preceptores y el de cargos de `buscar_por_rol`—, y es más estricto que las búsquedas
+normales: substring, o similitud **palabra por palabra** ≥ `UMBRAL_SIMILITUD` (0.68). No usa
+el 0.6 de `_buscar_profesor_scored`, que ofrece candidatos a propósito: con 0.6 el cruce de
+"nati" traía PETRATE MATIAS (0.60 contra "matias") y el de "calei" traía PRIETO VALERIA.
+Tampoco alcanza con substring solo — los apodos del castellano no son prefijos: "nati" **no**
+es substring de "natalia" (0.73 de similitud, sí pasa el umbral), y ése era justo el caso a
+resolver.
 
 ### La hora en cada mensaje
 
@@ -1124,168 +1008,6 @@ DeepSeek (proveedor por defecto) es más frágil que con Claude:
 - la `instruccion` del resultado dice "estos son TODOS; si ninguno es, decilo — no ofrezcas
   el más parecido como si fuera el correcto";
 - la regla 3 del system prompt fija el orden de los tres pasos.
-
-**Con personas el protocolo es el mismo pero se resuelve en una sola llamada**: la tool devuelve
-el padrón entero en la misma respuesta en vez de mandar a pedirlo, igual que `buscar_por_rol`.
-El motivo del corte distinto y los números están en "Cuando no coincide nadie", más arriba.
-
-### Historia de la escuela (`consultar_historia`)
-
-Cuarta área del agente: lore institucional (fundación, nombre de la escuela, edificio) y
-guiños internos sobre gente de la casa. **Cuando se piden historias, no es el agente quien
-responde: es Emilio Mitre, el fantasma que habita la escuela desde su construcción.** Recorre
-todos los pasillos, ve y escucha todo. Por eso cuenta en primera persona con autoridad omnipotente.
-Las historias son literales del archivo — nunca improvisadas.
-
-**Estructura de archivos**:
-- **`historia_indice.json`** — índice comprimido: id, título, claves, tipo, resumen, tono, estilo.
-  Se cachea por mtime (pequeño, ~20KB). Recarga sola cuando cambia sin reiniciar.
-- **`historias/`** — directorio con un archivo JSON por historia (ej: `guino_canamas.json`).
-  Contiene: id, título, claves, tipo, resumen, tono, estilo, **texto completo**.
-  Se cargan bajo demanda (lazy-loading), no se cachean.
-
-Estructura por historia:
-```json
-{
-  "id": "guino_canamas",
-  "titulo": "Miriam Cañamas: el multímetro fallado",
-  "claves": ["cañamas", "miriam", "multimetro"],
-  "tipo": "guiño",
-  "fecha": "2008",
-  "resumen": "La anécdota de tercero que culpó al instrumento",
-  "tono": "nervioso",
-  "estilo": "primera persona, cómplice, como confesando",
-  "texto": "Miriam Cañamas tiene fama de escuchar todo..."
-}
-```
-
-**Campo `fecha`** (crítico): año o período aproximado. Determina el tono nostálgico de la historia.
-Una historia de 2005 + tono reflexivo = profundamente nostálgica. Sin fecha, es solo una anécdota.
-
-**Búsqueda** (`_historia_fmt`): sin tema devuelve índice completo. Con tema:
-- Busca en `claves`, `tono`, `estilo`, `titulo`, `resumen` (substring + difuso con umbral 0.72)
-- Devuelve tres modos:
-  * **directo**: 1 coincidencia exacta → devuelve historia completa + `instruccion_tono` (instrucciones para Emilio)
-  * **listar**: múltiples opciones → devuelve índice sin textos, usuario elige cuál historia quiere escuchar
-  * **no_encontrado**: nada coincide → instrucción de no inventar
-
-**Personalidad de Emilio**: en modo `directo`, la `instruccion_tono` le recordar a Claude que es
-Emilio Mitre, el fantasma omnipotente, contando desde su perspectiva de siglos. Cada historia
-especifica un `tono` (emociones: nervioso, reflexivo, misterioso, conmocionado, nostálgico) y
-un `estilo` (narrativa: primera persona, íntimo, cómplice, como confesando, etc.). El modelo
-respeta estas instrucciones y cuenta la historia con la voz de Emilio, no como un asistente
-que relata.
-
-La instrucción la arma **`_instruccion_tono(tono, estilo)`**, una sola fuente para las dos rutas
-de `consultar_historia` (por `tema` y por `id`). Es una función y no texto inline porque estuvo
-duplicada: la ruta por `id` — la que se usa cuando el usuario elige de un `listar`, o sea el
-camino más común — tenía una versión de dos líneas sin la regla anti-acotaciones.
-
-### La voz del personaje (`QUIEN_ES_EMILIO`, `EXCUSA_SIN_HISTORIA`)
-
-Con solo pedirle primera persona, las historias salían correctas pero **anónimas**: se presentaba,
-explicaba que era un fantasma, aclaraba que la escuela lleva su nombre y pedía permiso para
-empezar. Leídas seguidas parecían el conserje contando una anécdota, no el dueño del edificio.
-Dos constantes arreglan eso, y van **solo en el circuito de historias** (`_instruccion_tono` + la
-sección HISTORIA DE LA CASA del system prompt), no en las respuestas operativas:
-
-- **`QUIEN_ES_EMILIO`** — tres cosas juntas. *Con quién habla*: el otro ya sabe quién es, así que
-  no se presenta ni se explica; entra directo, con la familiaridad del que es dueño de la casa y
-  sabe que el otro está de visita. *Su orgullo*: sabe todo lo que pasa en la escuela y le encanta
-  que se note, cuenta como el único que estuvo ahí y deja caer que nadie más lo vio. La soberbia
-  es parte del personaje; maltratar al que pregunta, no — le halaga que le vengan a preguntar,
-  porque confirma que es el que sabe. *Y que no es una persona*, sin decirlo nunca: con solo
-  pedirle primera persona hablaba como un empleado con cuerpo ("yo estaba ahí parado"), que fue
-  el segundo problema reportado. Tres señales lo delatan y el prompt las nombra — no tiene cuerpo
-  ni lugar (no entró ni se acercó: **estaba**, porque está siempre y en todas partes a la vez),
-  nada lo tapa (escuchó lo que se dijo en voz baja, con la puerta cerrada, y no aclara cómo), y
-  el tiempo no le pesa (veinte años son "el otro día"; los que estaban ya no están y él sigue).
-
-  **De acá sale, además, el fundamento de la regla anti-acotaciones**: no describe lo que hace
-  con el cuerpo porque **no tiene cuerpo**. Las dos reglas dejaron de ser independientes, y en
-  `COMO_CUENTA_EMILIO` está escrito así — es una consecuencia del personaje, no una prohibición
-  de estilo caída del cielo.
-- **`EXCUSA_SIN_HISTORIA`** — qué hace cuando no tiene la historia: no admite un agujero en su
-  memoria de un siglo, zafa con una excusa obvia y absurda dicha con naturalidad ("justo esa
-  semana estaba en el subsuelo peleándome con la caldera"). Se interpola en las **tres** `nota`
-  de `no_encontrado` (índice vacío, sin coincidencias por tema, id inexistente). El chiste se
-  apoya en el punto anterior: la excusa **se contradice con el personaje** —está en todos lados
-  al mismo tiempo, así que "estaba ocupado en otra parte" no se lo cree nadie— y la dice igual,
-  sin inmutarse. Ahí está la gracia, y por eso el prompt le pide que no se haga cargo del chiste.
-
-**Dónde termina el personaje** — es el límite que sostiene todo lo demás, y está escrito en el
-system prompt además de acá:
-
-- La excusa **reemplaza el "no sé", nunca los hechos**. Es un chiste de personaje, no un permiso
-  para inventar: la respuesta tiene que seguir dejando clarísimo que esa historia no existe. Sin
-  esta línea, la excusa absurda es exactamente el borde por el que se cuela la fabricación de
-  anécdotas que el resto del prompt trabaja para evitar.
-- Y vale **solo para historias y lore**. Un horario, un stock, un recurso o una persona que no
-  están cargados se contestan derecho: "no hay datos de eso". Al que busca una herramienta o va
-  corriendo a dar clase, un chiste le cuesta una vuelta al pañol al vacío. Ahí sigue valiendo el
-  agente bifásico de siempre (DECISIONS 2026-08-08): fantasma orgulloso en las historias,
-  herramienta neutra en lo operativo.
-
-### Emilio cuenta, no actúa (`_quitar_acotaciones`)
-
-Decirle al modelo que hable en primera persona como un fantasma le activa el registro de
-roleplay, y empieza a **actuar** el personaje: `*se acomoda los anteojos*`, `—mirando el
-patio—`, `EMILIO:` antes de hablar. Mismo esquema de defensa que los id — prompt **y** filtro
-de salida:
-
-- **`COMO_CUENTA_EMILIO`** (constante en `agente/lore.py`): se interpola en el **system prompt** y en
-  cada `instruccion_tono`. Va en el system prompt porque **los resultados de tools no se
-  persisten en el historial**: en un turno de seguimiento ("¿y después qué pasó?") la
-  `instruccion_tono` ya no está en contexto y lo único que el modelo tiene a la vista es su
-  propia respuesta actuada del turno anterior, que imita.
-
-  Está redactada como **instructivo de qué hacer**, no como lista de prohibiciones: "escribís
-  únicamente las palabras que Emilio dice en voz alta", cómo transmitir el clima con lo dicho
-  (si es un secreto, "esto no lo repitas"; si da para resignarse, "y bueno, así es acá") y un
-  **test** que el modelo aplica solo — *¿esta oración se puede pronunciar?*. La primera versión
-  era negativa ("no escribas acotaciones de gestos, no marcas de guion") y funcionó peor por dos
-  razones: le dejaba al modelo deducir la forma correcta, y para nombrar lo prohibido había que
-  escribir el ejemplo malo en el prompt, que es justo lo que después copiaba. Hoy **no hay ni
-  una acotación de muestra** en el prompt.
-- **`_quitar_acotaciones()`**: filtro de salida en `chat()`, junto a `_ocultar_ids()` y también
-  **antes de persistir**, así el turno siguiente no arranca con el ejemplo malo en el historial.
-  Barre cursivas de una sola marca (`*...*`, no `**bold**`), corchetes, tramos entre rayas
-  (`—...—`) y la etiqueta `EMILIO:` / `**Emilio:**` al principio de línea.
-- **`_quitar_oraciones_gesto()` / `_es_oracion_gesto()`**: las acotaciones **sin marcar**.
-  Prohibirle las marcas no le quita la costumbre de actuar — encuentra la vuelta y escribe el
-  mismo gesto como prosa suelta ("Baja la voz, se acerca un poco." / "Se encoge de hombros."),
-  que fue exactamente lo que pasó al probar la primera versión. La señal que las delata es
-  gramatical: Emilio habla en primera persona y las historias están en pasado, así que una
-  oración corta, entera en tercera del presente y sin sujeto solo puede ser él describiéndose
-  desde afuera. Se borra la oración **solo si todas sus cláusulas son gesto**: "Baja la voz, se
-  acerca un poco." se va entera, pero "Sonríe y sigue la clase como si nada" se queda porque la
-  segunda mitad dice algo. Los núcleos de gesto están **listados a mano** (`_GESTO_NUCLEO`) en
-  vez de inferidos por conjugación: la lista se queda corta ante un gesto nuevo, pero no se come
-  una oración real, que es el error caro.
-- **`_parece_gesto()`** decide qué se borra, y es deliberadamente conservador: nunca toca un
-  tramo con números (los datos técnicos y las fechas los tienen: `*Panel solar 100 W*` es
-  contenido, y `—fundada en 1957—` es un paréntesis legítimo), y de ahí pide o una frase con
-  señal de gesto (reflexivo inicial, gerundio, palabra de la lista) o una sola palabra que ya
-  sea un gesto (`*suspira*`, `*riéndose*`). Se preferió que se escape una acotación rara antes
-  que borrar contenido real. Los verbos que existen en imperativo quedaron **fuera** de la
-  lista de una palabra: `*mirá*` es una cursiva válida.
-
-También se sacó el vocabulario de teatro de la doc de historias: el `estilo` se le pasa
-**literal** al modelo, así que `"diálogos"` o `"dramático"` en ese campo son un pedido de
-guion. Ver `HISTORIAS_PROCEDIMIENTO.md`.
-
-**Gatillo de personalidad**: Emilio solo cobra vida cuando se consultan historias. Para tareas
-prácticas (horarios, inventario), sigue siendo una herramienta eficiente sin personaje.
-Así alguien que consulta un horario en medio de la jornada obtiene info rápida, sin interrupciones
-de lore.
-
-**Por qué textos literales**: dejarlo improvisar anécdotas dispara la conducta que el prompt desactiva
-(fabricación de historias), y el modelo no sabe que el permiso termina en anécdotas. Por eso textos
-vienen del JSON siempre, jamás generados. `no_encontrado` devuelve instrucción explícita de no inventar,
-no lista vacía que invita a rellenar.
-
-**Costo**: índice cachea siempre (~250 tokens por turno). Historias completas se pagan solo cuando se
-leen (varían, típicamente 200–500 tokens por historia).
 
 ### Alta desde foto (datasheets, etiquetas, chapas de características)
 
@@ -1658,12 +1380,11 @@ entera en orden — es cómo se pasa de "este turno salió mal" a "qué venía p
 
 ### Guardias de seguridad / guardrails de prompt
 
-- **Confirmación en dos turnos para eliminar**: el *system prompt* instruye a Claude a nunca
-  ejecutar `eliminar_entidad` en el mismo turno en que se pide el borrado. Primero debe
-  responder qué va a borrar y esperar una confirmación explícita del usuario en el turno
-  siguiente. Es una guardrail de prompt (coherente con "/gestion" siendo "traba de desarrollo,
-  no seguridad completa"), reforzada por la auditoría.
-- **Confirmación de alta con ficha**: a diferencia del borrado, el alta **no** depende del
+- **No hay tool que elimine una entidad**: un recurso no se borra nunca, sale del inventario
+  dándolo de baja desde la web (ver `agent_docs/gestion-conocimiento.md`). El *system prompt*
+  se lo dice así al agente cuando le piden "borrar algo", en vez de dejarlo inventar un
+  camino que no existe.
+- **Confirmación de alta con ficha**: el alta **no** depende del
   prompt — `crear_entidad` no escribe hasta que el hash de la ficha coincida con uno mostrado
   en un turno anterior (ver "Alta con ficha de confirmación"). Vale también para las altas
   desde foto: la foto llena la ficha, no la base.
@@ -1702,10 +1423,10 @@ entera en orden — es cómo se pasa de "este turno salió mal" a "qué venía p
   `AGENTE_VISION_API_BASE` (default el endpoint OpenAI-compatible de Google). Con la key
   puesta, el alta desde foto anda con **cualquier** `AGENTE_PROVIDER`, incluido el default.
 - **Env var** `AGENTE_API_BASE` — para APIs custom (Ollama, self-hosted).
-- **Costo**: cada mensaje del chat arrastra el system prompt + los esquemas de las tools, ~15.000
+- **Costo**: cada mensaje del chat arrastra el system prompt + los esquemas de las tools, ~10.000
   tokens de entrada, tenga foto o no — eso domina la factura, no las respuestas. **Un acceso de
-  solo consulta paga bastante menos**: 12 esquemas en vez de 20, y un prompt más corto (sin el
-  circuito de alta, el bloque de hitos ni el de fotos). Por eso el lector de
+  solo consulta paga bastante menos**: menos de 10 esquemas en vez de 20, y un prompt más corto
+  (sin el circuito de alta ni el bloque de fotos). Por eso el lector de
   fotos va aparte (~2.000 tokens por foto) en vez de mandarle la imagen al agente. Las
   lecturas (búsquedas, horarios) agregan poco (~100–500 tokens); las escrituras
   (create/edit) más, porque la salida de la tool vuelve a entrar al modelo. El
@@ -1713,33 +1434,11 @@ entera en orden — es cómo se pasa de "este turno salió mal" a "qué venía p
 
 ### La columna de nombre no siempre se llama `nombre`
 
-El circuito de alta asumía una columna `nombre`, y `hitos` la llama `titulo`. Lo que sostiene
-que el agente trate a todas las entidades igual:
-- **`_crear_entidad`** valida `crud.campo_nombre(cfg)` de la entidad, no `'nombre'`.
-- **`_nombre_de(slug, campos)`** resuelve el nombre visible de una ficha. Hace falta porque
-  `campos` es el dict que armó el modelo, no una fila de la DB: ahí **no** llega el alias de
-  `crud.select()`. Sin esto el botón de confirmar y el "✅ Guardado" salían en blanco para `hitos`.
-- **`CAMPOS_REDACTADOS`** incluye `'titulo'` además de `'nombre'`.
-- **Los esquemas de `crear_entidad` / `editar_entidad` exponen `titulo`**, más `nivel`,
-  `etiquetas`, `protagonistas` y `fecha`. `required` es `['slug']` a secas: si hace falta
-  `nombre` o `titulo` lo decide `_crear_entidad` contra `crud.campo_nombre`, la única fuente.
-- **Las lecturas van por `crud.select()`**, que agrega `titulo AS nombre`: `_buscar_entidad_fmt`,
-  `_listar_todos_fmt`, `_detalle_entidad_fmt` y `crud.snapshot_entidad` devuelven `nombre` en todos
-  los slugs. `_listar_todos_fmt` y `_detalle_entidad_fmt` tenían la query cruda
-  (`SELECT id, nombre …` / `SELECT * …`) y con `hitos` daban `no such column: nombre` y una
-  ficha sin `nombre` respectivamente — arreglado 2026-08-10 al separar los módulos.
-- **`vincular_entidad`** con `personas ↔ hitos` anda en las dos direcciones: `hitos` declara
-  `rel_personas` como espejo de `personas.rel_hitos` sobre la misma tabla `persona_hitos`.
-
-`hitos` tiene además una tool de lectura propia, **`buscar_hitos(etiqueta, desde_fecha,
-hasta_fecha)`**, que ordena por nivel y fecha — el CRUD genérico cubre la escritura, ésa cubre
-la consulta de la línea del tiempo. Lee de `historia.db`.
-
-El system prompt describe **cinco áreas** (horarios, inventario, historia/lore, línea
-del tiempo, personas). La sección de PERSONAS le marca dos cosas que el código no puede forzar:
-que la semblanza institucional **no** se mezcla con las anécdotas literales de
-`consultar_historia`, y que antes de crear una persona hay que buscarla, porque una segunda
-ficha del mismo docente le parte la historia en dos.
+Hoy `recursos` es la única entidad y su columna de nombre se llama `nombre`, pero el circuito
+de alta no lo asume: valida `crud.campo_nombre(cfg)` de la entidad, no el string `'nombre'`
+a mano, precisamente para que una entidad de dominio futura con otra columna (como fue
+`hitos`, que la llamaba `titulo`, antes de que `/historia` se extrajera del código) entre sin
+tocar `_crear_entidad`, `_nombre_de` ni las lecturas (`crud.select()`, que arma el alias).
 
 ### Claves de `relaciones` en `detalle_entidad`
 
@@ -1747,8 +1446,7 @@ ficha del mismo docente le parte la historia en dos.
 `modulo.secciones_detalle()`, y **la clave que elige cambia lo que el modelo entiende**:
 
 - Si el `slug` de la sección es una entidad real (está en `modulo.ENTIDADES`), la clave **es
-  el slug** (`hitos`, `personas`): así el modelo puede pasarla tal cual a `buscar_entidad` /
-  `detalle_entidad`.
+  el slug**: así el modelo puede pasarla tal cual a `buscar_entidad` / `detalle_entidad`.
 - Si no lo es, manda el **título** (hoy, sólo `"Ubicación"` en recursos: el desglose por
   lugar no es una entidad y no tiene id que pasarle a ninguna tool).
 
@@ -1759,7 +1457,9 @@ como prosa no puede depender de un detalle de routing.**
 
 ### Integración con los módulos de dominio
 
-- Reusan `ENTIDADES` de los dos módulos (config declarativa), resueltos por `_modulo(slug)`.
+- Reusa `ENTIDADES` de `gestion.py` (config declarativa), resuelto por `_modulo(slug)` — que
+  queda como función (no `gestion` directo) para que un área de dominio nueva entre sin tocar
+  `tools/`.
 - **Toda la lectura/escritura genérica pasa por `crud.py`** (capa 1), con el área como primer
   argumento: `crud.conectar`, `crud.buscar_entidad`, `crud.guardar_entidad`,
   `crud.snapshot_entidad`, `crud.agregar_relacion_m2m`, `crud.quitar_relacion_m2m`,
@@ -1770,9 +1470,8 @@ como prosa no puede depender de un detalle de routing.**
   desglose de recursos por unidad (`mover_unidades`, `lugares_recurso_agrupado`) es exclusivo
   del área de recursos y no pasa por el motor.
 - **`texto.norm` / `texto.puntaje_busqueda` / `texto.UMBRAL_SIMILITUD`** son la única fuente de
-  normalización y búsqueda difusa del archivo, para las tres fuentes de datos. Antes esto se le
-  pedía a `gestion._norm` o a `historia._norm` según el call site, sin criterio — funcionaba sólo
-  porque las dos copias eran idénticas (ver `dev-log/DECISIONS.md` 2026-08-10).
+  normalización y búsqueda difusa del archivo, para las dos fuentes de datos (horarios y
+  gestión).
 - Reusan queries de `horarios/datos.py`: `aulas_libres()` (calcula libres vs ocupadas en `clases` a
   tiempo real, agrupadas por piso de `FLOOR_MAPPING`) y la familia `ocupacion_curso` /
   `ocupacion_profesor` / `ocupacion_no_docente` / `ocupacion_preceptor`, que devuelven todas

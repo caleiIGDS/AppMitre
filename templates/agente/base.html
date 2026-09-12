@@ -63,9 +63,6 @@
            página, que muestra los que este acceso puede abrir. Sin condición de permiso
            porque `gestion.leer` es de UN inventario y acá no hay ninguno activo. #}
         <a href="{{ url_for('inventarios.panel') }}">INVENTARIOS</a>
-        {% if 'historia' in areas and puede('historia.leer') %}
-        <a href="{{ url_for('historia.home') }}">HISTORIA INSTITUCIONAL</a>
-        {% endif %}
         {% if puede('salidas.leer') %}
         <a href="{{ url_for('salidas.lista') }}">SALIDAS EDUCATIVAS</a>
         {% endif %}

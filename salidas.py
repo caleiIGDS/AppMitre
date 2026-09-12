@@ -8,7 +8,7 @@
 # usa para préstamos: tabla y rutas propias, escritas a mano, reutilizando sólo lo
 # compartido (accesos, crud.conectar/init_db, respaldos, layout de templates).
 #
-# Usa su propia DB (salidas.db). A diferencia de gestion.db/historia.db, sus filas tienen
+# Usa su propia DB (salidas.db). A diferencia de gestion.db, sus filas tienen
 # vigencia: al año de guardadas se borran solas (fila + PDFs) — ver _purgar_vencidas().
 #
 # El PDF de cada anexo NO se arma con un layout a mano por anexo: un solo renderer
@@ -33,7 +33,6 @@ from fpdf import FPDF, FontFace
 
 import accesos
 import crud
-import estudiantes
 from config import DIR_DATOS, ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION, ahora
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -68,6 +67,19 @@ TABLA_TESTIGO = 'salidas_meta'
 # datos sensibles (DNI, salud) más de lo necesario, en línea con el mismo criterio que ya
 # se usó para el formulario ("no persistente en la compu que se esté usando").
 VIGENCIA_DIAS = 365
+
+# Los respaldos de esta área CADUCAN, a diferencia de los del resto. Una salida vencida se
+# borra de salidas.db a los 365 días, pero seguía viva para siempre en el "primero de cada
+# día" que conserva respaldos.py: purgar la fila y dejar el respaldo es teatro. 60 días es
+# lo que un respaldo sirve de verdad acá — restaurar un salidas.db de hace un año recupera
+# lo viejo y pierde todo lo cargado desde entonces, así que nadie lo haría. Los últimos
+# respaldos.BACKUP_MAX se conservan igual aunque sean más viejos (ver respaldos._a_borrar).
+BACKUP_MAX_DIAS = 60
+
+# Cada cuánto se purgan las vencidas. `_purgar_vencidas` corría sólo desde `init_db()`, o
+# sea una vez por arranque del proceso: en un hosting donde el web app puede no reciclarse
+# en meses, eso es "nunca".
+INTERVALO_PURGA_HORAS = 24
 
 ENTIDADES = {}  # no es una entidad de crud.py — ver el comentario de arriba del archivo
 
@@ -127,7 +139,9 @@ def migrar(cur):
         cur.execute("UPDATE salidas SET token = ? WHERE id = ?", (_generar_token(), fila['id']))
     # `salidas_familias` (lo que completaba cada familia por el link público) se retiró:
     # ahora ese formulario no persiste nada del lado de la escuela (ver dev-log/DECISIONS.md
-    # 2026-08-16) — la tabla vieja, si existe, la limpia actualizar.py en el deploy.
+    # 2026-08-16). La tabla vieja, si existe, la borra `retirar_datos_sensibles` (PASO 4.7
+    # de actualizar.py): no se hace acá porque `migrar` corre en cada arranque y tirar filas
+    # con datos de salud sin preview y sin que nadie lo pida es lo que ese script evita.
 
 
 def init_db():
@@ -136,10 +150,6 @@ def init_db():
     un año sin salidas activas nunca se confunda con un archivo perdido."""
     crud.init_db(sys.modules[__name__])
     _purgar_vencidas()
-    # estudiantes.py no es un área registrada en accesos (sin blueprint ni permiso
-    # propio) — es el padrón que alimenta el autocompletado de la tabla de Personas, así
-    # que su ciclo de vida lo maneja esta área en vez de app.py.
-    estudiantes.init_db()
 
 
 def _purgar_vencidas():
@@ -152,6 +162,30 @@ def _purgar_vencidas():
     cur.execute("DELETE FROM salidas WHERE vigencia_hasta < ?", (ahora_iso,))
     con.commit()
     con.close()
+
+
+# Última vez que este proceso purgó. Sin persistir a propósito: es una optimización para
+# no releer la tabla en cada request, no un registro de nada. Un reinicio purga de nuevo,
+# que es justo lo que queremos.
+_ultima_purga = None
+
+
+def _purgar_si_toca():
+    """Purga las vencidas a lo sumo una vez cada INTERVALO_PURGA_HORAS.
+
+    Va como before_request de los DOS blueprints del área: si sólo estuviera en `bp`, un
+    año en que nadie de la escuela abre /salidas no purgaría nada, y el link público es
+    justamente la ruta que más se visita desde afuera. `_purgar_vencidas` es idempotente,
+    así que dos workers purgando el mismo día no molestan.
+    """
+    global _ultima_purga
+    if _ultima_purga and (ahora() - _ultima_purga) < timedelta(hours=INTERVALO_PURGA_HORAS):
+        return
+    _ultima_purga = ahora()
+    _purgar_vencidas()
+
+
+bp.before_request(_purgar_si_toca)
 
 
 def _carpeta_pdfs(id):
@@ -1081,7 +1115,7 @@ def lista():
 def nueva():
     normativa = _cargar_normativa()
     return render_template('salidas/formulario.html', activo='nueva', datos_precargar=None, id_editar=None,
-                           normativa=normativa, estudiantes=estudiantes.listar_para_autocomplete())
+                           normativa=normativa)
 
 
 @bp.route('/nueva-tabs')
@@ -1102,8 +1136,7 @@ def nueva_tabs():
         variante = '1'
     normativa = _cargar_normativa()
     return render_template('salidas/formulario_tabs.html', activo='nueva', datos_precargar=None,
-                           id_editar=None, normativa=normativa, variante=variante,
-                           estudiantes=estudiantes.listar_para_autocomplete())
+                           id_editar=None, normativa=normativa, variante=variante)
 
 
 @bp.route('/<int:id>/editar')
@@ -1118,7 +1151,7 @@ def editar(id):
     datos_precargar = json.loads(fila['datos_json'])
     normativa = _cargar_normativa()
     return render_template('salidas/formulario.html', activo='nueva', id_editar=id, datos_precargar=datos_precargar,
-                           normativa=normativa, estudiantes=estudiantes.listar_para_autocomplete())
+                           normativa=normativa)
 
 
 @bp.route('/api/guardar', methods=['POST'])
@@ -1173,23 +1206,6 @@ def api_guardar():
 
     _generar_pdfs(id, anexos)
     return jsonify({'id': id})
-
-
-@bp.route('/api/estudiantes/csv', methods=['POST'])
-@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
-def api_cargar_estudiantes():
-    """Reemplaza todo el padrón de estudiantes (estudiantes.db) por el CSV subido —
-    ver estudiantes.cargar_csv. Es carga anual completa, no alta incremental."""
-    if 'file' not in request.files:
-        return jsonify({'ok': False, 'error': 'No se envió ningún archivo.'}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'ok': False, 'error': 'Archivo vacío.'}), 400
-    try:
-        cantidad = estudiantes.cargar_csv(file.stream)
-        return jsonify({'ok': True, 'cantidad': cantidad})
-    except ValueError as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
 
 
 @bp.route('/<int:id>')
@@ -1283,6 +1299,7 @@ def instructivo():
 # (/salidas) porque es la misma área — Flask no tiene problema con dos blueprints en el
 # mismo prefijo mientras las rutas no choquen.
 bp_publico = Blueprint('salidas_familia', __name__, url_prefix='/salidas')
+bp_publico.before_request(_purgar_si_toca)
 
 
 def _salida_por_token(token):

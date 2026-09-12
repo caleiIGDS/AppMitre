@@ -2,17 +2,21 @@
 
 ## Qué es esta app
 
-**AppMitre** son **cinco áreas** sobre el mismo Flask, para la **Escuela Técnica Emilio Mitre**. Cada una tiene su archivo, su prefijo de URL y (las que tienen datos propios) **su propia DB, sin FK que crucen de una a otra**.
+**AppMitre** son **cuatro áreas** sobre el mismo Flask, para la **Escuela Técnica Emilio Mitre**. Cada una tiene su archivo, su prefijo de URL y (las que tienen datos propios) **su propia DB, sin FK que crucen de una a otra**.
 
 | Área | URL | Archivo | DB | Qué es |
 |---|---|---|---|---|
 | **Horarios** | `/horarios` | `horarios/` (paquete) | `database/escuela.db` | Consulta de horarios por curso (1°–7°), profesor, aula y preceptor; dashboard "En Vivo" para kiosco; export a PDF. Se regenera desde Google Sheets. **Sitio aparte**: login propio (`HORARIOS_CLAVE`), config y datos propios, **no pasa por `accesos`**. `/` sólo redirige acá. |
 | **Gestión de recursos** | `/gestion` | `gestion.py` | `gestion.db` (registro) + `inventarios/<slug>.db` | **Varios inventarios estancos**: `/gestion` es la lista y `/gestion/<inv>/…` uno abierto. Cada uno tiene su archivo, su clave y su encargado, que adentro reparte los permisos. El admin general los crea, nombra y elimina, y **no ve el contenido**. |
-| **Historia institucional** ⏸ | `/historia` | `historia.py` | `historia.db` | **APAGADA** (`historia.ACTIVA = False`): hitos y personas no se montan — sin rutas, sin permisos en el catálogo, sin tools ni una línea de prompt en el agente. La DB queda intacta; se prende poniendo el flag en `True`. |
-| **Asistente** | `/agente` | `agente/` (paquete) | `agente.db` (+ las de arriba) | Chat con tool-calling. Único transversal: **lee las áreas prendidas** y escribe en recursos. `agente.db` es sólo el registro de uso y de chats (`/agente/uso`). |
+| **Asistente** | `/agente` | `agente/` (paquete) | `agente.db` (+ las de arriba) | Chat con tool-calling. Único transversal: **lee horarios** y escribe en recursos. `agente.db` es sólo el registro de uso y de chats (`/agente/uso`). |
 | **Salidas educativas** | `/salidas` | `salidas.py` | `salidas.db` | Legajo digital de una salida (Anexos III–IX, Res. 3871/24): formulario de carga, guardado con vigencia de 1 año y generación de PDF por anexo. |
 
-**Quién entra a qué.** El sistema de horarios es un **sitio aparte** con su propia contraseña (`HORARIOS_CLAVE`, ver `horarios/acceso.py`): no usa nada de lo de abajo. El resto (gestión, historia, agente, salidas, accesos) pasa por `accesos.py` — **tres niveles** (detalle en `agent_docs/accesos.md`): **Público** ya casi no ve nada, sólo el canje de invitación y el link de familias de salidas. **Interno** son dispositivos habilitados por un link de invitación de un solo uso, cada uno con su conjunto de permisos (`agente.escribir`, `salidas.leer`, …). **Admin** entra con `GESTION_CLAVE` y tiene el comodín `'*'`. Un área declara sus `PERMISOS` y entra sola al catálogo y a los perfiles: agregar un área nueva **no toca el gate ni migra los accesos ya dados**.
+> Hasta 2026-09 hubo una quinta área, **Historia institucional** (`/historia`, hitos y
+> personas) más un lore de la escuela narrado por un personaje dentro del agente. Se
+> extrajeron del código — ver `dev-log/DECISIONS.md` — y el material archivado queda fuera
+> del repo, con una guía para reimplementarlos si hiciera falta.
+
+**Quién entra a qué.** El sistema de horarios es un **sitio aparte** con su propia contraseña (`HORARIOS_CLAVE`, ver `horarios/acceso.py`): no usa nada de lo de abajo. El resto (gestión, agente, salidas, accesos) pasa por `accesos.py` — **tres niveles** (detalle en `agent_docs/accesos.md`): **Público** ya casi no ve nada, sólo el canje de invitación y el link de familias de salidas. **Interno** son dispositivos habilitados por un link de invitación de un solo uso, cada uno con su conjunto de permisos (`agente.escribir`, `salidas.leer`, …). **Admin** entra con `GESTION_CLAVE` y tiene el comodín `'*'`. Un área declara sus `PERMISOS` y entra sola al catálogo y a los perfiles: agregar un área nueva **no toca el gate ni migra los accesos ya dados**.
 
 **El comodín tiene un límite, y es a propósito.** Un permiso puede declararse **con ámbito** (`PERMISOS_AMBITO`): se guarda prefijado (`inv:7/gestion.editar`) y vale sólo adentro de ese compartimento — a esas claves `'*'` **no llega**. Hoy las usa gestión: el admin general administra la lista de inventarios sin poder abrir ninguno, y adentro manda el encargado, que entra con la clave de SU inventario y reparte permisos sólo ahí. Ser encargado de uno no da nada en el de al lado.
 
@@ -21,7 +25,7 @@
 Las áreas **no duplican código**: comparten un motor. Las dependencias van siempre hacia arriba y **la capa 1 nunca importa un área** — las recibe como argumento.
 
 ```
-capa 2   gestion.py   historia.py   agente/                            ← nombran tablas reales
+capa 2   gestion.py   agente/                                          ← nombran tablas reales
 capa 1      crud.py + templates/crud/   ·   accesos.py                 ← saben "entidad" y "permiso",
                                                                          no cuáles
 capa 0        config.py    texto.py    respaldos.py    fotos_disco.py  ← no nombran nada del dominio
@@ -34,7 +38,7 @@ autónomo con su propia config, su propio gate y sus propios datos. No importa `
 
 **La pregunta para ubicar cualquier función es una sola: ¿qué nombra?** Si nombra una tabla, un slug o una ruta, es del área y quien la necesite la importa de ahí. Si no nombra nada del dominio, sube. Lo específico de un área entra al motor por **hooks declarados** (`migrar`, `seed`, `derivados`, `secciones_detalle`, …), nunca por un `if slug == '...'` dentro de `crud.py`. Detalle completo en `agent_docs/crud-motor.md`.
 
-También se comparte lo que no es lógica de dominio: `static/global.css` (paleta, reset y escudo del header), `static/gestion.css` (estilos específicos de gestión/historia/agente/salidas), `static/img-utils.js` (compresión de imágenes client-side, la usan el chat y la galería de fotos), `static/gestion-agente.js`, `static/mobile-nav.js` (menú lateral de celular) y el widget del chat.
+También se comparte lo que no es lógica de dominio: `static/global.css` (paleta, reset y escudo del header), `static/gestion.css` (estilos específicos de gestión/agente/salidas), `static/img-utils.js` (compresión de imágenes client-side, la usan el chat y la galería de fotos), `static/gestion-agente.js`, `static/mobile-nav.js` (menú lateral de celular) y el widget del chat.
 
 **Usuarios principales:** alumnos, docentes, preceptores y administración.  
 **Stack:** Flask + SQLite + Vanilla JS (sin frameworks). Sin tests, sin linter, sin build step.
@@ -69,26 +73,25 @@ Google Sheets (CSV export por año: 1ro–7mo + preceptores + personal)
 
 | Archivo | Rol |
 |---------|-----|
-| `config.py` | Branding, `ahora()` (el reloj de la escuela), `PRODUCCION`, `SESION_DIAS` (capa 0). Compartido por gestión/historia/agente/salidas/accesos. **No lo usa horarios** (tiene `horarios/config.py`). Nadie llama a `datetime.now()`: el server de producción corre en UTC |
+| `config.py` | Branding, `ahora()` (el reloj de la escuela), `PRODUCCION`, `SESION_DIAS` (capa 0). Compartido por gestión/agente/salidas/accesos. **No lo usa horarios** (tiene `horarios/config.py`). Nadie llama a `datetime.now()`: el server de producción corre en UTC |
 | `texto.py` | Normalización de texto y búsqueda difusa (capa 0). Único dueño de `UMBRAL_SIMILITUD` |
 | `respaldos.py` | Respaldos rotativos de SQLite, parametrizados por área (capa 0) |
 | `fotos_disco.py` | Archivo en disco de cada foto de entidad (`database/fotos/<uuid><ext>`), capa 0: no nombra ninguna tabla, sólo guarda/sirve/borra por uuid. No entra en la rotación de `respaldos.py` (son inmutables) |
 | `crud.py` | Motor CRUD genérico + rutas (capa 1). No importa ningún área |
 | `accesos.py` | Motor de accesos y permisos (capa 1), hermano de `crud.py`: gate, catálogo de permisos, perfiles, links de invitación y panel `/accesos`. DB propia `accesos.db`. No nombra ningún permiso de área. **Horarios no pasa por acá** |
-| `actualizar.py` | Script de consola para el deploy: pone al día una `gestion.db`/`historia.db` vieja. Hace lo que `migrar()` no puede porque cruza las dos DBs (mudanza de hitos/personas, `proyectos` → hitos) y limpia tablas y columnas que el código ya no declara. Idempotente, con `--dry-run`. No toca `escuela.db` |
+| `actualizar.py` | Script de consola para el deploy: pone al día una `gestion.db` vieja. Hace lo que `migrar()` no puede porque cruza DBs (permisos `gestion.*` al pasar a varios inventarios) y limpia tablas y columnas que el código ya no declara. Idempotente, con `--dry-run`. No toca `escuela.db` |
 | `app.py` | Bootstrap Flask: crea la app, `SECRET_KEY`, config de sesión, registra los blueprints de las áreas, `/` → redirect a `/horarios/` |
 | `horarios/` | Sistema de horarios (`/horarios`): paquete autónomo. `__init__.py` (blueprint + guards), `config.py` (SHEET_ID, GIDs, FLOOR_MAPPING, branding propio), `acceso.py` (login con `HORARIOS_CLAVE`), `datos.py` (schema `escuela.db`, descarga CSV, normalización), `rutas.py` (SPA + API + PDF). Expone `bp`, `init_db`, `cargar_inicial`. Su DB es lo único que no vive adentro del paquete: está en `database/`, como todas |
 | `templates/index.html` | Shell SPA — pasa `window.APP_DATA` al JS |
 | `static/js/script.js` | Toda la lógica frontend (~1500 líneas) |
 | `static/global.css` | Paleta compartida, reset base, escudo (`.marca`), header genérico y el `@font-face` de Roboto Mono auto-hospedada (capa 0). Va como `<link>` propio en cada plantilla, **antes** de `gestion.css`/`horarios.css` |
-| `static/gestion.css` | Estilos específicos de gestión/historia/agente/salidas (tablas, fichas, widget del agente, galería, etc). No importa `global.css`: la plantilla carga las dos hojas en paralelo |
+| `static/gestion.css` | Estilos específicos de gestión/agente/salidas (tablas, fichas, widget del agente, galería, etc). No importa `global.css`: la plantilla carga las dos hojas en paralelo |
 | `static/horarios.css` | Estilos específicos del sistema de horarios (calendario, dashboard, tema oscuro, etc). Mismo criterio que `gestion.css` |
 | `horarios/nombre_mapeos.json` | Correcciones manuales de nombres de docentes (lo lee `horarios/datos.py`; opcional — si no está, no se aplica ningún mapeo) |
 | `gestion.py` | Gestión de recursos: el registro de inventarios (`bp_inv`, `/gestion`) y un inventario abierto (`bp`, `/gestion/<inv>`), sus entidades y hooks (incluidos `db_path`/`prefijo_backup`, que resuelven el archivo por request) + el desglose de recursos por ubicación |
-| `historia.py` | Historia institucional (`/historia`): declara sus entidades y hooks (`derivados`, `clave_persona`) |
 | `agente/` | Asistente conversacional (`/agente`): paquete con blueprint, tools, prompt y loop + templates en `templates/agente/`. Expone `bp` e `init_db`; el mapa de los módulos está en `agente/__init__.py` |
 | `templates/crud/` | `lista/form/detalle/login.html` genéricos; cada área deja un stub que los extiende |
-| `static/mobile-nav.js` | Menú lateral ocultable de celular para `/gestion`, `/historia` y `/agente` (≤900px). No toca escritorio |
+| `static/mobile-nav.js` | Menú lateral ocultable de celular para `/gestion` y `/agente` (≤900px). No toca escritorio |
 
 ---
 
@@ -210,7 +213,7 @@ Completa `hora_fin` faltante buscando el patrón horario conocido más cercano; 
 
 ## Config
 
-- **`config.py`** (raíz): sólo lo compartido por gestión/historia/agente/salidas/accesos —
+- **`config.py`** (raíz): sólo lo compartido por gestión/agente/salidas/accesos —
   branding (`ESCUELA_NOMBRE/LOGO/VERSION`), `DIAS`, `ahora()`, `PRODUCCION`, `SESION_DIAS`.
 - **`horarios/config.py`**: todo lo del sistema de horarios — `SHEET_ID`, `GIDS`,
   `FLOOR_MAPPING`, `TURNO_CURSOS`, `TURNO_DEFAULT`, `ESPECIALIDAD_CURSOS`, `APPSCRIPT_URL/SECRET`,
@@ -243,7 +246,8 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 ## Deployment
 
 - **Hosting:** PythonAnywhere (WSGI) + Cloudflare DNS. Antes fue Render.com — ver `dev-log/DECISIONS.md` 2026-06-25
-- **Todas las bases viven en `database/`** (`gestion.db`, `accesos.db`, `salidas.db`, `historia.db`, `estudiantes.db`, `agente.db`, `escuela.db`, más `inventarios/<slug>.db` y la rotación de `backups/`). Qué guarda cada una y qué pasa si se pierde: `database/LEEME.md`, que es lo único de esa carpeta que va a git. **Persisten entre deploys** y están en `.gitignore`: `git pull` nunca las pisa. Son la fuente de verdad y sólo tienen los respaldos de `respaldos.py`, con dos excepciones a propósito: `escuela.db` se regenera desde Sheets y `agente.db` es telemetría que crece sin techo (ver `dev-log/DECISIONS.md`). `salidas_pdfs/` (también en `.gitignore`, contiene DNI y datos de salud) no tiene respaldo propio: se regenera solo la próxima vez que se guarda esa salida, y se purga junto con su fila al año. `agente.md` (las notas del asistente, ver `agent_docs/agente-asistente.md`) también está en `.gitignore` y por la misma razón que los `.db`: lo escriben la app y el agente, así que un archivo versionado se pisaría en cada `git pull`
+- **Producción está en uso, esta máquina no.** Lo que corre en PythonAnywhere es la instalación real de la escuela: datos vivos y gente usándola. El ciclo es siempre el mismo — se codea acá, se prueba en `localhost:5000`, se pushea, y en PythonAnywhere `git pull` + Reload. **Lo único que viaja es código**: las `.db` de `database/` acá son de desarrollo (`inventarios/general.db`, `prueba.db`) y los inventarios de verdad, más cargados y más al día, están sólo allá. Nunca subir una `.db` local, y nunca sacar conclusiones sobre producción contando filas en una base de acá: lo que tenga que cambiar datos del server llega por `migrar()` o por `actualizar.py`, no por el repo
+- **Todas las bases viven en `database/`** (`gestion.db`, `accesos.db`, `salidas.db`, `agente.db`, `escuela.db`, más `inventarios/<slug>.db` y la rotación de `backups/`). Qué guarda cada una y qué pasa si se pierde: `database/LEEME.md`, que es lo único de esa carpeta que va a git. **Persisten entre deploys** y están en `.gitignore`: `git pull` nunca las pisa. Son la fuente de verdad y sólo tienen los respaldos de `respaldos.py`, con dos excepciones a propósito: `escuela.db` se regenera desde Sheets y `agente.db` es telemetría que crece sin techo (ver `dev-log/DECISIONS.md`). `salidas_pdfs/` (también en `.gitignore`, contiene DNI y datos de salud) no tiene respaldo propio: se regenera solo la próxima vez que se guarda esa salida, y se purga junto con su fila al año. `agente.md` (las notas del asistente, ver `agent_docs/agente-asistente.md`) también está en `.gitignore` y por la misma razón que los `.db`: lo escriben la app y el agente, así que un archivo versionado se pisaría en cada `git pull`
 - **Deploy:** `git pull` → `pip install -r requirements.txt` → `python actualizar.py --dry-run` → `python actualizar.py` → Reload del web app. Las variables de entorno (`SECRET_KEY`, `GESTION_CLAVE`, `HORARIOS_CLAVE`, `SHEETS_PROXY_URL`, `SHEETS_PROXY_SECRET`, las API keys del agente) van en el `.env` del servidor, que tampoco viaja por git
 - **`SECRET_KEY`, `GESTION_CLAVE` y `HORARIOS_CLAVE` son obligatorias en producción**: sin ellas la app no arranca (se exigen cuando detectan `PYTHONANYWHERE_DOMAIN`). En local caen a un default de desarrollo con un aviso por consola. `HORARIOS_CLAVE` es la contraseña del sistema de horarios (`/horarios`), independiente de `GESTION_CLAVE`. Lo mismo `SHEETS_PROXY_URL` y `SHEETS_PROXY_SECRET`: el Drive de horarios es privado y sólo se lee vía el Web App de Apps Script (`apps_script/`), firmando cada request con HMAC sobre el timestamp; sin ellas no arranca en producción y en local `descargar_sheet()` lanza `RuntimeError`. Ojo: **cambiar `GESTION_CLAVE` cierra todas las sesiones de admin** (es el botón de pánico) y **rotar `SECRET_KEY` desloguea también a todos los dispositivos**, que hay que volver a invitar
 - **La primera vez, `accesos.db` nace vacía**: no hay ningún dispositivo habilitado y el único acceso es el de administración con `GESTION_CLAVE`. Desde `/accesos` se invita al resto. La crea sola `accesos.init_db()`, tanto al arrancar como desde `actualizar.py`
@@ -273,11 +277,10 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 - Motor CRUD compartido, criterio de capas, contrato de área, hooks, templates genéricos (`crud.py`, `texto.py`, `respaldos.py`, `templates/crud/`) → leer `agent_docs/crud-motor.md`
 - Quién puede entrar a qué: los tres niveles (público/interno/admin), permisos por área, **permisos con ámbito** (el comodín que no llega), links de invitación y dispositivos (`accesos.py`, `accesos.db`, `/accesos`) → leer `agent_docs/accesos.md`
 - Gestión de recursos: varios inventarios estancos, uno por archivo (`/gestion`, `gestion.py`, `gestion.db` + `inventarios/<slug>.db`) → leer `agent_docs/gestion-conocimiento.md`
-- Historia institucional (`/historia`, `historia.py`, `historia.db`: hitos y personas) — **área apagada**, ver `historia.ACTIVA` → leer `agent_docs/historia-institucional.md`
 - Salidas educativas (`/salidas`, `salidas.py`, `salidas.db`, `salidas_pdfs/`, generación de PDF por anexo, vigencia y purga) → leer `agent_docs/salidas-educativas.md`
 - Asistente conversacional (`/agente`, paquete `agente/`, tools, fichas de confirmación, fotos) → leer `agent_docs/agente-asistente.md`
 - Qué guarda cada `.db`, qué se regenera y qué no, y cómo restaurar un respaldo → leer `database/LEEME.md`
-- Historias narradas por Emilio (`historias/*.json`, lore — NO confundir con `/historia`): cómo agregar, campos, tonos y estilos → leer `HISTORIAS_PROCEDIMIENTO.md`
+- Historia institucional y el lore de Emilio (`/historia`, hitos, personas, `historias/*.json`) — **extraídos del código en 2026-09**, ver `dev-log/DECISIONS.md`
 
 ## Dev Log
 

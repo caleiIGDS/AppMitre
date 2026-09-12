@@ -6,6 +6,28 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-09-12] — El padrón de estudiantes deja el servidor y pasa al navegador
+
+**Archivos**: `estudiantes.py` borrado; `static/salidas-padron.js` nuevo; `salidas.py`,
+`app.py`, `actualizar.py`, `crud.py`, `respaldos.py`, `lista.html`, `formulario.html`.
+Se van `POST /salidas/api/estudiantes/csv`, `estudiantes.db` y el `ESTUDIANTES` que las
+tres rutas del formulario embebían (~139 KB por carga): ahora es `window.Padron`.
+`respaldos.respaldar`/`_a_borrar` aceptan `max_dias` y `respaldos.podar()` es nueva; un área
+puede declarar `BACKUP_MAX_DIAS` (hook opcional de `crud.init_db`).
+
+---
+
+## [2026-09-11] — `/historia` y el lore del agente salen del código
+
+**Archivos**: `historia.py`, `init_historia.py`, `historias/*.json` borrados; `app.py`,
+`actualizar.py`, ~11 archivos de `agente/`, 5 `base.html` editados. El agente pasa de ~24 a
+20 tools: sin `consultar_historia`/`buscar_hitos`/`vincular_entidad`/`desvincular_entidad`/
+`eliminar_entidad`, sin campos de hito en `crear_entidad`/`editar_entidad`,
+`agente.dominio.SLUGS_ENTIDAD` sólo trae `recursos`. Si tenías una rama vieja que asumía
+`historia.ACTIVA = True` o el slug `personas`, no van a existir más.
+
+---
+
 ## [2026-09-09] — `recursos.cantidad` deja de editarse a mano: es el COUNT de `recurso_unidades`
 
 **Archivos**: `gestion.py`, `crud.py`, `templates/crud/form.html`, `templates/gestion/{form,bajas}.html`, `agente/tools/entidades.py`, `static/gestion.css`

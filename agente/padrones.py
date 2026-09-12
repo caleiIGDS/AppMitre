@@ -1,23 +1,16 @@
-"""Los padrones de personas de la escuela, y los cruces entre ellos.
+"""El padrón de gente de los horarios (docentes + personal no docente), y los preceptores.
 
-Los docentes salen de `escuela.db` (los horarios) y las fichas de personas de
-`historia.db`. NO se superponen: un alumno que ganó una olimpiada tiene ficha y no da
-clases; una profesora que nadie cargó da clases y no tiene ficha. El modelo los mezcla,
-así que buscar una persona mira siempre los dos lados — y el aviso viaja en el resultado
-de la tool, no en el system prompt, porque para cuando el modelo llamó ya eligió.
+Los docentes y el personal no docente salen de `escuela.db`. Los PRECEPTORES son una
+tercera fuente (`horarios_preceptores`) y tienen un trato distinto: sus nombres están
+cargados sin normalizar ("ANGELINA", "KARINA (M RIOS)", "FALTA"), así que NO entran al
+padrón difuso —ensuciarían las sugerencias de `buscar_profesor`— y se consultan por su
+propia tool, que los devuelve ya digeridos (una fila por curso, con titular y contraturno
+separados).
 
-Los PRECEPTORES son una tercera fuente (`horarios_preceptores`) y tienen un trato
-distinto: sus nombres están cargados sin normalizar ("ANGELINA", "KARINA (M RIOS)",
-"FALTA"), así que NO entran al padrón difuso —ensuciarían las sugerencias de
-`buscar_profesor`— y se consultan por su propia tool, que los devuelve ya digeridos
-(una fila por curso, con titular y contraturno separados).
-
-Vive fuera de `tools/` porque lo usan varias tools (horarios, entidades, fichas).
+Vive fuera de `tools/` porque lo usan varias tools (horarios, entidades).
 """
 import difflib
 
-import crud
-import historia
 import texto
 from config import DIAS
 from horarios import datos as database
@@ -91,8 +84,9 @@ def _buscar_profesor_scored(query):
 
 def _personas_conocidas():
     """Nombres conocidos (profesores + personal no docente), ordenados. Es el padrón
-    completo que usa `_padron_completo_horarios` como segundo nivel de `buscar_profesor`
-    cuando la búsqueda difusa no encuentra a nadie."""
+    completo de HORARIOS —pese al nombre, no tiene nada que ver con fichas de personas—
+    que usa `_padron_completo_horarios` como segundo nivel de `buscar_profesor` cuando la
+    búsqueda difusa no encuentra a nadie."""
     return sorted(_padron_horarios())
 
 
@@ -227,29 +221,17 @@ def _preceptores_parecidos(query):
     return [n for n in _lista_preceptores() if _coincide_fuerte(q, n)]
 
 
-def _personas_cargadas():
-    """[(id, nombre)] de todas las personas, para cruzar nombres contra texto libre.
-    `personas` vive en historia.db (se separó de gestion.db) — ver dev-log/DECISIONS.md."""
-    con = crud.conectar(historia)
-    filas = con.execute("SELECT id, nombre FROM personas WHERE TRIM(nombre) <> ''").fetchall()
-    con.close()
-    return [(f[0], f[1]) for f in filas]
-
-
 def _coincide_fuerte(q_norm, nombre):
-    """¿`nombre` coincide con lo buscado lo bastante como para cruzarlo de padrón?
+    """¿`nombre` coincide con lo buscado lo bastante como para tratarlo como un match fuerte?
 
-    Los cruces entre los dos padrones de personas (ver `_buscar_profesor` y
-    `_buscar_entidad_fmt`) usan esto en vez del puntaje de las búsquedas normales. Un cruce
-    es una sugerencia lateral: si no es fuerte, conviene callarse.
+    Usan esto los cruces de preceptores y de cargos (`_preceptores_parecidos`,
+    `_roles_no_docentes`), donde alcanza con substring o con una similitud fuerte y no con
+    el puntaje laxo de las búsquedas normales.
 
     Substring alcanza, pero no basta con eso: los apodos del castellano no son prefijos
-    ("nati" no es substring de "natalia"), y ese era justo el caso que motivó todo esto. Así
-    que se compara **palabra por palabra** con `texto.UMBRAL_SIMILITUD`, el mismo del resto del
-    sistema — no con el 0.6 laxo de `_buscar_profesor_scored`, que ofrece candidatos a
-    propósito. La diferencia se nota: con 0.6, "nati" traía PETRATE MATIAS (0.60 contra
-    "matias") y "calei" traía PRIETO VALERIA; con 0.68, "nati" sigue trayendo Natalia (0.73)
-    y esos dos se caen.
+    ("nati" no es substring de "natalia"). Así que se compara **palabra por palabra** con
+    `texto.UMBRAL_SIMILITUD`, el mismo del resto del sistema — no con el 0.6 laxo de
+    `_buscar_profesor_scored`, que ofrece candidatos a propósito.
     """
     n = texto.norm(nombre or '')
     if not q_norm or not n:
@@ -264,56 +246,3 @@ def _coincide_fuerte(q_norm, nombre):
                for p in palabras):
             return True
     return False
-
-
-def _personas_parecidas(query):
-    """Personas con ficha que coinciden con `query`, de mejor a peor. [(id, nombre)].
-
-    Es el complemento suelto de `_personas_nombradas_en`: acá alcanza con que matchee
-    parcialmente ("nati" → "Natalia Boo Fiad"), porque el resultado es un AVISO para que el
-    modelo pregunte, no un vínculo que se escriba solo. La regla estricta de nombre completo
-    sigue siendo la que decide a quién se vincula de verdad.
-    """
-    q = texto.norm(query or '')
-    if not q:
-        return []
-    puntuadas = []
-    for pid, nombre in _personas_cargadas():
-        if not _coincide_fuerte(q, nombre):
-            continue
-        puntuadas.append((texto.puntaje_busqueda(q, nombre) or 1.0, pid, nombre))
-    puntuadas.sort(key=lambda x: (-x[0], x[2]))
-    return [(pid, nombre) for _, pid, nombre in puntuadas]
-
-
-def _gente_horarios_parecida(query):
-    """Gente de los horarios que coincide con `query`. Espejo de `_personas_parecidas`.
-
-    Devuelve [(nombre, rol)] — `rol` es el cargo no docente o None. No se llama
-    `_docentes_parecidos` porque el padrón dejó de ser solo docentes cuando se le sumó
-    `personal_no_docente`, y el nombre viejo empujaba a los avisos a decirle "docente" a
-    un EMATP.
-    """
-    q = texto.norm(query or '')
-    if not q:
-        return []
-    return [(n, rol) for _, n, rol in _buscar_profesor_scored(query) if _coincide_fuerte(q, n)]
-
-
-def _personas_nombradas_en(frase):
-    """Personas ya cargadas cuyo nombre aparece en `frase`.
-
-    Compara normalizado (sin acentos ni mayúsculas) y acepta el orden dado vuelta
-    ("Errio Pablo"), que es como aparece medio inventario. Devuelve [(id, nombre)].
-    Solo matchea nombres COMPLETOS: un "Pablo" suelto no alcanza, porque puede haber
-    dos y vincular a la persona equivocada es peor que no vincular.
-    """
-    t = texto.norm(frase or '')
-    if not t:
-        return []
-    encontradas = []
-    for pid, nombre in _personas_cargadas():
-        partes = [p for p in texto.norm(nombre).split() if len(p) > 2]
-        if partes and all(p in t for p in partes):
-            encontradas.append((pid, nombre))
-    return encontradas

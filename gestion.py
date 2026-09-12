@@ -94,7 +94,7 @@ PERMISO_AUDITORIA = 'gestion.auditoria'
 PERMISO_ACCESOS = 'gestion.accesos'
 PERMISO_REGISTRO = 'inventarios.admin'
 # Hook opcional que lee crud.py: quién puede girar una foto ya cargada. Si un área no lo
-# declara (historia), el botón pide el permiso de escritura de siempre.
+# declara, el botón pide el permiso de escritura de siempre.
 PERMISO_ROTAR_FOTO = 'gestion.rotar'
 
 # Respaldos rotativos: la maquinaria vive en respaldos.py (capa 0). Acá sólo se declara
@@ -608,8 +608,7 @@ def migrar(cur):
 
 
 # Qué decir cuando un UNIQUE de la DB rechaza el guardado (si no, sale un 500 pelado).
-# Vacío: ninguna entidad de este módulo tiene un UNIQUE de negocio (a diferencia de
-# historia.personas, que sí lo necesita — ver historia.ERROR_DUPLICADO).
+# Vacío: ninguna entidad de este módulo tiene un UNIQUE de negocio.
 ERROR_DUPLICADO = {}
 
 

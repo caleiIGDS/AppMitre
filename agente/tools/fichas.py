@@ -14,10 +14,7 @@ import crud
 import gestion
 from config import ahora
 
-from ..db import conectar
-from ..dominio import SLUGS_ENTIDAD, _modulo, ve_entidad
-from ..padrones import _personas_cargadas, _personas_nombradas_en
-PADRON_EN_AVISO = 40       # personas con ficha que se listan enteras en un aviso de tool
+from ..dominio import SLUGS_ENTIDAD, _modulo
 
 # ============================================================================
 # Ejecutores de tools de ESCRITURA (auditados en agente_log)
@@ -27,13 +24,12 @@ PADRON_EN_AVISO = 40       # personas con ficha que se listan enteras en un avis
 # Alta en dos pasos: ficha → confirmación del usuario → escritura
 # ---------------------------------------------------------------------------
 
-# SLUGS_ENTIDAD y _modulo() están definidos arriba, junto a los imports de gestion/historia.
+# SLUGS_ENTIDAD y _modulo() están definidos arriba, junto a los imports de gestion.
 
 # Campos que el asistente REDACTA a partir de lo que contó el usuario, en vez de
 # pedirlos literalmente ("¿qué descripción le pongo?"). Se marcan en la ficha para que
 # el usuario sepa que ese texto lo escribió el asistente y lo lea con esa expectativa.
-# 'titulo' es el 'nombre' de los hitos (ver crud.campo_nombre).
-CAMPOS_REDACTADOS = ('nombre', 'titulo', 'tipo', 'descripcion')
+CAMPOS_REDACTADOS = ('nombre', 'tipo', 'descripcion')
 
 # Campos REALES de la entidad que NO se pintan en la ficha de alta: se completan solos y
 # el usuario no los edita ahí. `fecha_revision` de un recurso arranca siempre en la fecha
@@ -51,7 +47,7 @@ SLUG_CON_LUGAR = 'recursos'
 
 
 def _campos_validos(slug):
-    """Nombres de campo de la entidad, en el orden del formulario de /gestion o /historia."""
+    """Nombres de campo de la entidad, en el orden del formulario de /gestion."""
     cfg = _modulo(slug).ENTIDADES.get(slug) or {}
     return [c['nombre'] for c in cfg.get('campos', [])]
 
@@ -60,8 +56,9 @@ def _nombre_de(slug, campos):
     """El nombre visible de una ficha de alta.
 
     `campos` es el dict que armó el modelo, no una fila de la DB, así que acá **no** llega
-    el alias de `crud.select()`: en `hitos` la clave es 'titulo'. Sin esto el botón de
-    confirmar y el "✅ Guardado" salían con el nombre en blanco.
+    el alias de `crud.select()`: si la entidad usara otra columna de nombre (ver
+    `crud.campo_nombre`), el botón de confirmar y el "✅ Guardado" saldrían con el nombre en
+    blanco sin este `.get`.
     """
     modulo = _modulo(slug)
     return campos.get(crud.campo_nombre(modulo.ENTIDADES.get(slug, {})), '')
@@ -184,68 +181,17 @@ def _tipos_en_uso():
     Van en la ficha para que el asistente reuse una existente en vez de inventar una
     nueva en cada alta: `tipo` es texto libre y sin esto se llena de sinónimos
     ("Herramienta"/"Herramientas"/"Herramienta manual") que no sirven para agrupar.
+
+    Va por `gestion.conectar()` —el .db del inventario activo— y no por el `conectar()` del
+    agente, que es `gestion.db`: ahí viven las conversaciones y el log, no `recursos`.
     """
-    con = conectar()
+    con = gestion.conectar()
     filas = con.execute(
         "SELECT DISTINCT tipo FROM recursos WHERE tipo IS NOT NULL AND TRIM(tipo) <> '' "
         "ORDER BY tipo COLLATE NOCASE"
     ).fetchall()
     con.close()
     return [f[0] for f in filas]
-
-
-def _recordatorio_hito(borrador, permisos):
-    """Aviso para el modelo cuando una ficha de hito sale con agujeros evitables.
-
-    Va acá y no (solo) en el system prompt porque llega como resultado de tool, en el
-    mismo turno y con los nombres concretos: el modelo escribía "Pablo Errio y Ezequiel
-    Toñanes" en el título y dejaba `protagonistas` vacío, y después le preguntaba al
-    usuario la importancia que el usuario le acababa de decir.
-
-    La mitad de `protagonistas` cruza el padrón de fichas, así que sale sólo con permiso
-    para ver `personas`: si no, el aviso le pondría delante al modelo justo los nombres
-    que el permiso esconde. El resto de los avisos (nivel, fecha, tipo) no depende de eso.
-    """
-    avisos = []
-
-    if not borrador.get('protagonistas') and ve_entidad('personas', permisos):
-        texto = (borrador.get('titulo', '') + ' ' + borrador.get('descripcion', ''))
-        nombradas = _personas_nombradas_en(texto)
-        if nombradas:
-            avisos.append(
-                'En el título/descripción de este hito nombrás a personas que YA están '
-                'cargadas: ' + ', '.join(n for _, n in nombradas) + '. El campo '
-                '`protagonistas` está VACÍO: completalo con esos nombres y volvé a llamar a '
-                'crear_entidad. No se lo preguntes al usuario, ya te lo dijo.'
-            )
-        else:
-            aviso = ('El campo `protagonistas` está vacío. Si el usuario nombró personas o '
-                     'cursos (aunque los hayas puesto en el título), van ahí: completalo y '
-                     'volvé a llamar a crear_entidad.')
-            # El padrón completo, no una búsqueda: el usuario dice "nati" o "el Errio" y el
-            # modelo no tiene con qué resolverlo. Teniendo los nombres a la vista, ata el
-            # apodo solo, en vez de irse a buscar docentes a los horarios — que es otro
-            # padrón y donde estas personas no están.
-            cargadas = _personas_cargadas()
-            if cargadas and len(cargadas) <= PADRON_EN_AVISO:
-                aviso += (' Las personas CON FICHA hoy son: '
-                          + ', '.join(n for _, n in cargadas) + '.')
-            elif cargadas:
-                aviso += (' Si nombró a alguien en particular, buscalo con '
-                          "buscar_entidad('personas', ...).")
-            if cargadas:
-                aviso += (' Si el usuario nombró a una de ellas (aunque sea por apodo o solo '
-                          'el nombre de pila), es esa: no la busques con buscar_profesor, que '
-                          'son los docentes de los horarios y es otro padrón.')
-            avisos.append(aviso)
-
-    for campo, etiqueta in (('nivel', 'nivel'), ('fecha', 'fecha'), ('tipo', 'tipo')):
-        if not borrador.get(campo):
-            avisos.append(
-                f'Falta `{etiqueta}`. Si el usuario ya lo dijo en la conversación, cargalo y '
-                f'volvé a llamar a crear_entidad; recién si NO lo dijo, preguntáselo.'
-            )
-    return avisos
 
 
 def _campos_para_editar(slug, borrador):
@@ -341,30 +287,28 @@ def _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos, foto=No
         resultado['tipos_en_uso'] = _tipos_en_uso()
         if borrador.get('_sub_recursos'):
             resultado['sub_recursos'] = borrador['_sub_recursos']
-    if slug == 'hitos':
-        avisos = _recordatorio_hito(borrador, permisos)
-        if avisos:
-            resultado['antes_de_mostrar'] = avisos
     return resultado
 
 
 def _crear_entidad(slug, campos_dict, contexto_turno=None, permisos=frozenset(), foto=None,
                    sub_recursos=None, ubicacion=None):
-    """Alta de recurso/hito/persona, en DOS PASOS.
+    """Alta de una entidad de dominio (hoy sólo recursos), en DOS PASOS.
 
-    Primera llamada con un juego de campos: no toca la base, devuelve la ficha para que el
-    asistente se la muestre al usuario. Segunda llamada con LOS MISMOS campos (ya en otro
-    turno, después del OK): escribe.
+    Llamada desde el MODELO: nunca escribe. Arma la ficha y la devuelve para que el
+    asistente se la muestre. Ahí termina lo que el modelo puede hacer con un alta.
+
+    Llamada desde los BOTONES (`rutas._guardar_ficha`, que es lo que usan `/confirmar` y
+    `/lote`): escribe. Se distingue por `contexto_turno['confirmado_por_usuario']`, que el
+    modelo no tiene forma de poner — no es un parámetro de la tool, y el loop del chat arma
+    ese dict sin la marca.
 
     Lo que hace que la confirmación signifique algo es que la ficha se identifica por un
-    hash de su CONTENIDO: si entre la ficha y el alta cambia aunque sea un campo, el hash
-    es otro y vuelve a pedir confirmación — no se puede guardar algo distinto de lo que el
-    usuario leyó, y "cambiame la ubicación" cae solo en el paso de revisión.
+    hash de su CONTENIDO: el botón manda sólo el token, los campos salen de la sesión, y si
+    entre la ficha y el alta cambió un campo el hash es otro y no se guarda — no se puede
+    escribir algo distinto de lo que el usuario leyó.
 
     Los hashes ya mostrados viajan en `contexto_turno['fichas_previas']`, que el endpoint
-    de chat carga de la sesión y vuelve a guardar. Tiene que ser la SESIÓN y no el turno:
-    los resultados de tools no se persisten en el historial, así que cuando el usuario
-    contesta "dale" el modelo ya no tiene a la vista nada de la ficha anterior.
+    de chat carga de la sesión y vuelve a guardar.
 
     Es un guard de código y no una regla del system prompt a propósito: las reglas del
     prompt este agente a veces las cumple y a veces no, y acá se escribe en el inventario
@@ -376,7 +320,8 @@ def _crear_entidad(slug, campos_dict, contexto_turno=None, permisos=frozenset(),
     if slug not in SLUGS_ENTIDAD:
         return {'ok': False, 'error': f'Slug desconocido: {slug}. Usá {", ".join(SLUGS_ENTIDAD)}.'}
     modulo = _modulo(slug)
-    # No es siempre 'nombre': en `hitos` el campo obligatorio se llama 'titulo'.
+    # No siempre es 'nombre' (ver crud.campo_nombre): queda genérico por si otra entidad
+    # de dominio usa otra columna.
     campo_nombre = crud.campo_nombre(modulo.ENTIDADES[slug])
     if not campos_dict.get(campo_nombre):
         return {'ok': False, 'error': f'El campo "{campo_nombre}" es obligatorio.'}
@@ -400,10 +345,11 @@ def _crear_entidad(slug, campos_dict, contexto_turno=None, permisos=frozenset(),
     token = _token_ficha(slug, borrador)
     previas = contexto_turno.setdefault('fichas_previas', {})
 
-    # Si esta ficha exacta no se mostró en un turno anterior, el usuario no la aprobó.
-    # (Una mostrada en ESTE turno tampoco cuenta: hasta que el loop no termina, el usuario
-    # no vio una sola palabra — por eso se anotan aparte, en `fichas_mostradas`.)
-    if token not in previas:
+    # El alta la aprueba el USUARIO desde los botones, nunca el modelo. Que vuelva a mandar
+    # una ficha idéntica no es una aprobación: eso lo hace solo cuando cree que le dijeron
+    # que sí, y lo creyó con un "?" — 33 altas de una foto se dispararon así (ver
+    # dev-log/DECISIONS.md). Sin la marca de los botones, esto SIEMPRE devuelve la ficha.
+    if not contexto_turno.get('confirmado_por_usuario') or token not in previas:
         return _ficha_confirmacion(slug, borrador, token, contexto_turno, permisos, foto)
 
     # Se consume: si el asistente vuelve a llamar con los mismos campos, es un alta nueva

@@ -13,19 +13,15 @@ import accesos
 
 from ..db import _ahora, conectar
 from ..dominio import ve_entidad
-from ..lore import (EXCUSA_SIN_HISTORIA, _cargar_historia_completa, _historia_fmt,
-                    _instruccion_tono)
 from ..notas import escribir as _escribir_notas
 from ..vision import MODO_DEFAULT
-from .entidades import (_buscar_entidad_fmt, _desvincular_entidad, _detalle_entidad_fmt,
-                        _editar_entidad, _eliminar_entidad, _listar_alias_fmt,
-                        _listar_todos_fmt, _vincular_entidad)
+from .entidades import (_buscar_entidad_fmt, _detalle_entidad_fmt,
+                        _editar_entidad, _listar_alias_fmt, _listar_todos_fmt)
 from .esquemas import (PERMISO_EXTRA_POR_TOOL, PERMISO_POR_TOOL, TOOLS_AUDITADAS,
                        TOOLS_ESCRITURA, TOOLS_FOTO, TOOLS_NOTAS, TOOLS_SCHEMA,
                        slug_visible, tools_permitidas)
 from .fichas import _crear_entidad, _editar_sub_recurso, _eliminar_sub_recurso
 from .fotos import _adjuntar_foto_entidad, _leer_foto_fmt
-from .hitos import _buscar_hitos_fmt
 from .horarios import (_aulas_libres_fmt, _buscar_por_rol_fmt, _buscar_profesor,
                        _coincidencias_fmt, _horario_aula_fmt, _horario_curso_fmt,
                        _horario_profesor_fmt, _preceptores_fmt)
@@ -92,9 +88,9 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
             _auditar(tool_name, tool_input, None, resultado, ok=False)
         return resultado
 
-    # Segundo eje: la tool puede estar permitida y la ENTIDAD que le pasan no. `personas`
-    # pide `historia.personas` (ver crud.permiso_entidad), y eso no se puede resolver con
-    # PERMISO_POR_TOOL porque no depende de la tool sino del slug que venga en el input.
+    # Segundo eje: la tool puede estar permitida y la ENTIDAD que le pasan no (una entidad
+    # puede pedir un permiso propio, ver crud.permiso_entidad) — eso no se puede resolver
+    # con PERMISO_POR_TOOL porque no depende de la tool sino del slug que venga en el input.
     for clave in ('slug', 'slug_origen', 'slug_destino'):
         slug = tool_input.get(clave)
         if slug and not ve_entidad(slug, permisos):
@@ -134,35 +130,6 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
         elif tool_name == 'detalle_entidad':
             resultado = _detalle_entidad_fmt(tool_input.get('slug', ''),
                                              tool_input.get('id', 0), permisos)
-        elif tool_name == 'consultar_historia':
-            # Si pasan ID directamente, carga esa historia (de historias/*.json — lore, no
-            # confundir con el módulo `historia` de hitos/personas, ver dev-log/DECISIONS.md)
-            if tool_input.get('id'):
-                historia_lore = _cargar_historia_completa(tool_input.get('id'))
-                if historia_lore:
-                    instruccion_tono = _instruccion_tono(
-                        historia_lore.get('tono', 'reflexivo'),
-                        historia_lore.get('estilo', 'primera persona'))
-                    resultado = {
-                        'modo': 'directo',
-                        'historia': historia_lore,
-                        'instruccion_tono': instruccion_tono
-                    }
-                else:
-                    resultado = {
-                        'modo': 'no_encontrado',
-                        'nota': f'No existe la historia con ID "{tool_input.get("id")}". '
-                                f'{EXCUSA_SIN_HISTORIA}'
-                    }
-            else:
-                resultado = _historia_fmt(tool_input.get('tema', ''))
-        elif tool_name == 'buscar_hitos':
-            resultado = _buscar_hitos_fmt(
-                etiqueta=tool_input.get('etiqueta'),
-                desde_fecha=tool_input.get('desde_fecha'),
-                hasta_fecha=tool_input.get('hasta_fecha'),
-                limite=tool_input.get('limite', 50)
-            )
         elif tool_name == 'crear_entidad':
             # `foto`, `sub_recursos` y `ubicacion` quedan AFUERA de los campos: no son
             # columnas de la entidad — `foto` es de qué imagen salió la ficha,
@@ -195,17 +162,10 @@ def ejecutar_tool(tool_name, tool_input, contexto_turno=None, permisos=None):
                 tool_input.get('recurso_asignado'))
         elif tool_name == 'eliminar_sub_recurso':
             resultado = _eliminar_sub_recurso(tool_input.get('id', 0), tool_input.get('item_id', 0))
-        elif tool_name == 'vincular_entidad':
-            resultado = _vincular_entidad(tool_input.get('slug_origen'), tool_input.get('id_origen'), tool_input.get('slug_destino'), tool_input.get('id_destino'))
-        elif tool_name == 'desvincular_entidad':
-            resultado = _desvincular_entidad(tool_input.get('slug_origen'), tool_input.get('id_origen'), tool_input.get('slug_destino'), tool_input.get('id_destino'))
         elif tool_name == 'mover_ubicacion':
             resultado = _mover_ubicacion_fmt(tool_input.get('recurso', ''), tool_input.get('destino'),
                                              numeros=tool_input.get('numeros'), cantidad=tool_input.get('cantidad'),
                                              origen=tool_input.get('origen'))
-        elif tool_name == 'eliminar_entidad':
-            resultado = _eliminar_entidad(tool_input.get('slug', ''), tool_input.get('id', 0),
-                                          tool_input.get('nombre_confirmacion'))
         elif tool_name == 'escribir_notas':
             # `autor='agente'` fijo: por esta puerta entra sólo lo que escribe el modelo.
             # Lo que escribe la administración entra por /agente/notas.

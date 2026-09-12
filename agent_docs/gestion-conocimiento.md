@@ -38,10 +38,11 @@ tuvo que cambiar**.
 > entidad guardaba un link en `drive_url`. La escuela dejó de usar Drive y la columna se
 > eliminó. Si ves `drive_url` en un respaldo viejo, es de antes de ese corte.
 
-**Qué NO está acá**: la línea del tiempo institucional (`hitos`) y las fichas de personas se
-separaron a `/historia` + `historia.db` el 2026-08-10 — ver `agent_docs/historia-institucional.md`
-y `dev-log/DECISIONS.md`. Los dos módulos son hermanos y **no se importan entre sí**: comparten
-el motor genérico `crud.py`, que no importa a ninguno de los dos — ver `agent_docs/crud-motor.md`.
+**Qué NO está acá**: hasta 2026-09 la línea del tiempo institucional (`hitos`) y las fichas de
+personas vivían como área hermana en `/historia` + `historia.db`, separada el 2026-08-10 —
+se extrajo del código, ver `dev-log/DECISIONS.md`. `gestion.py` sigue sin importar ningún
+área de dominio, ni falta que hace: comparte el motor genérico `crud.py`, que tampoco importa
+ninguna — ver `agent_docs/crud-motor.md`.
 
 > Hasta el 2026-08-21 el módulo también tenía `conjuntos`, `actividades` y un bloque entero
 > de préstamos/retiro interno con carrito en sesión. Se sacaron por decisión de producto
@@ -74,13 +75,13 @@ el motor genérico `crud.py`, que no importa a ninguno de los dos — ver `agent
   recurso su maqueta propia (tarjeta de título con chips de estado, contenedor con borde y
   barras de sección azules, el desglose por unidad con columna de chips y total). Las fotos
   y su visor salen del partial compartido `templates/crud/_detalle_fotos.html`.
-- **`static/gestion.css`** — hoja de estilos para gestión/historia/agente/salidas/accesos (importa
-  `global.css`). Sin modo oscuro. La comparten `/historia`, `/agente` y `/accesos`: la identidad
+- **`static/gestion.css`** — hoja de estilos para gestión/agente/salidas/accesos (importa
+  `global.css`). Sin modo oscuro. La comparten `/agente` y `/accesos`: la identidad
   visual sí es común, la lógica de dominio no. Completamente separada de `horarios.css`.
 - **`static/gestion.js`** — único JS del módulo: búsqueda en vivo del listado (vanilla, sin
   build step). Cargado en `base.html` con `defer`; no hace nada fuera de las páginas donde
   encuentra sus hooks (guarda por existencia de elementos).
-- **`static/mobile-nav.js`** — el ☰ y su panel lateral, compartido con `/historia`,
+- **`static/mobile-nav.js`** — el ☰ y su panel lateral, compartido con
   `/agente` y `/accesos` (ver "Celular" abajo). No es lógica de dominio: solo mueve nodos
   del shell.
 - `base.html` incluye el widget flotante del asistente (`agente/_agente_widget.html`) y
@@ -95,8 +96,8 @@ el motor genérico `crud.py`, que no importa a ninguno de los dos — ver `agent
 ## Celular
 
 Todo el shell (header + nav + fichas) es **el mismo markup en celular y en escritorio**:
-lo único que cambia es CSS, más un script que reubica bloques. Es común a las cuatro
-áreas que comparten `gestion.css` (`/gestion`, `/historia`, `/agente`, `/accesos`).
+lo único que cambia es CSS, más un script que reubica bloques. Es común a las
+áreas que comparten `gestion.css` (`/gestion`, `/agente`, `/accesos`).
 
 - **El ☰ y su panel (`static/mobile-nav.js`)** — el panel existe **a cualquier ancho** y
   lleva el menú de áreas (`.g-areas`, ver `agent_docs/frontend-ui.md`). **Abajo de 900px**
@@ -274,7 +275,8 @@ colisionar con nombres de columnas.
 
 **`campo_nombre`** (opcional, default `'nombre'`): cómo se llama en la tabla la columna que
 hace de nombre visible. `recursos` no la declara distinta — el mecanismo existe
-porque `historia.hitos` sí la necesita (`titulo`). Todas las lecturas van por **`crud.select(cfg)`**,
+para una entidad de dominio futura cuya columna se llame otra cosa (hasta 2026-09 fue el
+caso de `historia.hitos`, con `titulo`). Todas las lecturas van por **`crud.select(cfg)`**,
 que agrega el alias `AS nombre`, así que templates, `crud.buscar_entidad`, `crud.snapshot_entidad`
 y el agente leen siempre `fila['nombre']`. Las escrituras usan `crud.campo_nombre(cfg)`.
 
@@ -328,8 +330,7 @@ Las rutas de la tabla van todas **abajo de un inventario**: la columna de arriba
 `/gestion/<inv>/<slug>`, `/gestion/<inv>/bajas`, etc. Se escriben cortas por legibilidad, y
 porque en el código tampoco se nombra el `<inv>` (lo pone `url_defaults`).
 
-`slug` sólo puede ser `recursos`; otro valor → 404. (`hitos` y `personas` viven en
-`/historia`, con las mismas rutas bajo su propio prefijo.)
+`slug` sólo puede ser `recursos`; otro valor → 404.
 
 ## Búsqueda tolerante (`?q=` en `lista()`)
 
@@ -434,9 +435,9 @@ general y no abre ningún inventario.
 | `inventarios.admin` | admin | **sin ámbito**: crear, renombrar, re-fijar la clave y eliminar inventarios desde `/gestion`. NO da acceso al contenido de ninguno |
 | `gestion.leer` | leer | ver el inventario. Es el permiso base del blueprint |
 | `gestion.editar` | escribir | `nuevo`/`editar`/fotos/desglose por ubicación + dar de baja un recurso y revertir la baja (borrar, no: ningún recurso se borra) |
-| `gestion.alias` | admin | `/gestion/alias` (tabla de solo lectura) y la tool del agente `listar_alias`. Verbo `admin`: no entra en ningún preset de interno, solo lo tiene el comodín `'*'` (mismo criterio que `historia.personas`) |
+| `gestion.alias` | admin | `/gestion/alias` (tabla de solo lectura) y la tool del agente `listar_alias`. Verbo `admin`: no entra en ningún preset de interno, solo lo tiene el comodín `'*'` |
 | `gestion.auditoria` | admin | los chips de auditoría del listado (vencidos de revisión, dados de baja) y `/gestion/bajas`, el registro de bajas |
-| `gestion.rotar` | admin | el botón ROTAR del visor de fotos y su ruta. `crud.py` lo lee del hook opcional `PERMISO_ROTAR_FOTO`; el área que no lo declara (historia) cae en su permiso de escritura |
+| `gestion.rotar` | admin | el botón ROTAR del visor de fotos y su ruta. `crud.py` lo lee del hook opcional `PERMISO_ROTAR_FOTO`; un área que no lo declara cae en su permiso de escritura |
 | `gestion.accesos` | admin | `/gestion/<inv>/accesos`: invitar y quitar gente DE ESE inventario. Lo tiene el encargado por haber entrado con la clave, y lo puede delegar |
 
 `PERMISO_ESCRITURA` lo aplica `crud.registrar_rutas` a sus cinco rutas genéricas, y las dos

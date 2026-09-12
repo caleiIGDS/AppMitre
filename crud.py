@@ -1,11 +1,11 @@
 """Motor CRUD genérico — capa 1.
 
 Conoce el *concepto* de entidad (una config declarativa, un slug, relaciones M2M) pero
-**ninguna entidad concreta**: no sabe qué es un recurso ni un hito. Por eso **no importa
-`gestion` ni `historia`** — las recibe como argumento (`area`). Esa es la regla que evita
-el import circular y la que mantiene legible el criterio de pertenencia:
+**ninguna entidad concreta**: no sabe qué es un recurso. Por eso **no importa un área** —
+la recibe como argumento (`area`). Esa es la regla que evita el import circular y la que
+mantiene legible el criterio de pertenencia:
 
-    capa 2 (gestion, historia)  ->  capa 1 (crud)  ->  capa 0 (texto, respaldos, config)
+    capa 2 (gestion)  ->  capa 1 (crud)  ->  capa 0 (texto, respaldos, config)
 
 Un "área" es simplemente un módulo que expone lo de abajo. Todo lo que nombre una tabla
 concreta entra por un **hook opcional**, nunca por un `if slug == '...'` acá adentro.
@@ -97,7 +97,8 @@ def cfg(area, slug):
 def campo_nombre(cfg_ent):
     """Columna que hace de nombre visible de la entidad.
 
-    Casi todas usan 'nombre'; `historia.hitos` la llama 'titulo'. El mecanismo existe para
+    Casi todas usan 'nombre'; existe para una entidad cuya columna se llame otra cosa
+    (hasta 2026-09 fue el caso de `historia.hitos`, con 'titulo'). El mecanismo existe para
     que el resto del sistema no tenga que enterarse (ver `select`).
     """
     return cfg_ent.get('campo_nombre', 'nombre')
@@ -120,10 +121,11 @@ def campo_alias(cfg_ent):
 def permiso_entidad(area, slug):
     """Permiso EXTRA que pide UNA entidad, si su área lo declaró en su cfg (`permiso`).
 
-    Es lo que permite esconder una sola entidad sin partir el área en dos: `/historia`
-    sigue siendo una para todo el mundo, pero `personas` pide `historia.personas`, que
-    sólo tiene el admin. Capa 1 conoce la clave `permiso`; CUÁL permiso es lo dice el
-    área, igual que con `campo_nombre` o `PERMISO_ESCRITURA`.
+    Es lo que permite esconder una sola entidad sin partir el área en dos (hasta 2026-09,
+    `/historia` seguía viéndose para todo el mundo, pero `personas` pedía
+    `historia.personas`, que sólo tenía el admin). Ninguna entidad lo usa hoy. Capa 1
+    conoce la clave `permiso`; CUÁL permiso es lo dice el área, igual que con
+    `campo_nombre` o `PERMISO_ESCRITURA`.
 
     Sin la clave no hay permiso extra: la entidad se ve con el permiso base del área.
     """
@@ -140,8 +142,8 @@ def relaciones_visibles(area, cfg_ent):
     """Las relaciones M2M del formulario cuya entidad ajena este acceso puede ver.
 
     Las que no, quedan afuera del form Y de `_guardar_form`: si sólo desaparecieran del
-    HTML, guardar un hito desde un acceso sin `historia.personas` borraría sus vínculos
-    con personas, porque el form postea la lista entera de cada relación.
+    HTML, guardar una entidad desde un acceso sin el permiso extra le borraría sus
+    vínculos con la relacionada, porque el form postea la lista entera de cada relación.
     """
     return [rel for rel in cfg_ent['relaciones'] if ve_entidad(area, rel['slug_ajeno'])]
 
@@ -172,7 +174,8 @@ def init_db(area):
     Respalda antes de tocar nada (ver `respaldos.respaldar`).
     """
     ruta, prefijo = db_path(area), prefijo_backup(area)
-    respaldos.respaldar(ruta, prefijo, area.TABLA_TESTIGO)
+    respaldos.respaldar(ruta, prefijo, area.TABLA_TESTIGO,
+                        max_dias=_hook(area, 'BACKUP_MAX_DIAS', respaldos.BACKUP_MAX_DIAS))
 
     con = conectar(area)
     cur = con.cursor()
@@ -686,9 +689,10 @@ def registrar_rutas(bp, area):
             abort(404)
         secciones_hook = _hook(area, 'secciones_detalle')
         secciones = secciones_hook(slug, id, cur) if secciones_hook else []
-        # Una sección que apunta a una entidad con permiso propio no se muestra: la ficha
-        # de un hito lista sus personas, y esos nombres son justamente lo que el permiso
-        # esconde. Las que no apuntan a una entidad (gestion: "Por ubicación") pasan.
+        # Una sección que apunta a una entidad con permiso propio no se muestra: si esa
+        # entidad esconde datos detrás de un permiso extra, listarlos desde la ficha de
+        # otra sería la puerta de atrás. Las que no apuntan a una entidad (gestion: "Por
+        # ubicación") pasan.
         secciones = [s for s in secciones if ve_entidad(area, s.get('slug'))]
         con.close()
         fila_dict = dict(fila)

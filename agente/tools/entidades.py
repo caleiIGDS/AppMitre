@@ -1,8 +1,7 @@
-"""CRUD genérico sobre las entidades de los dos módulos de dominio.
+"""CRUD genérico sobre las entidades de dominio (hoy sólo `gestion`).
 
-Todo pasa por `_modulo(slug)`, que resuelve si el slug vive en `gestion` o en `historia`.
-Los dos exponen la misma superficie a propósito, así que el agente los trata igual sin
-saber en cuál está parado.
+Todo pasa por `_modulo(slug)`, que resuelve el módulo dueño del slug. Queda como función
+—en vez de usar `gestion` directo— para que un área de dominio nueva entre sin tocar acá.
 
 El alta NO está acá: vive en `fichas.py`, porque es el único camino de escritura que se
 hace en dos pasos.
@@ -12,7 +11,6 @@ import gestion
 import texto
 
 from ..dominio import SLUGS_ENTIDAD, _modulo, ve_entidad
-from ..padrones import _gente_horarios_parecida
 from .fichas import _normalizar_sub_recursos
 
 # Tope de resultados que se le mandan a Claude. La búsqueda difusa no acota: con una
@@ -51,7 +49,7 @@ def _clasificar_match(q_norm, nombre, descripcion):
 
 
 def _buscar_entidad_fmt(slug, query):
-    """Búsqueda de entidad (recursos, hitos, personas)."""
+    """Búsqueda de entidad (recursos)."""
     if slug not in SLUGS_ENTIDAD:
         # Sin esto un slug mal escrito devolvía 0 resultados y el agente concluía
         # "no hay nada cargado" en vez de reintentar con el slug correcto.
@@ -115,36 +113,6 @@ def _buscar_entidad_fmt(slug, query):
                            'NINGUNO sea lo que se busca. No ofrezcas el más parecido como si '
                            f'fuera el correcto. Llamá a listar_todos("{slug}") para ver la lista '
                            'completa y recién ahí decidí si está o no.')
-
-    # Buscar una persona mira SIEMPRE los dos padrones, en las dos direcciones. Este es el
-    # espejo del cruce que hace `buscar_profesor`: quien pregunta por alguien no sabe —ni
-    # tiene por qué saber— si esa persona tiene ficha propia o si solo figura en los
-    # horarios. Sin esto, buscar "vazquez" en `personas` no devolvía nada y el modelo
-    # concluía "no la tengo cargada", con VAZQUEZ NATALIA dando clases en la escuela.
-    if slug == 'personas' and query:
-        # El padrón de horarios no es solo docentes: incluye a los EMATP y las jefaturas,
-        # y su cargo viaja con el nombre para que el aviso diga "CALEI (EMATP EERR)" en vez
-        # de presentarlo como un docente más.
-        gente = _gente_horarios_parecida(query)
-        if gente:
-            salida['en_horarios'] = [
-                {'nombre': n, 'rol': rol} if rol else {'nombre': n} for n, rol in gente]
-            listado = ', '.join(f'{n} ({rol})' if rol else n for n, rol in gente)
-            if resultados:
-                salida['aviso_horarios'] = (
-                    'Además, en los HORARIOS hay gente que coincide con "' + query + '": '
-                    + listado + '. Son otro padrón: pueden ser la misma persona '
-                    'o no. Si de cuál se trata cambia lo que vas a hacer, preguntale al usuario.'
-                )
-            else:
-                salida['aviso_horarios'] = (
-                    'NO hay ficha de persona que coincida, pero en los HORARIOS sí hay: '
-                    + listado + '. O sea que existe en la escuela, solo que sin '
-                    'ficha propia. NO le digas al usuario que no la tenés. Si te está hablando '
-                    'de horarios, resolvelo con esos nombres; si está armando un hito o una '
-                    'semblanza, avisale que todavía no tiene ficha y ofrecé '
-                    'crearla con crear_entidad.'
-                )
     return salida
 
 
@@ -181,8 +149,8 @@ def _listar_todos_fmt(slug, con_descripcion=False):
 
     modulo = _modulo(slug)
     con = crud.conectar(modulo)
-    # Por crud.select(), no `SELECT id, nombre`: en `hitos` la columna se llama `titulo` y la
-    # query cruda reventaba con "no such column: nombre".
+    # Por crud.select() y no `SELECT id, nombre`: una entidad cuya columna de nombre no se
+    # llame `nombre` (ver crud.campo_nombre) rompería con "no such column: nombre".
     cfg = modulo.ENTIDADES[slug]
     campo = crud.campo_nombre(cfg)
     # La descripción sale de los campos declarados, no hardcodeada: una entidad que no la
@@ -287,9 +255,9 @@ def _listar_alias_fmt(slug):
 def _detalle_entidad_fmt(slug, id, permisos=frozenset()):
     """Detalle completo de una entidad.
 
-    `permisos` filtra las RELACIONES: el slug propio ya lo chequeó `ejecutar_tool`, pero un
-    hito que se puede ver lista igual las personas que participaron, y esos nombres son lo
-    que esconde `historia.personas`. Mismo criterio que la ficha web (ver crud.detalle).
+    `permisos` filtra las RELACIONES: el slug propio ya lo chequeó `ejecutar_tool`, pero
+    una entidad visible puede listar relaciones hacia otra que no lo sea, si alguna vez
+    hay una que pida permiso propio. Mismo criterio que la ficha web (ver crud.detalle).
     """
     modulo = _modulo(slug)
     con = crud.conectar(modulo)
@@ -299,7 +267,7 @@ def _detalle_entidad_fmt(slug, id, permisos=frozenset()):
         return {'error': f'Slug inválido: {slug}'}
 
     # Por crud.select() para que la ficha siempre traiga `nombre`, se llame como se llame la
-    # columna (en `hitos` es `titulo`): el modelo lee esa clave en todos los slugs.
+    # columna real (ver crud.campo_nombre): el modelo lee esa clave en todos los slugs.
     fila = cur.execute(f"{crud.select(cfg)} WHERE id = ?", (id,)).fetchone()
     if not fila:
         con.close()
@@ -333,7 +301,7 @@ def _detalle_entidad_fmt(slug, id, permisos=frozenset()):
 
 
 def _editar_entidad(slug, id, campos_dict, sub_recursos=None):
-    """Editar recurso/hito/persona (edición PARCIAL).
+    """Editar una entidad de dominio (hoy sólo recursos), edición PARCIAL.
 
     `crud.guardar_entidad` hace UPDATE de TODAS las columnas usando
     `campos_dict.get(n, '')`, porque nació del form de /gestion, que siempre postea el
@@ -397,130 +365,3 @@ def _editar_entidad(slug, id, campos_dict, sub_recursos=None):
     else:
         return {'ok': False, 'error': f'Error al editar {slug} id={id}'}
 
-def _vincular_entidad(slug_origen, id_origen, slug_destino, id_destino):
-    """Vincular dos entidades vía relación M2M. Las relaciones son siempre intra-módulo
-    (no hay ninguna cruzada entre gestion/recursos e historia/hitos-personas desde que se
-    sacó `proyecto_recursos` — ver dev-log/DECISIONS.md), así que alcanza con el módulo
-    del slug de origen para conectar."""
-    modulo = _modulo(slug_origen)
-    cfg_origen = modulo.ENTIDADES.get(slug_origen)
-    if not cfg_origen:
-        return {'ok': False, 'error': f'Slug inválido: {slug_origen}'}
-
-    # Encontrar la relación M2M
-    rel_config = None
-    for rel in cfg_origen.get('relaciones', []):
-        if rel['slug_ajeno'] == slug_destino:
-            rel_config = rel
-            break
-
-    if not rel_config:
-        return {'ok': False, 'error': f'No hay relación entre {slug_origen} y {slug_destino}'}
-
-    tabla = rel_config['tabla']
-    col_propia = rel_config['col_propia']
-    col_ajena = rel_config['col_ajena']
-
-    con = crud.conectar(modulo)
-    resultado = crud.agregar_relacion_m2m(modulo, tabla, col_propia, col_ajena, id_origen, id_destino, con=con)
-    con.close()
-
-    if resultado:
-        return {'ok': True, 'mensaje': f'Vinculado {slug_origen}[{id_origen}] ← {slug_destino}[{id_destino}]'}
-    else:
-        return {'ok': False, 'error': 'Error al vincular'}
-
-def _desvincular_entidad(slug_origen, id_origen, slug_destino, id_destino):
-    """Desvincular dos entidades (siempre intra-módulo, ver _vincular_entidad)."""
-    modulo = _modulo(slug_origen)
-    cfg_origen = modulo.ENTIDADES.get(slug_origen)
-    if not cfg_origen:
-        return {'ok': False, 'error': f'Slug inválido: {slug_origen}'}
-
-    rel_config = None
-    for rel in cfg_origen.get('relaciones', []):
-        if rel['slug_ajeno'] == slug_destino:
-            rel_config = rel
-            break
-
-    if not rel_config:
-        return {'ok': False, 'error': f'No hay relación entre {slug_origen} y {slug_destino}'}
-
-    tabla = rel_config['tabla']
-    col_propia = rel_config['col_propia']
-    col_ajena = rel_config['col_ajena']
-
-    con = crud.conectar(modulo)
-    resultado = crud.quitar_relacion_m2m(modulo, tabla, col_propia, col_ajena, id_origen, id_destino, con=con)
-    con.close()
-
-    if resultado:
-        return {'ok': True, 'mensaje': f'Desvinculado {slug_origen}[{id_origen}] ↛ {slug_destino}[{id_destino}]'}
-    else:
-        return {'ok': False, 'error': 'Error al desvincular'}
-
-def _eliminar_entidad(slug, id, nombre_confirmacion=None):
-    """Eliminar entidad (recurso/hito/persona).
-
-    `nombre_confirmacion` es obligatorio y debe coincidir con el nombre real de la fila:
-    es una traba de CÓDIGO, no de prompt. Sin esto el modelo podía alucinar un id
-    (llegó a borrar 'Panel solar 100W' id=1 creyendo que borraba un recurso de prueba
-    que nunca existió) — ver DECISIONS 2026-08-04.
-    """
-    modulo = _modulo(slug)
-    con = crud.conectar(modulo)
-    cur = con.cursor()
-
-    # Snapshot antes (obligatorio)
-    antes = crud.snapshot_entidad(modulo, slug, id, con=con)
-    if not antes:
-        con.close()
-        return {'ok': False, 'error': f'No encontrado: {slug} id={id}. No se borró nada.'}
-
-    cfg = modulo.ENTIDADES.get(slug)
-    if not cfg:
-        con.close()
-        return {'ok': False, 'error': f'Slug inválido: {slug}'}
-
-    # Entidad que no se borra nunca (`sin_eliminar`, hoy los recursos: se dan de baja
-    # diciendo qué les pasó, ver gestion.dar_de_baja). Se mira el flag y no el slug para
-    # no volver a nombrar una tabla concreta acá adentro, igual que hace crud.py.
-    if cfg.get('sin_eliminar'):
-        con.close()
-        return {'ok': False, 'error':
-                f'{slug} no se elimina nunca: sale del inventario dándole de baja, y la '
-                f'baja se hace desde la web (EDITAR el recurso → DAR DE BAJA), donde hay '
-                f'que indicar qué le pasó. Contale eso al usuario. No se borró nada.'}
-
-    nombre_real = antes['fila'].get('nombre', '')
-    if not nombre_confirmacion:
-        con.close()
-        return {'ok': False, 'error':
-                f'Falta nombre_confirmacion. {slug} id={id} se llama "{nombre_real}". '
-                f'Confirmá con el usuario que es eso lo que quiere borrar y reintentá '
-                f'pasando nombre_confirmacion="{nombre_real}". No se borró nada.'}
-
-    if texto.norm(nombre_confirmacion) != texto.norm(nombre_real):
-        con.close()
-        return {'ok': False, 'error':
-                f'NO COINCIDE: pediste borrar "{nombre_confirmacion}" pero {slug} id={id} '
-                f'es "{nombre_real}". No se borró nada. Buscá el id correcto con '
-                f'buscar_entidad antes de reintentar.'}
-
-    try:
-        # Borrar relaciones M2M
-        for tabla, columna in modulo.LIMPIEZA_M2M.get(slug, []):
-            cur.execute(f"DELETE FROM {tabla} WHERE {columna} = ?", (id,))
-
-        # Borrar la fila
-        cur.execute(f"DELETE FROM {cfg['tabla']} WHERE id = ?", (id,))
-
-        con.commit()
-        con.close()
-
-        return {'ok': True, 'mensaje': f'Eliminado {slug} id={id}', 'antes': antes}
-
-    except Exception as e:
-        con.rollback()
-        con.close()
-        return {'ok': False, 'error': f'Error al eliminar: {str(e)}', 'antes': antes}

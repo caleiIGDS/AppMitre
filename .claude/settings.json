@@ -6,7 +6,6 @@
       "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\len_desc.py\")",
       "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\probar_busqueda2.py\")",
       "Bash(python -m py_compile agente.py)",
-      "Bash(python -c \"import json; json.load\\(open\\('historia_indice.json', encoding='utf-8'\\)\\)\")",
       "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\verify_listar.py\")",
       "PowerShell(python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\3fa8e557-c661-43f7-888f-23ec016b69de\\\\scratchpad\\\\piso_real.py\")",
       "Bash(git commit *)",
@@ -76,7 +75,9 @@
       "PowerShell($env:PYTHONIOENCODING='utf-8'; python \"C:\\\\Users\\\\calei\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-calei-projects-AppMitre\\\\628de037-dab8-4373-bbeb-446fdf048299\\\\scratchpad\\\\test_fichas.py\")",
       "Bash(python -m py_compile fotos_disco.py crud.py actualizar.py)",
       "Bash(python -c \"import fpdf; print\\(fpdf.__version__\\); from fpdf import FontFace; print\\('FontFace OK'\\)\")",
-      "Bash(git fetch *)"
+      "Bash(git fetch *)",
+      "Bash(git rm *)",
+      "Bash(python -c \"import salidas, app\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\calei\\projects\\AppMitre\\static\\vendor\\pdfjs\\build",

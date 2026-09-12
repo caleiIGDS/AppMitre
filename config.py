@@ -1,5 +1,5 @@
 # config.py
-# Configuración compartida por el resto de la app (gestión, historia, agente, salidas,
+# Configuración compartida por el resto de la app (gestión, agente, salidas,
 # accesos). El sistema de horarios NO usa este archivo — tiene su propia config en
 # `horarios/config.py` (ver el plan de separación en dev-log/DECISIONS.md).
 

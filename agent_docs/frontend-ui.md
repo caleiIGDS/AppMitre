@@ -198,9 +198,9 @@ horarios como en las áreas.
 
 ---
 
-## Menú de áreas (☰) — en las cinco páginas del shell de `accesos`
+## Menú de áreas (☰) — en las páginas del shell de `accesos`
 
-Gestión, historia, agente, salidas y accesos tienen un **☰** que abre un panel lateral con las
+Gestión, agente, salidas y accesos tienen un **☰** que abre un panel lateral con las
 otras áreas. Cada página omite la suya, y cada link va por su permiso (`{% if puede(...) %}`), así
 que el admin las ve todas y un interno de consulta ve sólo las que puede abrir. El
 `{% if acceso_actual() %}` que envuelve el panel sigue en los templates por las dudas.
@@ -214,7 +214,7 @@ sin `accesos`), su `index.html` no tiene ☰ ni `areas-nav.js`: sólo un botón 
 
 | | contenido |
 |---|---|
-| `.g-nav` | las **entidades de esta área** (RECURSOS, HITOS…). El 🤖 ASISTENTE salió de acá: no era una entidad |
+| `.g-nav` | las **entidades de esta área** (RECURSOS…). El 🤖 ASISTENTE salió de acá: no era una entidad |
 | `.g-header-actions` | acciones **de esta página**: el toggle del widget del asistente y `‹ SISTEMA DE HORARIOS` como salida |
 | el ☰ | **saltar a otra área** + SALIR |
 

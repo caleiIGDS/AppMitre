@@ -5,19 +5,20 @@
     python actualizar.py              # aplica
 
 Existe porque no todo lo que cambió en las DBs entra por el hook `migrar()` de cada área.
-Los `ALTER` aditivos sí (los corre `crud.init_db` sola en cada arranque), pero dos
-migraciones **cruzan las dos DBs** y por eso no pueden vivir adentro de un área — ninguna
-importa a la otra (ver CLAUDE.md, criterio de capas):
+Los `ALTER` aditivos sí (los corre `crud.init_db` sola en cada arranque), pero algunas
+migraciones **cruzan DBs** y por eso no pueden vivir adentro de un área — ninguna importa
+a la otra (ver CLAUDE.md, criterio de capas):
 
-  1. `hitos` / `personas` / `persona_hitos` se mudaron de `gestion.db` a `historia.db`.
-  2. La entidad `proyectos` se eliminó: sus filas son hoy hitos con 'Proyecto' en
-     `etiquetas`, y viven en la otra DB.
-  3. Gestión dejó de ser UN inventario y pasó a ser varios, uno por archivo: `recursos` y
+  1. Gestión dejó de ser UN inventario y pasó a ser varios, uno por archivo: `recursos` y
      sus tres tablas se van de `gestion.db` a `inventarios/<slug>.db`, y los permisos
      `gestion.*` que había en `accesos.db` pasan a llevar el ámbito de ese inventario.
-  4. Todas las bases se mudaron a `database/`. Esa no es una migración de datos sino de
+  2. Todas las bases se mudaron a `database/`. Esa no es una migración de datos sino de
      archivos, y es la única que hay que correr sí o sí: sin ella la app se niega a
      arrancar (ver la guarda de `app.py`), porque los datos quedaron en el lugar viejo.
+
+(El área `/historia` — hitos y personas — se extrajo del código; su migración vieja
+`gestion.db → historia.db` y la de `proyectos → hitos` se sacaron de acá con ella. Ver
+`dev-log/DECISIONS.md`.)
 
 En el equipo de desarrollo eso se corrió una vez con un script de un solo uso y se borró;
 una instalación que venga de un deploy anterior nunca lo vio. Sin esto, un `git pull` deja
@@ -52,10 +53,8 @@ if hasattr(sys.stdout, 'reconfigure'):
 load_dotenv(os.path.join(RAIZ, '.env'))
 
 import accesos
-import estudiantes
 import fotos_disco
 import gestion
-import historia
 import agente
 import salidas
 import respaldos
@@ -143,8 +142,8 @@ def _mudanzas():
     una sobra (una prueba, una restauración vieja) y se reporta sin tocarlo: mezclarlo con
     las buenas es justamente lo que la carpeta nueva viene a evitar.
     """
-    bases = (gestion.DB_PATH, historia.DB_PATH, accesos.DB_PATH, salidas.DB_PATH,
-             agente_registro.DB_PATH, estudiantes.DB_PATH)
+    bases = (gestion.DB_PATH, accesos.DB_PATH, salidas.DB_PATH,
+             agente_registro.DB_PATH)
     pares = [(os.path.join(RAIZ, os.path.basename(d)), d) for d in bases]
     pares.append((os.path.join(RAIZ, 'horarios', 'escuela.db'),
                   os.path.join(DIR_DATOS, 'escuela.db')))
@@ -220,8 +219,7 @@ def diagnostico():
     print("=" * 70)
     print(f"Python {sys.version.split()[0]}  ·  SQLite {sqlite3.sqlite_version}")
 
-    for declarada in (gestion.DB_PATH, historia.DB_PATH, salidas.DB_PATH,
-                      agente_registro.DB_PATH, estudiantes.DB_PATH):
+    for declarada in (gestion.DB_PATH, salidas.DB_PATH, agente_registro.DB_PATH):
         # `_donde_esta`: en --dry-run la mudanza no se hizo y las bases siguen en la raíz.
         ruta = _donde_esta(declarada)
         nombre = os.path.basename(ruta)
@@ -252,8 +250,7 @@ def diagnostico():
     # que sepa DROP COLUMN. Avisar acá y no en medio de un traceback del servidor web.
     if sqlite3.sqlite_version_info < SQLITE_MINIMO_DROP_COLUMN:
         pendiente = False
-        for ruta, tablas in ((gestion.DB_PATH, ('recursos',)),
-                             (historia.DB_PATH, ('hitos', 'personas'))):
+        for ruta, tablas in ((gestion.DB_PATH, ('recursos',)),):
             if not os.path.exists(ruta):
                 continue
             con = _conectar(ruta)
@@ -267,8 +264,8 @@ def diagnostico():
                   f"ALTER TABLE ... DROP COLUMN (necesita {minimo}+),")
             print("    y las DBs todavía tienen la columna `drive_url` que hay que eliminar.")
             print("    Tal como está, el sitio entero va a dar 500: `migrar()` corre en el")
-            print("    import de app.py. Hay que poner un guard en gestion.migrar() e")
-            print("    historia.migrar() antes de subir esto.")
+            print("    import de app.py. Hay que poner un guard en gestion.migrar()")
+            print("    antes de subir esto.")
             return False
     return True
 
@@ -288,8 +285,8 @@ def copia_de_seguridad(dry):
     print("=" * 70)
 
     sello = ahora().strftime('%Y%m%d-%H%M%S')
-    for ruta in (gestion.DB_PATH, historia.DB_PATH, accesos.DB_PATH, salidas.DB_PATH,
-                 agente_registro.DB_PATH, estudiantes.DB_PATH):
+    for ruta in (gestion.DB_PATH, accesos.DB_PATH, salidas.DB_PATH,
+                 agente_registro.DB_PATH):
         if not os.path.exists(ruta):
             continue
         destino = f"{ruta}.pre-actualizacion-{sello}"
@@ -305,228 +302,6 @@ def copia_de_seguridad(dry):
             copia.close()
             origen.close()
         print(f"  ✓ {os.path.basename(destino)}")
-
-
-# ---------------------------------------------------------------------------
-# Paso 2 — hitos/personas: de gestion.db a historia.db
-# ---------------------------------------------------------------------------
-
-# Tablas que se mudaron, en orden: las personas antes que la M2M que las referencia.
-TABLAS_MUDADAS = ('hitos', 'personas', 'persona_hitos')
-
-
-def _copiar_filas(origen, destino, tabla):
-    """Copia `tabla` de una DB a la otra conservando los ids, fila por fila.
-
-    Sólo las columnas que existen en las dos: la tabla vieja trae `drive_url`, que en el
-    schema nuevo ya no está. Fila por fila y no `executemany` para poder decir cuál falló
-    si choca contra un UNIQUE (el de `personas.nombre_norm` es el candidato real).
-    """
-    comunes = set(_columnas(origen, tabla))
-    cols = [c for c in _columnas(destino, tabla) if c in comunes]
-    marcadores = ', '.join('?' * len(cols))
-    sql = f"INSERT INTO {tabla} ({', '.join(cols)}) VALUES ({marcadores})"
-
-    copiadas, rechazadas = 0, []
-    for fila in origen.execute(f"SELECT {', '.join(cols)} FROM {tabla}").fetchall():
-        valores = list(fila)
-        # `personas.nombre_norm` tiene un UNIQUE encima y es la identidad de la fila. Si
-        # viene vacía de una DB muy vieja, recalcularla con la regla del área.
-        if tabla == 'personas' and 'nombre_norm' in cols and not valores[cols.index('nombre_norm')]:
-            valores[cols.index('nombre_norm')] = historia.clave_persona(
-                valores[cols.index('nombre')])
-        try:
-            destino.execute(sql, valores)
-            copiadas += 1
-        except sqlite3.IntegrityError as e:
-            etiqueta = valores[cols.index('nombre')] if 'nombre' in cols else (
-                valores[cols.index('titulo')] if 'titulo' in cols else str(valores))
-            rechazadas.append(f"{etiqueta} ({e})")
-    return copiadas, rechazadas
-
-
-def mudar_a_historia(dry):
-    """Mueve hitos/personas/persona_hitos a historia.db si todavía están en gestion.db."""
-    print("\n" + "=" * 70)
-    print("PASO 2 · hitos y personas → historia.db")
-    print("=" * 70)
-
-    con_g = _conectar(gestion.DB_PATH) if os.path.exists(gestion.DB_PATH) else None
-    if con_g is None or 'hitos' not in _tablas(con_g):
-        if con_g:
-            con_g.close()
-        print("  · Nada que mudar: gestion.db ya no tiene `hitos` (instalación al día).")
-        return True
-
-    try:
-        pendientes = {t: _filas(con_g, t) for t in TABLAS_MUDADAS if t in _tablas(con_g)}
-        print("  Encontrado en gestion.db: " +
-              ", ".join(f"{t} ({n})" for t, n in pendientes.items()))
-
-        # Caso típico de una instalación que ya corrió el código post-split: las tablas
-        # quedaron físicamente en gestion.db pero vacías, porque el área dejó de escribir
-        # ahí antes de que hubiera datos. No hay nada que mudar; las borra el paso 5.
-        if not any(pendientes.values()):
-            print("  · Están todas vacías: no hay datos que mudar (las elimina el paso 5).")
-            return True
-
-        con_h = _conectar(historia.DB_PATH)
-        try:
-            con_h.executescript(historia.SCHEMA)  # crea las tablas destino si faltan
-
-            # Las dos con datos es ambiguo (¿cuál manda? ¿los ids chocan?). Antes que
-            # elegir por el usuario, frenar: la copia de seguridad ya está hecha.
-            if _filas(con_h, 'hitos') or _filas(con_h, 'personas'):
-                print("  ✗ historia.db YA tiene datos y gestion.db también. No se toca nada:")
-                print("    hay que decidir a mano cuál de las dos manda.")
-                return False
-
-            if dry:
-                print("  [dry-run] copiaría esas filas a historia.db y las borraría de gestion.db")
-                return True
-
-            problemas = []
-            for tabla, esperadas in pendientes.items():
-                copiadas, rechazadas = _copiar_filas(con_g, con_h, tabla)
-                print(f"    {tabla}: {copiadas}/{esperadas} copiadas")
-                for r in rechazadas:
-                    print(f"      ✗ rechazada: {r}")
-                problemas.extend(rechazadas)
-            con_h.commit()
-
-            # El origen se borra sólo si TODO llegó. Ante la duda quedan las dos copias:
-            # nada se pierde, sobra.
-            if problemas:
-                print("  ✗ Quedaron filas sin copiar — NO se borran las tablas de gestion.db.")
-                return False
-            for tabla in reversed(TABLAS_MUDADAS):
-                if tabla in pendientes:
-                    con_g.execute(f"DROP TABLE {tabla}")
-            con_g.commit()
-            print("  ✓ Mudanza completa; las tablas viejas se eliminaron de gestion.db.")
-            return True
-        finally:
-            con_h.close()
-    finally:
-        con_g.close()
-
-
-# ---------------------------------------------------------------------------
-# Paso 3 — proyectos → hitos
-# ---------------------------------------------------------------------------
-
-TABLAS_PROYECTO = ('persona_proyectos', 'proyecto_recursos', 'proyectos')
-
-
-def migrar_proyectos(dry):
-    """Convierte cada fila de `proyectos` (gestion.db) en un hito de historia.db.
-
-    Mapeo (el mismo que se aplicó en desarrollo, ver dev-log/CHANGELOG.md 2026-08-10):
-    `nombre`→`titulo`, `participantes`→`protagonistas`, `'Proyecto'` en `etiquetas`, y el
-    `estado` anexado a `descripcion` porque los hitos no tienen esa columna.
-
-    `proyecto_recursos` cruzaba a la otra DB y no puede sobrevivir como relación — esos
-    vínculos se anexan a la descripción en texto para no perder el dato.
-    """
-    print("\n" + "=" * 70)
-    print("PASO 3 · proyectos → hitos")
-    print("=" * 70)
-
-    con_g = _conectar(gestion.DB_PATH) if os.path.exists(gestion.DB_PATH) else None
-    if con_g is None or 'proyectos' not in _tablas(con_g):
-        if con_g:
-            con_g.close()
-        print("  · Nada que migrar: no existe la tabla `proyectos`.")
-        return True
-
-    try:
-        tablas_g = _tablas(con_g)
-        proyectos = con_g.execute("SELECT * FROM proyectos ORDER BY id").fetchall()
-        print(f"  Encontrados {len(proyectos)} proyecto(s).")
-        if not proyectos:
-            if not dry:
-                for tabla in TABLAS_PROYECTO:
-                    if tabla in tablas_g:
-                        con_g.execute(f"DROP TABLE {tabla}")
-                con_g.commit()
-                print("  ✓ Tablas vacías eliminadas.")
-            return True
-
-        con_h = _conectar(historia.DB_PATH)
-        try:
-            con_h.executescript(historia.SCHEMA)
-
-            for p in proyectos:
-                partes = [p['descripcion'] or '']
-                if p['estado']:
-                    partes.append(f"Estado del proyecto al migrarlo: {p['estado']}.")
-                if 'proyecto_recursos' in tablas_g:
-                    usados = [f['nombre'] for f in con_g.execute(
-                        "SELECT r.nombre FROM recursos r JOIN proyecto_recursos pr "
-                        "ON pr.recurso_id = r.id WHERE pr.proyecto_id = ? "
-                        "ORDER BY r.nombre COLLATE NOCASE", (p['id'],)).fetchall()]
-                    if usados:
-                        partes.append("Recursos que usaba: " + ", ".join(usados) + ".")
-                descripcion = "\n\n".join(t for t in partes if t)
-
-                vinculos = 0
-                if 'persona_proyectos' in tablas_g:
-                    vinculos = con_g.execute(
-                        "SELECT COUNT(*) FROM persona_proyectos WHERE proyecto_id = ?",
-                        (p['id'],)).fetchone()[0]
-
-                if dry:
-                    print(f"    [dry-run] '{p['nombre']}' → hito "
-                          f"(etiqueta 'Proyecto', {vinculos} persona(s) vinculada(s))")
-                    continue
-
-                cur = con_h.execute(
-                    "INSERT INTO hitos (titulo, descripcion, fecha, tipo, nivel, etiquetas, "
-                    "protagonistas, fotos) VALUES (?,?,?,?,?,?,?,?)",
-                    (p['nombre'], descripcion, p['fecha'] or '', '', 'Básico', 'Proyecto',
-                     p['participantes'] or '', '[]'))
-                hito_id = cur.lastrowid
-
-                # Los ids de persona se conservaron en la mudanza del paso 2, así que los de
-                # persona_proyectos siguen apuntando a la persona correcta. Igual se verifica
-                # una por una: si la instalación mudó las personas por otro camino, los ids
-                # pueden no coincidir, y un vínculo a una persona inexistente ensucia la ficha
-                # del hito sin que nadie lo note.
-                huerfanos = []
-                if 'persona_proyectos' in tablas_g:
-                    for f in con_g.execute(
-                            "SELECT persona_id FROM persona_proyectos WHERE proyecto_id = ?",
-                            (p['id'],)).fetchall():
-                        existe = con_h.execute("SELECT 1 FROM personas WHERE id = ?",
-                                               (f['persona_id'],)).fetchone()
-                        if existe:
-                            con_h.execute("INSERT OR IGNORE INTO persona_hitos "
-                                          "(persona_id, hito_id) VALUES (?, ?)",
-                                          (f['persona_id'], hito_id))
-                        else:
-                            huerfanos.append(f['persona_id'])
-                print(f"    ✓ '{p['nombre']}' → hito #{hito_id} "
-                      f"({vinculos - len(huerfanos)} vínculo(s))")
-                if huerfanos:
-                    print(f"      ! {len(huerfanos)} vínculo(s) a persona(s) inexistente(s) "
-                          f"(ids {huerfanos}) — se descartan.")
-                    AVISOS.append(f"El hito #{hito_id} ('{p['nombre']}') perdió {len(huerfanos)} "
-                                  f"vínculo(s) a personas que no están en historia.db.")
-
-            if dry:
-                return True
-            con_h.commit()
-
-            for tabla in TABLAS_PROYECTO:
-                if tabla in tablas_g:
-                    con_g.execute(f"DROP TABLE {tabla}")
-            con_g.commit()
-            print("  ✓ Migración completa; las tablas de proyectos se eliminaron.")
-            return True
-        finally:
-            con_h.close()
-    finally:
-        con_g.close()
 
 
 # ---------------------------------------------------------------------------
@@ -676,7 +451,7 @@ def migraciones_de_schema(dry):
     print("=" * 70)
 
     if dry:
-        print("  [dry-run] correría gestion.init_db(), historia.init_db(), agente.init_db(),")
+        print("  [dry-run] correría gestion.init_db(), agente.init_db(),")
         print("            salidas.init_db() y accesos.init_db()")
         print("            (ALTER aditivos, rename utilidad→valor, DROP de drive_url,")
         print("             las tablas agente_* dentro de gestion.db, agente.db con el")
@@ -689,7 +464,6 @@ def migraciones_de_schema(dry):
         return True
 
     for nombre, init in (('gestion', gestion.init_db),
-                         ('historia', historia.init_db),
                          ('agente', agente.init_db),
                          ('salidas', salidas.init_db),
                          ('accesos', accesos.init_db)):
@@ -783,6 +557,140 @@ def migrar_fotos_a_disco(dry):
 
 
 # ---------------------------------------------------------------------------
+# Paso 4.7 — datos sensibles que ya no tienen dueño en el código
+# ---------------------------------------------------------------------------
+
+# El padrón (DNI de menores) dejó de vivir en el servidor: se carga en el navegador y no
+# sale de ahí (ver agent_docs/salidas-educativas.md). `estudiantes.py` ya no existe, así
+# que nadie vuelve a abrir estos archivos: no hay nada que migrar, sólo que borrar.
+NOMBRES_PADRON = ('estudiantes.db', 'estudiantes.db-wal', 'estudiantes.db-shm',
+                  'estudiantes.db-journal')
+GLOBS_PADRON = ('estudiantes.db.pre-actualizacion-*',)
+PREFIJO_BACKUP_PADRON = 'estudiantes'
+
+# `salidas_familias` guardaba lo que completaba cada familia por el link público (DNI,
+# salud, obra social, teléfonos, domicilio). Dejó de escribirse el 2026-08-16 y
+# `salidas.migrar()` prometía desde entonces que "la limpia actualizar.py": esto es esa
+# limpieza. No entra por el PASO 5 porque ahí una tabla con filas exige `--limpiar`, que
+# es global y forzaría también cualquier otra sobra con datos de cualquier otra base.
+TABLA_FAMILIAS = 'salidas_familias'
+
+
+def _archivos_del_padron():
+    """Todo lo que quedó del padrón, en `database/` y en la raíz (layout viejo), más sus
+    respaldos rotativos. Se busca en los dos lados porque `estudiantes` ya no está en la
+    lista de mudanzas: un archivo que quedó arriba no lo movería nadie."""
+    encontrados = []
+    for carpeta in (DIR_DATOS, RAIZ):
+        for nombre in NOMBRES_PADRON:
+            ruta = os.path.join(carpeta, nombre)
+            if os.path.exists(ruta):
+                encontrados.append(ruta)
+        for patron in GLOBS_PADRON:
+            encontrados.extend(sorted(glob.glob(os.path.join(carpeta, patron))))
+    encontrados.extend(respaldos.listar(PREFIJO_BACKUP_PADRON))
+    return encontrados
+
+
+def retirar_datos_sensibles(dry):
+    """Saca del servidor lo que ya no tiene dueño en el código: el padrón entero y la
+    tabla `salidas_familias`, incluidas las copias de esa tabla que quedaron DENTRO de
+    los respaldos, y recorta los respaldos de salidas fuera de la retención nueva.
+
+    Idempotente: en la segunda corrida no queda nada que borrar. El criterio es borrar
+    sólo artefactos de un módulo que ya no existe — nunca una copia manual de una base
+    que sigue viva, que es lo que hace el bloque de avisos del final.
+    """
+    print("\n" + "=" * 70)
+    print("PASO 4.7 · Datos sensibles que el código ya no lee")
+    print("=" * 70)
+
+    # 1. El padrón
+    archivos = _archivos_del_padron()
+    if not archivos:
+        print("  · No quedó ningún archivo del padrón: ya estaba retirado.")
+    for ruta in archivos:
+        rel = os.path.relpath(ruta, RAIZ)
+        kb = os.path.getsize(ruta) // 1024
+        if dry:
+            print(f"  [dry-run] borraría {rel} ({kb} KB)")
+        else:
+            os.remove(ruta)
+            print(f"  ✓ {rel} borrado ({kb} KB)")
+
+    # 2. salidas_familias
+    if os.path.exists(salidas.DB_PATH):
+        con = _conectar(salidas.DB_PATH)
+        try:
+            if TABLA_FAMILIAS in _tablas(con):
+                n = _filas(con, TABLA_FAMILIAS)
+                if dry:
+                    print(f"  [dry-run] borraría la tabla '{TABLA_FAMILIAS}' de salidas.db ({n} fila(s))")
+                else:
+                    con.execute(f'DROP TABLE "{TABLA_FAMILIAS}"')
+                    con.commit()
+                    print(f"  ✓ tabla '{TABLA_FAMILIAS}' borrada de salidas.db ({n} fila(s))")
+            else:
+                print(f"  · salidas.db ya no tiene '{TABLA_FAMILIAS}'.")
+        finally:
+            con.close()
+
+    # 3. Respaldos de salidas fuera de la retención nueva (salidas.BACKUP_MAX_DIAS).
+    #    La app lo aplicaría sola en el próximo arranque; acá se hace para que se vea en
+    #    el --dry-run antes de aplicarlo.
+    sobran = respaldos.podar(salidas.PREFIJO_BACKUP, max_dias=salidas.BACKUP_MAX_DIAS, dry=dry)
+    if sobran:
+        desde = os.path.basename(sobran[0])
+        verbo = "podaría" if dry else "✓ podados"
+        print(f"  {'[dry-run] ' if dry else ''}{verbo} {len(sobran)} respaldo(s) de salidas "
+              f"de más de {salidas.BACKUP_MAX_DIAS} días (el más viejo: {desde})")
+    else:
+        print(f"  · Respaldos de salidas: ninguno excede los {salidas.BACKUP_MAX_DIAS} días.")
+
+    # 3.5. Los respaldos que SÍ se conservan siguen teniendo la tabla adentro: son copias
+    #      del archivo entero tomadas antes del DROP, y podar por antigüedad sólo alcanza a
+    #      los viejos. Borrar el respaldo entero tiraría la red de recuperación de salidas,
+    #      que es para lo que existe; así que se le saca la tabla a cada uno y se deja el
+    #      resto intacto. El VACUUM no es opcional: sin él el DROP deja las filas en páginas
+    #      libres del archivo y los datos se siguen leyendo con un editor hexadecimal.
+    limpiados = filas_limpiadas = 0
+    for ruta in respaldos.listar(salidas.PREFIJO_BACKUP):
+        if ruta in sobran:
+            continue  # ya se fue entero en la poda
+        con = _conectar(ruta)
+        try:
+            if TABLA_FAMILIAS not in _tablas(con):
+                continue
+            n = _filas(con, TABLA_FAMILIAS)
+            limpiados += 1
+            filas_limpiadas += n
+            if not dry:
+                con.execute(f'DROP TABLE "{TABLA_FAMILIAS}"')
+                con.commit()
+                con.execute("VACUUM")
+        finally:
+            con.close()
+    if limpiados:
+        print(f"  {'[dry-run] sacaría' if dry else '✓ sacada'} la tabla '{TABLA_FAMILIAS}' "
+              f"de {limpiados} respaldo(s) de salidas ({filas_limpiadas} fila(s) en total)")
+    else:
+        print(f"  · Ningún respaldo de salidas conserva '{TABLA_FAMILIAS}'.")
+
+    # 4. Las copias manuales NO se tocan: son la red de seguridad de deploys anteriores y
+    #    database/LEEME.md dice que se borran a mano cuando el deploy se verificó. Pero
+    #    tienen adentro las filas que acabamos de borrar, así que hay que nombrarlas.
+    viejas = sorted(glob.glob(os.path.join(DIR_DATOS, 'salidas.db.pre-actualizacion-*')))
+    if viejas:
+        nombres = ', '.join(os.path.basename(v) for v in viejas)
+        AVISOS.append(
+            f"Quedan {len(viejas)} copias manuales de salidas.db con los datos que este paso "
+            f"borró ({nombres}). No se tocan a propósito (son la red de este deploy). "
+            f"Cuando verifiques que todo anda: rm database/salidas.db.pre-actualizacion-*")
+
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Paso 5 — limpieza de sobras (tablas y columnas que el código ya no declara)
 # ---------------------------------------------------------------------------
 
@@ -792,7 +700,6 @@ def migrar_fotos_a_disco(dry):
 # `gestion.SCHEMA` NO describe gestion.db sino cada `inventarios/<slug>.db`.
 DUENOS_FIJOS = (
     (lambda: gestion.DB_PATH, lambda: (gestion.SCHEMA_REGISTRO, agente_db.SCHEMA)),
-    (lambda: historia.DB_PATH, lambda: (historia.SCHEMA,)),
     (lambda: accesos.DB_PATH, lambda: (accesos.SCHEMA,)),
     (lambda: salidas.DB_PATH, lambda: (salidas.SCHEMA,)),
     (lambda: agente_registro.DB_PATH, lambda: (agente_registro.SCHEMA,)),
@@ -953,8 +860,8 @@ def main():
 
     copia_de_seguridad(args.dry_run)
 
-    pasos = (mudar_a_historia, migrar_proyectos, mudar_a_inventarios,
-             migraciones_de_schema, migrar_fotos_a_disco,
+    pasos = (mudar_a_inventarios,
+             migraciones_de_schema, migrar_fotos_a_disco, retirar_datos_sensibles,
              lambda dry: limpiar_sobras(dry, args.limpiar))
     for paso in pasos:
         if not paso(args.dry_run):

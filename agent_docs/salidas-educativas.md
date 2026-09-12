@@ -1,6 +1,6 @@
 # Salidas educativas (`/salidas`)
 
-Quinta área de la app (las otras: el SPA de horarios, `/gestion`, `/historia`, `/agente`).
+Cuarta área de la app (las otras: el SPA de horarios, `/gestion`, `/agente`).
 Arma el legajo digital de una salida educativa/de representación institucional (Anexos III
 a IX de la Resolución RESOC-2024-3871-GDEBA-DGCYE), lo guarda en el servidor con **vigencia
 de 1 año**, y genera un PDF por anexo para previsualizar/imprimir. `salidas.db` es la fuente
@@ -22,7 +22,7 @@ rutas propias, escritas a mano, reutilizando sólo lo compartido (`accesos`,
   genérico** (ver abajo). `ENTIDADES = {}` a propósito — no pasa por `crud.registrar_rutas`.
   También define `bp_publico`, un **segundo blueprint sin gate** para el link de
   familias/estudiantes — ver "Link público" más abajo.
-- **`salidas.db`** — SQLite propia. Igual que `gestion.db`/`historia.db`/`accesos.db`:
+- **`salidas.db`** — SQLite propia. Igual que `gestion.db`/`accesos.db`:
   **no** se regenera desde Sheets, **no** viaja por git (`.gitignore`) y persiste entre
   deploys — es fuente de verdad, con la diferencia de que sus filas **vencen solas**
   (ver "Vigencia y purga" abajo). Una sola tabla: `salidas` (una fila por salida, con su
@@ -478,7 +478,22 @@ Al guardar (`api_guardar`), `vigencia_hasta = fecha_creacion + 365 días` (`conf
 `salidas.init_db()` llama primero a `crud.init_db()` (respalda, crea tablas, siembra) y
 **recién después** corre `_purgar_vencidas()`: borra las filas de `salidas` con
 `vigencia_hasta` pasada y su carpeta de `salidas_pdfs/<id>/`. Sin papelera ni tabla de
-auditoría — se va del todo, sin vuelta atrás. Es una decisión explícita: se prioriza no
+auditoría — se va del todo, sin vuelta atrás.
+
+La purga **no depende del arranque**: `_purgar_si_toca()` va como `before_request` de los
+dos blueprints del área (`bp` y `bp_publico`) y corre a lo sumo una vez cada
+`INTERVALO_PURGA_HORAS` = 24 por proceso. Antes sólo la llamaba `init_db()`, o sea una vez
+por arranque, y en un hosting donde el web app puede no reciclarse en meses eso era
+"nunca". Va también en el blueprint público porque el link de familias es la ruta más
+visitada desde afuera: si sólo estuviera en `bp`, un año sin que nadie de la escuela abra
+`/salidas` no purgaría nada.
+
+Y los **respaldos de esta área caducan**, a diferencia de los del resto: `salidas.py`
+declara `BACKUP_MAX_DIAS = 60`, que `crud.init_db` le pasa a `respaldos.respaldar`. Sin
+eso, el "primero de cada día" que conserva `respaldos.py` no caduca nunca y una salida
+purgada seguía viva para siempre en `database/backups/salidas-*.db` — purgar la fila y
+dejar el respaldo no purga nada. Los últimos `respaldos.BACKUP_MAX` se conservan igual
+aunque sean más viejos. Es una decisión explícita: se prioriza no
 retener datos sensibles (DNI, salud) más de lo necesario, en línea con el mismo criterio
 que ya regía el formulario standalone original ("no persistente en la compu que se esté
 usando"). Ver `dev-log/DECISIONS.md`.
@@ -492,33 +507,50 @@ activas tumbaría el arranque de la app entera. Por eso el testigo es `salidas_m
 tabla de un solo renglón (`id=1`) sembrada una vez en el primer `init_db()` y nunca más
 tocada — siempre tiene datos, así que nunca dispara el guard.
 
-## Padrón de estudiantes (`estudiantes.py`)
+## Padrón de estudiantes (`static/salidas-padron.js`)
 
-Módulo aparte, capa 2, con su propia DB (`estudiantes.db`) — información sensible (DNI de
-menores) que sólo vive en la computadora de la escuela, nunca en git (`*.db` en
-`.gitignore`, y también `*.xlsx` por si vuelve a aparecer un Excel fuente en la raíz antes
-de importarlo). No es un área registrada en `accesos.py` (sin blueprint ni permiso
-propio): es una dependencia privada de esta feature, así que `salidas.init_db()` también
-llama a `estudiantes.init_db()`, y las rutas que lo tocan viven en `bp` de `salidas.py`,
-gateadas con `salidas.editar`.
+El padrón **no está en el servidor**: lo carga, lo parsea y lo guarda el navegador. Hasta
+2026-09-12 fue `estudiantes.py` + `database/estudiantes.db`, y ahí el problema no era el
+gate sino el lugar — el padrón entero (DNI de menores de toda la escuela) vivía en el disco
+de PythonAnywhere y además viajaba embebido en el HTML de cada carga del formulario. Ver
+`dev-log/DECISIONS.md`.
 
-- **Carga/actualización**: botón "Actualizar padrón de estudiantes" en `/salidas/`
-  (`lista.html`) sube un CSV a `POST /salidas/api/estudiantes/csv`. `estudiantes.cargar_csv`
-  detecta las columnas de curso/apellido y nombre/DNI por nombre (tolera variantes vía
-  `texto.norm`) y **reemplaza todo el padrón** dentro de una transacción — es una carga
-  anual completa, no un alta incremental. El curso viene codificado en un solo campo de 2
-  caracteres (`"1A"`, `"41"`): el primer carácter es el año (1-7) y el resto la división
-  tal cual — mismo criterio que ya usa `escuela.db` (1°-3° con letra, 4°-7° con número).
-- **Autocompletado**: `salidas.nueva()`/`editar()` pasan
-  `estudiantes.listar_para_autocomplete()` al template, que lo embebe como `ESTUDIANTES` (
-  `formulario.html`, junto a `NORMATIVA`). En la tabla de Personas, tipear en "Apellido y
-  Nombre" con rol Estudiante filtra ese array client-side (`normTexto`, mismo criterio que
-  `normalize()` de `static/js/script.js` — sin acentos, minúsculas, substring) y muestra
-  hasta 8 sugerencias con curso/división de referencia; elegir una completa nombre bien
-  escrito + DNI. El dropdown se ancla con `position:fixed` sobre el input en vez de vivir
-  anidado en `.tabla-scroll` (que tiene `overflow-x:auto` y recortaría un hijo absoluto).
-  No hay columna de curso/división en la tabla de Personas — el dato sólo se muestra en la
-  sugerencia, no se guarda con la salida.
+Lo que la escuela carga una vez por año queda en `localStorage` bajo la clave
+`appmitre.padron.v1`, con la forma `{v, cargado, archivo, alumnos:[{apellido_nombre, dni,
+curso, division}]}`. El módulo lleva prefijo de área porque nombra dominio: no es capa 0
+compartida. Lo cargan `lista.html` y `formulario.html` con `<script src>` **sin `defer`** —
+el JS del formulario es un `<script>` inline y un `defer` correría después de él.
+
+- **Carga/actualización**: botón "ACTUALIZAR PADRÓN DE ESTUDIANTES" en `/salidas/`
+  (`lista.html`), que ya no sube nada: `Padron.leerArchivo` → `Padron.parsearCSV` →
+  `Padron.guardar`. `parsearCSV` es el puerto a JS de lo que hacía `estudiantes.cargar_csv`
+  — mismos alias de encabezado (curso/año, apellido/nombre, DNI/documento, detectados por
+  `texto.norm`), mismas reglas y **los mismos mensajes de error, carácter por carácter**. El
+  curso viene en un campo de 2+ caracteres (`"1A"`, `"41"`): el primer carácter es el año
+  (1-7) y el resto la división tal cual — mismo criterio que `escuela.db`. Reemplaza todo el
+  padrón del dispositivo: es carga anual completa, no alta incremental, y como `parsearCSV`
+  valida antes de devolver y `guardar` es un único `setItem`, nunca queda a medias.
+- **Más tolerante que el Python que reemplazó**, en dos puntos que eran trampas reales:
+  detecta `;` además de `,` (el export de Excel en español daba "El CSV no tiene columna
+  para: curso, dni, nombre") y relee en `windows-1252` si el UTF-8 sale con U+FFFD (antes
+  era un 500: `UnicodeDecodeError` no caía en el `except ValueError` de la ruta).
+- **Autocompletado**: los tres consumidores de `formulario.html` llaman a `Padron.listar()`
+  — `renderPasoChipsCurso` (chips por año/división), `renderPasoListaCurso` (los alumnos de
+  un curso con checkbox) y `mostrarSugerenciasEstudiante` (hasta 8 sugerencias por nombre,
+  con `puntajeBusqueda`). El dropdown se ancla con `position:fixed` sobre el input en vez de
+  vivir anidado en `.tabla-scroll` (que tiene `overflow-x:auto` y recortaría un hijo
+  absoluto). No hay columna de curso/división en la tabla de Personas: el dato sólo se
+  muestra en la sugerencia, no se guarda con la salida.
+- **Sin padrón en el dispositivo, todo degrada a tipeo manual** — exactamente como era antes
+  de que el padrón existiera. `listar()` devuelve `[]`, el autocomplete no sugiere y no tira
+  error. Se avisa en dos lugares para que nadie lo confunda con un bug: una línea fija bajo
+  "+ Agregar por curso" (`estadoPadron()`) y el aviso dentro del modal (`avisoSinPadron()`),
+  cuyo link abre en pestaña nueva **a propósito**: el estado del formulario vive sólo en
+  memoria y navegar afuera perdería lo cargado.
+
+**La contra asumida**: el padrón dejó de ser compartido. Cada dispositivo carga el suyo, y
+se pierde si se borran los datos de navegación. `lista.html` lo dice explícitamente en
+pantalla, junto a la cantidad y la fecha de lo que ese dispositivo tiene cargado.
 
 ## Rutas
 
@@ -528,7 +560,6 @@ gateadas con `salidas.editar`.
 | `/salidas/nueva` | GET | `salidas.editar` | El formulario grande de carga |
 | `/salidas/<id>/editar` | GET | `salidas.editar` | El formulario precargado con datos de una salida existente para reeditar |
 | `/salidas/api/guardar` | POST | `salidas.editar` | JSON del formulario → **inserta** la fila si es nueva, o **actualiza** si viene `_id_editar`; genera/regenera los 7 PDF, devuelve `{id}` |
-| `/salidas/api/estudiantes/csv` | POST | `salidas.editar` | Sube un CSV que **reemplaza todo** el padrón de `estudiantes.db` (ver "Padrón de estudiantes" arriba) |
 | `/salidas/<id>` | GET | `salidas.leer` | Detalle: datos comunes, link para compartir, links a los PDF que ya generó la escuela |
 | `/salidas/<id>/regenerar` | POST | `salidas.editar` | Rehace los 7 PDF a partir del `datos_json` guardado |
 | `/salidas/<id>/pdf/<anexo>` | GET | `salidas.leer` | `send_file` del PDF guardado, `as_attachment=False` (se abre en el navegador, no se descarga solo) |

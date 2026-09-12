@@ -39,7 +39,6 @@
   - **CSRF** en los forms que escriben (hoy no hay; la cookie es `SameSite=Lax`, que cubre el caso común).
   - **Límite de intentos** en el login de admin — es la única puerta que sigue siendo una contraseña.
   - **Google Sign-In** como segunda puerta: las columnas `email` / `google_sub` de `dispositivos` ya están reservadas y el gate lee "identidad" en abstracto, así que se suma sin migrar nada ni tocar los permisos.
-  - **Corte fino por área en el agente**: hoy `agente.escribir` habilita escribir en gestión **y** en historia, porque las tools genéricas por slug cruzan las dos. Si hiciera falta separarlas, el lugar es `ejecutar_tool` mirando `_modulo(slug)`, no el esquema.
 
 - [ ] #23 — `config.TURNO_CURSOS` desfasado contra la planilla de preceptores — `config.py` (+ confirmar con la escuela)  
   Hay **7 cursos** donde el turno que dice `config.TURNO_CURSOS` no tiene **ninguna fila** en `horarios_preceptores`. Consecuencia: el agente devuelve `titular` vacío (hay una rama en `NOTA_TURNOS` que lo explica, pero es un parche sobre datos mal) y el SPA no marca ningún "PRECEPTOR PRINCIPAL" en la vista de curso.
@@ -55,12 +54,6 @@
   | 7° 5 | VESPERTINO | TARDE |
 
   Además `("3", "")` y `("4", "G")` no están en el mapa y caen silenciosamente a `TURNO_DEFAULT` ("MAÑANA"). **Antes de tocar nada hay que preguntar en la escuela cuál de los dos está bien**: puede ser config viejo, o puede ser que falte cargar gente en el Sheet. No es un bug de código. Salió al arreglar el bug de turnos del agente el 2026-08-11 (ver `dev-log/DECISIONS.md`).
-
----
-
-## En pausa
-
-- **Historia institucional (`/historia`)** — pausada el 2026-09-02: no se le agregan features ni se abren tareas. Los cambios de capa 1 (`crud.py`, `accesos.py`, `templates/crud/`) la siguen alcanzando por arrastre; ahí sólo se verifica que no se rompa.
 
 ---
 
