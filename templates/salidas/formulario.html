@@ -256,10 +256,7 @@ const DATOS_FIJOS = {
   distrito:              "General San Martín",
   domicilio:             "San Martín 1714",
   telefono:              "011 4755-2116",
-  director:              "Moschet Javier", // Apellido y nombre del/la director/a
-  tipo_gestion:          "estatal",       // "estatal" | "privada"
-  representante_legal:   "",              // sólo gestión privada (DIEGEP)
-  entidad_propietaria:   ""               // sólo gestión privada (DIEGEP)
+  director:              "Moschet Javier" // Apellido y nombre del/la director/a
 };
 
 /* ============================================================================
@@ -311,10 +308,7 @@ const COMUNES = [
      a:"Teléfono de contacto del establecimiento. Sólo lo pide el Anexo IV."},
     {id:"director", label:"Director/a del establecimiento", tipo:"text", fijo:true,
      destino:["IX.director"],
-     a:"Apellido y nombre de quien firma la Declaración Jurada del Anexo IX. Es el/la responsable de que todo el legajo esté completo antes de la partida."},
-    {id:"tipo_gestion", label:"Tipo de gestión", tipo:"select", opciones:["estatal","privada"], fijo:true,
-     destino:["IX.tipo_gestion"],
-     a:"Estatal o privada. No es un campo del formulario original: define si el Anexo IX además necesita los datos y la firma del/la Representante Legal, como exige el Anexo I para las escuelas de gestión privada."}
+     a:"Apellido y nombre de quien firma la Declaración Jurada del Anexo IX. Es el/la responsable de que todo el legajo esté completo antes de la partida."}
   ]},
   { grupo:"Proyecto y salida", campos:[
     {id:"denominacion_proyecto", label:"Denominación del proyecto", tipo:"text",
@@ -557,10 +551,6 @@ const ANEXOS = [
     {id:"domicilio", label:"Domicilio", tipo:"text", req:true, auto:true},
     {id:"distrito", label:"Distrito", tipo:"text", req:true, auto:true},
     {id:"director", label:"Director/a del establecimiento", tipo:"text", req:true, auto:true},
-    {id:"representante_legal", label:"Representante Legal (DIEGEP)", tipo:"text", req:false, cond:{campo:"tipo_gestion", valor:"privada"},
-     a:"Sólo para escuelas de gestión privada. En ese caso el/la Representante Legal también firma la declaración."},
-    {id:"entidad_propietaria", label:"Entidad propietaria (DIEGEP)", tipo:"text", req:false, cond:{campo:"tipo_gestion", valor:"privada"},
-     a:"Sólo para gestión privada: en esas escuelas la entidad propietaria es la responsable de la salida."},
     {id:"fecha_lugar_realizacion", label:"Fecha y lugar de realización de la salida", tipo:"text", req:true, calc:true,
      a:"Se arma solo con los datos comunes de la salida."},
     {id:"compania_aseguradora", label:"Compañía aseguradora (seguro escolar)", tipo:"text", req:true, seccion:"Seguro escolar"},
@@ -656,15 +646,6 @@ function puntajeBusqueda(qNorm, texto){
   if (difuso && mejor >= UMBRAL_SIMILITUD) return mejor;
   return null;
 }
-
-/* Datos fijos que alimentan campos del Anexo IX que no son del bloque de seguro (ese
-   bloque ya no es "auto": tiene su propio selector de preset, ver SEGUROS_PRESET y
-   selectorPresetSeguro — necesita quedar editable a mano sin que refrescarDerivados() lo
-   pise en cada tecla que se toca en Datos Comunes). */
-const SEGURO_A_FIJO = {
-  "IX.representante_legal":"representante_legal",
-  "IX.entidad_propietaria":"entidad_propietaria"
-};
 
 const ROLES = [
   {v:"estudiante",           t:"Estudiante"},
@@ -829,7 +810,6 @@ function calculado(anexo, campo){
 
 function valorAuto(anexo, campo){
   const clave = anexo + "." + campo;
-  if (SEGURO_A_FIJO[clave]) return DATOS_FIJOS[SEGURO_A_FIJO[clave]] || "";
   for (const g of COMUNES) for (const c of g.campos){
     if ((c.destino||[]).includes(clave)) return estado.comunes[c.id] || "";
   }

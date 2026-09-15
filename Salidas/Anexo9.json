@@ -107,7 +107,7 @@
       "seccion": null,
       "opciones": null,
       "columnas": null,
-      "condicion": { "campo": "tipo_gestion", "valor": "privada" },
+      "condicion": null,
       "notas": null
     },
     {
@@ -120,7 +120,7 @@
       "seccion": null,
       "opciones": null,
       "columnas": null,
-      "condicion": { "campo": "tipo_gestion", "valor": "privada" },
+      "condicion": null,
       "notas": null
     },
     {

@@ -6,6 +6,18 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-09-12] — Anexo IX: DIEGEP siempre en blanco, `tipo_gestion` nunca se imprime
+
+`representante_legal`/`entidad_propietaria` (DIEGEP) ya no dependen de `condicion` en
+`Anexo9.json`: en el papel esas dos líneas están siempre, en blanco si no aplica — no un
+campo que aparece o no. Como la escuela es siempre gestión estatal, se sacaron del
+formulario digital (nunca hay nada que cargar ahí) pero el PDF las sigue imprimiendo vacías.
+`tipo_gestion` sigue existiendo y viajando en el JSON guardado (`CAMPOS_SIN_IMPRIMIR` en
+`salidas.py`) porque `_dibujar_firmas_ix` todavía lo usa para la segunda columna de firma —
+pero no es un campo del papel, así que no se dibuja como línea propia.
+
+---
+
 ## [2026-09-12] — El modelo no confirma altas: sólo escriben los botones
 
 `crear_entidad` escribe únicamente si `contexto_turno['confirmado_por_usuario']` está puesto,

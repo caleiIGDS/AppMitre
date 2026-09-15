@@ -110,16 +110,6 @@
     "frase_resaltar": "8.11 Cuando el traslado de las y los estudiantes mayores de 18 años"
   },
   {
-    "clave": "COMUN.tipo_gestion",
-    "anexo": null,
-    "tipo": "ayuda_campo",
-    "mensaje": "Estatal o privada. No es un campo del formulario original: define si el Anexo IX además necesita los datos y la firma del/la Representante Legal, como exige el Anexo I para las escuelas de gestión privada.",
-    "razon": "En escuelas de gestión privada, el Representante Legal (DIEGEP) también firma la Declaración Jurada del Anexo IX, además del director/a.",
-    "referencia_normativa": "Resolución RESOC-2024-3871-GDEBA-DGCYE, Anexo I",
-    "pagina_pdf": 17,
-    "frase_resaltar": "también por el/la Representante Legal"
-  },
-  {
     "clave": "IV.itinerario",
     "anexo": "IV",
     "tipo": "ayuda_campo",
@@ -305,26 +295,6 @@
     "tipo": "ayuda_campo",
     "mensaje": "Apellido y nombre de quien firma la Declaración Jurada del Anexo IX. Es el/la responsable de que todo el legajo esté completo antes de la partida.",
     "razon": "Identificación del máximo responsable de la institución educativa ante la autoridad educativa en materia de salidas.",
-    "referencia_normativa": null,
-    "pagina_pdf": null,
-    "frase_resaltar": null
-  },
-  {
-    "clave": "COMUN.representante_legal",
-    "anexo": null,
-    "tipo": "ayuda_campo",
-    "mensaje": "Para escuelas de gestión privada. Datos del Representante Legal (DIEGEP).",
-    "razon": "En gestión privada, el Representante Legal es el responsable de la entidad ante la autoridad educativa.",
-    "referencia_normativa": null,
-    "pagina_pdf": null,
-    "frase_resaltar": null
-  },
-  {
-    "clave": "COMUN.entidad_propietaria",
-    "anexo": null,
-    "tipo": "ayuda_campo",
-    "mensaje": "Para escuelas de gestión privada. Entidad propietaria de la institución.",
-    "razon": "En gestión privada, la entidad propietaria es responsable solidario de la salida según la Resolución.",
     "referencia_normativa": null,
     "pagina_pdf": null,
     "frase_resaltar": null
@@ -915,26 +885,6 @@
     "tipo": "ayuda_campo",
     "mensaje": "Marcar cuando la fotocopia ya esté adjuntada.",
     "razon": "Control administrativo de documentación adjunta.",
-    "referencia_normativa": null,
-    "pagina_pdf": null,
-    "frase_resaltar": null
-  },
-  {
-    "clave": "IX.representante_legal",
-    "anexo": "IX",
-    "tipo": "ayuda_campo",
-    "mensaje": "Sólo para escuelas de gestión privada. En ese caso el/la Representante Legal también firma la declaración.",
-    "razon": "En gestión privada, el Representante Legal es responsable solidario ante la autoridad educativa.",
-    "referencia_normativa": null,
-    "pagina_pdf": null,
-    "frase_resaltar": null
-  },
-  {
-    "clave": "IX.entidad_propietaria",
-    "anexo": "IX",
-    "tipo": "ayuda_campo",
-    "mensaje": "Sólo para gestión privada: en esas escuelas la entidad propietaria es la responsable de la salida.",
-    "razon": "En gestión privada, la entidad propietaria asume responsabilidad de la salida.",
     "referencia_normativa": null,
     "pagina_pdf": null,
     "frase_resaltar": null

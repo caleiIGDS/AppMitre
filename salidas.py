@@ -343,6 +343,15 @@ CAMPOS_DOCENTES = ('docentes_responsables_titulares', 'docentes_reemplazantes')
 # siendo el texto legible para el formulario HTML) y dibuja el texto fijo del papel.
 CAMPOS_FIRMA_IX = ('firma_sello_director', 'firma_sello_representante_legal')
 
+# `tipo_gestion` (Anexo IX) no es un campo del papel original — lo dice su propia
+# `notas` en el JSON: existe sólo para que el código decida si corresponde pedir
+# representante_legal/entidad_propietaria y la segunda columna de CAMPOS_FIRMA_IX. Por
+# eso nunca se dibuja como "label: valor" suelto, aunque sí se sigue usando su valor
+# (siempre 'estatal' para esta escuela) para esas decisiones.
+CAMPOS_SIN_IMPRIMIR = {
+    'IX': {'tipo_gestion'},
+}
+
 # El original mete dos (o hasta tres) campos en el mismo renglón en varios lugares (ej.
 # Anexo V: "INSTITUCIÓN EDUCATIVA ____ N°____" es una sola línea, no dos; Anexo IV: "Fecha
 # de salida ____ Hora ____ Lugar ____" son tres). Cada tupla es un grupo completo, en el
@@ -417,6 +426,14 @@ PARRAFOS_NARRATIVA = {
         # corresponde, acá se resuelve solo con el valor elegido.
         'mapeos': {'tipo_salida': {'educativa': 'Salida Educativa',
                                     'representacion_institucional': 'Salida de Representación Institucional'}},
+        # En el original el blanco de "mi hijo/a ____" ocupa toda la línea (y sigue en la
+        # siguiente): es el único dato de la parte 2 que necesita ese lugar. Los demás
+        # blancos del párrafo se quedan con el ancho fijo de ANCHOS_BLANCO_NARRATIVA.
+        'anchos_resto_linea': {'nombre_estudiante'},
+        # Sin tipo_salida elegido (formulario en blanco para completar a mano), mismo
+        # criterio que LABELS_SEGUN_TIPO_SALIDA en el IX: en vez de un blanco, cae el texto
+        # con las dos opciones para tachar la que no corresponda.
+        'sin_dato': {'tipo_salida': 'Salida educativa/ de representación institucional'},
     }],
     'VII': [{
         'ids': ('nombre_estudiante', 'dni_estudiante', 'domicilio', 'localidad', 'institucion', 'tipo_salida',
@@ -739,9 +756,14 @@ def _dibujar_narrativa(pdf, bloque, valores, campos_por_id):
                 # Es un placeholder {id} — escribir el valor destacado, o una línea en
                 # blanco para completar a mano si no vino cargado.
                 valor = valores_texto.get(parte, '')
+                sin_dato = bloque.get('sin_dato', {}).get(parte)
                 if valor:
                     with _valor_destacado(pdf, TAM_TEXTO):
                         pdf.write(ALTO_LINEA, valor)
+                elif sin_dato:
+                    pdf.write(ALTO_LINEA, sin_dato)
+                elif parte in bloque.get('anchos_resto_linea', ()):
+                    pdf.cell(pdf.w - pdf.r_margin - pdf.get_x(), ALTO_LINEA, '', border='B')
                 else:
                     pdf.cell(ANCHOS_BLANCO_NARRATIVA.get(parte, ANCHO_BLANCO_NARRATIVA), ALTO_LINEA, '', border='B')
         pdf.ln(ALTO_LINEA)
@@ -905,9 +927,10 @@ def _generar_pdf_anexo(anexo, valores, destino):
     ids_narrativa_resto = {id for b in narrativas for id in b['ids'][1:]}  # el resto no se dibuja solo
     procesados = set()  # ids ya dibujados por un caso especial (obra social) — no se repiten
     seccion_actual = object()  # distinto de cualquier valor real, para forzar el primer título
+    sin_imprimir = CAMPOS_SIN_IMPRIMIR.get(anexo, ())
     for campo in sorted(schema['campos'], key=lambda c: c['orden']):
         if (campo['id'] in procesados or campo['id'] in ids_resto_linea or campo['id'] in ids_narrativa_resto
-                or not _condicion_cumple(campo, valores)):
+                or campo['id'] in sin_imprimir or not _condicion_cumple(campo, valores)):
             continue
         if campo.get('seccion') != seccion_actual:
             seccion_actual = campo.get('seccion')
