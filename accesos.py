@@ -988,13 +988,20 @@ def registrar_app(app, modulos):
         return redirect('/')
 
     # El canje va sobre `app` y no sobre un blueprint con gate: es justamente la puerta
-    # por la que entra alguien que todavía no tiene ningún acceso.
+    # por la que entra alguien que todavía no tiene ningún acceso. Por eso ningún
+    # `context_processor` de área lo alcanza (cada uno cuelga de su `bp`) y `accesos/base.html`
+    # tiene que recibir escuela_nombre/logo/version a mano en cada render.
+    def _render_canje(template, codigo=200, **kw):
+        return render_template(template, escuela_nombre=ESCUELA_NOMBRE,
+                               escuela_logo=ESCUELA_LOGO,
+                               escuela_version=ESCUELA_VERSION, **kw), codigo
+
     @app.route('/acceso/<token>', methods=['GET'])
     def acceso_canjear_ver(token):
         inv = invitacion_valida(token)
         if inv is None:
-            return render_template('accesos/invalido.html'), 410
-        return render_template('accesos/canjear.html', inv=inv, token=token, error=None)
+            return _render_canje('accesos/invalido.html', 410)
+        return _render_canje('accesos/canjear.html', inv=inv, token=token, error=None)
 
     @app.route('/acceso/<token>', methods=['POST'])
     def acceso_canjear(token):
@@ -1004,22 +1011,22 @@ def registrar_app(app, modulos):
         # recibiría "link inválido" sin haber hecho nada.
         inv = invitacion_valida(token)
         if inv is None:
-            return render_template('accesos/invalido.html'), 410
+            return _render_canje('accesos/invalido.html', 410)
 
         nombre = ' '.join((request.form.get('nombre') or '').split())[:80]
         if len(nombre) < 3:
             # Vuelve al formulario SIN quemar el token: mandar el campo vacío no puede
             # costarle el acceso a nadie.
-            return render_template('accesos/canjear.html', inv=inv, token=token,
-                                   error='Escribí tu nombre y apellido.'), 400
+            return _render_canje('accesos/canjear.html', 400, inv=inv, token=token,
+                                 error='Escribí tu nombre y apellido.')
 
         disp = canjear(token, nombre, (request.headers.get('User-Agent') or '')[:300])
         if disp is None:
-            return render_template('accesos/invalido.html'), 410
+            return _render_canje('accesos/invalido.html', 410)
 
         session.clear()
         session.permanent = True
         session['acceso'] = {'tipo': 'dispositivo', 'id': disp['id']}
-        return render_template('accesos/listo.html', disp=disp,
-                               perfil_etiqueta=ETIQUETA_PERFIL.get(disp['perfil'],
-                                                                   disp['perfil']))
+        return _render_canje('accesos/listo.html', disp=disp,
+                             perfil_etiqueta=ETIQUETA_PERFIL.get(disp['perfil'],
+                                                                  disp['perfil']))
