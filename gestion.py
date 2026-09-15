@@ -612,25 +612,27 @@ def migrar(cur):
 ERROR_DUPLICADO = {}
 
 
-# Umbral del chip "sin revisar hace +6 meses" del listado (rediseño de
-# templates/gestion/lista.html). 183 días ~ 6 meses.
-UMBRAL_SIN_REVISAR_DIAS = 183
+# Slider "sin revisar hace +N meses" del listado (rediseño de templates/gestion/lista.html):
+# el JS convierte meses a días con este mismo factor (ver gestion.js) para comparar contra
+# `_dias_sin_revisar`.
+DIAS_POR_MES = 30.5
 
 
-def _revisado_vencido(fecha_texto):
-    """True si `fecha_revision` está vacía o pasó el umbral de 6 meses.
+def _dias_sin_revisar(fecha_texto):
+    """Días desde `fecha_revision`, para el slider de "última revisión" del listado.
 
-    Las fechas cortas sin año que trae el inventario importado del sheet (ver
-    FORMATO_FECHA_REVISION) no se pueden ubicar en el tiempo: no se marcan vencidas
-    (mejor un falso negativo suelto que marcar vencido todo el inventario viejo)."""
+    None si el texto no se puede ubicar en el tiempo — las fechas cortas sin año que trae
+    el inventario importado del sheet (ver FORMATO_FECHA_REVISION) — y no entra al filtro
+    ni a favor ni en contra (mejor un falso negativo suelto que marcar vencido todo el
+    inventario viejo). Vacía es la peor fecha posible: un número bien alto, no None."""
     fecha_texto = (fecha_texto or '').strip()
     if not fecha_texto:
-        return True
+        return 99999
     try:
         fecha = datetime.strptime(fecha_texto, FORMATO_FECHA_REVISION)
     except ValueError:
-        return False
-    return (ahora() - fecha).days > UMBRAL_SIN_REVISAR_DIAS
+        return None
+    return (ahora() - fecha).days
 
 
 def valores_iniciales(slug):
@@ -692,9 +694,9 @@ def init_db():
 def extras_template(vista, slug, id=None):
     """Kwargs extra para el render. En la ficha: la lista fija de lugares, para el datalist
     del mini form de mover/ubicar unidades (templates/gestion/detalle.html). En el listado:
-    los lugares de cada recurso (para la columna y el filtro) y qué está vencido. En el
-    formulario de edición: los sub-recursos del kit, que se cargan y se borran ahí y no en
-    la ficha (templates/gestion/form.html)."""
+    los lugares y estados de cada recurso (para la columna y los filtros) y los días desde
+    la última revisión, para el slider. En el formulario de edición: los sub-recursos del
+    kit, que se cargan y se borran ahí y no en la ficha (templates/gestion/form.html)."""
     if slug == 'recursos' and vista == 'detalle':
         return {'lugares_recurso': LUGARES_RECURSO}
     if slug == 'recursos' and vista == 'editar':
@@ -709,13 +711,17 @@ def extras_template(vista, slug, id=None):
         con = conectar()
         cur = con.cursor()
         filas = cur.execute("SELECT id, fecha_revision FROM recursos").fetchall()
-        vencidos = {f['id'] for f in filas if _revisado_vencido(f['fecha_revision'])}
+        dias_revision = {f['id']: _dias_sin_revisar(f['fecha_revision']) for f in filas}
+        # Insignia fija de "Sin revisar" en la tarjeta de celular (visual "6a"): un umbral
+        # por defecto (6 meses), no el del slider — ése filtra, esto es sólo un aviso.
+        vencidos = {id for id, dias in dias_revision.items() if dias is not None and dias >= 6 * DIAS_POR_MES}
         ubicaciones = lugares_por_recurso(cur)
         con.commit()  # lugares_por_recurso puede crear unidades que faltaban (_asegurar_unidades)
         con.close()
         lugares = sorted({g['ubicacion'] for lugs in ubicaciones.values() for g in lugs if g['ubicacion'] != 'Sin ubicar'},
                           key=texto.norm)
-        return {'vencidos_recurso': vencidos, 'lugares_filtro': lugares, 'ubicaciones_recurso': ubicaciones}
+        return {'dias_revision': dias_revision, 'vencidos_recurso': vencidos, 'lugares_filtro': lugares,
+                'ubicaciones_recurso': ubicaciones, 'estados_filtro': ESTADOS_RECURSO}
     return {}
 
 
@@ -1052,16 +1058,33 @@ def _int(texto):
 @bp.route('/alias')
 @accesos.requiere(PERMISO_ALIAS)
 def alias_lista():
-    """Consulta de solo lectura: qué alias le completó el asistente a cada recurso.
+    """Qué alias tiene cada recurso — los completa el asistente, pero el admin del
+    inventario (único que llega acá, ver `PERMISO_ALIAS`) los puede corregir a mano.
 
-    Es la única ventana al campo oculto (`recursos.alias`) — no hay edición acá ni en
-    ningún otro lado de la web a propósito, ver `agent_docs/gestion-conocimiento.md`.
+    Es la única ventana al campo oculto (`recursos.alias`); a un humano que no sea admin
+    de este inventario no se le muestra ni se le deja editar en ningún otro lado, ver
+    `agent_docs/gestion-conocimiento.md`.
     """
     con = conectar()
     filas = con.execute(
-        "SELECT nombre, alias FROM recursos ORDER BY nombre COLLATE NOCASE").fetchall()
+        "SELECT id, nombre, alias FROM recursos ORDER BY nombre COLLATE NOCASE").fetchall()
     con.close()
     return render_template('gestion/alias_lista.html', filas=filas, activo='alias')
+
+
+@bp.route('/alias/<int:id>/guardar', methods=['POST'])
+@accesos.requiere(PERMISO_ALIAS)
+def alias_guardar(id):
+    """Guarda el alias editado a mano desde `/gestion/alias`. Mismo campo y mismo formato
+    CSV que usa el asistente vía `editar_entidad(alias=...)`: reemplaza el valor entero."""
+    alias = request.form.get('alias', '').strip()
+    con = conectar()
+    cur = con.cursor()
+    if cur.execute("SELECT 1 FROM recursos WHERE id = ?", (id,)).fetchone():
+        cur.execute("UPDATE recursos SET alias = ? WHERE id = ?", (alias, id))
+        con.commit()
+    con.close()
+    return redirect(url_for('gestion.alias_lista'))
 
 
 def _stock(cur, rid):

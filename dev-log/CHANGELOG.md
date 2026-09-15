@@ -6,6 +6,15 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-09-15] — `/gestion/alias` deja de ser solo lectura
+
+**Archivos**: `gestion.py` (ruta nueva `POST /gestion/alias/<id>/guardar`),
+`templates/gestion/alias_lista.html` (tags editables por JS). El admin del inventario
+(`gestion.alias`) ahora puede corregir el alias a mano, mismo campo y formato CSV que
+`editar_entidad(alias=...)` del asistente — sigue invisible para cualquier otro humano.
+
+---
+
 ## [2026-09-12] — El padrón de estudiantes deja el servidor y pasa al navegador
 
 **Archivos**: `estudiantes.py` borrado; `static/salidas-padron.js` nuevo; `salidas.py`,

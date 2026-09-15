@@ -1,19 +1,20 @@
-{# Consulta de solo lectura, admin-only: qué alias le completó el asistente a cada
-   recurso. No hay edición acá ni en ningún otro lado de la web — ver
+{# Único lugar de la web que muestra el campo oculto `recursos.alias` — y ahora también
+   el único donde un humano (el admin de este inventario) lo puede editar, además del
+   asistente por chat. Ver gestion.py::alias_lista/alias_guardar y
    agent_docs/gestion-conocimiento.md. #}
 {% extends 'gestion/base.html' %}
 {% block titulo %}Alias de recursos{% endblock %}
 {% block contenido %}
 <div class="g-toolbar">
     <h2>ALIAS DE RECURSOS <span class="g-count">{{ filas | length }}</span></h2>
-    <p class="g-help">Términos que el asistente completó para que la búsqueda encuentre un
-        recurso aunque lo pidan con otro nombre. Solo lectura: se edita únicamente por
-        chat.</p>
+    <p class="g-help">Términos alternativos para que la búsqueda encuentre un recurso
+        aunque lo pidan con otro nombre. Los completa el asistente por chat, pero acá los
+        podés agregar, corregir o sacar a mano.</p>
 </div>
 
 {% if filas %}
 <div class="g-table-wrap">
-    <table class="g-table">
+    <table class="g-table g-table-alias">
         <thead>
             <tr><th>NOMBRE</th><th>ALIAS</th></tr>
         </thead>
@@ -21,7 +22,21 @@
             {% for fila in filas %}
             <tr>
                 <td data-label="NOMBRE">{{ fila['nombre'] }}</td>
-                <td data-label="ALIAS">{{ fila['alias'] or '' }}</td>
+                <td data-label="ALIAS">
+                    <form method="post" class="g-alias-form"
+                          action="{{ url_for('gestion.alias_guardar', id=fila['id']) }}">
+                        <div class="g-tags" data-tags>
+                            {% for termino in (fila['alias'] or '').split(',') %}
+                            {% if termino.strip() %}
+                            <span class="g-tag"><span class="g-tag-texto">{{ termino.strip() }}</span><button type="button" class="g-tag-quitar" aria-label="Quitar «{{ termino.strip() }}»">×</button></span>
+                            {% endif %}
+                            {% endfor %}
+                            <input type="text" class="g-tag-input" placeholder="+ agregar…">
+                        </div>
+                        <input type="hidden" name="alias" value="{{ fila['alias'] or '' }}">
+                        <button type="submit" class="g-btn-mini g-tag-guardar" hidden>Guardar</button>
+                    </form>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
@@ -30,4 +45,72 @@
 {% else %}
 <div class="g-empty"><p>Todavía no hay recursos cargados.</p></div>
 {% endif %}
+
+<script>
+(function () {
+    // Tira de tags editable: cada .g-alias-form tiene sus chips + un input de texto suelto
+    // y un hidden `alias` en CSV (mismo formato que escribe el asistente). Enter/coma/blur
+    // con texto agrega chip; × en un chip lo saca. El botón Guardar queda oculto hasta que
+    // algo cambió, para no mostrar un submit sin sentido en cada fila de la tabla.
+    function sincronizar(form) {
+        var tags = form.querySelectorAll('.g-tag-texto');
+        var valor = Array.prototype.map.call(tags, function (t) { return t.textContent; }).join(', ');
+        var hidden = form.querySelector('input[name="alias"]');
+        hidden.value = valor;
+        var boton = form.querySelector('.g-tag-guardar');
+        boton.hidden = (valor === hidden.defaultValue);
+    }
+
+    function agregarTag(form, texto) {
+        texto = texto.trim().replace(/,+$/, '').trim();
+        if (!texto) return;
+        var contenedor = form.querySelector('[data-tags]');
+        var input = form.querySelector('.g-tag-input');
+        var chip = document.createElement('span');
+        chip.className = 'g-tag';
+        var span = document.createElement('span');
+        span.className = 'g-tag-texto';
+        span.textContent = texto;
+        var quitar = document.createElement('button');
+        quitar.type = 'button';
+        quitar.className = 'g-tag-quitar';
+        quitar.setAttribute('aria-label', 'Quitar «' + texto + '»');
+        quitar.textContent = '×';
+        chip.appendChild(span);
+        chip.appendChild(quitar);
+        contenedor.insertBefore(chip, input);
+        input.value = '';
+        sincronizar(form);
+    }
+
+    document.querySelectorAll('.g-alias-form').forEach(function (form) {
+        var hidden = form.querySelector('input[name="alias"]');
+        hidden.defaultValue = hidden.value;
+        var input = form.querySelector('.g-tag-input');
+
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                agregarTag(form, input.value);
+            } else if (e.key === 'Backspace' && !input.value) {
+                var chips = form.querySelectorAll('.g-tag');
+                if (chips.length) {
+                    chips[chips.length - 1].remove();
+                    sincronizar(form);
+                }
+            }
+        });
+        input.addEventListener('blur', function () {
+            if (input.value.trim()) agregarTag(form, input.value);
+        });
+
+        form.addEventListener('click', function (e) {
+            var quitar = e.target.closest('.g-tag-quitar');
+            if (!quitar) return;
+            quitar.closest('.g-tag').remove();
+            sincronizar(form);
+        });
+    });
+})();
+</script>
 {% endblock %}

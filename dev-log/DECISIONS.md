@@ -6,6 +6,16 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-09-15] — `/gestion/alias` pasa a ser editable (solo para el admin que ya llega ahí)
+
+La decisión 2026-08-21 dijo "el usuario nunca debe ver ni editar" el alias — eso seguía
+hablando del usuario común, no de quien ya tiene `gestion.alias` (admin, comodín `'*'`):
+ese permiso ya filtraba a la única persona que hoy puede ver el campo. Se agregó edición
+con tags en la misma página, sin abrir el campo a nadie más ni tocar `ENTIDADES['recursos']['campos']`
+(sigue fuera del form y de la ficha del chat). El asistente sigue pudiendo escribirlo igual.
+
+---
+
 ## [2026-09-12] — Anexo IX: DIEGEP siempre en blanco, `tipo_gestion` nunca se imprime
 
 `representante_legal`/`entidad_propietaria` (DIEGEP) ya no dependen de `condicion` en

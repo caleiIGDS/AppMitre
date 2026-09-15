@@ -16,9 +16,10 @@
     {% if puede('agente.leer') %}
     <a class="g-btn" href="{{ url_for('agente.chat_page') }}">🤖 IR AL ASISTENTE</a>
     {% endif %}
-    {% if puede('gestion.leer') %}
+    {# Sin gate propio: la lista se ve identificado, y muestra sólo los inventarios que
+       este acceso puede abrir (ver `inventarios.panel`). Por eso va sin `puede()`: un
+       link de invitación con permiso SÓLO de un inventario (ámbito) no tiene
+       `gestion.leer` a secas, que es justo lo que `puede()` pregunta acá afuera. #}
     <a class="g-btn-outline" href="{{ url_for('inventarios.panel') }}">INVENTARIOS</a>
-    {% endif %}
-    <a class="g-btn-outline" href="/">SISTEMA DE HORARIOS</a>
 </div>
 {% endblock %}

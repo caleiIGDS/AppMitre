@@ -17,6 +17,15 @@
                 <input type="text" name="q" value="{{ q }}" placeholder="NOMBRE, TIPO O UBICACIÓN…">
                 <button type="submit">BUSCAR</button>
             </form>
+            {# En celular reemplaza a la tira de filtros de abajo (que ahí queda oculta):
+               un símbolo, no otro cuadro más al lado del de búsqueda. En escritorio no se
+               ve — ahí los filtros ya están siempre visibles (ver gestion.css). #}
+            <button type="button" class="g-filtro-abrir" id="btn-abrir-filtros" aria-expanded="false" aria-controls="panel-filtros">
+                <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">
+                    <path d="M2.5 4h15M5.5 10h9M8.5 16h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <span class="g-sr-only">Filtros</span>
+            </button>
             {% if puede(permiso_escritura) %}
             <a class="g-btn" href="{{ url_for(area_nombre ~ '.nuevo', slug=slug) }}">+ CREAR {{ cfg.singular | upper }}</a>
             {% endif %}
@@ -26,8 +35,16 @@
     {% if filas %}
     {# Filtros client-side (gestion.js): combinan con la búsqueda de arriba sobre las filas
        ya renderizadas, sin ir al servidor. Sin JS quedan visibles pero inertes: la búsqueda
-       por texto sigue funcionando server-side igual que en cualquier otro listado. #}
-    <div class="g-filtros">
+       por texto sigue funcionando server-side igual que en cualquier otro listado. En
+       celular sin JS el símbolo no tiene con qué abrir el panel (nadie escucha el click),
+       así que se fuerza visible tal como antes — desplegable sólo es un lujo con JS. #}
+    <noscript><style>
+        @media (max-width: 700px) {
+            .g-filtros { display: flex !important; position: static !important; box-shadow: none !important; }
+            .g-filtro-abrir { display: none !important; }
+        }
+    </style></noscript>
+    <div class="g-filtros" id="panel-filtros">
         <span class="g-filtros-label">Filtros</span>
         {% if lugares_filtro %}
         <select class="g-filtro-select" id="filtro-ubicacion">
@@ -37,13 +54,22 @@
             {% endfor %}
         </select>
         {% endif %}
+        {% if estados_filtro %}
+        <select class="g-filtro-select" id="filtro-estado">
+            <option value="">Estado: todos</option>
+            {% for e in estados_filtro %}
+            <option value="{{ e }}">{{ e }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
         <span class="g-filtro-spacer"></span>
         {% if puede('gestion.auditoria') %}
-        <button type="button" class="g-chip-vencidos" id="filtro-vencidos" aria-pressed="false">
-            Sin revisar hace +6 meses <span id="filtro-vencidos-count">{{ vencidos_recurso | length }}</span>
-        </button>
+        <div class="g-filtro-fecha">
+            <label for="filtro-fecha">Sin revisar hace +<span id="filtro-fecha-valor">0</span> meses</label>
+            <input type="range" id="filtro-fecha" min="0" max="24" step="0.5" value="0">
+        </div>
         <button type="button" class="g-chip-vencidos" id="filtro-baja" aria-pressed="false">
-            Mostrar dados de baja
+            Sólo dados de baja
         </button>
         {% endif %}
     </div>
@@ -68,6 +94,8 @@
             <tr data-buscar="{{ buscar[fila['id']] }}"
                 data-alias="{{ buscar_alias[fila['id']] }}"
                 data-ubicacion="|{{ ubicaciones_recurso[fila['id']] | map(attribute='ubicacion') | join('|') }}|"
+                data-estado="{{ fila['estado'] }}"
+                data-dias-revision="{{ dias_revision[fila['id']] if dias_revision[fila['id']] is not none else '' }}"
                 data-vencido="{{ '1' if fila['id'] in vencidos_recurso else '0' }}"
                 data-href="{{ url_for(area_nombre ~ '.detalle', slug=slug, id=fila['id']) }}"
                 {{ 'hidden' if fila['estado'] == estado_baja }}

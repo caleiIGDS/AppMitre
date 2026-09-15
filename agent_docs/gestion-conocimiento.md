@@ -314,7 +314,8 @@ unidad y los sub-recursos de un kit, pero el mecanismo de limpieza es idéntico)
 | `/gestion/<slug>/<id>/foto/<foto_id>` | GET | Sirve el archivo de esa foto |
 | `/gestion/<slug>/<id>/foto/<foto_id>/eliminar` | POST | Borra la foto (fila + archivo) y vuelve a la ficha |
 | `/gestion/<slug>/<id>/foto/<foto_id>/rotar` | POST | Reemplaza el ARCHIVO de esa foto por la versión girada que manda el navegador (imagen cruda en el body), mismo `id`. Solo admin (`gestion.rotar`) |
-| `/gestion/alias` | GET | Solo lectura, solo admin (`gestion.alias`): tabla NOMBRE / ALIAS de todos los recursos. Único lugar de la web donde se ve el alias oculto — no hay edición acá |
+| `/gestion/alias` | GET | Solo admin (`gestion.alias`): tabla NOMBRE / ALIAS de todos los recursos, editable con tags (Enter/coma agrega, × saca). Único lugar de la web donde un humano ve y toca el alias oculto |
+| `/gestion/alias/<id>/guardar` | POST | Reemplaza `recursos.alias` de un recurso (CSV), mismo formato y mismo campo que `editar_entidad(alias=...)` del asistente |
 | `/gestion/recursos/<id>/baja` | POST | Da de baja el recurso: exige `motivo` (sin motivo vuelve al form), guarda `detalle` y la fecha de hoy |
 | `/gestion/recursos/<id>/baja/revertir` | POST | Devuelve el recurso al inventario y marca esa baja como revertida |
 | `/gestion/recursos/<id>/unidades/agregar` | POST | Crea unidades nuevas con los `numeros` (IDs) que se piden; rechaza los usados/inválidos |
@@ -435,7 +436,7 @@ general y no abre ningún inventario.
 | `inventarios.admin` | admin | **sin ámbito**: crear, renombrar, re-fijar la clave y eliminar inventarios desde `/gestion`. NO da acceso al contenido de ninguno |
 | `gestion.leer` | leer | ver el inventario. Es el permiso base del blueprint |
 | `gestion.editar` | escribir | `nuevo`/`editar`/fotos/desglose por ubicación + dar de baja un recurso y revertir la baja (borrar, no: ningún recurso se borra) |
-| `gestion.alias` | admin | `/gestion/alias` (tabla de solo lectura) y la tool del agente `listar_alias`. Verbo `admin`: no entra en ningún preset de interno, solo lo tiene el comodín `'*'` |
+| `gestion.alias` | admin | `/gestion/alias`, editable, y la tool del agente `listar_alias`. Verbo `admin`: no entra en ningún preset de interno, solo lo tiene el comodín `'*'` |
 | `gestion.auditoria` | admin | los chips de auditoría del listado (vencidos de revisión, dados de baja) y `/gestion/bajas`, el registro de bajas |
 | `gestion.rotar` | admin | el botón ROTAR del visor de fotos y su ruta. `crud.py` lo lee del hook opcional `PERMISO_ROTAR_FOTO`; un área que no lo declara cae en su permiso de escritura |
 | `gestion.accesos` | admin | `/gestion/<inv>/accesos`: invitar y quitar gente DE ESE inventario. Lo tiene el encargado por haber entrado con la clave, y lo puede delegar |

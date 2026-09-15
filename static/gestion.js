@@ -31,9 +31,17 @@
     // Filtros propios del listado de recursos (templates/gestion/lista.html): pueden no
     // existir (cualquier otro listado del área) — se combinan con la búsqueda de arriba.
     var selectUbicacion = document.getElementById('filtro-ubicacion');
-    var chipVencidos = document.getElementById('filtro-vencidos');
+    var selectEstado = document.getElementById('filtro-estado');
+    var sliderFecha = document.getElementById('filtro-fecha');
+    var sliderFechaValor = document.getElementById('filtro-fecha-valor');
     var chipBaja = document.getElementById('filtro-baja');
+    var btnAbrirFiltros = document.getElementById('btn-abrir-filtros');
+    var panelFiltros = document.getElementById('panel-filtros');
     var esFichas = !!(contador && contador.className.indexOf('g-fichas-count') !== -1);
+
+    // Mismo factor que gestion.py::DIAS_POR_MES, para convertir el valor del slider
+    // (meses, pasos de 0.5) a los días que trae cada fila en data-dias-revision.
+    var DIAS_POR_MES = 30.5;
 
     // Misma normalización que _norm() en gestion.py: minúsculas, sin acentos,
     // espacios colapsados. Así "multimetro" (sin tilde) matchea "Multímetro".
@@ -106,7 +114,9 @@
     function filtrar() {
         var q = norm(input.value);
         var ubicacion = selectUbicacion ? selectUbicacion.value : '';
-        var soloVencidos = !!(chipVencidos && chipVencidos.getAttribute('aria-pressed') === 'true');
+        var estado = selectEstado ? selectEstado.value : '';
+        var umbralMeses = sliderFecha ? parseFloat(sliderFecha.value) : 0;
+        var umbralDias = umbralMeses * DIAS_POR_MES;
         var mostrarBaja = !!(chipBaja && chipBaja.getAttribute('aria-pressed') === 'true');
         var visibles = 0;
         var porNombre = [], porAlias = [], ocultas = [];
@@ -124,10 +134,19 @@
             // data-ubicacion trae TODOS los lugares del recurso, delimitados por "|"
             // (un recurso puede estar repartido en más de uno): substring, no igualdad.
             if (coincide && ubicacion) coincide = (fila.getAttribute('data-ubicacion') || '').indexOf('|' + ubicacion + '|') !== -1;
-            if (coincide && soloVencidos) coincide = fila.getAttribute('data-vencido') === '1';
-            // Los dados de baja quedan afuera salvo que se pida verlos explícitamente
+            if (coincide && estado) coincide = fila.getAttribute('data-estado') === estado;
+            // data-dias-revision viene vacío para una fecha corta sin año (no se puede
+            // ubicar en el tiempo, ver gestion.py::_dias_sin_revisar): Number('') es 0, así
+            // que nunca alcanza un umbral > 0 y la fila queda afuera del filtro, igual que
+            // con el chip fijo que reemplaza este slider.
+            if (coincide && umbralMeses > 0) {
+                coincide = Number(fila.getAttribute('data-dias-revision') || 0) >= umbralDias;
+            }
+            // El chip ahora es excluyente: activado, muestra SOLO los dados de baja (no los
+            // suma a la vista de siempre); desactivado, los sigue dejando afuera como antes
             // (arrancan con `hidden` puesto por el propio servidor, ver lista.html).
-            if (coincide && !mostrarBaja && fila.classList.contains('g-recurso-baja')) coincide = false;
+            if (mostrarBaja) coincide = coincide && fila.classList.contains('g-recurso-baja');
+            else if (fila.classList.contains('g-recurso-baja')) coincide = false;
             fila.hidden = !coincide;
             if (!coincide) ocultas.push(fila);
             else { visibles++; (esAlias ? porAlias : porNombre).push(fila); }
@@ -146,7 +165,7 @@
         for (var j = 0; j < orden.length; j++) frag.appendChild(orden[j]);
         cuerpo.appendChild(frag);
         if (contador) contador.textContent = esFichas ? (visibles + ' FICHAS') : visibles;
-        if ((q !== '' || ubicacion || soloVencidos) && visibles === 0) {
+        if ((q !== '' || ubicacion || estado || umbralMeses > 0 || mostrarBaja) && visibles === 0) {
             vacio.textContent = q !== ''
                 ? 'No se encontraron resultados para "' + input.value.trim() + '".'
                 : 'No se encontraron recursos con ese filtro.';
@@ -154,14 +173,19 @@
         } else {
             vacio.hidden = true;
         }
+        // El símbolo de filtro (celular) marca si hay algo activo, para que cerrar el
+        // panel no borre el rastro de que la lista está filtrada.
+        if (btnAbrirFiltros) {
+            btnAbrirFiltros.classList.toggle('g-filtro-activo', !!(ubicacion || estado || umbralMeses > 0 || mostrarBaja));
+        }
     }
 
     input.addEventListener('input', filtrar);
     if (selectUbicacion) selectUbicacion.addEventListener('change', filtrar);
-    if (chipVencidos) {
-        chipVencidos.addEventListener('click', function () {
-            var activo = chipVencidos.getAttribute('aria-pressed') === 'true';
-            chipVencidos.setAttribute('aria-pressed', activo ? 'false' : 'true');
+    if (selectEstado) selectEstado.addEventListener('change', filtrar);
+    if (sliderFecha) {
+        sliderFecha.addEventListener('input', function () {
+            if (sliderFechaValor) sliderFechaValor.textContent = sliderFecha.value;
             filtrar();
         });
     }
@@ -175,6 +199,23 @@
     // Con JS el filtrado es en vivo: que Enter no recargue, y el botón sobra.
     if (form) form.addEventListener('submit', function (e) { e.preventDefault(); });
     if (boton) boton.hidden = true;
+
+    // Símbolo de filtro (celular, ver gestion.css): abre/cierra el panel de filtros como
+    // un desplegable en vez de tenerlo siempre visible ocupando la franja de búsqueda.
+    // En escritorio el botón queda oculto por CSS y el panel siempre visible: este código
+    // no tiene efecto ahí.
+    if (btnAbrirFiltros && panelFiltros) {
+        btnAbrirFiltros.addEventListener('click', function () {
+            var abierto = panelFiltros.classList.toggle('g-filtros-abierta');
+            btnAbrirFiltros.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+        });
+        document.addEventListener('click', function (e) {
+            if (!panelFiltros.classList.contains('g-filtros-abierta')) return;
+            if (e.target.closest('#panel-filtros') || e.target.closest('#btn-abrir-filtros')) return;
+            panelFiltros.classList.remove('g-filtros-abierta');
+            btnAbrirFiltros.setAttribute('aria-expanded', 'false');
+        });
+    }
 })();
 
 // Fila entera clickable en listados con `data-href` (ver .g-table tr[data-href] en
