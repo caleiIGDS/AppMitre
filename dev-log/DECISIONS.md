@@ -6,6 +6,19 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-09-15] — Filtros del listado de recursos: chip fijo → slider, "mostrar baja" → excluyente
+
+El chip "sin revisar hace +6 meses" se reemplazó por un slider en meses (pasos de 0.5): el
+umbral ahora lo elige quien mira la lista, no queda fijo en el código. La insignia de
+"Sin revisar" de la tarjeta de celular sigue en 6 meses aparte (`vencidos_recurso`), porque
+es un aviso fijo, no el filtro. Se agregó `_dias_sin_revisar()` — igual criterio que el viejo
+`_revisado_vencido()` (fecha corta sin año no cuenta ni a favor ni en contra) pero devuelve
+días, no un booleano contra un umbral fijo. El chip "mostrar dados de baja" pasó de sumar
+los dados de baja a la vista de siempre a mostrar **sólo** esos: mezclados con recursos
+activos, un dado de baja se leía como parte del inventario vivo.
+
+---
+
 ## [2026-09-15] — `/gestion/alias` pasa a ser editable (solo para el admin que ya llega ahí)
 
 La decisión 2026-08-21 dijo "el usuario nunca debe ver ni editar" el alias — eso seguía

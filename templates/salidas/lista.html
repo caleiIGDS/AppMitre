@@ -2,14 +2,25 @@
 {% block titulo %}Salidas guardadas{% endblock %}
 {% block contenido %}
 <div class="g-toolbar">
-    <h2>SALIDAS GUARDADAS <span class="g-count">{{ filas | length }}</span></h2>
+    <h2>{{ 'SALIDAS ARCHIVADAS' if ver_archivadas else 'SALIDAS GUARDADAS' }} <span class="g-count">{{ filas | length }}</span></h2>
     {% if puede('salidas.editar') %}
+    {% if not ver_archivadas %}
     <input type="file" id="input-csv-padron" accept=".csv" style="display:none">
     <button class="g-btn" id="btn-cargar-padron" type="button">ACTUALIZAR PADRÓN DE ESTUDIANTES</button>
     <a class="g-btn" href="{{ url_for('salidas.nueva') }}">+ NUEVA SALIDA</a>
     {% endif %}
+    {% endif %}
 </div>
-{% if puede('salidas.editar') %}
+{% if cantidad_archivadas or ver_archivadas %}
+<p class="g-help">
+    {% if ver_archivadas %}
+    <a href="{{ url_for('salidas.lista') }}">‹ Ver salidas activas</a>
+    {% else %}
+    <a href="{{ url_for('salidas.lista', archivadas=1) }}">Ver archivadas ({{ cantidad_archivadas }})</a>
+    {% endif %}
+</p>
+{% endif %}
+{% if puede('salidas.editar') and not ver_archivadas %}
 {# El padrón no se sube a ningún lado: lo parsea y lo guarda el navegador (ver
    static/salidas-padron.js). Por eso el estado que se pinta acá es del dispositivo, no
    del servidor, y hay que decirlo explícitamente: si no, "Padrón actualizado" se lee
@@ -49,11 +60,15 @@
     </table>
 </div>
 {% else %}
-<p class="g-help g-section-empty">Todavía no hay ninguna salida guardada.
-    {% if puede('salidas.editar') %}Empezá por <a href="{{ url_for('salidas.nueva') }}">cargar una nueva</a>.{% endif %}</p>
+<p class="g-help g-section-empty">
+    {% if ver_archivadas %}Todavía no archivaste ninguna salida.
+    {% else %}Todavía no hay ninguna salida guardada.
+    {% if puede('salidas.editar') %}Empezá por <a href="{{ url_for('salidas.nueva') }}">cargar una nueva</a>.{% endif %}
+    {% endif %}
+</p>
 {% endif %}
 
-<p class="g-help">Cada salida guardada queda disponible durante 1 año; al vencer se borra sola del servidor, junto con sus PDF.</p>
+<p class="g-help">Cada salida guardada queda disponible durante 1 año; al vencer se borra sola del servidor, junto con sus PDF{{ ', esté archivada o no' if ver_archivadas or cantidad_archivadas else '' }}.</p>
 {% endblock %}
 
 {% block scripts %}

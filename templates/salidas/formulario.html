@@ -210,6 +210,14 @@ tbody tr:nth-child(even){background:#fafbfc}
 }
 .pie-fijo .estado{opacity:.85}
 .oculto{display:none !important}
+
+.bloque-archivo{
+  display:flex; gap:16px; align-items:center; justify-content:space-between; flex-wrap:wrap;
+  background:var(--papel); border:1px solid var(--linea); border-radius:var(--radio);
+  padding:16px 18px; margin:8px 0 24px;
+}
+.bloque-archivo .g-help{display:block; margin-top:4px; color:var(--tinta-suave)}
+.bloque-archivo form{margin:0}
 @media(max-width:640px){
   .grilla{grid-template-columns:1fr}
   main{padding:16px 10px}
@@ -231,6 +239,29 @@ tbody tr:nth-child(even){background:#fafbfc}
 
 {% block contenido %}
 <div id="contenedor"></div>
+
+{% if id_editar %}
+<div class="bloque-archivo">
+    {% if archivado %}
+    <div>
+        <strong>SALIDA ARCHIVADA</strong>
+        <span class="g-help">No aparece en el listado de salidas guardadas. Se puede desarchivar cuando haga falta, sin perder nada.</span>
+    </div>
+    <form method="post" action="{{ url_for('salidas.archivar_revertir', id=id_editar) }}">
+        <button type="submit" class="g-btn-outline-dark">DESARCHIVAR</button>
+    </form>
+    {% else %}
+    <div>
+        <strong>ARCHIVAR ESTA SALIDA</strong>
+        <span class="g-help">Deja de aparecer en el listado de salidas guardadas, para que no se acumulen con el tiempo. Sigue guardada igual y se puede desarchivar después.</span>
+    </div>
+    <form method="post" action="{{ url_for('salidas.archivar', id=id_editar) }}"
+          onsubmit="return confirm('¿Archivar esta salida? Deja de verse en el listado de guardadas; se puede desarchivar después.');">
+        <button type="submit" class="g-btn-outline-dark">ARCHIVAR</button>
+    </form>
+    {% endif %}
+</div>
+{% endif %}
 
 <div class="pie-fijo">
   <span class="estado" id="estado">Sin cambios todavía.</span>
@@ -440,8 +471,8 @@ const ANEXOS = [
      a:"Se arma solo con los datos comunes de la salida."},
     {id:"lugar_dia_hora_regreso", label:"Lugar, día y hora de regreso", tipo:"text", req:true, calc:true, seccion:"1 · Informativa (completa la escuela)",
      a:"Se arma solo con los datos comunes de la salida."},
-    {id:"lugares_estadia", label:"Lugares de estadía (domicilios y teléfonos)", tipo:"textarea", req:false, ancho:true, seccion:"1 · Informativa (completa la escuela)",
-     a:"Sólo si hay pernocte. Es el dato que le permite a una familia ubicar a su hijo/a durante el viaje."},
+    {id:"lugares_estadia", label:"Lugares de estadía (domicilios y teléfonos)", tipo:"textarea", req:false, ancho:true, seccion:"1 · Informativa (completa la escuela)", prellenar:true,
+     a:"Sólo si hay pernocte. Se arma solo con el hospedaje cargado en el Anexo IV, pero se puede editar acá mismo: en cuanto lo tocás, deja de actualizarse solo."},
     {id:"nombres_telefonos_acompanantes", label:"Nombres y teléfonos de los acompañantes", tipo:"acompañantes_telefonos", req:true, ancho:true, seccion:"1 · Informativa (completa la escuela)",
      a:"Quiénes van a cargo del grupo y cómo ubicarlos durante la salida. Seleccioná los teléfonos de cada acompañante."},
     {id:"empresas_contratadas", label:"Empresa/s contratada/s (nombre, dirección, teléfonos)", tipo:"textarea", req:false, ancho:true, seccion:"1 · Informativa (completa la escuela)",
@@ -673,6 +704,11 @@ if (datosPrecargar) {
   estado.personas = datosPrecargar.personas || [];
   normalizarPersonas();
   ANEXOS.forEach(a => estado.anexos[a.n] = (datosPrecargar.anexos && datosPrecargar.anexos[a.n]) || {});
+  // Salidas guardadas antes de este prellenado: si ya traían texto propio en
+  // "lugares_estadia", se respeta como edición manual en vez de pisarlo.
+  if (estado.anexos["VI"] && estado.anexos["VI"].lugares_estadia && estado.anexos["VI"]._lugares_estadia_manual === undefined){
+    estado.anexos["VI"]._lugares_estadia_manual = true;
+  }
 }
 
 let tocado = false;
@@ -806,6 +842,13 @@ function calculado(anexo, campo){
       return [fechaLarga(c.fecha_salida), c.lugar_a_visitar].filter(Boolean).join(" — ");
     default: return "";
   }
+}
+
+function textoHospedajeIV(){
+  const h = estado.anexos["IV"] || {};
+  const domicilio = [h.hospedaje_nombre, h.hospedaje_domicilio, h.hospedaje_localidad].filter(Boolean).join(", ");
+  const tel = h.hospedaje_telefono ? ("Tel: " + h.hospedaje_telefono) : "";
+  return [domicilio, tel].filter(Boolean).join(" — ");
 }
 
 function valorAuto(anexo, campo){
@@ -1214,8 +1257,9 @@ function pintarPersonas(){
     tb.appendChild(el("tr", {}, el("td", {colspan:String(span), class:"vacio"},
       "Todavía no hay nadie cargado. Usá \"Agregar persona\".")));
   }
-  // Ordenar por rol y luego alfabéticamente por nombre
-  const rolesOrden = ROLES.map(r => r.v);
+  // Ordenar por rol y luego alfabéticamente por nombre.
+  // Los docentes (titulares y reemplazantes) van siempre al final de la tabla.
+  const rolesOrden = ["estudiante", "no_docente", "docente_titular", "docente_reemplazante"];
   const personasOrdenadas = [...estado.personas].sort((a, b) => {
     const idxRolA = rolesOrden.indexOf(a.rol);
     const idxRolB = rolesOrden.indexOf(b.rol);
@@ -1423,6 +1467,7 @@ function campoAnexo(anexo, campo){
   const info = botonAyuda(ayuda, clave); if (info) lab.appendChild(info);
   if (campo.auto) lab.appendChild(el("span", {class:"tag tag-auto", text:"auto"}));
   if (campo.calc) lab.appendChild(el("span", {class:"tag tag-auto", text:"calculado"}));
+  if (campo.prellenar) lab.appendChild(el("span", {class:"tag tag-auto", text:"auto (editable)"}));
   wrap.appendChild(lab);
   if (ayuda) {
     const cajaAyuda = el("div", {class:"ayuda", text:ayuda});
@@ -1512,6 +1557,7 @@ function campoAnexo(anexo, campo){
       }
     } else {
       estado.anexos[anexo.n][campo.id] = inp.value;
+      if (anexo.n === "VI" && campo.id === "lugares_estadia") estado.anexos["VI"]._lugares_estadia_manual = true;
     }
     marcarCambio();
     aplicarCondiciones();
@@ -1714,6 +1760,16 @@ function refrescarDerivados(){
     no_docente: p.rol === "no_docente",
     asistencia: ""   // se completa a mano el día de la salida
   }));
+
+  // Anexo VI: lugares de estadía — se prellena solo desde el hospedaje del Anexo IV
+  // (un único cuadro de texto, para no tocar el formato del PDF). Deja de actualizarse
+  // en cuanto se edita a mano en el propio Anexo VI (ver listener de campoAnexo).
+  if (estado.anexos["VI"] && !estado.anexos["VI"]._lugares_estadia_manual){
+    const texto = textoHospedajeIV();
+    estado.anexos["VI"].lugares_estadia = texto;
+    const inpLugares = document.querySelector('[data-campo="VI.lugares_estadia"]');
+    if (inpLugares && document.activeElement !== inpLugares) inpLugares.value = texto;
+  }
 
   // Anexo VI: armar el texto de nombres y telefonos de acompañantes desde la lista
   if (estado.anexos["VI"]){

@@ -3371,6 +3371,10 @@ body.g-sidebar-abierto { overflow: hidden; }
        de filas), para que se lea como parte del header y no como una tarjeta
        más. */
     .g-panel-top {
+        /* Más que el z-index:1 del thead pegajoso de la tabla (ver más abajo): sin esto el
+           desplegable de filtros, que se abre encima de la tabla, quedaba tapado por el
+           encabezado apenas se solapaban un par de píxeles. */
+        z-index: 6;
         background: var(--g-primary);
         border: none;
         padding: 12px 14px;

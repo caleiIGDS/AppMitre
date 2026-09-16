@@ -117,7 +117,8 @@ CREATE TABLE IF NOT EXISTS salidas (
     fecha_creacion TEXT NOT NULL,
     vigencia_hasta TEXT NOT NULL,
     datos_json TEXT NOT NULL,
-    token TEXT DEFAULT ''
+    token TEXT DEFAULT '',
+    archivado INTEGER NOT NULL DEFAULT 0
 );
 """
 
@@ -132,6 +133,8 @@ def migrar(cur):
     existentes = {c[1] for c in cur.execute("PRAGMA table_info(salidas)").fetchall()}
     if 'token' not in existentes:
         cur.execute("ALTER TABLE salidas ADD COLUMN token TEXT DEFAULT ''")
+    if 'archivado' not in existentes:
+        cur.execute("ALTER TABLE salidas ADD COLUMN archivado INTEGER NOT NULL DEFAULT 0")
     # Las salidas guardadas antes de este cambio no tienen token — se les genera uno acá,
     # una sola vez, para que el link público funcione también para ellas.
     sin_token = cur.execute("SELECT id FROM salidas WHERE token IS NULL OR token = ''").fetchall()
@@ -293,6 +296,23 @@ def _iso_a_dd_mm_yyyy(iso_fecha):
     except:
         return iso_fecha
 
+# La fuente de los PDF ("helvetica") es un core font: sólo soporta latin-1. Cualquier
+# usuario puede pegar texto copiado de Word/Docs con viñetas, comillas tipográficas o rayas,
+# y sin sanear eso fpdf2 tira FPDFUnicodeEncodingException — no sólo sale mal el PDF, se
+# cae api_guardar entero (500) y la salida no queda guardada. Reemplazos legibles para los
+# casos comunes, y un fallback (encode/decode) para que ningún otro carácter vuelva a romper
+# el guardado.
+_REEMPLAZOS_LATIN1 = {
+    '—': ' - ', '–': '-', '•': '-', '…': '...',
+    '‘': "'", '’': "'", '“': '"', '”': '"',
+}
+
+def _sanear_latin1(text):
+    for original, nuevo in _REEMPLAZOS_LATIN1.items():
+        text = text.replace(original, nuevo)
+    return text.encode('latin-1', 'replace').decode('latin-1')
+
+
 def _texto_valor(campo, valor):
     if valor is None or valor == '':
         return ''
@@ -304,9 +324,7 @@ def _texto_valor(campo, valor):
     # muerto y las fechas auto del IV y del V salían en ISO.
     if campo['tipo'] in ('fecha', 'date'):
         return _iso_a_dd_mm_yyyy(str(valor))
-    text = str(valor)
-    text = text.replace('—', ' - ')  # em dash → hyphen (helvetica no soporta Unicode)
-    return text
+    return _sanear_latin1(str(valor))
 
 
 # Los AnexoN.json agrupan campos con una clave corta (`seccion`) para uso interno del
@@ -653,8 +671,8 @@ def _dibujar_textarea(pdf, campo, valores, anexo):
     if campo['id'] == 'nombres_telefonos_acompanantes':
         if campo['id'] + '_texto' in valores:
             # Versión "texto" generada en el frontend — no pasa por _texto_valor porque no
-            # es el valor de `campo`, así que el reemplazo de raya larga se hace acá aparte.
-            texto_valor = (valores.get(campo['id'] + '_texto', '') or '').replace('—', ' - ')
+            # es el valor de `campo`, así que el saneo para la fuente se hace acá aparte.
+            texto_valor = _sanear_latin1(valores.get(campo['id'] + '_texto', '') or '')
         elif isinstance(valor_raw, dict):
             # Versión diccionario — convertir a formato texto (compatibilidad)
             lineas = [f"{k} - {v}" if v else k for k, v in valor_raw.items()]
@@ -1124,13 +1142,16 @@ def _contexto():
 
 @bp.route('/')
 def lista():
+    ver_archivadas = request.args.get('archivadas') == '1'
     con = conectar()
     cur = con.cursor()
     filas = cur.execute(
         "SELECT id, nombre_proyecto, fecha_salida, fecha_creacion, vigencia_hasta "
-        "FROM salidas ORDER BY fecha_creacion DESC").fetchall()
+        "FROM salidas WHERE archivado = ? ORDER BY fecha_creacion DESC", (1 if ver_archivadas else 0,)).fetchall()
+    cantidad_archivadas = cur.execute("SELECT COUNT(*) AS n FROM salidas WHERE archivado = 1").fetchone()['n']
     con.close()
-    return render_template('salidas/lista.html', filas=filas, activo='lista')
+    return render_template('salidas/lista.html', filas=filas, activo='lista',
+                           ver_archivadas=ver_archivadas, cantidad_archivadas=cantidad_archivadas)
 
 
 @bp.route('/nueva')
@@ -1167,14 +1188,14 @@ def nueva_tabs():
 def editar(id):
     con = conectar()
     cur = con.cursor()
-    fila = cur.execute("SELECT datos_json FROM salidas WHERE id = ?", (id,)).fetchone()
+    fila = cur.execute("SELECT datos_json, archivado FROM salidas WHERE id = ?", (id,)).fetchone()
     con.close()
     if fila is None:
         abort(404)
     datos_precargar = json.loads(fila['datos_json'])
     normativa = _cargar_normativa()
     return render_template('salidas/formulario.html', activo='nueva', id_editar=id, datos_precargar=datos_precargar,
-                           normativa=normativa)
+                           normativa=normativa, archivado=bool(fila['archivado']))
 
 
 @bp.route('/api/guardar', methods=['POST'])
@@ -1276,6 +1297,35 @@ def regenerar_pdfs(id):
             anexo.update(datos_comunes)
     _generar_pdfs(id, anexos)
     return redirect(url_for('salidas.detalle', id=id))
+
+
+@bp.route('/<int:id>/archivar', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
+def archivar(id):
+    """Archiva una salida guardada: sale del listado por default (que se llena con los
+    años) pero sigue existiendo igual — no toca la vigencia ni el borrado automático de
+    _purgar_vencidas, es sólo una cuestión de qué se ve en /salidas."""
+    con = conectar()
+    cur = con.cursor()
+    if cur.execute("UPDATE salidas SET archivado = 1 WHERE id = ?", (id,)).rowcount == 0:
+        con.close()
+        abort(404)
+    con.commit()
+    con.close()
+    return redirect(url_for('salidas.lista'))
+
+
+@bp.route('/<int:id>/archivar/revertir', methods=['POST'])
+@accesos.requiere(PERMISO_ESCRITURA)
+def archivar_revertir(id):
+    con = conectar()
+    cur = con.cursor()
+    if cur.execute("UPDATE salidas SET archivado = 0 WHERE id = ?", (id,)).rowcount == 0:
+        con.close()
+        abort(404)
+    con.commit()
+    con.close()
+    return redirect(url_for('salidas.editar', id=id))
 
 
 @bp.route('/<int:id>/pdf/<anexo>')
