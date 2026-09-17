@@ -619,6 +619,29 @@ def _valor_secundario(pdf):
         pdf.set_font('helvetica', '', TAM_TEXTO)
 
 
+def _cell_blanco(pdf, ancho, alto=ALTO_LINEA, border='B'):
+    """Línea en blanco para completar a mano ("label: ____"). A diferencia de `write()`,
+    `cell()` no hace salto de línea automático: si el ancho no entra en lo que queda del
+    renglón, seguía de largo pasando el margen derecho. Acá se parte igual que haría un
+    `write()`: ocupa lo que queda del renglón actual y sigue con el resto en el siguiente,
+    tantas veces como haga falta si el ancho pedido fuera mayor a un renglón entero."""
+    disponible = pdf.w - pdf.r_margin - pdf.get_x()
+    if ancho <= disponible:
+        # Entra entero donde está: nada que partir.
+        pdf.cell(ancho, alto, '', border=border)
+        return
+    ancho_restante = ancho
+    if disponible > 0:
+        pdf.cell(disponible, alto, '', border=border)
+        ancho_restante -= disponible
+    ancho_linea = pdf.w - pdf.l_margin - pdf.r_margin
+    while ancho_restante > 0:
+        pdf.ln(alto)
+        ancho_tramo = min(ancho_restante, ancho_linea)
+        pdf.cell(ancho_tramo, alto, '', border=border)
+        ancho_restante -= ancho_tramo
+
+
 def _escribir_par(pdf, label, valor, negrita, anexo, ancho_blanco=ANCHO_BLANCO_PAR):
     label_destacado = anexo in ANEXOS_LABEL_DESTACADO
     delta = ANEXOS_VALOR_TAM_DELTA.get(anexo, 1)
@@ -639,7 +662,7 @@ def _escribir_par(pdf, label, valor, negrita, anexo, ancho_blanco=ANCHO_BLANCO_P
     else:
         # Sin valor: línea en blanco para completar a mano después de imprimir — firma,
         # "lugar y fecha", nombre del hijo/a en la autorización, etc.
-        pdf.cell(ancho_blanco, ALTO_LINEA, '', border='B')
+        _cell_blanco(pdf, ancho_blanco)
 
 
 def _dibujar_campo(pdf, campo, valores, anexo, extra=()):
@@ -758,7 +781,7 @@ def _dibujar_narrativa(pdf, bloque, valores, campos_por_id):
                         with _trazo_valor(pdf):  # sin cambiar la fuente: conserva `estilo`
                             pdf.write(ALTO_LINEA, valor)
                     else:
-                        pdf.cell(ANCHOS_BLANCO_NARRATIVA.get(parte, ANCHO_BLANCO_NARRATIVA), ALTO_LINEA, '', border='B')
+                        _cell_blanco(pdf, ANCHOS_BLANCO_NARRATIVA.get(parte, ANCHO_BLANCO_NARRATIVA))
                     pdf.set_font('helvetica', estilo, TAM_TEXTO)
         pdf.ln(ALTO_LINEA)
     else:
@@ -783,7 +806,7 @@ def _dibujar_narrativa(pdf, bloque, valores, campos_por_id):
                 elif parte in bloque.get('anchos_resto_linea', ()):
                     pdf.cell(pdf.w - pdf.r_margin - pdf.get_x(), ALTO_LINEA, '', border='B')
                 else:
-                    pdf.cell(ANCHOS_BLANCO_NARRATIVA.get(parte, ANCHO_BLANCO_NARRATIVA), ALTO_LINEA, '', border='B')
+                    _cell_blanco(pdf, ANCHOS_BLANCO_NARRATIVA.get(parte, ANCHO_BLANCO_NARRATIVA))
         pdf.ln(ALTO_LINEA)
     pdf.ln(2)
 
@@ -1162,6 +1185,15 @@ def nueva():
                            normativa=normativa)
 
 
+@bp.route('/padron')
+@accesos.requiere(PERMISO_ESCRITURA)
+def padron():
+    """Alta/edición manual y carga por CSV del padrón de alumnos y profesores. Todo vive en
+    localStorage del navegador (static/salidas-padron.js): esta ruta sólo sirve la plantilla,
+    no hay ningún dato de personas en salidas.db ni en ningún otro lado del server."""
+    return render_template('salidas/padron.html', activo='padron')
+
+
 @bp.route('/nueva-tabs')
 @accesos.requiere(PERMISO_ESCRITURA)
 def nueva_tabs():
@@ -1325,6 +1357,10 @@ def archivar_revertir(id):
         abort(404)
     con.commit()
     con.close()
+    # Desarchivar desde /salidas (lista de archivadas) vuelve ahí; desde el formulario
+    # (donde ya se está viendo la salida) se queda en el editar, como antes.
+    if request.form.get('volver') == 'lista':
+        return redirect(url_for('salidas.lista'))
     return redirect(url_for('salidas.editar', id=id))
 
 

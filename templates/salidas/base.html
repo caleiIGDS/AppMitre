@@ -45,6 +45,7 @@
                 <a href="{{ url_for('salidas.lista') }}" class="g-nav-tag {{ 'active' if activo == 'lista' }}">SALIDAS GUARDADAS</a>
                 {% if puede('salidas.editar') %}
                 <a href="{{ url_for('salidas.nueva') }}" class="g-nav-tag {{ 'active' if activo == 'nueva' }}">NUEVA SALIDA</a>
+                <a href="{{ url_for('salidas.padron') }}" class="g-nav-tag {{ 'active' if activo == 'padron' }}">PADRÓN</a>
                 {% endif %}
             </nav>
 

@@ -1,0 +1,232 @@
+{% extends 'salidas/base.html' %}
+{% block titulo %}Padrón de personas{% endblock %}
+
+{% block estilos %}
+<style>
+/* Sólo lo que hace falta para que la tabla de g-table sea editable: el resto del look
+   (colores, bordes, hover) ya viene de .g-table/.g-table-wrap en gestion.css. */
+.g-table td input[type="text"] {
+    width: 100%;
+    border: 1px solid transparent;
+    background: transparent;
+    font-family: inherit;
+    font-size: 13px;
+    color: inherit;
+    padding: 5px 6px;
+    border-radius: 3px;
+}
+.g-table td input[type="text"]:focus {
+    outline: none;
+    border-color: var(--g-primary);
+    background: #fff;
+}
+.g-padron-tabs { display: flex; gap: 10px; margin: 0 0 20px; flex-wrap: wrap; }
+.g-padron-tabs button { cursor: pointer; font-family: inherit; }
+</style>
+{% endblock %}
+
+{% block contenido %}
+<div class="g-toolbar">
+    <h2>PADRÓN DE PERSONAS</h2>
+</div>
+<p class="g-help">Alumnos y profesores para completar las salidas más rápido — autocompletado
+    y "Agregar por curso" en el formulario. Se guarda sólo en este navegador: no se sube al
+    servidor, no viaja a otros dispositivos y se pierde si borrás los datos de navegación.</p>
+
+<div class="g-padron-tabs">
+    <button type="button" class="g-nav-tag g-padron-tab active" data-tipo="alumnos">ALUMNOS</button>
+    <button type="button" class="g-nav-tag g-padron-tab" data-tipo="profesores">PROFESORES</button>
+</div>
+
+<div id="panel-alumnos"></div>
+<div id="panel-profesores" hidden></div>
+{% endblock %}
+
+{% block scripts %}
+{# SIN `defer`: el <script> inline de abajo usa `Padron` apenas carga. #}
+<script src="{{ static_v('salidas-padron.js') }}"></script>
+<script>
+(function () {
+    'use strict';
+
+    // Copia local del helper de formulario.html — es chico y este template no comparte
+    // <script> inline con ese, así que duplicarlo sale más simple que compartirlo.
+    function el(tag, attrs) {
+        var n = document.createElement(tag);
+        for (var k in (attrs || {})) {
+            if (k === 'class') n.className = attrs[k];
+            else if (k === 'text') n.textContent = attrs[k];
+            else if (k.indexOf('on') === 0) n.addEventListener(k.slice(2), attrs[k]);
+            else if (attrs[k] !== null && attrs[k] !== undefined) n.setAttribute(k, attrs[k]);
+        }
+        for (var i = 2; i < arguments.length; i++) {
+            var hijos = [].concat(arguments[i]);
+            hijos.forEach(function (h) { if (h) n.appendChild(typeof h === 'string' ? document.createTextNode(h) : h); });
+        }
+        return n;
+    }
+
+    var CAMPOS = {
+        alumnos: [
+            {clave: 'apellido_nombre', label: 'Apellido y Nombre'},
+            {clave: 'dni', label: 'DNI', ancho: '130px'},
+            {clave: 'curso', label: 'Curso', ancho: '70px'},
+            {clave: 'division', label: 'División', ancho: '80px'}
+        ],
+        profesores: [
+            {clave: 'apellido_nombre', label: 'Apellido y Nombre'},
+            {clave: 'dni', label: 'DNI', ancho: '130px'}
+        ]
+    };
+    var NOMBRE_TIPO = {alumnos: 'alumnos', profesores: 'profesores'};
+    // Curso/división se normalizan en mayúscula, igual que hace parsearCSV con el CSV.
+    var CAMPOS_MAYUSCULA = {curso: true, division: true};
+
+    function filaVacia(tipo) {
+        var f = {};
+        CAMPOS[tipo].forEach(function (c) { f[c.clave] = ''; });
+        return f;
+    }
+
+    function armarPanel(tipo) {
+        var cont = el('div', {});
+        var estado = el('p', {class: 'g-help'});
+        var error = el('p', {class: 'g-help g-error', style: 'display:none'});
+
+        var inputReemplazar = el('input', {type: 'file', accept: '.csv', style: 'display:none'});
+        var inputFusionar = el('input', {type: 'file', accept: '.csv', style: 'display:none'});
+        var btnReemplazar = el('button', {class: 'g-btn-outline', type: 'button'}, 'Cargar CSV — reemplazar todo');
+        var btnFusionar = el('button', {class: 'g-btn-outline', type: 'button'},
+            'Cargar CSV — actualizar / agregar por DNI');
+        var acciones = el('div', {style: 'display:flex; gap:10px; flex-wrap:wrap; margin:10px 0'},
+            [btnReemplazar, btnFusionar, inputReemplazar, inputFusionar]);
+
+        var thCampos = CAMPOS[tipo].map(function (c) {
+            return el('th', {style: c.ancho ? 'width:' + c.ancho : ''}, c.label);
+        });
+        var tbody = el('tbody', {});
+        var tabla = el('table', {},
+            el('thead', {}, el('tr', {}, thCampos.concat([el('th', {style: 'width:46px'}, '')]))),
+            tbody);
+        var btnAgregar = el('button', {class: 'g-btn-outline', type: 'button', style: 'margin-top:10px'},
+            '+ Agregar ' + (tipo === 'alumnos' ? 'alumno' : 'profesor'));
+
+        cont.appendChild(estado);
+        cont.appendChild(acciones);
+        cont.appendChild(error);
+        cont.appendChild(el('div', {class: 'g-table-wrap'}, tabla));
+        cont.appendChild(btnAgregar);
+
+        // Copia editable en memoria; cada cambio la persiste con Padron.guardarLista.
+        var lista = Padron.listar(tipo).slice();
+
+        function guardar() { Padron.guardarLista(tipo, lista); }
+
+        function pintarEstado() {
+            var info = Padron.info(tipo);
+            if (!info || (!info.cantidad && !info.cargado)) {
+                estado.textContent = 'Todavía no hay nadie cargado en este dispositivo.';
+                return;
+            }
+            var texto = 'En este dispositivo: ' + info.cantidad + ' ' + NOMBRE_TIPO[tipo];
+            if (info.cargado) {
+                var cuando = new Date(info.cargado).toLocaleDateString('es-AR');
+                texto += ' · última carga de CSV: ' + cuando + (info.archivo ? ' desde «' + info.archivo + '»' : '');
+            }
+            estado.textContent = texto;
+        }
+
+        function pintarTabla() {
+            tbody.textContent = '';
+            if (!lista.length) {
+                tbody.appendChild(el('tr', {},
+                    el('td', {colspan: String(CAMPOS[tipo].length + 1), class: 'g-help'},
+                        'Todavía no hay nadie cargado. Usá "+ Agregar".')));
+                return;
+            }
+            lista.forEach(function (p, i) {
+                var celdas = CAMPOS[tipo].map(function (c) {
+                    var inp = el('input', {type: 'text', value: p[c.clave] || '', placeholder: c.label});
+                    inp.addEventListener('input', function () {
+                        p[c.clave] = CAMPOS_MAYUSCULA[c.clave] ? inp.value.toUpperCase() : inp.value;
+                        guardar();
+                    });
+                    return el('td', {}, inp);
+                });
+                var btnBorrar = el('button', {class: 'g-link', type: 'button', title: 'Borrar'}, '✕');
+                btnBorrar.addEventListener('click', function () {
+                    lista.splice(i, 1);
+                    guardar();
+                    pintarTabla();
+                    pintarEstado();
+                });
+                tbody.appendChild(el('tr', {}, celdas.concat([el('td', {class: 'g-td-actions'}, btnBorrar)])));
+            });
+        }
+
+        btnAgregar.addEventListener('click', function () {
+            lista.push(filaVacia(tipo));
+            guardar();
+            pintarTabla();
+            pintarEstado();
+        });
+
+        function mostrarError(msg) {
+            error.textContent = 'Error: ' + msg;
+            error.style.display = 'block';
+        }
+
+        function procesarCSV(archivo, modo) {
+            error.style.display = 'none';
+            Padron.leerArchivo(archivo)
+                .then(function (texto) {
+                    // parsearCSV valida todo antes de devolver, y guardar() es un único
+                    // setItem: si el CSV está mal, el padrón anterior queda intacto.
+                    var filas = Padron.parsearCSV(texto, tipo);
+                    Padron.guardar(filas, archivo.name, tipo, modo);
+                    lista = Padron.listar(tipo).slice();
+                    pintarTabla();
+                    pintarEstado();
+                })
+                .catch(function (e) { mostrarError(e.message || 'no se pudo leer el archivo.'); });
+        }
+
+        btnReemplazar.addEventListener('click', function () { inputReemplazar.click(); });
+        btnFusionar.addEventListener('click', function () { inputFusionar.click(); });
+
+        inputReemplazar.addEventListener('change', function () {
+            var archivo = inputReemplazar.files[0];
+            inputReemplazar.value = '';
+            if (!archivo) return;
+            if (!confirm('Esto reemplaza TODO el padrón de ' + NOMBRE_TIPO[tipo] +
+                    ' guardado en este dispositivo por el contenido de "' + archivo.name + '". ¿Continuar?')) return;
+            procesarCSV(archivo, 'reemplazar');
+        });
+
+        inputFusionar.addEventListener('change', function () {
+            var archivo = inputFusionar.files[0];
+            inputFusionar.value = '';
+            if (!archivo) return;
+            procesarCSV(archivo, 'fusionar');
+        });
+
+        pintarEstado();
+        pintarTabla();
+        return cont;
+    }
+
+    document.getElementById('panel-alumnos').appendChild(armarPanel('alumnos'));
+    document.getElementById('panel-profesores').appendChild(armarPanel('profesores'));
+
+    var tabs = document.querySelectorAll('.g-padron-tab');
+    tabs.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            tabs.forEach(function (b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            document.getElementById('panel-alumnos').hidden = btn.dataset.tipo !== 'alumnos';
+            document.getElementById('panel-profesores').hidden = btn.dataset.tipo !== 'profesores';
+        });
+    });
+})();
+</script>
+{% endblock %}

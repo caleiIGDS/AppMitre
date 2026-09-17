@@ -507,40 +507,52 @@ activas tumbaría el arranque de la app entera. Por eso el testigo es `salidas_m
 tabla de un solo renglón (`id=1`) sembrada una vez en el primer `init_db()` y nunca más
 tocada — siempre tiene datos, así que nunca dispara el guard.
 
-## Padrón de estudiantes (`static/salidas-padron.js`)
+## Padrón de personas — alumnos y profesores (`static/salidas-padron.js`, `/salidas/padron`)
 
-El padrón **no está en el servidor**: lo carga, lo parsea y lo guarda el navegador. Hasta
-2026-09-12 fue `estudiantes.py` + `database/estudiantes.db`, y ahí el problema no era el
-gate sino el lugar — el padrón entero (DNI de menores de toda la escuela) vivía en el disco
-de PythonAnywhere y además viajaba embebido en el HTML de cada carga del formulario. Ver
-`dev-log/DECISIONS.md`.
+El padrón **no está en el servidor**: lo carga, lo parsea, lo edita y lo guarda el
+navegador. Hasta 2026-09-12 fue `estudiantes.py` + `database/estudiantes.db`, y ahí el
+problema no era el gate sino el lugar — el padrón entero (DNI de menores de toda la escuela)
+vivía en el disco de PythonAnywhere y además viajaba embebido en el HTML de cada carga del
+formulario. Ver `dev-log/DECISIONS.md`.
 
-Lo que la escuela carga una vez por año queda en `localStorage` bajo la clave
-`appmitre.padron.v1`, con la forma `{v, cargado, archivo, alumnos:[{apellido_nombre, dni,
-curso, division}]}`. El módulo lleva prefijo de área porque nombra dominio: no es capa 0
-compartida. Lo cargan `lista.html` y `formulario.html` con `<script src>` **sin `defer`** —
-el JS del formulario es un `<script>` inline y un `defer` correría después de él.
+Todo vive en `localStorage` bajo la clave `appmitre.padron.v1`, con la forma
+`{v:2, alumnos:{cargado, archivo, lista:[{apellido_nombre, dni, curso, division}]},
+profesores:{cargado, archivo, lista:[{apellido_nombre, dni}]}}` — dos padrones, no uno.
+`leer()` migra sola una clave vieja `v:1` (sólo alumnos) al shape nuevo la primera vez que
+se lee, sin perder lo que ya había cargado el dispositivo. El módulo lleva prefijo de área
+porque nombra dominio: no es capa 0 compartida.
 
-- **Carga/actualización**: botón "ACTUALIZAR PADRÓN DE ESTUDIANTES" en `/salidas/`
-  (`lista.html`), que ya no sube nada: `Padron.leerArchivo` → `Padron.parsearCSV` →
-  `Padron.guardar`. `parsearCSV` es el puerto a JS de lo que hacía `estudiantes.cargar_csv`
-  — mismos alias de encabezado (curso/año, apellido/nombre, DNI/documento, detectados por
-  `texto.norm`), mismas reglas y **los mismos mensajes de error, carácter por carácter**. El
-  curso viene en un campo de 2+ caracteres (`"1A"`, `"41"`): el primer carácter es el año
-  (1-7) y el resto la división tal cual — mismo criterio que `escuela.db`. Reemplaza todo el
-  padrón del dispositivo: es carga anual completa, no alta incremental, y como `parsearCSV`
-  valida antes de devolver y `guardar` es un único `setItem`, nunca queda a medias.
+- **Pantalla `/salidas/padron`** (`salidas.padron` en `salidas.py`, template
+  `padron.html`): dos pestañas (ALUMNOS/PROFESORES, reusan `.g-nav-tag` pero como `<button>`
+  que togglea `hidden` en vez de navegar — no hay ruta por pestaña), cada una con una tabla
+  editable inline (`.g-table` de siempre + `<input>` por celda, mismo patrón que la tabla de
+  Personas de `formulario.html`) y dos botones de carga CSV. Toda alta/edición/borrado
+  manual de una fila llama `Padron.guardarLista(tipo, lista)` de una — no hay botón
+  "Guardar cambios" aparte, porque no hay round-trip a servidor que lo justifique.
+  Reemplaza al viejo botón "ACTUALIZAR PADRÓN DE ESTUDIANTES" de `lista.html` (ya no existe
+  ahí; el nav de `base.html` linkea a esta página).
+- **Carga por CSV, dos modos** — `Padron.guardar(lista, archivo, tipo, modo)`:
+  `'reemplazar'` (default, pisa todo el padrón de ese tipo, con `confirm()` porque borra —
+  igual que el comportamiento único que había hasta acá) o `'fusionar'` (upsert por DNI: una
+  fila del CSV con un DNI ya guardado pisa esa entrada entera, una con DNI nuevo se agrega,
+  y lo que el CSV no repite **no se toca** — así una carga nueva no borra lo agregado a mano
+  ni lo que quedó de una carga anterior). `parsearCSV(texto, tipo)` es el puerto a JS de lo
+  que hacía `estudiantes.cargar_csv` — mismos alias de encabezado (curso/año, apellido/
+  nombre, DNI/documento, detectados por `texto.norm`), mismas reglas y **los mismos mensajes
+  de error, carácter por carácter** para alumnos. El curso viene en un campo de 2+
+  caracteres (`"1A"`, `"41"`): el primer carácter es el año (1-7) y el resto la división tal
+  cual — mismo criterio que `escuela.db`. Profesores no pide curso, sólo nombre + DNI
+  (confirmado con la escuela: alcanza para las tablas de docentes de los Anexos IV/V).
 - **Más tolerante que el Python que reemplazó**, en dos puntos que eran trampas reales:
   detecta `;` además de `,` (el export de Excel en español daba "El CSV no tiene columna
   para: curso, dni, nombre") y relee en `windows-1252` si el UTF-8 sale con U+FFFD (antes
   era un 500: `UnicodeDecodeError` no caía en el `except ValueError` de la ruta).
-- **Autocompletado**: los tres consumidores de `formulario.html` llaman a `Padron.listar()`
-  — `renderPasoChipsCurso` (chips por año/división), `renderPasoListaCurso` (los alumnos de
-  un curso con checkbox) y `mostrarSugerenciasEstudiante` (hasta 8 sugerencias por nombre,
-  con `puntajeBusqueda`). El dropdown se ancla con `position:fixed` sobre el input en vez de
-  vivir anidado en `.tabla-scroll` (que tiene `overflow-x:auto` y recortaría un hijo
-  absoluto). No hay columna de curso/división en la tabla de Personas: el dato sólo se
-  muestra en la sugerencia, no se guarda con la salida.
+- **Autocompletado en `formulario.html`**: sigue leyendo sólo el padrón de **alumnos**, sin
+  ningún cambio — `listar()`/`info()` mantienen `'alumnos'` como default, así los tres
+  consumidores (`renderPasoChipsCurso`, `renderPasoListaCurso`,
+  `mostrarSugerenciasEstudiante`, todas llaman `Padron.listar()` sin argumento) no se
+  tocaron. El padrón de profesores todavía no está wireado a ningún autocompletado del
+  formulario (la tabla de Personas sigue pidiendo el nombre/cargo del docente a mano).
 - **Sin padrón en el dispositivo, todo degrada a tipeo manual** — exactamente como era antes
   de que el padrón existiera. `listar()` devuelve `[]`, el autocomplete no sugiere y no tira
   error. Se avisa en dos lugares para que nadie lo confunda con un bug: una línea fija bajo
@@ -549,8 +561,8 @@ el JS del formulario es un `<script>` inline y un `defer` correría después de 
   memoria y navegar afuera perdería lo cargado.
 
 **La contra asumida**: el padrón dejó de ser compartido. Cada dispositivo carga el suyo, y
-se pierde si se borran los datos de navegación. `lista.html` lo dice explícitamente en
-pantalla, junto a la cantidad y la fecha de lo que ese dispositivo tiene cargado.
+se pierde si se borran los datos de navegación. `/salidas/padron` lo dice explícitamente en
+pantalla, junto a la cantidad y la fecha de la última carga de CSV de ese dispositivo.
 
 ## Rutas
 
@@ -558,6 +570,7 @@ pantalla, junto a la cantidad y la fecha de lo que ese dispositivo tiene cargado
 |---|---|---|---|
 | `/salidas/` | GET | `salidas.leer` | Previsualización: nombre de proyecto, fecha de salida, guardada, vigente hasta |
 | `/salidas/nueva` | GET | `salidas.editar` | El formulario grande de carga |
+| `/salidas/padron` | GET | `salidas.editar` | Alta/edición manual y carga CSV del padrón de alumnos y profesores (100% localStorage, ver arriba) |
 | `/salidas/<id>/editar` | GET | `salidas.editar` | El formulario precargado con datos de una salida existente para reeditar |
 | `/salidas/api/guardar` | POST | `salidas.editar` | JSON del formulario → **inserta** la fila si es nueva, o **actualiza** si viene `_id_editar`; genera/regenera los 7 PDF, devuelve `{id}` |
 | `/salidas/<id>` | GET | `salidas.leer` | Detalle: datos comunes, link para compartir, links a los PDF que ya generó la escuela |

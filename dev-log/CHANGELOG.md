@@ -6,6 +6,14 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-09-17] — Padrón de salidas: profesores + alta manual + CSV con merge por DNI
+
+**Archivos**: `static/salidas-padron.js` (v2 de la clave `appmitre.padron.v1`, migra sola
+desde v1), `templates/salidas/padron.html` (nuevo, ruta `salidas.padron`), `lista.html`/
+`base.html` (el botón de carga se mudó al nav). `Padron.guardar()` ahora toma `(lista,
+archivo, tipo, modo)` — `tipo` es `'alumnos'`/`'profesores'`, `modo` `'reemplazar'`/
+`'fusionar'` (upsert por DNI). `listar()`/`info()` sin argumento siguen siendo alumnos.
+
 ## [2026-09-15] — `/gestion/alias` deja de ser solo lectura
 
 **Archivos**: `gestion.py` (ruta nueva `POST /gestion/alias/<id>/guardar`),

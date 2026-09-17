@@ -5,8 +5,6 @@
     <h2>{{ 'SALIDAS ARCHIVADAS' if ver_archivadas else 'SALIDAS GUARDADAS' }} <span class="g-count">{{ filas | length }}</span></h2>
     {% if puede('salidas.editar') %}
     {% if not ver_archivadas %}
-    <input type="file" id="input-csv-padron" accept=".csv" style="display:none">
-    <button class="g-btn" id="btn-cargar-padron" type="button">ACTUALIZAR PADRÓN DE ESTUDIANTES</button>
     <a class="g-btn" href="{{ url_for('salidas.nueva') }}">+ NUEVA SALIDA</a>
     {% endif %}
     {% endif %}
@@ -19,15 +17,6 @@
     <a href="{{ url_for('salidas.lista', archivadas=1) }}">Ver archivadas ({{ cantidad_archivadas }})</a>
     {% endif %}
 </p>
-{% endif %}
-{% if puede('salidas.editar') and not ver_archivadas %}
-{# El padrón no se sube a ningún lado: lo parsea y lo guarda el navegador (ver
-   static/salidas-padron.js). Por eso el estado que se pinta acá es del dispositivo, no
-   del servidor, y hay que decirlo explícitamente: si no, "Padrón actualizado" se lee
-   como "actualizado para todos". #}
-<p class="g-help" id="padron-estado"></p>
-<p class="g-help">El padrón queda guardado sólo en este navegador: no se sube al servidor,
-    no viaja a otros dispositivos y se pierde si borrás los datos de navegación.</p>
 {% endif %}
 
 {% if filas %}
@@ -52,6 +41,17 @@
                 <td class="g-td-actions">
                     {%- if puede('salidas.editar') -%}
                     <a class="g-link" href="{{ url_for('salidas.editar', id=f['id']) }}">Editar</a>
+                    {%- if ver_archivadas -%}
+                    <form method="post" action="{{ url_for('salidas.archivar_revertir', id=f['id']) }}" style="display:inline">
+                        <input type="hidden" name="volver" value="lista">
+                        <button class="g-link" type="submit">Desarchivar</button>
+                    </form>
+                    {%- else -%}
+                    <form method="post" action="{{ url_for('salidas.archivar', id=f['id']) }}" style="display:inline"
+                          onsubmit="return confirm('¿Archivar esta salida? Deja de verse en el listado de guardadas; se puede desarchivar después.');">
+                        <button class="g-link" type="submit">Archivar</button>
+                    </form>
+                    {%- endif -%}
                     {%- endif -%}
                 </td>
             </tr>
@@ -72,9 +72,6 @@
 {% endblock %}
 
 {% block scripts %}
-{# SIN `defer`: el <script> inline de abajo usa `Padron` apenas carga (pintarEstado), y
-   un `defer` correría después. #}
-<script src="{{ static_v('salidas-padron.js') }}"></script>
 <script>
 // Toda la fila lleva al detalle: un solo blanco grande en vez de un link chico.
 // Delegado en document porque las filas las arma Jinja y no cambian después.
@@ -82,78 +79,8 @@
 document.addEventListener('click', function (e) {
     if (!e.target.closest) return;
     var fila = e.target.closest('tr[data-href]');
-    if (!fila || e.target.closest('a')) return;
+    if (!fila || e.target.closest('a, button')) return;
     window.location = fila.getAttribute('data-href');
 });
-
-// Carga/actualización del padrón de estudiantes: reemplaza TODO el padrón guardado EN
-// ESTE DISPOSITIVO por el CSV elegido, así que confirma antes. Nada de esto sale del
-// navegador — el parseo y el guardado son de Padron (static/salidas-padron.js).
-(function () {
-    var btn = document.getElementById('btn-cargar-padron');
-    var input = document.getElementById('input-csv-padron');
-    var estado = document.getElementById('padron-estado');
-    if (!btn || !input) return;
-
-    function error(msg) {
-        estado.textContent = 'Error: ' + msg;
-        estado.classList.add('g-error');
-    }
-
-    function pintarEstado(extra) {
-        estado.textContent = '';
-        estado.classList.remove('g-error');
-        var info = Padron.info();
-
-        if (!info) {
-            estado.textContent = 'Este dispositivo no tiene el padrón cargado. El autocompletado ' +
-                'de estudiantes y "Agregar por curso" del formulario están apagados hasta que cargues el CSV.';
-            return;
-        }
-
-        // Fecha con el reloj del dispositivo y no con config.ahora(): es una etiqueta
-        // informativa de algo que pasó en esta máquina, no un dato de negocio.
-        var cuando = new Date(info.cargado).toLocaleDateString('es-AR');
-        var texto = (extra ? extra + ' ' : '') +
-            'Padrón en este dispositivo: ' + info.cantidad + ' estudiantes · cargado el ' + cuando +
-            (info.archivo ? ' desde «' + info.archivo + '»' : '') + '. ';
-        estado.appendChild(document.createTextNode(texto));
-
-        var borrar = document.createElement('button');
-        borrar.type = 'button';
-        borrar.className = 'g-link';
-        borrar.textContent = 'Borrar del dispositivo';
-        borrar.addEventListener('click', function () {
-            if (!confirm('Esto borra el padrón guardado en este dispositivo. ¿Continuar?')) return;
-            Padron.borrar();
-            pintarEstado();
-        });
-        estado.appendChild(borrar);
-    }
-
-    btn.addEventListener('click', function () { input.click(); });
-
-    input.addEventListener('change', function () {
-        var archivo = input.files[0];
-        input.value = '';
-        if (!archivo) return;
-        if (!confirm('Esto reemplaza el padrón guardado EN ESTE DISPOSITIVO por el contenido de "' + archivo.name + '". ¿Continuar?')) return;
-
-        estado.textContent = 'Leyendo el archivo...';
-        estado.classList.remove('g-error');
-
-        Padron.leerArchivo(archivo)
-            .then(function (texto) {
-                // parsearCSV valida todo antes de devolver, y guardar() es un único
-                // setItem: si el CSV está mal, el padrón anterior queda intacto.
-                var alumnos = Padron.parsearCSV(texto);
-                Padron.guardar(alumnos, archivo.name);
-                pintarEstado('Padrón actualizado.');
-            })
-            .catch(function (e) { error(e.message || 'no se pudo leer el archivo.'); });
-    });
-
-    pintarEstado();
-})();
 </script>
 {% endblock %}
