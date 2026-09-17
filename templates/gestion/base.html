@@ -42,9 +42,6 @@
                     {% if puede('gestion.auditoria') %}
                     <a class="g-btn-outline" href="{{ url_for('gestion.bajas_lista') }}">BAJAS</a>
                     {% endif %}
-                    {% if puede('agente.leer') %}
-                    <button id="agente-toggle-btn" class="g-btn-outline" title="Abrir asistente" style="cursor: pointer;">🤖 ASISTENTE</button>
-                    {% endif %}
                 </div>
             </div>
         </header>

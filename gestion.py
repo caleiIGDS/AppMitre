@@ -736,9 +736,14 @@ def contexto_extra():
     """Constantes que necesitan varios templates del área: el estado que marca una baja
     (para no repetir el string suelto en el listado y la ficha), los motivos del cuadro de
     baja del formulario, y cuál es el inventario abierto — que el header muestra al lado
-    del título, porque con varios hay que saber en cuál se está escribiendo."""
+    del título, porque con varios hay que saber en cuál se está escribiendo.
+
+    `inventarios`/`inv_activo` son para el selector del widget del asistente (ver
+    _agente_widget.html): acá el `<inv>` ya está fijo por la URL, pero el selector se
+    muestra en todos lados por igual — ver dev-log/DECISIONS.md."""
     return {'estado_baja': ESTADO_BAJA, 'motivos_baja': MOTIVOS_BAJA,
-            'inventario': inventario_activo(), 'permiso_accesos': PERMISO_ACCESOS}
+            'inventario': inventario_activo(), 'inventarios': abribles(),
+            'inv_activo': slug_activo(), 'permiso_accesos': PERMISO_ACCESOS}
 
 
 # ---------------------------------------------------------------------------

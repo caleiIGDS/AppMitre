@@ -30,12 +30,7 @@
                    así el header sigue siendo uno solo (`g-header`/`g-btn*`)
                    aunque la lista de botones cambie según la pantalla. #}
                 <div class="g-header-actions">
-                    {% block header_acciones %}
-                    <a class="g-btn-outline" href="/">‹ SISTEMA DE HORARIOS</a>
-                    {% if puede('agente.leer') %}
-                    <button id="agente-toggle-btn" class="g-btn-outline" title="Abrir asistente" style="cursor: pointer;">🤖 ASISTENTE</button>
-                    {% endif %}
-                    {% endblock %}
+                    {% block header_acciones %}{% endblock %}
                 </div>
             </div>
         </header>

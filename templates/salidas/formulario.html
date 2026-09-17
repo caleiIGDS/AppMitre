@@ -686,6 +686,24 @@ const ROLES = [
 ];
 const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 
+// Orden único de la tabla de Personas, usado tanto para pintar en pantalla como para
+// el listado del Anexo V (PDF) — antes cada uno ordenaba distinto y el PDF no bajaba
+// a los docentes. Los docentes (titulares y reemplazantes) van siempre al final;
+// dentro de cada rol, alfabético por nombre, con las filas sin nombre todavía (recién
+// agregadas) al final de su grupo en vez de al principio — la localeCompare de toda la
+// vida las mandaba arriba porque "" ordena antes que cualquier letra, lejos del botón
+// "+ Agregar persona" que está debajo de la tabla.
+const ROLES_ORDEN_PERSONAS = ["estudiante", "no_docente", "docente_titular", "docente_reemplazante"];
+function ordenarPersonas(personas){
+  return [...personas].sort((a, b) => {
+    const idxRolA = ROLES_ORDEN_PERSONAS.indexOf(a.rol);
+    const idxRolB = ROLES_ORDEN_PERSONAS.indexOf(b.rol);
+    if (idxRolA !== idxRolB) return idxRolA - idxRolB;
+    if (!a.apellido_nombre !== !b.apellido_nombre) return a.apellido_nombre ? -1 : 1;
+    return a.apellido_nombre.localeCompare(b.apellido_nombre, 'es');
+  });
+}
+
 /* ============================================================================
    ESTADO
    ============================================================================ */
@@ -1257,17 +1275,9 @@ function pintarPersonas(){
     tb.appendChild(el("tr", {}, el("td", {colspan:String(span), class:"vacio"},
       "Todavía no hay nadie cargado. Usá \"Agregar persona\".")));
   }
-  // Ordenar por rol y luego alfabéticamente por nombre.
-  // Los docentes (titulares y reemplazantes) van siempre al final de la tabla.
-  const rolesOrden = ["estudiante", "no_docente", "docente_titular", "docente_reemplazante"];
-  const personasOrdenadas = [...estado.personas].sort((a, b) => {
-    const idxRolA = rolesOrden.indexOf(a.rol);
-    const idxRolB = rolesOrden.indexOf(b.rol);
-    if (idxRolA !== idxRolB) return idxRolA - idxRolB;
-    return a.apellido_nombre.localeCompare(b.apellido_nombre, 'es');
-  });
+  const personasOrdenadas = ordenarPersonas(estado.personas);
 
-  personasOrdenadas.forEach((p) => {
+  personasOrdenadas.forEach((p, posicion) => {
     const i = estado.personas.indexOf(p);
     const inpNombre = el("input", {type:"text", value:p.apellido_nombre, placeholder:"Apellido y Nombre"});
     const inpDoc = el("input", {type:"text", value:p.documento, placeholder:"DNI"});
@@ -1327,7 +1337,7 @@ function pintarPersonas(){
     btn.addEventListener("click", () => { estado.personas.splice(i,1); marcarCambio(); pintarPersonas(); });
 
     tb.appendChild(el("tr", {},
-      el("td", {text:String(i+1)}),
+      el("td", {text:String(posicion+1)}),
       el("td", {}, inpNombre),
       el("td", {}, inpDoc),
       tdCargo,
@@ -1636,7 +1646,7 @@ function pintarEspejo(){
     tb.appendChild(el("tr", {}, el("td", {colspan:"7", class:"vacio"}, "Sin personas cargadas.")));
     return;
   }
-  estado.personas.forEach((p,i) => {
+  ordenarPersonas(estado.personas).forEach((p,i) => {
     const esDoc = p.rol.startsWith("docente");
     tb.appendChild(el("tr", {},
       el("td", {text:String(i+1)}),
@@ -1750,8 +1760,10 @@ function refrescarDerivados(){
   // Las dos tablas de docentes del Anexo IV no tienen input: salen de Personas
   estado.anexos["IV"].docentes_responsables_titulares = docentesPorRol("docente_titular");
   estado.anexos["IV"].docentes_reemplazantes = docentesPorRol("docente_reemplazante");
-  // El Anexo V lleva el listado completo, con las columnas del formulario original
-  estado.anexos["V"].listado_personas = estado.personas.map((p,i) => ({
+  // El Anexo V lleva el listado completo, con las columnas del formulario original.
+  // Mismo orden que la tabla en pantalla (ordenarPersonas): antes salía en orden de
+  // carga y el PDF no bajaba a los docentes al final como sí hacía la página.
+  estado.anexos["V"].listado_personas = ordenarPersonas(estado.personas).map((p,i) => ({
     numero: i+1,
     apellido_nombre: p.apellido_nombre,
     documento: p.documento,

@@ -24,10 +24,12 @@ propios** —`agente.leer`, `agente.escribir`, `agente.vision`, `agente.auditar`
 cambia lo que el agente es**: con solo `agente.leer` las tools de escritura ni se le mandan al
 modelo, y sin `agente.vision` no hay botón para adjuntar fotos ni tools que las miren. Ver
 "Permisos" más abajo y `agent_docs/accesos.md`.
-- Botón "🤖 ASISTENTE" en el header de `/gestion` → widget flotante, para
-  consultar sin salir de la página en la que se está.
-- `/agente/`, el chat a pantalla completa. Es la vista pensada para el celular, que es donde
-  más se usa el asistente.
+- Widget flotante, incluido en `/gestion` y `/salidas` — para consultar sin salir de la
+  página en la que se está. Hoy no hay ningún botón que lo abra en la UI (se sacó del header
+  por duplicar el ☰, ver `dev-log/DECISIONS.md`): el markup y el JS quedan listos por si se
+  reactiva.
+- `/agente/`, el chat a pantalla completa, alcanzable desde el ☰. Es la vista pensada para el
+  celular, que es donde más se usa el asistente.
 
 ## A qué datos llega (`SLUGS_ENTIDAD` y `_modulo`)
 
@@ -183,12 +185,13 @@ asistente trabaja en UNO: el de `session['inv_activo']`, que es lo que resuelve 
 lo que hace que `gestion.leer` valga (sin inventario abierto, `recursos` se cae de los enum y
 las siete tools de entidades no viajan).
 
-En el widget flotante eso no se elige: el widget se abre adentro de `/gestion/<inv>/…` y ahí
-manda la URL. En la **pestaña `/agente` no hay URL que lo diga**, así que la barra de arriba
-tiene un `<select>` con los inventarios que este acceso abre — `gestion.abribles()`, la misma
-lista del panel del registro — y `POST /agente/inventario` lo cambia (`gestion.activar()`
-revalida el slug: uno ajeno da `403`). Si no hay ninguno abierto el selector arranca en un
-placeholder, y con cero inventarios abribles no se pinta.
+El mismo `<select>` va en las dos vistas — la pestaña `/agente` y el widget flotante (ver
+`_agente_widget.html`, `.agente-widget-invbar` en `gestion.css`) — con los inventarios que
+este acceso abre (`gestion.abribles()`, la misma lista del panel del registro), aunque el
+widget se abra adentro de `/gestion/<inv>/…` (donde la URL ya "sugiere" uno) o de `/salidas`
+(donde no hay ningún `<inv>` en la URL). `POST /agente/inventario` lo cambia
+(`gestion.activar()` revalida el slug: uno ajeno da `403`). Si no hay ninguno abierto el
+selector arranca en un placeholder, y con cero inventarios abribles no se pinta.
 
 **Cambiar de inventario reinicia la conversación**, y no es prolijidad: en el historial quedan
 ids de recursos y fichas sin confirmar del inventario anterior, y un id no significa lo mismo
@@ -262,19 +265,20 @@ Comparten markup y JS; lo único que cambia es el contenedor.
 
 | Archivo | Rol |
 |---|---|
-| `templates/agente/base.html` | Layout propio del área: header con links cruzados a horarios / `/gestion`, nav ASISTENTE + AUDITORÍA. No incluye el widget flotante. |
+| `templates/agente/base.html` | Layout propio del área: header propio (sin links cruzados: saltar de área es el ☰), nav ASISTENTE + AUDITORÍA. No incluye el widget flotante. |
 | `templates/agente/_agente_chat_core.html` | El chat en sí: `#agente-messages` + área de input (texto, 📷 imagen, enviar, link a auditoría). **Único lugar donde se edita el markup del chat.** |
-| `templates/agente/_agente_widget.html` | Widget flotante = header propio (↺ reiniciar, ⤢ abrir a pantalla completa, ✕ cerrar) + el core. Lo incluye `gestion/base.html`. |
+| `templates/agente/_agente_widget.html` | Widget flotante = header propio (↺ reiniciar, ⤢ abrir a pantalla completa, ✕ cerrar) + selector de inventario + el core. Lo incluyen `gestion/base.html` y `salidas/base.html`. |
 | `templates/agente/agente_chat.html` | Pestaña = barra de título + selector de inventario + el core, dentro de `agente/base.html`. |
 | `templates/agente/agente_log.html` | Auditoría, dentro de `agente/base.html`. |
 | `templates/agente/login.html` | Login del área. |
 | `static/gestion-agente.js` | Sirve a las dos vistas. Las URLs (`/agente/chat`, `/agente/historial`, `/agente/confirmar`, `/agente/reset`, `/agente/inventario`) están hardcodeadas ahí: si cambia el prefijo del blueprint, hay que tocarlas. |
 
-Los IDs del core (`agente-messages`, `agente-input`, `agente-send-btn`, `agente-reset-btn`…)
-son únicos y el JS los busca con `getElementById` — por eso **las dos vistas nunca se
-renderizan juntas**. Hoy la invariante se cumple sola porque viven en layouts distintos: el
-widget solo lo incluye `gestion/base.html`, y `agente/base.html` (el
-de la pestaña) no lo incluye. Si se agrega otra vista del chat, mantener esa invariante.
+Los IDs del core (`agente-messages`, `agente-input`, `agente-send-btn`, `agente-reset-btn`,
+`agente-inv-select`…) son únicos y el JS los busca con `getElementById` — por eso **las dos
+vistas nunca se renderizan juntas**. Hoy la invariante se cumple sola porque viven en layouts
+distintos: el widget lo incluyen `gestion/base.html` y `salidas/base.html`, y
+`agente/base.html` (el de la pestaña) no lo incluye. Si se agrega otra vista del chat,
+mantener esa invariante.
 
 Progressive enhancement: con JS es fluido, sin JS el chat no funciona pero el resto del
 servidor sigue andando. Las respuestas se renderizan como markdown liviano

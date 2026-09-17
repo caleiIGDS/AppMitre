@@ -207,15 +207,15 @@ que el admin las ve todas y un interno de consulta ve sólo las que puede abrir.
 
 **El SPA de horarios ya no participa.** Desde que `/horarios` es un sitio aparte (login propio,
 sin `accesos`), su `index.html` no tiene ☰ ni `areas-nav.js`: sólo un botón **SALIR** →
-`url_for('horarios.salir')`. Los `‹ SISTEMA DE HORARIOS` de las otras áreas siguen apuntando a
-`/`, que redirige a `/horarios/` y cae en su login — un salto entre sitios, no un menú.
+`url_for('horarios.salir')`. Las otras áreas no tienen ningún link directo a `/horarios`: para
+volver hay que `SALIR` (`url_for('salir_general')`), que desloguea de `accesos` y cae en `/`.
 
 ### Qué va dónde (shell de `accesos`)
 
 | | contenido |
 |---|---|
 | `.g-nav` | las **entidades de esta área** (RECURSOS…). El 🤖 ASISTENTE salió de acá: no era una entidad |
-| `.g-header-actions` | acciones **de esta página**: el toggle del widget del asistente y `‹ SISTEMA DE HORARIOS` como salida |
+| `.g-header-actions` | acciones **de esta página**, sólo las que no están ya en el ☰ (el toggle del widget del asistente y el link a `/horarios` se sacaron de acá por duplicar el ☰) |
 | el ☰ | **saltar a otra área** + SALIR |
 
 `SALIR` apunta a `url_for('salir_general')` — el logout de la app, que vuelve a `/`, y no al

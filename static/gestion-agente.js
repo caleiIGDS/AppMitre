@@ -135,10 +135,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Selector de inventario (sólo la pestaña /agente: en el widget el inventario lo fija
-  // la URL de la página). Cambiarlo REINICIA la conversación, y por eso se pregunta: en
-  // el historial quedan ids y fichas sin confirmar del inventario anterior, que en el
-  // archivo de al lado significan otra cosa.
+  // Selector de inventario: mismo markup y mismo listener en la pestaña /agente y en el
+  // widget flotante (nunca se renderizan juntos, ver el comment de arriba del archivo).
+  // Cambiarlo REINICIA la conversación, y por eso se pregunta: en el historial quedan ids
+  // y fichas sin confirmar del inventario anterior, que en el archivo de al lado
+  // significan otra cosa.
   const invSelect = document.getElementById('agente-inv-select');
   if (invSelect) {
     let invActual = invSelect.value;

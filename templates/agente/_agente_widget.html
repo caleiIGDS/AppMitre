@@ -11,5 +11,25 @@
     </div>
   </div>
 
+  {# En qué inventario trabaja el chat — mismo selector que agente_chat.html, acá siempre
+     angosto (el widget mide 380px), por eso reusa el markup compacto de `.agente-inv` sin
+     esperar a la media query mobile. Ver `.agente-widget-invbar` en gestion.css. #}
+  {% if inventarios %}
+  <div class="agente-page-bar agente-widget-invbar">
+    <div class="agente-inv">
+      <label for="agente-inv-select" class="agente-inv-label">Inventario</label>
+      <select id="agente-inv-select" class="agente-inv-select"
+              title="Cambiar de inventario reinicia la conversación">
+        {% if not inv_activo %}
+        <option value="" selected disabled>Elegí uno…</option>
+        {% endif %}
+        {% for inv in inventarios %}
+        <option value="{{ inv.slug }}" {{ 'selected' if inv.slug == inv_activo }}>{{ inv.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  {% endif %}
+
   {% include 'agente/_agente_chat_core.html' %}
 </div>

@@ -6,6 +6,27 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-09-17] — Selector de inventario también en el widget flotante, no sólo en `/agente`
+
+`_agente_widget.html` ahora incluye el mismo `<select>` de inventario que la pestaña
+`/agente` (antes era exclusivo de ahí: en `/gestion/<inv>/…` la URL ya lo fijaba). Se agregó
+igual en todos lados a propósito, incluido `/gestion`, donde es redundante con la URL. Para
+que funcione en `/salidas` (sin ningún `<inv>` en la URL) `salidas.py` pasó a importar
+`gestion` y usar `gestion.abribles()`/`slug_activo()` en su `context_processor` — mismo
+patrón que ya usaba `agente/rutas.py`, no una excepción nueva a la capa.
+
+---
+
+## [2026-09-17] — Header de gestión/agente/salidas: se sacó el botón del widget y `‹ SISTEMA DE HORARIOS`
+
+Ambos duplicaban lo que ya ofrece el ☰ (panel lateral de áreas). El toggle del widget
+(`#agente-toggle-btn`) se sacó de `gestion/base.html` y `salidas/base.html` sin reemplazo:
+el widget flotante queda sin ningún botón que lo abra en la UI (markup y JS intactos, por si
+se reactiva). El link a `/horarios` tampoco se movió a ningún lado — sin JS, estas áreas
+quedan sin salida directa a horarios; se acepta porque la app ya asume JS en todos lados.
+
+---
+
 ## [2026-09-15] — Filtros del listado de recursos: chip fijo → slider, "mostrar baja" → excluyente
 
 El chip "sin revisar hace +6 meses" se reemplazó por un slider en meses (pasos de 0.5): el

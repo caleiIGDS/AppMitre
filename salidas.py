@@ -33,6 +33,7 @@ from fpdf import FPDF, FontFace
 
 import accesos
 import crud
+import gestion
 from config import DIR_DATOS, ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION, ahora
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -1154,10 +1155,19 @@ accesos.registrar_acceso(bp, PERMISO_LECTURA, endpoint_default='lista')
 
 @bp.context_processor
 def _contexto():
+    # inventarios/inv_activo: los pide el widget del asistente (ver _agente_widget.html),
+    # que acá no tiene un `<inv>` en la URL que se lo fije como en /gestion/<inv>/… — el
+    # selector es la única forma de ver o cambiar en cuál está trabajando.
+    inventarios = gestion.abribles()
+    inv_activo = gestion.slug_activo()
+    if inv_activo not in [f['slug'] for f in inventarios]:
+        inv_activo = None
     return {
         'escuela_nombre': ESCUELA_NOMBRE,
         'escuela_logo': ESCUELA_LOGO,
         'escuela_version': ESCUELA_VERSION,
+        'inventarios': inventarios,
+        'inv_activo': inv_activo,
     }
 
 

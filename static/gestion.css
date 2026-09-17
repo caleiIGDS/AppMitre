@@ -2557,6 +2557,27 @@ textarea.agente-ficha-input {
     }
 }
 
+/* El widget flotante mide 380px fijo (ver .agente-widget): la barra angosta de celular
+   de arriba le queda siempre chica, así que acá no se espera a la media query — el mismo
+   ajuste (sin label, select a lo ancho) va siempre. */
+.agente-widget-invbar {
+    padding: 8px 12px;
+}
+
+.agente-widget-invbar .agente-inv {
+    margin-left: 0;
+    width: 100%;
+}
+
+.agente-widget-invbar .agente-inv-label {
+    display: none;
+}
+
+.agente-widget-invbar .agente-inv-select {
+    flex: 1;
+    max-width: none;
+}
+
 .agente-page-title {
     display: flex;
     align-items: center;
@@ -2851,8 +2872,8 @@ body.g-sidebar-abierto { overflow: hidden; }
 /* ---------- Menú de áreas adentro del panel ---------- */
 /* El server lo renderiza al final del `body` y `mobile-nav.js` lo mueve al panel. Fuera
    del panel no se muestra: si no, se vería suelto abajo del footer hasta que corra el JS.
-   Sin JS no hay panel y por lo tanto no hay salto entre áreas — queda el
-   `‹ SISTEMA DE HORARIOS` del header, que es la salida que importa. */
+   Sin JS no hay panel y por lo tanto no hay salto entre áreas ni salida a horarios: la app
+   ya asume JS (SPA vainilla en todos lados), así que no hay fallback dedicado. */
 .g-areas { display: none; }
 
 .g-sidebar .g-areas {

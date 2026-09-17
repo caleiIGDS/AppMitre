@@ -10,10 +10,10 @@
       <span>Asistente</span>
     </div>
 
-    {# En qué inventario trabaja el chat. Sólo acá y no en el widget flotante: el widget
-       se abre adentro de `/gestion/<inv>/…`, donde el inventario lo fija la URL y elegir
-       otro sería contradecir la página. Los que se listan son los que ESTE acceso abre
-       (gestion.abribles()); el server igual revalida en /agente/inventario. #}
+    {# En qué inventario trabaja el chat — el widget flotante tiene el mismo selector
+       (ver _agente_widget.html), acá en su versión ancha. Los que se listan son los que
+       ESTE acceso abre (gestion.abribles()); el server igual revalida en
+       /agente/inventario. #}
     {% if inventarios %}
     <div class="agente-inv">
       <label for="agente-inv-select" class="agente-inv-label">Inventario</label>

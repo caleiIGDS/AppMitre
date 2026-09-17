@@ -6,6 +6,13 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-09-17] — `salidas.py` importa `gestion` para el selector de inventario del widget
+
+**Archivos**: `salidas.py` (`import gestion`, `_contexto()` agrega `inventarios`/`inv_activo`),
+`templates/agente/_agente_widget.html` (selector, antes sólo en `/agente`), `gestion.py`
+(`contexto_extra()` idem). Una página nueva que incluya `_agente_widget.html` sin pasar esas
+dos claves simplemente no pinta el selector (`{% if inventarios %}`), no rompe.
+
 ## [2026-09-17] — Padrón de salidas: profesores + alta manual + CSV con merge por DNI
 
 **Archivos**: `static/salidas-padron.js` (v2 de la clave `appmitre.padron.v1`, migra sola
