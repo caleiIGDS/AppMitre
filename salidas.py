@@ -968,6 +968,10 @@ def _dibujar_tabla(pdf, campo, valores):
 # de texto-que-no-existe-en-el-papel que este mecanismo busca evitar.
 NOTAS_GENERALES_A_IMPRIMIR = {'V', 'VIII'}
 
+# El párrafo de `notas_generales` no siempre va suelto: el VIII lo encabeza con "Aclaración:"
+# en negrita (ver Salidas/Anexo8.md), el V no trae ningún título. Por anexo, no default global.
+NOTAS_GENERALES_TITULO = {'VIII': 'Aclaración:'}
+
 
 def _generar_pdf_anexo(anexo, valores, destino):
     schema = _cargar_schema(anexo)
@@ -1039,6 +1043,10 @@ def _generar_pdf_anexo(anexo, valores, destino):
 
     if anexo in NOTAS_GENERALES_A_IMPRIMIR and schema.get('notas_generales'):
         pdf.ln(2)
+        titulo = NOTAS_GENERALES_TITULO.get(anexo)
+        if titulo:
+            pdf.set_font('helvetica', 'B', TAM_TEXTO)
+            pdf.multi_cell(0, ALTO_LINEA, titulo, align='L', new_x='LMARGIN', new_y='NEXT')
         # Mismo cuerpo e interlineado que una nota del cuerpo (_dibujar_nota): en el papel
         # es un párrafo más del formulario, no una letra chica al pie.
         pdf.set_font('helvetica', '', TAM_TEXTO)
