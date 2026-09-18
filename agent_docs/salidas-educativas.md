@@ -93,13 +93,19 @@ tocar el servidor — pero se sacó de la UI por pedido explícito; no queda ras
 La réplica `COMUNES[].destino` (ej. `tipo_salida` → `VI.tipo_salida`/`VII.tipo_salida`) es
 sólo una indirección de **lectura** en el JS (`getValorCampo`, `formulario.html`): el objeto
 `estado.anexos[n]` nunca llega a tener esas claves, se manda tal cual en `datos_comunes` +
-`anexos` por separado. Por eso `api_guardar` (y `regenerar_pdfs`, que ya lo hacía) hace
-`anexo.update(comunes)` sobre cada anexo del payload **antes** de guardar `datos_json` y
+`anexos` por separado. Por eso `api_guardar` (y `regenerar_pdfs`, que ya lo hacía) llama a
+`_replicar_comunes(anexos, comunes)` sobre el payload **antes** de guardar `datos_json` y
 generar los PDF — si no, el PDF de la primera vez que se guarda una salida sale con esos
 campos en blanco (sólo se corregían al tocar "Regenerar PDF" a mano). Al mutar `anexos[n]`
 in place, el `datos_json` que se persiste ya queda con la réplica resuelta, así que el link
 público de familias (`valores_base` en `completar()`/`pdf_publico()`, el `resumen` de
 `completar()`) también la ve sin depender de un regenerado posterior.
+
+`_replicar_comunes` no hace un `dict.update` ciego: `_REPLICA_COMUNES_EXCLUIR` frena los
+casos donde un anexo reutiliza el mismo id que un campo común pero con otro significado
+(VIII.telefono es de la empresa de transporte, VII.domicilio es del/la estudiante) — si no,
+esos dos campos quedaban pisados por el dato de la escuela en cada guardado y era imposible
+cargarlos o editarlos.
 
 Los campos de **firma** y de **"lugar y fecha" de la firma** no están en el formulario
 digital (`ANEXOS` en `formulario.html`) a propósito: van a mano sobre el papel impreso,

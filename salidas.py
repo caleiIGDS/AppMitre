@@ -284,6 +284,30 @@ def _condicion_cumple(campo, valores):
     return not cond or valores.get(cond['campo']) == cond['valor']
 
 
+# Campos de un anexo que casualmente comparten id con uno de Datos Comunes pero tienen
+# un significado propio — no deben pisarse con el dato de la escuela: VIII.telefono lo
+# completa la empresa de transporte (colisiona con el "Teléfono de la escuela" común) y
+# VII.domicilio es el domicilio particular del/la estudiante (colisiona con el "Domicilio
+# de la escuela" común). Sin esta exclusión, _replicar_comunes los pisaba en cada guardado
+# y no había forma de cargarlos ni editarlos.
+_REPLICA_COMUNES_EXCLUIR = {
+    'VII': {'domicilio'},
+    'VIII': {'telefono'},
+}
+
+
+def _replicar_comunes(anexos, comunes):
+    """Copia cada campo de Datos Comunes dentro de los anexos que comparten su id (ver
+    comentario en api_guardar), salvo los de _REPLICA_COMUNES_EXCLUIR."""
+    for anexo_id, anexo in anexos.items():
+        if not isinstance(anexo, dict):
+            continue
+        excluir = _REPLICA_COMUNES_EXCLUIR.get(anexo_id, ())
+        for clave, valor in comunes.items():
+            if clave not in excluir:
+                anexo[clave] = valor
+
+
 def _iso_a_dd_mm_yyyy(iso_fecha):
     """Convierte fecha ISO (YYYY-MM-DD) a formato dd/mm/yyyy"""
     if not iso_fecha or not isinstance(iso_fecha, str):
@@ -1256,9 +1280,7 @@ def api_guardar():
     # establecimiento_educativo, localidad_salida...) quedan en blanco en el PDF hasta que
     # alguien aprieta "Regenerar PDF" a mano (regenerar_pdfs sí hace este merge, pero desde
     # datos_json ya guardado — acá hace falta antes de guardar por primera vez).
-    for anexo in anexos.values():
-        if isinstance(anexo, dict):
-            anexo.update(comunes)
+    _replicar_comunes(anexos, comunes)
 
     con = conectar()
     cur = con.cursor()
@@ -1334,9 +1356,7 @@ def regenerar_pdfs(id):
     anexos = datos.get('anexos') or {}
     datos_comunes = datos.get('datos_comunes') or {}
     # Replicar datos_comunes en cada anexo, igual que en api_guardar
-    for anexo in anexos.values():
-        if isinstance(anexo, dict):
-            anexo.update(datos_comunes)
+    _replicar_comunes(anexos, datos_comunes)
     _generar_pdfs(id, anexos)
     return redirect(url_for('salidas.detalle', id=id))
 
