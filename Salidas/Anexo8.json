@@ -4,7 +4,7 @@
   "titulo": "Planilla Informe de Transporte a contratar",
   "fuente": "IF-2024-35031394-GDEBA-CGCYEDGCYE",
   "completa_general": "empresa_transporte",
-  "notas_generales": "Se completa de modo digital por la empresa de transporte y/o por las autoridades de la escuela, una vez visada la documentación (que se registra en la Declaración Jurada del Anexo IX). Si se contrata transporte público de pasajeros, se consignan los datos de los pasajes/boletos en lugar de estos campos de vehículo/conductor.",
+  "notas_generales": "El presente anexo debe ser completado de modo digital por la empresa de transporte y/o por las autoridades de la escuela, una vez visada la documentación correspondiente (la cual se registra en la Declaración Jurada, anexo IX).\n\nAdjuntar fotocopia de Constancia de habilitaciones, carnet de conductor, DNI del conductor/ra o conductores.\n\nSi se contratare transporte público de pasajeros se consignarán los datos de los respectivos pasajes o boletos.",
   "campos": [
     {
       "id": "nombre_empresa",
@@ -108,7 +108,7 @@
       "opciones": null,
       "columnas": null,
       "condicion": null,
-      "notas": "Tipo de vehículo: micro, ómnibus, combi, automóvil, camioneta, barco, lancha, avión, entre otros"
+      "notas": "Micro, ómnibus, combi, automóvil, camioneta, barco, lancha, avión, entre otros"
     },
     {
       "id": "habilitacion_vehiculo",
@@ -121,7 +121,7 @@
       "opciones": null,
       "columnas": null,
       "condicion": null,
-      "notas": "Número de registro, fecha, tipo de habilitación, cantidad de asientos, vigencia de VTV hasta el regreso"
+      "notas": "número de registro, fecha, tipo de habilitación, cantidad de asientos, vigencia de VTV hasta el regreso"
     },
     {
       "id": "compania_aseguradora",

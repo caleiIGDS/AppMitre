@@ -432,13 +432,17 @@ CAMPOS_MISMA_LINEA = {
 NOTAS_A_IMPRIMIR = {
     'IV': {'observaciones_fechas', 'itinerario'},
     'V': {'observaciones'},
+    # Anexo VIII: "Titularidad del vehículo (Micro, ómnibus...)" y "Habilitación del/los
+    # vehículos (número de registro...)" — verificado contra Salidas/Anexo8.md.
+    'VIII': {'titularidad_vehiculo', 'habilitacion_vehiculo'},
 }
 
 # Dónde va la aclaración entre paréntesis respecto de los ":" tampoco es parejo: el Anexo V
-# la pone DESPUÉS ("OBSERVACIONES:(Para ser completado...)"), el Anexo IV la pone ANTES
-# ("Itinerario (detalle pormenorizado del mismo):") — verificado en el original de los dos.
-# Sólo afecta a `_dibujar_textarea`; el default (después de los ":") es el de más anexos.
-NOTAS_ANTES_DE_DOSPUNTOS = {'IV'}
+# la pone DESPUÉS ("OBSERVACIONES:(Para ser completado...)"), el Anexo IV y el VIII la ponen
+# ANTES ("Itinerario (detalle pormenorizado del mismo):", "Titularidad del vehículo (Micro,
+# ómnibus...):") — verificado en el original de los tres. Afecta a `_dibujar_textarea` y a
+# `_dibujar_campo`; el default (después de los ":") es el de más anexos.
+NOTAS_ANTES_DE_DOSPUNTOS = {'IV', 'VIII'}
 
 # Varios anexos NO son, en el original, una lista de "label: valor": arrancan con un
 # párrafo corrido con blancos intercalados (ej. Anexo III: "Por la presente autorizo a
@@ -696,9 +700,13 @@ def _dibujar_campo(pdf, campo, valores, anexo, extra=()):
     negrita = anexo in ANEXOS_LABEL_NEGRITA
     texto_valor = _texto_valor(campo, valores.get(campo['id']))
     nota = campo.get('notas') if campo['id'] in NOTAS_A_IMPRIMIR.get(anexo, ()) else None
+    nota_antes = bool(nota) and anexo in NOTAS_ANTES_DE_DOSPUNTOS
+    label = _label_campo(campo, anexo, valores)
+    if nota_antes:
+        label = f"{label} ({nota})"
     ancho_blanco = ANCHOS_BLANCO_PAR.get(campo['id'], ANCHO_BLANCO_PAR_EXTRA if extra else ANCHO_BLANCO_PAR)
-    _escribir_par(pdf, _label_campo(campo, anexo, valores), texto_valor, negrita, anexo, ancho_blanco)
-    if nota:
+    _escribir_par(pdf, label, texto_valor, negrita, anexo, ancho_blanco)
+    if nota and not nota_antes:
         pdf.write(ALTO_LINEA, f" ({nota})")
     for campo_extra in extra:
         texto_extra = _texto_valor(campo_extra, valores.get(campo_extra['id']))
@@ -958,7 +966,7 @@ def _dibujar_tabla(pdf, campo, valores):
 # ser completado de forma digital..."). No se imprime para el resto hasta revisarlos uno
 # por uno — imprimirla sin verificar arriesgaría meter, en otro anexo, exactamente el tipo
 # de texto-que-no-existe-en-el-papel que este mecanismo busca evitar.
-NOTAS_GENERALES_A_IMPRIMIR = {'V'}
+NOTAS_GENERALES_A_IMPRIMIR = {'V', 'VIII'}
 
 
 def _generar_pdf_anexo(anexo, valores, destino):
