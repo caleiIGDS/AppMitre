@@ -492,9 +492,9 @@ const ANEXOS = [
     {id:"distrito", label:"Distrito", tipo:"text", req:true, auto:true, seccion:"2 · Autorización (completa la familia)"},
     {id:"localidad_salida", label:"Localidad donde se realiza la salida", tipo:"text", req:true, auto:true, seccion:"2 · Autorización (completa la familia)"},
     {id:"dias_salida", label:"Día/días de la salida", tipo:"text", req:true, calc:true, seccion:"2 · Autorización (completa la familia)",
-     a:"Se calcula solo desde la fecha de salida."},
+     a:"Se calcula solo desde las fechas de salida y regreso."},
     {id:"mes_salida", label:"Mes de la salida", tipo:"text", req:true, calc:true, seccion:"2 · Autorización (completa la familia)",
-     a:"Se calcula solo desde la fecha de salida."},
+     a:"Se calcula solo desde las fechas de salida y regreso."},
 
     {id:"indicaciones_salud", label:"Indicaciones para el personal docente y médico", tipo:"textarea", req:false, ancho:true, seccion:"3 · Salud (completa la familia)",
      a:"Alergias, medicación, tratamientos, condiciones que el/la docente a cargo tenga que conocer ante una urgencia. Si no hay nada para informar, se deja en blanco."},
@@ -522,9 +522,9 @@ const ANEXOS = [
     {id:"institucion", label:"Institución a la que concurre", tipo:"text", req:true, auto:true},
     {id:"tipo_salida", label:"Tipo de salida", tipo:"select", opciones:["educativa","representacion_institucional"], req:true, auto:true},
     {id:"localidad_salida", label:"Localidad donde se realiza la salida", tipo:"text", req:true, auto:true},
-    {id:"dias_salida", label:"Día/días de la salida", tipo:"text", req:true, calc:true, a:"Se calcula solo desde la fecha de salida."},
-    {id:"mes_salida", label:"Mes de la salida", tipo:"text", req:true, calc:true, a:"Se calcula solo desde la fecha de salida."},
-    {id:"anio_salida", label:"Año de la salida", tipo:"text", req:true, calc:true, a:"Se calcula solo desde la fecha de salida."},
+    {id:"dias_salida", label:"Día/días de la salida", tipo:"text", req:true, calc:true, a:"Se calcula solo desde las fechas de salida y regreso."},
+    {id:"mes_salida", label:"Mes de la salida", tipo:"text", req:true, calc:true, a:"Se calcula solo desde las fechas de salida y regreso."},
+    {id:"anio_salida", label:"Año de la salida", tipo:"text", req:true, calc:true, a:"Se calcula solo desde las fechas de salida y regreso."},
     {id:"indicaciones_salud", label:"Indicaciones para el personal docente y médico", tipo:"textarea", req:false, ancho:true,
      a:"Alergias, medicación o condiciones que el/la docente a cargo deba conocer ante una urgencia."},
     {id:"tiene_obra_social", label:"¿Tiene obra social o prepaga?", tipo:"bool", req:true, a:"Si se marca, se habilitan los datos de la cobertura."},
@@ -838,6 +838,29 @@ function fechaLarga(iso){
 function soloDia(iso){ return iso ? String(Number(iso.split("-")[2])) : ""; }
 function soloMes(iso){ return iso ? MESES[Number(iso.split("-")[1])-1] : ""; }
 function soloAnio(iso){ return iso ? iso.split("-")[0] : ""; }
+
+/* Salida de varios días: el papel dice "{los días} ___ del mes de ___ (del año ___)", así
+   que el rango va en los días y el mes/año son los del regreso. Si cruza de mes (o de año),
+   el de la salida se escribe dentro de los días: "30 de septiembre al 2" + "octubre". */
+function rangoSalida(){
+  const ini = estado.comunes.fecha_salida, fin = estado.comunes.fecha_regreso;
+  const unDia = !fin || fin <= ini;
+  return {ini, fin: unDia ? ini : fin, unDia};
+}
+function diasSalida(conAnio){
+  const {ini, fin, unDia} = rangoSalida();
+  if (!ini) return "";
+  if (unDia) return soloDia(ini);
+  let desde = soloDia(ini);
+  if (soloAnio(ini) !== soloAnio(fin)) desde += conAnio ? ` de ${soloMes(ini)} de ${soloAnio(ini)}` : ` de ${soloMes(ini)}`;
+  else if (soloMes(ini) !== soloMes(fin)) desde += ` de ${soloMes(ini)}`;
+  return `${desde} al ${soloDia(fin)}`;
+}
+function fechaLargaRango(){
+  const {ini, fin, unDia} = rangoSalida();
+  if (!ini) return "";
+  return unDia ? fechaLarga(ini) : `del ${fechaLarga(ini)} al ${fechaLarga(fin)}`;
+}
 function hhmm(v){ return v || ""; }
 
 /* Valores calculados a partir de comunes + personas */
@@ -853,11 +876,12 @@ function calculado(anexo, campo){
       return [c.lugar_salida, fechaLarga(c.fecha_salida), hhmm(c.hora_salida) && (hhmm(c.hora_salida)+" hs")].filter(Boolean).join(" — ");
     case "VI.lugar_dia_hora_regreso":
       return [c.lugar_regreso, fechaLarga(c.fecha_regreso), hhmm(c.hora_regreso) && (hhmm(c.hora_regreso)+" hs")].filter(Boolean).join(" — ");
-    case "VI.dias_salida": case "VII.dias_salida": return soloDia(c.fecha_salida);
-    case "VI.mes_salida":  case "VII.mes_salida":  return soloMes(c.fecha_salida);
-    case "VII.anio_salida": return soloAnio(c.fecha_salida);
+    case "VI.dias_salida":  return diasSalida(false);
+    case "VII.dias_salida": return diasSalida(true);
+    case "VI.mes_salida":  case "VII.mes_salida":  return soloMes(rangoSalida().fin);
+    case "VII.anio_salida": return soloAnio(rangoSalida().fin);
     case "IX.fecha_lugar_realizacion":
-      return [fechaLarga(c.fecha_salida), c.lugar_a_visitar].filter(Boolean).join(" — ");
+      return [fechaLargaRango(), c.lugar_a_visitar].filter(Boolean).join(" — ");
     default: return "";
   }
 }
@@ -1512,7 +1536,7 @@ function campoAnexo(anexo, campo){
         marcarCambio();
       });
       tbody.appendChild(el("tr", {style:"border-bottom:1px solid #eee"},
-        el("td", {style:"padding:8px"}, acomp.apellido_nombre),
+        el("td", {style:"padding:8px"}, acomp.rol === "docente_reemplazante" ? acomp.apellido_nombre + " (suplente)" : acomp.apellido_nombre),
         el("td", {style:"padding:8px"}, inpTel)));
     });
 
@@ -1791,9 +1815,11 @@ function refrescarDerivados(){
       ...estado.personas.filter(p => p.rol === "docente_reemplazante" && p.apellido_nombre),
       ...estado.personas.filter(p => p.rol === "no_docente" && p.apellido_nombre)
     ];
+    // El reemplazante va marcado: si no, una familia podría llamar a quien al final no fue.
     const textosAcompañantes = acompañantesLista.map(a => {
       const tel = datosAcompañantes[a.apellido_nombre];
-      return tel ? (a.apellido_nombre + " - " + tel) : a.apellido_nombre;
+      const nombre = a.rol === "docente_reemplazante" ? a.apellido_nombre + " (suplente)" : a.apellido_nombre;
+      return tel ? (nombre + " - " + tel) : nombre;
     }).filter(x => x);
     estado.anexos["VI"].nombres_telefonos_acompanantes_texto = textosAcompañantes.join("\n");
   }

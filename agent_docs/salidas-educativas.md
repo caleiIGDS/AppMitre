@@ -230,8 +230,10 @@ imita esa estructura. `_generar_pdf_anexo(anexo, valores, destino)` recorre el
   `pdf.table()`: en el original son renglones repetidos "Apellido y Nombre ____ Cargo
   ____", uno por docente, sin bordes — `_dibujar_docentes` los imprime así.
 - **El grupo "Tiene Obra Social/Prepaga"** (VI y VII, detectado por id —
-  `CAMPOS_OBRA_SOCIAL`) sí es una cajita con bordes en el original (3 renglones: Sí/No ·
-  Nombre · N° Socio) — `_dibujar_obra_social` la arma con `pdf.table()` y se saltea
+  `CAMPOS_OBRA_SOCIAL`) sí es una cajita con bordes en el original: "Tiene Obra
+  Social/Prepaga" y las columnas Sí / No (se marca con X, ninguna si no hay respuesta)
+  ocupan dos filas, y a la derecha van Nombre y N° Socio uno arriba del otro —
+  `_dibujar_obra_social` la dibuja a mano con `rect()` (proporciones medidas del papel) y se saltea
   `nombre_obra_social`/`numero_socio` en el loop principal (van adentro de la cajita).
 - **El bloque de firmas del Anexo IX** (`firma_sello_director`,
   `firma_sello_representante_legal`, detectados por id — `CAMPOS_FIRMA_IX`) es dos columnas
@@ -287,32 +289,23 @@ no tiene un weight "semibold" real (sólo Regular/Bold), así que se usa el modo
 `FILL_STROKE` de PDF (relleno + contorno fino con el mismo color), que engrosa visualmente
 sin llegar a negrita completa. Además cambian 1pt de tamaño respecto de `TAM_TEXTO`
 (`_valor_destacado(pdf, tam_base, delta)`): **más grandes** (`delta=1`, 12pt en vez de 11)
-en los siete anexos. El IX tuvo hasta 2026-09-09 un `ANEXOS_VALOR_TAM_DELTA` de `-1` —por
+en los siete anexos (`DELTA_VALOR`). El IX tuvo hasta 2026-09-09 un delta de `-1` —por
 ser casi enteramente pares "label: valor", donde el destacado de todos satura la hoja—, pero
 al lado de los otros seis se leía como un anexo impreso en letra chica, así que volvió al
-default. `ANEXOS_VALOR_TAM_DELTA` queda sólo para el VI (ver el piloto más abajo). Esto
+default. Esto
 afecta a: `_escribir_par` (la
 mayoría de campos), `_dibujar_textarea` (observaciones, itinerarios, etc.),
 `_dibujar_narrativa` (párrafos con `{placeholders}` interpolados en Anexos III, VI, VII —
 siempre con el delta default, no hay narrativa en IX), y `_dibujar_docentes`
 (nombres/cargo, sólo Anexo IV). La excepción son las **tablas**
-(`_dibujar_obra_social`, `_dibujar_tabla`): `FontFace` no soporta `text_mode` por celda, así
+(`_dibujar_tabla`): `FontFace` no soporta `text_mode` por celda, así
 que los valores en tablas sólo se agrandan (+1pt) sin el trazo — suficiente para diferenciar
 del header. El trazo se aplica **incluso a segmentos que ya están en negrita** (ej. el
 `{tipo_salida}` del Anexo VII, que es negrita del papel original): queda más pesado, pero
 sigue siendo principalmente negrita, no un efecto visual distinto.
 
-**Piloto: invertir label/valor (`ANEXOS_LABEL_DESTACADO`)** — 2026-08-16. La norma de arriba
-(valor destacado, label plano/`ANEXOS_LABEL_NEGRITA`) es la que rige en 6 de los 7 anexos.
-Para el Anexo VI se está probando lo opuesto: el **label** lleva el trazo de semi-negrita
-(`_valor_destacado`) y el **valor** va en texto plano — pedido explícito para evaluar cómo
-se lee antes de decidir si se extiende al resto. `ANEXOS_LABEL_DESTACADO = {'VI'}` controla
-qué anexos usan el criterio invertido; lo consultan `_escribir_par` y `_dibujar_textarea`
-(no `_dibujar_narrativa`: el párrafo corrido de "Autorización" no tiene labels sueltos que
-invertir, así que sus valores interpolados —`{tipo_salida}`, `{distrito}`, etc.— siguen
-destacados igual que antes, sin cambios). Si se confirma el look, lo natural es que
-`ANEXOS_LABEL_DESTACADO` reemplace a `ANEXOS_LABEL_NEGRITA` (que sólo tiene `V`) en vez de
-convivir los dos indefinidamente.
+La norma rige en los 7 anexos por igual (`DELTA_VALOR`, títulos de sección a `TAM_TEXTO`): el
+VI tuvo un tiempo el criterio invertido y se descartó (ver `dev-log/DECISIONS.md`).
 
 Reusa la subclase `_PDFAnexo(FPDF)` propia (no la `PDF` de `app.py`, para no crear un
 acoplamiento entre módulos). `pdf.output(destino)` escribe a disco directamente (a

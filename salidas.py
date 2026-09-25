@@ -254,11 +254,6 @@ def _crear_pdf():
     # está tipeado en una sans-serif proporcional (Arial/Helvetica), no en la monoespaciada
     # RobotoMono que usa el resto de la app — para estos PDF, que imitan un formulario
     # oficial ajeno, se prioriza parecerse al papel por sobre la identidad visual de AppMitre.
-    # La única fuente embebida es Roboto Light, para los valores del Anexo VI (FUENTE_VALOR):
-    # helvetica core no tiene un peso liviano y es la forma de que el valor pese menos que su
-    # label. Apache 2.0, así que viaja en el repo — imprescindible, porque el server es Linux
-    # y no tiene fuentes de Windows. fpdf2 subsetea: sólo embebe los glifos usados.
-    pdf.add_font(FUENTE_VALOR, '', os.path.join(_AQUI, 'static', 'fonts', 'Roboto-Light.ttf'))
     return pdf
 
 
@@ -369,6 +364,13 @@ SECCION_TITULOS = {
     'IX': {'seguro_escolar': 'Datos del seguro escolar'},
 }
 
+# Secciones que en el papel arrancan hoja nueva. En el VI, "3- Salud" abre la página 2: sin
+# esto el título quedaba huérfano al pie de la página 1 y el resto de la sección en la 2.
+SECCIONES_PAGINA_NUEVA = {'VI': {'salud'}}
+# Ídem por campo, para anexos sin secciones: en el VII la cajita de obra social abre la página 2
+# (así teléfonos y firma quedan juntos con ella, en vez de partirse entre las dos hojas).
+CAMPOS_PAGINA_NUEVA = {'VII': {'tiene_obra_social'}}
+
 # El original agrupa estos tres campos en una cajita de 3 renglones (Tiene Obra
 # Social/Prepaga · Sí-No · Nombre · N° Socio) en vez de listarlos sueltos — VI y VII
 # repiten la misma cajita, así que alcanza con detectar el id.
@@ -435,6 +437,9 @@ NOTAS_A_IMPRIMIR = {
     # Anexo VIII: "Titularidad del vehículo (Micro, ómnibus...)" y "Habilitación del/los
     # vehículos (número de registro...)" — verificado contra Salidas/Anexo8.md.
     'VIII': {'titularidad_vehiculo', 'habilitacion_vehiculo'},
+    # "Teléfonos de contacto en caso de urgencia: (Consignar varios)" — igual en VI y VII.
+    'VI': {'telefonos_urgencia'},
+    'VII': {'telefonos_urgencia'},
 }
 
 # Dónde va la aclaración entre paréntesis respecto de los ":" tampoco es parejo: el Anexo V
@@ -501,6 +506,10 @@ PARRAFOS_NARRATIVA = {
         # tipo_salida se guarda como slug de <select> — el papel espera el texto tachable.
         'mapeos': {'tipo_salida': {'educativa': 'salida educativa',
                                     'representacion_institucional': 'salida de representación institucional'}},
+        # Sin tipo_salida (VII en blanco): las dos opciones en negrita + la indicación en
+        # itálica, como en el papel.
+        'sin_dato': {'tipo_salida': [('salida educativa / de representación institucional', 'B'),
+                                     (' (tachar lo que no corresponda)', 'I')]},
     }],
 }
 
@@ -516,12 +525,6 @@ COL_WIDTHS = {
 # ejemplo, no — verificado visualmente en ambos), así que van por permiso explícito, igual
 # que NOTAS_A_IMPRIMIR/SECCION_TITULOS, no como default global.
 ANEXOS_LABEL_NEGRITA = {'V'}
-
-# Piloto (2026-08-16): la norma general es que el VALOR cargado lleve el efecto semi-negrita
-# (_valor_destacado) y el label vaya en texto plano/Bold real (ANEXOS_LABEL_NEGRITA). Acá se
-# invierte para probar cómo queda: el LABEL lleva el efecto semi-negrita (y el cuerpo extra de
-# ANEXOS_VALOR_TAM_DELTA) y el valor va en Roboto Light (FUENTE_VALOR). Sólo VI mientras se evalúa.
-ANEXOS_LABEL_DESTACADO = {'VI'}
 
 # Ídem para mayúsculas: en el papel del Anexo V los campos de identificación y
 # "OBSERVACIONES" están en mayúscula, pero "Lugar y fecha"/"Firma de Autoridad..." no —
@@ -549,14 +552,12 @@ RENGLONES_BLANCO = {
     'observaciones_fechas': 4,
     'gastos_estimativos': 4,
     'autoridad_que_completo': 1,
+    # Salud del VI/VII: dos renglones punteados para las indicaciones y varios para teléfonos.
+    'indicaciones_salud': 2,
+    'telefonos_urgencia': 4,
+    'VII.telefonos_urgencia': 3,  # "anexo.id" pisa al id solo: el VII trae uno menos que el VI
 }
 GROSOR_TRAZO_VALOR = 0.25  # mm — trazo fino sobre el relleno de valores destacados
-# Donde el destacado va en el label (ANEXOS_LABEL_DESTACADO), el valor se diferencia con una
-# fuente de peso liviano, no tocando el glifo de la helvetica. Descartados en el camino: afinarlo
-# con un trazo blanco (el inverso de _valor_destacado) queda demasiado débil para un papel que se
-# imprime y se firma — y encima no se apaga con 0, porque en PDF `0 w` es "la línea más fina del
-# dispositivo", no "sin línea"; y la itálica lo diferencia por forma pero no por peso.
-FUENTE_VALOR = 'roboto-light'  # embebida en _crear_pdf; helvetica core no tiene peso Light
 ANCHO_BLANCO_PAR = 70  # mm — línea en blanco para completar a mano, campo solo en su renglón
 ANCHO_BLANCO_PAR_EXTRA = 35  # mm — ídem, cuando comparte renglón con otro campo (CAMPOS_MISMA_LINEA)
 # Anchos por id que se apartan de esos dos defaults. El bloque de hospedaje del Anexo IV
@@ -571,6 +572,8 @@ ANCHOS_BLANCO_PAR = {
     'hospedaje_domicilio': 45, 'hospedaje_localidad': 45,
     'fecha_salida': 24, 'hora_salida': 16, 'lugar_salida': 38,
     'fecha_regreso': 24, 'hora_regreso': 16, 'lugar_regreso': 38,
+    # Anexo VII: "Firma: ______ DNI: ______" ocupa todo el renglón en el papel.
+    'firma': 65, 'dni_firma': 55,
 }
 ANCHO_BLANCO_NARRATIVA = 45  # mm — ídem, para un placeholder {id} vacío dentro del párrafo corrido
 # Nombre completo y domicilio necesitan más lugar que un DNI o un distrito para escribir a mano.
@@ -602,17 +605,10 @@ def _label_campo(campo, anexo, valores=None):
     return label.upper() if campo['id'] in LABELS_MAYUSCULA.get(anexo, ()) else label
 
 
-# Delta de tamaño (pt) del valor destacado respecto de `tam_base` — el default (+1, más
-# grande) rige en todos los anexos: el IX lo tuvo en -1 (valor más chico que el label) por
-# ser casi todo "label: valor" seguido, pero terminaba leyéndose como un anexo en letra
-# chica al lado de los otros seis. El VI es el único caso aparte: como el destacado lo lleva
-# el LABEL (ANEXOS_LABEL_DESTACADO), este delta agranda el label y toda la separación con el
-# valor se hace por acá.
-ANEXOS_VALOR_TAM_DELTA = {'VI': 1}
-
-# Cuerpo extra (pt) del título de sección respecto de TAM_TEXTO, por anexo — default 0. En el
-# VI arma la escalera completa: título de sección > label > valor, cada escalón 1pt.
-ANEXOS_SECCION_TAM_DELTA = {'VI': 2}
+# El valor destacado va +1pt respecto del label en todos los anexos. El IX lo tuvo en -1
+# (valor más chico) y el VI invertido (label destacado, valor en Roboto Light, títulos de
+# sección +2pt); los dos terminaban leyéndose distinto al lado del resto y se unificaron.
+DELTA_VALOR = 1
 
 
 @contextmanager
@@ -635,17 +631,6 @@ def _valor_destacado(pdf, tam_base=TAM_TEXTO, delta=1):
     with pdf.local_context(text_mode="FILL_STROKE", line_width=GROSOR_TRAZO_VALOR,
                            font_family='helvetica', font_style='', font_size_pt=tam_base + delta):
         yield
-
-
-@contextmanager
-def _valor_secundario(pdf):
-    """Contraparte de `_valor_destacado` para los anexos donde el destacado lo lleva el label:
-    el valor cargado va en Roboto Light, mismo cuerpo y mismo negro, un peso más abajo."""
-    pdf.set_font(FUENTE_VALOR, '', TAM_TEXTO)
-    try:
-        yield
-    finally:
-        pdf.set_font('helvetica', '', TAM_TEXTO)
 
 
 def _cell_blanco(pdf, ancho, alto=ALTO_LINEA, border='B'):
@@ -672,22 +657,12 @@ def _cell_blanco(pdf, ancho, alto=ALTO_LINEA, border='B'):
 
 
 def _escribir_par(pdf, label, valor, negrita, anexo, ancho_blanco=ANCHO_BLANCO_PAR):
-    label_destacado = anexo in ANEXOS_LABEL_DESTACADO
-    delta = ANEXOS_VALOR_TAM_DELTA.get(anexo, 1)
-    if label_destacado:
-        with _valor_destacado(pdf, TAM_TEXTO, delta):
-            pdf.write(ALTO_LINEA, f"{label}: ")
-    else:
-        pdf.set_font('helvetica', 'B' if negrita else '', TAM_TEXTO)
-        pdf.write(ALTO_LINEA, f"{label}: ")
+    pdf.set_font('helvetica', 'B' if negrita else '', TAM_TEXTO)
+    pdf.write(ALTO_LINEA, f"{label}: ")
     pdf.set_font('helvetica', '', TAM_TEXTO)
     if valor:
-        if label_destacado:
-            with _valor_secundario(pdf):
-                pdf.write(ALTO_LINEA, valor)
-        else:
-            with _valor_destacado(pdf, TAM_TEXTO, delta):
-                pdf.write(ALTO_LINEA, valor)
+        with _valor_destacado(pdf, TAM_TEXTO, DELTA_VALOR):
+            pdf.write(ALTO_LINEA, valor)
     else:
         # Sin valor: línea en blanco para completar a mano después de imprimir — firma,
         # "lugar y fecha", nombre del hijo/a en la autorización, etc.
@@ -743,24 +718,15 @@ def _dibujar_textarea(pdf, campo, valores, anexo):
         encabezado = f"{label} ({nota}):"
     else:
         encabezado = f"{label}:" + (f" ({nota})" if nota else '')
-    label_destacado = anexo in ANEXOS_LABEL_DESTACADO
-    delta = ANEXOS_VALOR_TAM_DELTA.get(anexo, 1)
-    if label_destacado:
-        with _valor_destacado(pdf, TAM_TEXTO, delta):
-            pdf.multi_cell(0, ALTO_LINEA, encabezado, align='L', new_x='LMARGIN', new_y='NEXT')
-    else:
-        pdf.set_font('helvetica', 'B' if negrita else '', TAM_TEXTO)
-        pdf.multi_cell(0, ALTO_LINEA, encabezado, align='L', new_x='LMARGIN', new_y='NEXT')
+    pdf.set_font('helvetica', 'B' if negrita else '', TAM_TEXTO)
+    pdf.multi_cell(0, ALTO_LINEA, encabezado, align='L', new_x='LMARGIN', new_y='NEXT')
     pdf.set_font('helvetica', '', TAM_TEXTO)
     if texto_valor:
-        if label_destacado:
-            with _valor_secundario(pdf):
-                pdf.multi_cell(0, ALTO_LINEA, texto_valor, align='L', new_x='LMARGIN', new_y='NEXT')
-        else:
-            with _valor_destacado(pdf, TAM_TEXTO, delta):
-                pdf.multi_cell(0, ALTO_LINEA, texto_valor, align='L', new_x='LMARGIN', new_y='NEXT')
+        with _valor_destacado(pdf, TAM_TEXTO, DELTA_VALOR):
+            pdf.multi_cell(0, ALTO_LINEA, texto_valor, align='L', new_x='LMARGIN', new_y='NEXT')
     else:
-        renglones = RENGLONES_BLANCO.get(campo['id'], 1 if anexo == 'VI' else RENGLONES_TEXTAREA)
+        renglones = RENGLONES_BLANCO.get(f"{anexo}.{campo['id']}",
+                                         RENGLONES_BLANCO.get(campo['id'], 1 if anexo == 'VI' else RENGLONES_TEXTAREA))
         for _ in range(renglones):
             pdf.cell(0, ALTO_LINEA, '', border='B', new_x='LMARGIN', new_y='NEXT')
     pdf.ln(2)
@@ -779,20 +745,32 @@ def _valor_narrativa(campo, valor, mapeo):
     return _texto_valor(campo, valor)
 
 
-def _articulo_dias(dias_texto):
+# Sin días cargados (anexo en blanco para completar a mano) va el texto tachable del papel,
+# que no es igual en los dos anexos.
+ARTICULO_DIAS_TACHABLE = {'VI': 'el/los día/días', 'VII': 'el día/ los días'}
+
+
+def _articulo_dias(dias_texto, anexo):
     """"el día"/"los días" según `dias_salida` tenga uno o varios días — reemplaza el
     "el/los día/días" tachable del papel, ya que acá se resuelve solo con el dato cargado."""
     if not dias_texto:
-        return ''
-    return 'los días' if re.search(r'[,\-]|\by\b', dias_texto) else 'el día'
+        return ARTICULO_DIAS_TACHABLE.get(anexo, '')
+    return 'los días' if re.search(r'[,\-]|\b(y|al)\b', dias_texto) else 'el día'
 
 
-def _dibujar_narrativa(pdf, bloque, valores, campos_por_id):
+def _dibujar_narrativa(pdf, bloque, valores, campos_por_id, anexo):
     mapeos = bloque.get('mapeos', {})
     valores_texto = {id: _valor_narrativa(campos_por_id[id], valores.get(id), mapeos.get(id))
                       for id in bloque['ids']}
+    sin_dato_bloque = dict(bloque.get('sin_dato', {}))
     if 'dias_salida' in valores_texto:
-        valores_texto['dia_articulo'] = _articulo_dias(valores_texto['dias_salida'])
+        articulo = _articulo_dias(valores_texto['dias_salida'], anexo)
+        if valores_texto['dias_salida']:
+            valores_texto['dia_articulo'] = articulo
+        else:
+            # Sin días es el "el/los día/días" tachable del papel: texto fijo, no un dato
+            # cargado, así que va sin destacar (por `sin_dato`, no como valor).
+            sin_dato_bloque['dia_articulo'] = [(articulo, '')] if 'segmentos' in bloque else articulo
     if 'segmentos' in bloque:
         # Párrafo con partes en negrita/itálica (ver Anexo VII) — pdf.write() para poder
         # cambiar de estilo sin forzar un salto de línea entre segmentos, igual que
@@ -810,9 +788,16 @@ def _dibujar_narrativa(pdf, bloque, valores, campos_por_id):
                     # (esto es, un {tipo_salida} en negrita se queda en negrita, con el trazo agregado).
                     # Sin valor: línea en blanco para completar a mano, igual que _escribir_par.
                     valor = valores_texto.get(parte, '')
+                    sin_dato = sin_dato_bloque.get(parte)
                     if valor:
                         with _trazo_valor(pdf):  # sin cambiar la fuente: conserva `estilo`
                             pdf.write(ALTO_LINEA, valor)
+                    elif sin_dato:
+                        # Texto fijo del papel en vez de blanco, con sus propios estilos:
+                        # lista de (texto, estilo) como `segmentos`.
+                        for texto_fijo, estilo_fijo in sin_dato:
+                            pdf.set_font('helvetica', estilo_fijo, TAM_TEXTO)
+                            pdf.write(ALTO_LINEA, texto_fijo)
                     else:
                         _cell_blanco(pdf, ANCHOS_BLANCO_NARRATIVA.get(parte, ANCHO_BLANCO_NARRATIVA))
                     pdf.set_font('helvetica', estilo, TAM_TEXTO)
@@ -830,7 +815,7 @@ def _dibujar_narrativa(pdf, bloque, valores, campos_por_id):
                 # Es un placeholder {id} — escribir el valor destacado, o una línea en
                 # blanco para completar a mano si no vino cargado.
                 valor = valores_texto.get(parte, '')
-                sin_dato = bloque.get('sin_dato', {}).get(parte)
+                sin_dato = sin_dato_bloque.get(parte)
                 if valor:
                     with _valor_destacado(pdf, TAM_TEXTO):
                         pdf.write(ALTO_LINEA, valor)
@@ -844,24 +829,73 @@ def _dibujar_narrativa(pdf, bloque, valores, campos_por_id):
     pdf.ln(2)
 
 
+# Proporción de las 5 columnas de la cajita de obra social, medida sobre el original (VI y
+# VII son iguales): "Tiene Obra Social/Prepaga" | Sí | No | Nombre/N° Socio | valor.
+OBRA_SOCIAL_PROPORCION = (126, 38, 38, 141, 202)
+OBRA_SOCIAL_ALTOS = (12, 10)  # mm — fila "Nombre de la Obra Social/Prepaga", fila "N° Socio"
+
+
+def _texto_en_caja(pdf, x, y, ancho, alto, texto, arriba=False):
+    """Texto centrado en una celda ya dibujada, partido en renglones si no entra."""
+    lineas = pdf.multi_cell(ancho - 2, 4.5, texto, align='C', dry_run=True, output='LINES')
+    alto_texto = 4.5 * len(lineas)
+    pdf.set_xy(x + 1, y + (1.5 if arriba else (alto - alto_texto) / 2))
+    pdf.multi_cell(ancho - 2, 4.5, texto, align='C')
+
+
 def _dibujar_obra_social(pdf, valores):
+    # En el papel no es una lista "label: valor": "Tiene Obra Social/Prepaga" ocupa las dos
+    # filas, Sí y No son dos columnas para marcar con una X, y a la derecha van nombre y N° de
+    # socio uno arriba del otro. Sin respuesta (el VI/VII en blanco que imprime la escuela) no
+    # se marca ninguna: sólo True/False de la familia es una respuesta.
     tiene_obra = valores.get('tiene_obra_social')
-    valores_celda = [
-        'Sí' if tiene_obra else 'No',
-        valores.get('nombre_obra_social') or '-',
-        valores.get('numero_socio') or '-',
-    ]
-    labels_celda = ['Tiene Obra Social / Prepaga', 'Nombre de la Obra Social/Prepaga', 'N° Socio']
-    with pdf.table(first_row_as_headings=False, text_align='LEFT', col_widths=(70, 30)) as table:
-        for label, valor in zip(labels_celda, valores_celda):
-            row = table.row()
-            row.cell(label, style=FontFace(size_pt=TAM_TEXTO - 1))
-            row.cell(valor, style=FontFace(size_pt=TAM_TEXTO))
-    pdf.ln(2)
+    alto1, alto2 = OBRA_SOCIAL_ALTOS
+    alto = alto1 + alto2
+    if pdf.get_y() + alto > pdf.page_break_trigger:
+        pdf.add_page()
+    total = sum(OBRA_SOCIAL_PROPORCION)
+    w_tiene, w_si, w_no, w_label, w_valor = (pdf.epw * p / total for p in OBRA_SOCIAL_PROPORCION)
+    x0, y0 = pdf.l_margin, pdf.get_y() + 2
+    x_si, x_no = x0 + w_tiene, x0 + w_tiene + w_si
+    x_label = x_no + w_no
+    x_valor = x_label + w_label
+
+    pdf.set_font('helvetica', '', TAM_TEXTO - 1)
+    for x, w in ((x0, w_tiene), (x_si, w_si), (x_no, w_no)):
+        pdf.rect(x, y0, w, alto)
+    for x, w in ((x_label, w_label), (x_valor, w_valor)):
+        pdf.rect(x, y0, w, alto1)
+        pdf.rect(x, y0 + alto1, w, alto2)
+    _texto_en_caja(pdf, x0, y0, w_tiene, alto, 'Tiene Obra Social/Prepaga')
+    _texto_en_caja(pdf, x_si, y0, w_si, alto, 'Sí', arriba=True)
+    _texto_en_caja(pdf, x_no, y0, w_no, alto, 'No', arriba=True)
+    _texto_en_caja(pdf, x_label, y0, w_label, alto1, 'Nombre de la Obra Social/Prepaga')
+    _texto_en_caja(pdf, x_label, y0 + alto1, w_label, alto2, 'N° Socio')
+
+    if tiene_obra is True or tiene_obra is False:
+        x_marca = x_si if tiene_obra else x_no
+        with _valor_destacado(pdf, TAM_TEXTO, 2):
+            _texto_en_caja(pdf, x_marca, y0 + 5, w_si, alto - 5, 'X')
+
+    for y, a, clave in ((y0, alto1, 'nombre_obra_social'), (y0 + alto1, alto2, 'numero_socio')):
+        texto = _sanear_latin1(str(valores.get(clave) or '')) if tiene_obra else ''
+        if not texto:
+            continue
+        with _valor_destacado(pdf, TAM_TEXTO, DELTA_VALOR):
+            # Una sola línea: si el nombre es largo se achica la letra antes que desbordar la celda.
+            tam = TAM_TEXTO + DELTA_VALOR
+            while tam > 7 and pdf.get_string_width(texto) > w_valor - 3:
+                tam -= 0.5
+                pdf.set_font_size(tam)
+            pdf.set_xy(x_valor + 1.5, y)
+            pdf.cell(w_valor - 3, a, texto, align='L')
+
+    pdf.set_font('helvetica', '', TAM_TEXTO)
+    pdf.set_xy(pdf.l_margin, y0 + alto + 4)
 
 
 def _dibujar_titulo_seccion(pdf, anexo, titulo):
-    pdf.set_font('helvetica', 'B', TAM_TEXTO + ANEXOS_SECCION_TAM_DELTA.get(anexo, 0))
+    pdf.set_font('helvetica', 'B', TAM_TEXTO)
     pdf.ln(2)
     pdf.multi_cell(0, ALTO_LINEA, titulo, align='L', new_x='LMARGIN', new_y='NEXT')
     pdf.ln(1)
@@ -1013,11 +1047,16 @@ def _generar_pdf_anexo(anexo, valores, destino):
         if campo.get('seccion') != seccion_actual:
             seccion_actual = campo.get('seccion')
             titulo = titulos_seccion.get(seccion_actual)
+            if seccion_actual in SECCIONES_PAGINA_NUEVA.get(anexo, ()) and pdf.get_y() > 40:  # 28 = donde header() deja el cursor
+                pdf.add_page()
             if titulo:
                 _dibujar_titulo_seccion(pdf, anexo, titulo)
 
+        if campo['id'] in CAMPOS_PAGINA_NUEVA.get(anexo, ()) and pdf.get_y() > 40:
+            pdf.add_page()
+
         if campo['id'] in narrativa_por_disparador:
-            _dibujar_narrativa(pdf, narrativa_por_disparador[campo['id']], valores, campos_por_id)
+            _dibujar_narrativa(pdf, narrativa_por_disparador[campo['id']], valores, campos_por_id, anexo)
         elif campo['id'] == 'tiene_obra_social':
             _dibujar_obra_social(pdf, valores)
             procesados.update(CAMPOS_OBRA_SOCIAL)

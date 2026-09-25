@@ -406,6 +406,10 @@ valor" (`_escribir_par`, `_dibujar_textarea`).
 `ANEXOS_LABEL_NEGRITA` por `ANEXOS_LABEL_DESTACADO` en el resto de los anexos en vez de
 mantener ambos mecanismos en paralelo — todavía no se pidió ese paso.
 
+**2026-09-25 — piloto descartado.** Se pidió que el VI vuelva a ser igual a los otros anexos:
+se sacaron `ANEXOS_LABEL_DESTACADO`, la fuente Roboto Light de los valores y los deltas de
+tamaño propios del VI (título de sección +2pt). No reintroducirlo sin pedido explícito.
+
 ---
 
 ## [2026-08-16] — Link público de familias: blueprint aparte + token propio por envío

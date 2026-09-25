@@ -243,7 +243,7 @@
     {
       "id": "indicaciones_salud",
       "orden": 18,
-      "label": "Indicaciones que deba conocer el personal docente y médico",
+      "label": "Dejo aquí constancia de cualquier indicación necesaria deba conocer el personal docente a cargo y personal médico",
       "tipo": "textarea",
       "requerido": false,
       "completa": "familia",

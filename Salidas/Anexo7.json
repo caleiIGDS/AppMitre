@@ -152,7 +152,7 @@
     {
       "id": "indicaciones_salud",
       "orden": 12,
-      "label": "Indicaciones que deba conocer el personal docente y médico",
+      "label": "Dejo aquí constancia de cualquier indicación necesaria deba conocer el personal docente a cargo y personal médico",
       "tipo": "textarea",
       "requerido": false,
       "completa": "estudiante",
@@ -243,7 +243,7 @@
     {
       "id": "dni_firma",
       "orden": 19,
-      "label": "DNI (junto a la firma)",
+      "label": "DNI",
       "tipo": "text",
       "requerido": true,
       "completa": "estudiante",
