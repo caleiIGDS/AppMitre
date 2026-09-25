@@ -839,9 +839,9 @@ function soloDia(iso){ return iso ? String(Number(iso.split("-")[2])) : ""; }
 function soloMes(iso){ return iso ? MESES[Number(iso.split("-")[1])-1] : ""; }
 function soloAnio(iso){ return iso ? iso.split("-")[0] : ""; }
 
-/* Salida de varios días: el papel dice "{los días} ___ del mes de ___ (del año ___)", así
-   que el rango va en los días y el mes/año son los del regreso. Si cruza de mes (o de año),
-   el de la salida se escribe dentro de los días: "30 de septiembre al 2" + "octubre". */
+/* El mes va dentro de los días ("28 al 30 de septiembre", "30 de septiembre al 2 de
+   octubre") y el PDF omite el "del mes de ___" del papel cuando ya está ahí. mes/año siguen
+   siendo los del regreso. */
 function rangoSalida(){
   const ini = estado.comunes.fecha_salida, fin = estado.comunes.fecha_regreso;
   const unDia = !fin || fin <= ini;
@@ -850,11 +850,12 @@ function rangoSalida(){
 function diasSalida(conAnio){
   const {ini, fin, unDia} = rangoSalida();
   if (!ini) return "";
-  if (unDia) return soloDia(ini);
-  let desde = soloDia(ini);
-  if (soloAnio(ini) !== soloAnio(fin)) desde += conAnio ? ` de ${soloMes(ini)} de ${soloAnio(ini)}` : ` de ${soloMes(ini)}`;
-  else if (soloMes(ini) !== soloMes(fin)) desde += ` de ${soloMes(ini)}`;
-  return `${desde} al ${soloDia(fin)}`;
+  const diaMes = iso => `${soloDia(iso)} de ${soloMes(iso)}`;
+  if (unDia) return diaMes(ini);
+  if (soloAnio(ini) !== soloAnio(fin))
+    return `${diaMes(ini)}${conAnio ? " de " + soloAnio(ini) : ""} al ${diaMes(fin)}`;
+  if (soloMes(ini) !== soloMes(fin)) return `${diaMes(ini)} al ${diaMes(fin)}`;
+  return `${soloDia(ini)} al ${diaMes(fin)}`;
 }
 function fechaLargaRango(){
   const {ini, fin, unDia} = rangoSalida();
@@ -1536,7 +1537,7 @@ function campoAnexo(anexo, campo){
         marcarCambio();
       });
       tbody.appendChild(el("tr", {style:"border-bottom:1px solid #eee"},
-        el("td", {style:"padding:8px"}, acomp.rol === "docente_reemplazante" ? acomp.apellido_nombre + " (suplente)" : acomp.apellido_nombre),
+        el("td", {style:"padding:8px"}, acomp.rol === "docente_reemplazante" ? acomp.apellido_nombre + " (reemplazante)" : acomp.apellido_nombre),
         el("td", {style:"padding:8px"}, inpTel)));
     });
 
@@ -1818,7 +1819,7 @@ function refrescarDerivados(){
     // El reemplazante va marcado: si no, una familia podría llamar a quien al final no fue.
     const textosAcompañantes = acompañantesLista.map(a => {
       const tel = datosAcompañantes[a.apellido_nombre];
-      const nombre = a.rol === "docente_reemplazante" ? a.apellido_nombre + " (suplente)" : a.apellido_nombre;
+      const nombre = a.rol === "docente_reemplazante" ? a.apellido_nombre + " (reemplazante)" : a.apellido_nombre;
       return tel ? (nombre + " - " + tel) : nombre;
     }).filter(x => x);
     estado.anexos["VI"].nombres_telefonos_acompanantes_texto = textosAcompañantes.join("\n");

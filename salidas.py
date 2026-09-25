@@ -301,6 +301,10 @@ def _replicar_comunes(anexos, comunes):
         for clave, valor in comunes.items():
             if clave not in excluir:
                 anexo[clave] = valor
+            elif valor and anexo.get(clave) == valor:
+                # Salidas guardadas antes de la exclusión traen el dato de la escuela
+                # persistido en el anexo: se vacía para que no siga apareciendo.
+                anexo[clave] = ''
 
 
 def _iso_a_dd_mm_yyyy(iso_fecha):
@@ -478,8 +482,8 @@ PARRAFOS_NARRATIVA = {
         # corresponde, acá se resuelve solo con el valor elegido.
         'mapeos': {'tipo_salida': {'educativa': 'Salida Educativa',
                                     'representacion_institucional': 'Salida de Representación Institucional'}},
-        # En el original el blanco de "mi hijo/a ____" ocupa toda la línea (y sigue en la
-        # siguiente): es el único dato de la parte 2 que necesita ese lugar. Los demás
+        # En el original el blanco de "mi hijo/a ____" ocupa toda la línea (sólo deja lugar a la
+        # coma): es el único dato de la parte 2 que necesita ese lugar. Los demás
         # blancos del párrafo se quedan con el ancho fijo de ANCHOS_BLANCO_NARRATIVA.
         'anchos_resto_linea': {'nombre_estudiante'},
         # Sin tipo_salida elegido (formulario en blanco para completar a mano), mismo
@@ -510,6 +514,8 @@ PARRAFOS_NARRATIVA = {
         # itálica, como en el papel.
         'sin_dato': {'tipo_salida': [('salida educativa / de representación institucional', 'B'),
                                      (' (tachar lo que no corresponda)', 'I')]},
+        # En blanco, el nombre completo a mano necesita todo el renglón.
+        'anchos_resto_linea': ('nombre_estudiante',),
     }],
 }
 
@@ -555,6 +561,7 @@ RENGLONES_BLANCO = {
     # Salud del VI/VII: dos renglones punteados para las indicaciones y varios para teléfonos.
     'indicaciones_salud': 2,
     'telefonos_urgencia': 4,
+    'VII.indicaciones_salud': 3,
     'VII.telefonos_urgencia': 3,  # "anexo.id" pisa al id solo: el VII trae uno menos que el VI
 }
 GROSOR_TRAZO_VALOR = 0.25  # mm — trazo fino sobre el relleno de valores destacados
@@ -633,22 +640,39 @@ def _valor_destacado(pdf, tam_base=TAM_TEXTO, delta=1):
         yield
 
 
+def _write(pdf, texto):
+    """pdf.write() sin partir la primera palabra: si no entra en lo que queda del renglón,
+    fpdf2 la corta letra por letra ("M" / "ar del Plata") en vez de pasarla entera abajo."""
+    if texto and not texto[0].isspace() and pdf.get_x() > pdf.l_margin + 0.01:
+        libre = pdf.w - pdf.r_margin - pdf.get_x() - 2 * pdf.c_margin  # write() descuenta c_margin a cada lado
+        if pdf.get_string_width(texto.split(None, 1)[0]) > libre:
+            pdf.ln(ALTO_LINEA)
+    pdf.write(ALTO_LINEA, texto)
+
+
+def _cell_resto_linea(pdf, siguiente):
+    """Blanco hasta el margen derecho, dejando lugar para `siguiente` (la puntuación que
+    le sigue en el párrafo, así la coma no arranca sola el renglón de abajo)."""
+    reservado = pdf.get_string_width(siguiente.split(' ', 1)[0] + ' ') + 2 * pdf.c_margin + 0.5 if siguiente[:1] not in ('', ' ') else 0
+    pdf.cell(pdf.w - pdf.r_margin - pdf.get_x() - reservado, ALTO_LINEA, '', border='B')
+
+
 def _cell_blanco(pdf, ancho, alto=ALTO_LINEA, border='B'):
     """Línea en blanco para completar a mano ("label: ____"). A diferencia de `write()`,
     `cell()` no hace salto de línea automático: si el ancho no entra en lo que queda del
-    renglón, seguía de largo pasando el margen derecho. Acá se parte igual que haría un
-    `write()`: ocupa lo que queda del renglón actual y sigue con el resto en el siguiente,
-    tantas veces como haga falta si el ancho pedido fuera mayor a un renglón entero."""
+    renglón, seguía de largo pasando el margen derecho. Acá baja al renglón siguiente, y
+    sólo se parte si el ancho pedido es mayor a un renglón entero."""
     disponible = pdf.w - pdf.r_margin - pdf.get_x()
     if ancho <= disponible:
         # Entra entero donde está: nada que partir.
         pdf.cell(ancho, alto, '', border=border)
         return
     ancho_restante = ancho
-    if disponible > 0:
+    ancho_linea = pdf.w - pdf.l_margin - pdf.r_margin
+    # Partido en dos parece otro blanco más: si entra en un renglón, baja entero.
+    if ancho > ancho_linea and disponible > 0:
         pdf.cell(disponible, alto, '', border=border)
         ancho_restante -= disponible
-    ancho_linea = pdf.w - pdf.l_margin - pdf.r_margin
     while ancho_restante > 0:
         pdf.ln(alto)
         ancho_tramo = min(ancho_restante, ancho_linea)
@@ -658,11 +682,11 @@ def _cell_blanco(pdf, ancho, alto=ALTO_LINEA, border='B'):
 
 def _escribir_par(pdf, label, valor, negrita, anexo, ancho_blanco=ANCHO_BLANCO_PAR):
     pdf.set_font('helvetica', 'B' if negrita else '', TAM_TEXTO)
-    pdf.write(ALTO_LINEA, f"{label}: ")
+    _write(pdf, f"{label}: ")
     pdf.set_font('helvetica', '', TAM_TEXTO)
     if valor:
         with _valor_destacado(pdf, TAM_TEXTO, DELTA_VALOR):
-            pdf.write(ALTO_LINEA, valor)
+            _write(pdf, valor)
     else:
         # Sin valor: línea en blanco para completar a mano después de imprimir — firma,
         # "lugar y fecha", nombre del hijo/a en la autorización, etc.
@@ -682,10 +706,10 @@ def _dibujar_campo(pdf, campo, valores, anexo, extra=()):
     ancho_blanco = ANCHOS_BLANCO_PAR.get(campo['id'], ANCHO_BLANCO_PAR_EXTRA if extra else ANCHO_BLANCO_PAR)
     _escribir_par(pdf, label, texto_valor, negrita, anexo, ancho_blanco)
     if nota and not nota_antes:
-        pdf.write(ALTO_LINEA, f" ({nota})")
+        _write(pdf, f" ({nota})")
     for campo_extra in extra:
         texto_extra = _texto_valor(campo_extra, valores.get(campo_extra['id']))
-        pdf.write(ALTO_LINEA, '     ')
+        _write(pdf, '     ')
         _escribir_par(pdf, _label_campo(campo_extra, anexo, valores), texto_extra, negrita, anexo,
                       ANCHOS_BLANCO_PAR.get(campo_extra['id'], ANCHO_BLANCO_PAR_EXTRA))
     pdf.ln(ALTO_LINEA)
@@ -758,10 +782,22 @@ def _articulo_dias(dias_texto, anexo):
     return 'los días' if re.search(r'[,\-]|\b(y|al)\b', dias_texto) else 'el día'
 
 
+_DEL_MES = ' del mes de {mes_salida}'
+
+
 def _dibujar_narrativa(pdf, bloque, valores, campos_por_id, anexo):
     mapeos = bloque.get('mapeos', {})
     valores_texto = {id: _valor_narrativa(campos_por_id[id], valores.get(id), mapeos.get(id))
                       for id in bloque['ids']}
+    # Los días ya traen el mes ("28 al 30 de septiembre"): el "del mes de ___" del papel
+    # quedaría repetido. Salidas guardadas antes traen sólo "28 al 30" y lo conservan.
+    mes = valores_texto.get('mes_salida')
+    if mes and mes in valores_texto.get('dias_salida', ''):
+        bloque = dict(bloque)
+        if 'segmentos' in bloque:
+            bloque['segmentos'] = [(t.replace(_DEL_MES, ''), e) for t, e in bloque['segmentos']]
+        else:
+            bloque['texto'] = bloque['texto'].replace(_DEL_MES, '')
     sin_dato_bloque = dict(bloque.get('sin_dato', {}))
     if 'dias_salida' in valores_texto:
         articulo = _articulo_dias(valores_texto['dias_salida'], anexo)
@@ -782,7 +818,7 @@ def _dibujar_narrativa(pdf, bloque, valores, campos_por_id, anexo):
             for i, parte in enumerate(partes):
                 if i % 2 == 0:
                     # Texto literal (no es placeholder)
-                    pdf.write(ALTO_LINEA, parte)
+                    _write(pdf, parte)
                 else:
                     # Es un placeholder {id} — escribir el valor destacado, pero sin cambiar el estilo
                     # (esto es, un {tipo_salida} en negrita se queda en negrita, con el trazo agregado).
@@ -791,13 +827,15 @@ def _dibujar_narrativa(pdf, bloque, valores, campos_por_id, anexo):
                     sin_dato = sin_dato_bloque.get(parte)
                     if valor:
                         with _trazo_valor(pdf):  # sin cambiar la fuente: conserva `estilo`
-                            pdf.write(ALTO_LINEA, valor)
+                            _write(pdf, valor)
                     elif sin_dato:
                         # Texto fijo del papel en vez de blanco, con sus propios estilos:
                         # lista de (texto, estilo) como `segmentos`.
                         for texto_fijo, estilo_fijo in sin_dato:
                             pdf.set_font('helvetica', estilo_fijo, TAM_TEXTO)
-                            pdf.write(ALTO_LINEA, texto_fijo)
+                            _write(pdf, texto_fijo)
+                    elif parte in bloque.get('anchos_resto_linea', ()):
+                        _cell_resto_linea(pdf, partes[i + 1] if i + 1 < len(partes) else '')
                     else:
                         _cell_blanco(pdf, ANCHOS_BLANCO_NARRATIVA.get(parte, ANCHO_BLANCO_NARRATIVA))
                     pdf.set_font('helvetica', estilo, TAM_TEXTO)
@@ -810,7 +848,7 @@ def _dibujar_narrativa(pdf, bloque, valores, campos_por_id, anexo):
         for i, parte in enumerate(partes):
             if i % 2 == 0:
                 # Texto literal (no es placeholder)
-                pdf.write(ALTO_LINEA, parte)
+                _write(pdf, parte)
             else:
                 # Es un placeholder {id} — escribir el valor destacado, o una línea en
                 # blanco para completar a mano si no vino cargado.
@@ -818,11 +856,11 @@ def _dibujar_narrativa(pdf, bloque, valores, campos_por_id, anexo):
                 sin_dato = sin_dato_bloque.get(parte)
                 if valor:
                     with _valor_destacado(pdf, TAM_TEXTO):
-                        pdf.write(ALTO_LINEA, valor)
+                        _write(pdf, valor)
                 elif sin_dato:
-                    pdf.write(ALTO_LINEA, sin_dato)
+                    _write(pdf, sin_dato)
                 elif parte in bloque.get('anchos_resto_linea', ()):
-                    pdf.cell(pdf.w - pdf.r_margin - pdf.get_x(), ALTO_LINEA, '', border='B')
+                    _cell_resto_linea(pdf, partes[i + 1] if i + 1 < len(partes) else '')
                 else:
                     _cell_blanco(pdf, ANCHOS_BLANCO_NARRATIVA.get(parte, ANCHO_BLANCO_NARRATIVA))
         pdf.ln(ALTO_LINEA)
@@ -939,7 +977,7 @@ def _dibujar_docentes(pdf, campo, valores, anexo):
         # "Apellido y Nombre:     Cargo:", todo junto y sin lugar para completar a mano.
         _escribir_par(pdf, 'Apellido y Nombre', fila.get('apellido_nombre', ''), negrita, anexo,
                       ANCHO_BLANCO_DOCENTE['apellido_nombre'])
-        pdf.write(ALTO_LINEA, '     ')
+        _write(pdf, '     ')
         _escribir_par(pdf, 'Cargo', fila.get('cargo', ''), negrita, anexo,
                       ANCHO_BLANCO_DOCENTE['cargo'])
         pdf.ln(ALTO_LINEA)
@@ -1314,6 +1352,7 @@ def editar(id):
     if fila is None:
         abort(404)
     datos_precargar = json.loads(fila['datos_json'])
+    _replicar_comunes(datos_precargar.get('anexos') or {}, datos_precargar.get('datos_comunes') or {})
     normativa = _cargar_normativa()
     return render_template('salidas/formulario.html', activo='nueva', id_editar=id, datos_precargar=datos_precargar,
                            normativa=normativa, archivado=bool(fila['archivado']))

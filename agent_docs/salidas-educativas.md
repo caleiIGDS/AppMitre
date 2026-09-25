@@ -105,7 +105,8 @@ público de familias (`valores_base` en `completar()`/`pdf_publico()`, el `resum
 casos donde un anexo reutiliza el mismo id que un campo común pero con otro significado
 (VIII.telefono es de la empresa de transporte, VII.domicilio es del/la estudiante) — si no,
 esos dos campos quedaban pisados por el dato de la escuela en cada guardado y era imposible
-cargarlos o editarlos.
+cargarlos o editarlos. Si el anexo trae guardado justo el dato de la escuela (salidas viejas),
+se vacía; `editar` también pasa por `_replicar_comunes` para que el formulario no lo muestre.
 
 Los campos de **firma** y de **"lugar y fecha" de la firma** no están en el formulario
 digital (`ANEXOS` en `formulario.html`) a propósito: van a mano sobre el papel impreso,
