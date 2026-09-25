@@ -1003,8 +1003,13 @@ function campoComun(c){
     marcarCambio();
     refrescarDerivados();
     // Autocompletados
-    if (c.id === "fecha_salida" && estado.comunes[c.id]) {
-      estado.comunes.fecha_regreso = estado.comunes[c.id];
+    // El regreso se propone igual a la salida sólo si está vacío o quedó antes: pisarlo
+    // siempre borraba en silencio el rango ya cargado (el input seguía mostrando la fecha vieja).
+    const salida = estado.comunes.fecha_salida, regreso = estado.comunes.fecha_regreso;
+    if (c.id === "fecha_salida" && validarFecha(inp.value) && (!regreso || regreso < salida)) {
+      estado.comunes.fecha_regreso = salida;
+      const inpRegreso = document.querySelector('input[data-comun-id="fecha_regreso"]');
+      if (inpRegreso) inpRegreso.value = isoADdMmYyyy(salida);
       refrescarDerivados();
     }
   });
