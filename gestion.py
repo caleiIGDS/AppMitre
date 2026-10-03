@@ -704,9 +704,10 @@ def extras_template(vista, slug, id=None):
         cur = con.cursor()
         items = kit_items_recurso(cur, id)
         unidades = unidades_recurso(cur, id)
+        por_lugar = lugares_recurso_agrupado(cur, id)
         con.commit()  # unidades_recurso puede sembrar unidades que faltaban
         con.close()
-        return {'kit_items': items, 'unidades': unidades}
+        return {'kit_items': items, 'unidades': unidades, 'unidades_por_lugar': por_lugar}
     if slug == 'recursos' and vista == 'lista':
         con = conectar()
         cur = con.cursor()

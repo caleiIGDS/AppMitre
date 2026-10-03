@@ -579,9 +579,15 @@ button.g-link {
    que pide motivo) y los números libres (se tocan para el alta). Reusa .g-ficha-unidad. */
 .g-form-unidades .g-uni-chips {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    flex-direction: column;
+    gap: 10px;
     margin-bottom: 14px;
+}
+.g-uni-grupo { display: flex; flex-direction: column; gap: 4px; }
+.g-uni-lugar {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--g-primary);
 }
 /* Las unidades que existen se tocan para darlas de baja: elegidas van en rojo, no en el
    naranja de "mover" de la ficha, porque acá lo que sigue es eliminarlas. */

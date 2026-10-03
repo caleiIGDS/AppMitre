@@ -21,10 +21,18 @@
     </p>
 
     {# Baja: las unidades que existen se tocan acá mismo (como el mover de la ficha) y
-       recién ahí aparece el motivo. Sin lista aparte de checkboxes que repita los números. #}
+       recién ahí aparece el motivo. Sin lista aparte de checkboxes que repita los números.
+       Agrupadas por lugar, como en la ficha, para saber cuál se está eliminando. #}
     <div class="g-uni-chips">
-        {% for u in unidades %}
-        <button type="button" class="g-ficha-unidad" data-numero="{{ u.numero }}" aria-pressed="false">#{{ u.numero }}</button>
+        {% for grupo in unidades_por_lugar %}
+        <div class="g-uni-grupo">
+            <span class="g-uni-lugar">{{ grupo.ubicacion }}</span>
+            <div class="g-ficha-unidades">
+                {% for n in grupo.numeros %}
+                <button type="button" class="g-ficha-unidad" data-numero="{{ n }}" aria-pressed="false">#{{ n }}</button>
+                {% endfor %}
+            </div>
+        </div>
         {% endfor %}
     </div>
     <p class="g-help g-uni-ayuda">Tocá una unidad para eliminarla (se rompió, se perdió).</p>
