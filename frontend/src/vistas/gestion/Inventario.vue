@@ -6,7 +6,7 @@
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useRecursos, useMeta } from '@/gestion/datos'
-import { norm, puntaje } from '@/texto'
+import { norm, puntaje, coincide } from '@/texto'
 import EstadoCarga from '@/componentes/EstadoCarga.vue'
 
 const props = defineProps({ inv: { type: String, required: true } })
@@ -27,16 +27,27 @@ const estado = filtro('estado')
 const baja = filtro('baja')
 const meses = filtro('meses')
 
-// El texto se escribe en local y llega a la URL con una pausa: si no, cada tecla sería
-// una entrada nueva para el navegador.
+// La búsqueda filtra en vivo, pero a la URL llega con una pausa: si no, cada tecla sería
+// una entrada nueva para el navegador. Y el filtro corre a lo sumo una vez por cuadro
+// (requestAnimationFrame): si se tipea más rápido que la pantalla, las teclas del medio no
+// filtran de más y el campo nunca se traba.
 const q = filtro('q')
 const busqueda = ref(q.value)
+const textoFiltro = ref(q.value.trim())
 let espera = null
+let cuadro = 0
 watch(busqueda, (valor) => {
   clearTimeout(espera)
-  espera = setTimeout(() => { q.value = valor.trim() }, 250)
+  espera = setTimeout(() => { q.value = valor.trim() }, 400)
+  if (!cuadro) {
+    cuadro = requestAnimationFrame(() => {
+      cuadro = 0
+      textoFiltro.value = busqueda.value.trim()
+    })
+  }
 })
 watch(q, (valor) => { if (valor !== busqueda.value.trim()) busqueda.value = valor })
+onUnmounted(() => { clearTimeout(espera); cancelAnimationFrame(cuadro) })
 
 // El slider se mueve en local (fluido) y se anota en la URL al soltarlo.
 const mesesVivo = ref(Number(meses.value) || 0)
@@ -54,7 +65,7 @@ const lugares = computed(() => {
   return [...todos].sort((a, b) => norm(a).localeCompare(norm(b)))
 })
 
-const qNorm = computed(() => norm(q.value))
+const qNorm = computed(() => norm(textoFiltro.value))
 
 // Misma jerarquía que la búsqueda del asistente: primero lo que coincide por nombre o
 // descripción (en orden alfabético), después lo que coincide sólo por el alias oculto.
@@ -63,35 +74,39 @@ const visibles = computed(() => {
   const porAlias = []
   const umbral = mesesVivo.value * (m.value.dias_por_mes || 30.5)
   for (const r of filas.value) {
-    let coincide = puntaje(qNorm.value, r._buscar) !== null
-    let esAlias = false
-    if (!coincide && r._buscar_alias && puntaje(qNorm.value, r._buscar_alias) !== null) { coincide = true; esAlias = true }
-    if (coincide && lugar.value) coincide = r.unidades.some((g) => g.ubicacion === lugar.value)
-    if (coincide && estado.value) coincide = r.estado === estado.value
-    // dias_revision null = fecha corta sin año: nunca alcanza un umbral > 0.
-    if (coincide && umbral > 0) coincide = (r.dias_revision ?? 0) >= umbral
+    // Lo barato primero: el texto sólo se mira en las fichas que pasan los otros filtros.
     // "Sólo dados de baja" es excluyente; sin él, los dados de baja no aparecen.
     const deBaja = r.estado === ESTADO_BAJA.value
-    coincide = coincide && (baja.value ? deBaja : !deBaja)
-    if (coincide) (esAlias ? porAlias : porNombre).push(r)
+    if (baja.value ? !deBaja : deBaja) continue
+    if (lugar.value && !r.unidades.some((g) => g.ubicacion === lugar.value)) continue
+    if (estado.value && r.estado !== estado.value) continue
+    // dias_revision null = fecha corta sin año: nunca alcanza un umbral > 0.
+    if (umbral > 0 && (r.dias_revision ?? 0) < umbral) continue
+    if (coincide(qNorm.value, r._buscar)) porNombre.push(r)
+    else if (r._buscar_alias && coincide(qNorm.value, r._buscar_alias)) porAlias.push(r)
   }
   return porNombre.concat(porAlias)
+})
+
+// Los títulos de los kits normalizados una vez por lista, no en cada tecla.
+const itemsKit = computed(() => {
+  const todos = []
+  for (const r of filas.value) for (const item of r.kit) todos.push({ item, kit: r, t: norm(item.titulo) })
+  return todos
 })
 
 const subrecursos = computed(() => {
   if (!qNorm.value) return []
   const encontrados = []
-  for (const r of filas.value) {
-    for (const item of r.kit) {
-      const p = puntaje(qNorm.value, norm(item.titulo))
-      if (p !== null) encontrados.push({ item, kit: r, p })
-    }
+  for (const s of itemsKit.value) {
+    const p = puntaje(qNorm.value, s.t)
+    if (p !== null) encontrados.push({ item: s.item, kit: s.kit, p })
   }
   return encontrados.sort((a, b) => b.p - a.p)
 })
 
 const hayFiltroActivo = computed(() => !!(lugar.value || estado.value || mesesVivo.value > 0 || baja.value))
-const hayFiltros = computed(() => !!(q.value || hayFiltroActivo.value))
+const hayFiltros = computed(() => !!(qNorm.value || hayFiltroActivo.value))
 
 // --- Panel de filtros en celular ---------------------------------------------------
 const filtrosAbiertos = ref(false)
@@ -107,11 +122,43 @@ onUnmounted(() => document.removeEventListener('click', fueraDelPanel))
 
 function limpiar() {
   busqueda.value = ''
+  textoFiltro.value = ''
   router.replace({ query: {} })
 }
 
+// --- Dibujar de a tandas -----------------------------------------------------------
+// Dibujar cientos de filas de una vez trababa la pantalla un segundo o más en un celular
+// (al abrir, o al borrar la búsqueda). Se dibujan las primeras y el resto a medida que el
+// centinela del final se acerca a la vista. Un filtro nuevo vuelve a la primera tanda; una
+// actualización de los datos no (no le achica la lista a quien ya bajó).
+const TANDA = 40
+const limite = ref(TANDA)
+const mostradas = computed(() => visibles.value.slice(0, limite.value))
+watch([qNorm, lugar, estado, mesesVivo, baja], () => { limite.value = TANDA })
+
+// El centinela cambia de `key` con cada tanda: el elemento nuevo se observa de cero, así que
+// si después de crecer sigue cerca de la vista (pantalla alta), avisa de nuevo y sigue.
+let observador = null
+function centinela(el) {
+  if (!el) return
+  observador ||= new IntersectionObserver((entradas) => {
+    if (entradas.some((e) => e.isIntersecting)) limite.value += TANDA
+  }, { rootMargin: '1200px 0px' })
+  observador.disconnect()
+  observador.observe(el)
+}
+onUnmounted(() => observador?.disconnect())
+
+// El link de cada fila es un <a> común, no un RouterLink: con cientos de filas, un
+// componente por fila era la mitad del costo de dibujarlas.
+const hrefRecurso = (r) => router.resolve({ name: 'recurso', params: { inv: props.inv, id: r.id } }).href
+
 function abrir(r, evento) {
-  if (evento.target.closest('a, button')) return
+  if (evento.target.closest('button')) return
+  const link = evento.target.closest('a')
+  // Ctrl/⌘/Shift-click en el nombre: que el navegador lo abra aparte, como cualquier link.
+  if (link && (evento.ctrlKey || evento.metaKey || evento.shiftKey || evento.altKey)) return
+  if (link) evento.preventDefault()
   router.push({ name: 'recurso', params: { inv: props.inv, id: r.id } })
 }
 </script>
@@ -186,12 +233,12 @@ function abrir(r, evento) {
         </thead>
         <tbody>
           <tr
-            v-for="r in visibles" :key="r.id" data-href
+            v-for="r in mostradas" :key="r.id" v-memo="[r, ESTADO_BAJA]" data-href
             :class="{ 'g-recurso-baja': r.estado === ESTADO_BAJA, 'g-recurso-roto': r.estado === 'Roto' }"
             @click="abrir(r, $event)"
           >
             <td data-label="RECURSO">
-              <RouterLink class="g-item-link" :to="{ name: 'recurso', params: { inv, id: r.id } }">{{ r.nombre }}</RouterLink>
+              <a class="g-item-link" :href="hrefRecurso(r)">{{ r.nombre }}</a>
               <span v-if="r.tipo" class="g-recurso-sub">{{ r.tipo }}</span>
             </td>
             <td data-label="CANT.">{{ r.cantidad }}</td>
@@ -205,6 +252,7 @@ function abrir(r, evento) {
           </tr>
         </tbody>
       </table>
+      <div v-if="mostradas.length < visibles.length" :key="limite" :ref="centinela" class="a-centinela" aria-hidden="true" />
     </div>
 
     <div v-else-if="!subrecursos.length" class="g-empty">
@@ -213,7 +261,7 @@ function abrir(r, evento) {
         <RouterLink v-if="m.puede_escribir" class="g-btn" :to="{ name: 'recurso-nuevo', params: { inv } }">+ CREAR EL PRIMERO</RouterLink>
       </template>
       <template v-else>
-        <p v-if="q">No se encontraron resultados para "{{ q }}".</p>
+        <p v-if="textoFiltro">No se encontraron resultados para "{{ textoFiltro }}".</p>
         <p v-else>No se encontraron recursos con ese filtro.</p>
         <button type="button" class="g-btn-outline-dark" @click="limpiar">LIMPIAR FILTROS</button>
       </template>

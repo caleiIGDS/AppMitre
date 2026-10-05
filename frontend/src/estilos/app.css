@@ -178,3 +178,6 @@ body.g-sin-scroll { overflow: hidden; }
 /* Los títulos de sección no se pegan a la tabla de arriba. */
 .a-seccion { margin-top: 32px; }
 .a-link-nuevo { border-color: var(--g-accent); margin-bottom: 24px; }
+
+/* El final de la tanda de filas dibujadas en el listado (ver Inventario.vue). */
+.a-centinela { height: 1px; }
