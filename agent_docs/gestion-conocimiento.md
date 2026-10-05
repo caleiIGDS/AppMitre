@@ -347,8 +347,10 @@ fuerza". Decisión 2026-08-24, revierte la parte "solo substring" de 2026-07-21 
 
 **Sub-recursos de kits en la búsqueda**: el listado principal nunca mezcla sub-recursos con
 recursos — sólo con una búsqueda escrita, `Inventario.vue` busca también en el `kit` de cada
-recurso y muestra los que matchean en una tabla aparte debajo ("Sub-recursos de kits"), cada
-uno linkeando al kit que lo contiene.
+recurso y muestra los que matchean **al final de la misma tabla**, en un bloque que abre un
+divisor naranja ("SUB-RECURSOS DE KITS"): misma fila que un recurso, con un recuadro naranja
+"KIT · <kit>", el estado del kit y el lugar vacío; el click abre la ficha del kit. Heredan los
+filtros de su kit (ubicación, estado, revisión, baja): un kit dado de baja no muestra los suyos.
 
 Secciones del detalle (`secciones_detalle`, las usa el asistente; la ficha de la app muestra lo mismo): recurso → **Ubicación** (la lista de
 unidades, siempre presente) y **Sub-recursos (kit)** (los `kit_items` del recurso, sólo de

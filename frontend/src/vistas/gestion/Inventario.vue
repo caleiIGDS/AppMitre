@@ -72,38 +72,54 @@ const qNorm = computed(() => norm(textoFiltro.value))
 const visibles = computed(() => {
   const porNombre = []
   const porAlias = []
-  const umbral = mesesVivo.value * (m.value.dias_por_mes || 30.5)
-  for (const r of filas.value) {
-    // Lo barato primero: el texto sólo se mira en las fichas que pasan los otros filtros.
-    // "Sólo dados de baja" es excluyente; sin él, los dados de baja no aparecen.
-    const deBaja = r.estado === ESTADO_BAJA.value
-    if (baja.value ? !deBaja : deBaja) continue
-    if (lugar.value && !r.unidades.some((g) => g.ubicacion === lugar.value)) continue
-    if (estado.value && r.estado !== estado.value) continue
-    // dias_revision null = fecha corta sin año: nunca alcanza un umbral > 0.
-    if (umbral > 0 && (r.dias_revision ?? 0) < umbral) continue
+  for (const r of pasanFiltros.value) {
     if (coincide(qNorm.value, r._buscar)) porNombre.push(r)
     else if (r._buscar_alias && coincide(qNorm.value, r._buscar_alias)) porAlias.push(r)
   }
   return porNombre.concat(porAlias)
 })
 
-// Los títulos de los kits normalizados una vez por lista, no en cada tecla.
-const itemsKit = computed(() => {
-  const todos = []
-  for (const r of filas.value) for (const item of r.kit) todos.push({ item, kit: r, t: norm(item.titulo) })
-  return todos
+// Las fichas que pasan los filtros que no son el texto (ubicación, estado, revisión, baja).
+// Los sub-recursos los heredan de su kit: un kit dado de baja no muestra los suyos.
+const pasanFiltros = computed(() => {
+  const umbral = mesesVivo.value * (m.value.dias_por_mes || 30.5)
+  return filas.value.filter((r) => {
+    // "Sólo dados de baja" es excluyente; sin él, los dados de baja no aparecen.
+    const deBaja = r.estado === ESTADO_BAJA.value
+    if (baja.value ? !deBaja : deBaja) return false
+    if (lugar.value && !r.unidades.some((g) => g.ubicacion === lugar.value)) return false
+    if (estado.value && r.estado !== estado.value) return false
+    // dias_revision null = fecha corta sin año: nunca alcanza un umbral > 0.
+    return !(umbral > 0 && (r.dias_revision ?? 0) < umbral)
+  })
 })
 
+// Los títulos de los kits normalizados una vez por lista, no en cada tecla.
+const titulosKit = computed(() => {
+  const t = new Map()
+  for (const r of filas.value) for (const item of r.kit) t.set(item, norm(item.titulo))
+  return t
+})
+
+// Sólo con una búsqueda escrita: los sub-recursos que coinciden, los mejores primero.
 const subrecursos = computed(() => {
   if (!qNorm.value) return []
   const encontrados = []
-  for (const s of itemsKit.value) {
-    const p = puntaje(qNorm.value, s.t)
-    if (p !== null) encontrados.push({ item: s.item, kit: s.kit, p })
+  for (const kit of pasanFiltros.value) {
+    for (const item of kit.kit) {
+      const p = puntaje(qNorm.value, titulosKit.value.get(item))
+      if (p !== null) encontrados.push({ item, kit, p })
+    }
   }
   return encontrados.sort((a, b) => b.p - a.p)
 })
+
+// Una sola lista para la tabla: los recursos y, después, los sub-recursos con el estado de
+// su kit (y su ficha: el sub-recurso no tiene una propia).
+const lista = computed(() => [
+  ...visibles.value.map((r) => ({ clave: `r${r.id}`, r, nombre: r.nombre, cantidad: r.cantidad, tipo: r.tipo, item: null })),
+  ...subrecursos.value.map((s, i) => ({ clave: `k${s.item.id}`, r: s.kit, nombre: s.item.titulo, cantidad: s.item.cantidad, tipo: '', item: s.item, primera: i === 0 })),
+])
 
 const hayFiltroActivo = computed(() => !!(lugar.value || estado.value || mesesVivo.value > 0 || baja.value))
 const hayFiltros = computed(() => !!(qNorm.value || hayFiltroActivo.value))
@@ -133,7 +149,7 @@ function limpiar() {
 // actualización de los datos no (no le achica la lista a quien ya bajó).
 const TANDA = 40
 const limite = ref(TANDA)
-const mostradas = computed(() => visibles.value.slice(0, limite.value))
+const mostradas = computed(() => lista.value.slice(0, limite.value))
 watch([qNorm, lugar, estado, mesesVivo, baja], () => { limite.value = TANDA })
 
 // El centinela cambia de `key` con cada tanda: el elemento nuevo se observa de cero, así que
@@ -226,36 +242,47 @@ function abrir(r, evento) {
   <EstadoCarga :consulta="recursos" que="el inventario" />
 
   <template v-if="recursos.data.value">
-    <div v-if="visibles.length" class="g-table-wrap">
+    <div v-if="lista.length" class="g-table-wrap">
       <table class="g-table">
         <thead>
           <tr><th>RECURSO</th><th>CANT.</th><th>LUGAR ASIGNADO</th><th>ESTADO</th></tr>
         </thead>
         <tbody>
+          <!-- Los sub-recursos van al final, en un bloque aparte que abre un divisor naranja.
+               Cada uno es la misma fila con el recuadro de su kit; estado y ficha son los del
+               kit, el lugar queda vacío. -->
+          <template v-for="f in mostradas" :key="f.clave">
+          <tr v-if="f.primera" class="a-sep-kits">
+            <td colspan="4"><span>SUB-RECURSOS DE KITS</span></td>
+          </tr>
           <tr
-            v-for="r in mostradas" :key="r.id" v-memo="[r, ESTADO_BAJA]" data-href
-            :class="{ 'g-recurso-baja': r.estado === ESTADO_BAJA, 'g-recurso-roto': r.estado === 'Roto' }"
-            @click="abrir(r, $event)"
+            data-href
+            :class="{ 'g-recurso-baja': f.r.estado === ESTADO_BAJA, 'g-recurso-roto': f.r.estado === 'Roto', 'a-fila-kit': f.item }"
+            @click="abrir(f.r, $event)"
           >
             <td data-label="RECURSO">
-              <a class="g-item-link" :href="hrefRecurso(r)">{{ r.nombre }}</a>
-              <span v-if="r.tipo" class="g-recurso-sub">{{ r.tipo }}</span>
+              <a class="g-item-link" :href="hrefRecurso(f.r)">{{ f.nombre }}</a>
+              <span v-if="f.item" class="a-chip-kit" :title="`Es parte del kit ${f.r.nombre}`">KIT · {{ f.r.nombre }}</span>
+              <span v-else-if="f.tipo" class="g-recurso-sub">{{ f.tipo }}</span>
             </td>
-            <td data-label="CANT.">{{ r.cantidad }}</td>
+            <td data-label="CANT.">{{ f.cantidad }}</td>
+            <!-- Un sub-recurso no muestra lugar: el del kit confundía (no es dónde está él). -->
             <td data-label="LUGAR ASIGNADO">
-              <div v-if="r.unidades.length > 1" class="g-lugares-multi">
-                <span v-for="g in r.unidades" :key="g.ubicacion" class="g-lugar-item">{{ g.numeros.length }} x {{ g.ubicacion }}</span>
+              <template v-if="f.item" />
+              <div v-else-if="f.r.unidades.length > 1" class="g-lugares-multi">
+                <span v-for="g in f.r.unidades" :key="g.ubicacion" class="g-lugar-item">{{ g.numeros.length }} x {{ g.ubicacion }}</span>
               </div>
-              <template v-else-if="r.unidades.length">{{ r.unidades[0].ubicacion }}</template>
+              <template v-else-if="f.r.unidades.length">{{ f.r.unidades[0].ubicacion }}</template>
             </td>
-            <td data-label="ESTADO" :data-estado="r.estado"><span v-if="r.estado" class="g-badge">{{ r.estado }}</span></td>
+            <td data-label="ESTADO" :data-estado="f.r.estado"><span v-if="f.r.estado" class="g-badge">{{ f.r.estado }}</span></td>
           </tr>
+          </template>
         </tbody>
       </table>
-      <div v-if="mostradas.length < visibles.length" :key="limite" :ref="centinela" class="a-centinela" aria-hidden="true" />
+      <div v-if="mostradas.length < lista.length" :key="limite" :ref="centinela" class="a-centinela" aria-hidden="true" />
     </div>
 
-    <div v-else-if="!subrecursos.length" class="g-empty">
+    <div v-else class="g-empty">
       <template v-if="!filas.length">
         <p>Todavía no hay recursos cargados.</p>
         <RouterLink v-if="m.puede_escribir" class="g-btn" :to="{ name: 'recurso-nuevo', params: { inv } }">+ CREAR EL PRIMERO</RouterLink>
@@ -266,28 +293,5 @@ function abrir(r, evento) {
         <button type="button" class="g-btn-outline-dark" @click="limpiar">LIMPIAR FILTROS</button>
       </template>
     </div>
-
-    <template v-if="subrecursos.length">
-      <div class="g-panel-top" style="margin-top: 24px;">
-        <h3>SUB-RECURSOS DE KITS</h3>
-      </div>
-      <div class="g-table-wrap">
-        <table class="g-table">
-          <thead>
-            <tr><th>SUB-RECURSO</th><th>CANT.</th><th>RECURSO ASIGNADO</th><th>KIT</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="s in subrecursos" :key="s.item.id" data-href @click="abrir(s.kit, $event)">
-              <td data-label="SUB-RECURSO">{{ s.item.titulo }}</td>
-              <td data-label="CANT.">{{ s.item.cantidad }}</td>
-              <td data-label="RECURSO ASIGNADO">{{ s.item.recurso_asignado }}</td>
-              <td data-label="KIT">
-                <RouterLink class="g-item-link" :to="{ name: 'recurso', params: { inv, id: s.kit.id } }">{{ s.kit.nombre }}</RouterLink>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </template>
   </template>
 </template>

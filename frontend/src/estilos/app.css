@@ -181,3 +181,56 @@ body.g-sin-scroll { overflow: hidden; }
 
 /* El final de la tanda de filas dibujadas en el listado (ver Inventario.vue). */
 .a-centinela { height: 1px; }
+
+/* El recuadro de un sub-recurso en el listado: de qué kit es (Inventario.vue). Se ve
+   también en celular, donde el tipo se oculta: sin él la fila parecería un recurso. */
+.a-chip-kit {
+  display: inline-block;
+  max-width: 100%;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--g-accent);
+  color: var(--g-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+@media (max-width: 700px) {
+  /* En la lista compacta, siempre en su propio renglón: al lado del nombre quedaba a veces
+     sí y a veces no, según el largo. */
+  .g-table td[data-label="RECURSO"] .a-chip-kit { display: table; margin: 3px 0 1px; padding: 1px 6px; }
+}
+
+/* El bloque de sub-recursos al final del listado (Inventario.vue): un divisor naranja con
+   su título, y las filas con un tinte y un filete naranja a la izquierda, para que se lea
+   como un cuadro aparte dentro de la misma tabla. */
+.g-table tbody tr.a-sep-kits,
+.g-table tbody tr.a-sep-kits:hover { background: transparent; cursor: default; }
+.g-table tbody tr.a-sep-kits td {
+  padding: 20px 14px 6px;
+  border-bottom: 2px solid var(--g-accent);
+  color: var(--g-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+}
+.g-table tbody tr.a-fila-kit:not(.g-recurso-roto),
+.g-panel-top + .g-table-wrap .g-table tbody tr.a-fila-kit:not(.g-recurso-roto) {
+  background: color-mix(in srgb, var(--g-accent) 5%, #fff);
+}
+.g-table tbody tr.a-fila-kit:not(.g-recurso-roto):hover { background: color-mix(in srgb, var(--g-accent) 9%, #fff); }
+.g-table tbody tr.a-fila-kit > td:first-child { box-shadow: inset 3px 0 0 var(--g-accent); }
+
+@media (max-width: 700px) {
+  .g-panel-top + .g-table-wrap .g-table tbody tr.a-sep-kits { display: block; border-bottom: none; }
+  .g-panel-top + .g-table-wrap .g-table tbody tr.a-sep-kits td { display: block; padding: 18px 12px 5px; }
+  /* En la lista compacta la fila es una grilla: el filete va en la fila entera. */
+  .g-panel-top + .g-table-wrap .g-table tbody tr.a-fila-kit { box-shadow: inset 3px 0 0 var(--g-accent); }
+  .g-panel-top + .g-table-wrap .g-table tbody tr.a-fila-kit > td:first-child { box-shadow: none; }
+}
