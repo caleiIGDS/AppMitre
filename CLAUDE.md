@@ -30,7 +30,7 @@ capa 0        config.py    texto.py    respaldos.py                    ← no no
 También se comparte lo que no es lógica de dominio: `static/marca.css` (el escudo del header — **único dueño**, lo cargan las cinco áreas *y* el SPA de horarios), `static/gestion.css` (paleta), `static/gestion-agente.js`, `static/mobile-nav.js` (menú lateral de celular) y el widget del chat.
 
 **Usuarios principales:** alumnos, docentes, preceptores y administración.  
-**Stack:** Flask + SQLite + Vanilla JS (sin frameworks). Sin tests, sin linter, sin build step.
+**Stack:** Flask + SQLite. Las páginas clásicas y el SPA de horarios son Vanilla JS sin build. La **app instalable** (`/app`, carpeta `frontend/`) es Vue 3 + Vite + PWA y le pide al servidor sólo datos (API JSON en `/app/api/`): hoy cubre Gestión y va reemplazando de a un área a las páginas clásicas, que conviven mientras tanto. Su compilado (`app_dist/`) se commitea. Sin tests, sin linter.
 
 ---
 
@@ -44,6 +44,10 @@ gunicorn app:app                   # producción
 
 python actualizar.py --dry-run     # deploy: qué le falta a las DB del server (no escribe)
 python actualizar.py               # aplicarlo, antes del Reload del web app
+
+cd frontend && npm install         # app instalable (/app): una vez
+npm run dev                        # dev en http://localhost:5173/app/ (con python app.py corriendo)
+npm run build                      # compila a app_dist/ — correrlo y commitearlo antes de subir
 ```
 
 ---
@@ -234,6 +238,7 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 
 - **Hosting:** PythonAnywhere (WSGI) + Cloudflare DNS. Antes fue Render.com — ver `dev-log/DECISIONS.md` 2026-06-25
 - **Los `.db` persisten entre deploys** y están en `.gitignore`: `git pull` nunca los pisa. `escuela.db` es la excepción que no importa (se regenera desde Sheets al iniciar o via `/api/actualizar`); `gestion.db`, `historia.db`, `accesos.db` y `salidas.db` son la fuente de verdad y sólo tienen los respaldos de `respaldos.py`. `salidas_pdfs/` (también en `.gitignore`, contiene DNI y datos de salud) no tiene respaldo propio: se regenera solo la próxima vez que se guarda esa salida, y se purga junto con su fila al año
+- **App instalable:** el servidor no tiene Node, así que `app_dist/` viaja compilado por git: un cambio en `frontend/` sin `npm run build` antes del commit no llega a producción
 - **Deploy:** `git pull` → `pip install -r requirements.txt` → `python actualizar.py --dry-run` → `python actualizar.py` → Reload del web app. Las variables de entorno (`SECRET_KEY`, `GESTION_CLAVE`, las API keys del agente) van en el `.env` del servidor, que tampoco viaja por git
 - **`SECRET_KEY` y `GESTION_CLAVE` son obligatorias en producción**: sin ellas la app no arranca (`config.PRODUCCION` las exige cuando detecta `PYTHONANYWHERE_DOMAIN`). En local caen a un default de desarrollo con un aviso por consola. Ojo: **cambiar `GESTION_CLAVE` cierra todas las sesiones de admin** (es el botón de pánico) y **rotar `SECRET_KEY` desloguea también a todos los dispositivos**, que hay que volver a invitar
 - **La primera vez, `accesos.db` nace vacía**: no hay ningún dispositivo habilitado y el único acceso es el de administración con `GESTION_CLAVE`. Desde `/accesos` se invita al resto. La crea sola `accesos.init_db()`, tanto al arrancar como desde `actualizar.py`
@@ -260,6 +265,7 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 - Sistema de búsqueda y parsing de queries → leer `agent_docs/search-api.md`
 - Estilos, variables CSS, patrones visuales → leer `agent_docs/frontend-ui.md`
 - Motor CRUD compartido, criterio de capas, contrato de área, hooks, templates genéricos (`crud.py`, `texto.py`, `respaldos.py`, `templates/crud/`) → leer `agent_docs/crud-motor.md`
+- App instalable (`/app`, `frontend/`, `app_dist/`): API JSON, versionado por triggers, conflictos, caché y service worker, build y deploy → leer `agent_docs/app-instalable.md`
 - Quién puede entrar a qué: los tres niveles (público/interno/admin), permisos por área, links de invitación y dispositivos (`accesos.py`, `accesos.db`, `/accesos`) → leer `agent_docs/accesos.md`
 - Gestión de recursos (`/gestion`, `gestion.py`, `gestion.db`) → leer `agent_docs/gestion-conocimiento.md`
 - Historia institucional (`/historia`, `historia.py`, `historia.db`: hitos y personas) → leer `agent_docs/historia-institucional.md`

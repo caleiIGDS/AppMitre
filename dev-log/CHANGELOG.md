@@ -6,6 +6,14 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-10-05] — API JSON `/app/api/*` y versionado por triggers en las DB del motor
+
+**Archivos**: `crud.py`, `accesos.py`, `gestion.py`, `app.py`, `actualizar.py`, `frontend/`, `app_dist/`
+
+Toda tabla de `ENTIDADES` suma `version` y cada DB del motor la tabla `_revision`, con triggers
+(`_v_*`) que crea `crud.instalar_versionado` en cada `init_db`. No escribir `version` a mano.
+`actualizar.py` los cuenta como schema propio (si no, la limpieza los borraría con `--limpiar`).
+
 ## [2026-08-24] — El chat puede armar un kit al dar de alta un recurso
 
 **Archivos**: `agente/tools/esquemas.py`, `agente/tools/__init__.py`, `agente/tools/fichas.py`,

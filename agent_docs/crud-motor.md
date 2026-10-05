@@ -93,6 +93,12 @@ acá, nunca por un `if slug == '...'` dentro de `crud.py`.
 | `contexto_extra()` | claves extra del context processor | ninguna hoy (ídem, `carrito_count`) |
 | `NAV_EXTRA` | `[(slug, label)]` extra para la nav | ninguna hoy (ídem, el ítem "Préstamos") |
 | `ERROR_DUPLICADO` | `{slug: mensaje}` cuando un UNIQUE rechaza el guardado | `historia` (personas) |
+| `api_serializar(slug, filas, cur)` | al devolver filas por la API JSON de la app (`/app/api/...`) | `gestion` (unidades, kit, vencido) |
+| `api_meta()` | claves extra del `GET /meta` de la API | `gestion` (lugares sugeridos, fecha de hoy) |
+
+Además de las rutas HTML, el motor monta la API JSON de la app instalable
+(`crud.registrar_api`) y, en cada `init_db`, el versionado por triggers (`version` por fila,
+`_revision` por DB). Cómo funcionan los dos: `agent_docs/app-instalable.md`.
 
 #### Lo que NO entra por `migrar(cur)`
 

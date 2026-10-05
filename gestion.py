@@ -18,7 +18,7 @@ import sys
 from datetime import datetime
 
 from config import ahora
-from flask import Blueprint, redirect, render_template, request, url_for
+from flask import Blueprint, jsonify, redirect, render_template, request, url_for
 
 import accesos
 import crud
@@ -315,6 +315,32 @@ def extras_template(vista, slug):
 
 accesos.registrar_acceso(bp, PERMISO_LECTURA)
 crud.registrar_rutas(bp, sys.modules[__name__])
+
+# API JSON de la app instalable (/app). El CRUD genérico lo monta el motor; lo propio
+# (unidades, kits, alias) está al final del archivo.
+bp_api = Blueprint('gestion_api', __name__, url_prefix='/app/api/gestion')
+accesos.registrar_acceso_api(bp_api, PERMISO_LECTURA)
+crud.registrar_api(bp_api, sys.modules[__name__])
+
+
+def api_meta():
+    """Opciones fijas que la app usa en formularios y filtros."""
+    return {'lugares_sugeridos': LUGARES_RECURSO,
+            'umbral_sin_revisar_dias': UMBRAL_SIN_REVISAR_DIAS,
+            'formato_fecha_revision': 'dd/mm/aaaa',
+            'fecha_revision_hoy': ahora().strftime(FORMATO_FECHA_REVISION),
+            'puede_ver_alias': accesos.puede(PERMISO_ALIAS)}
+
+
+def api_serializar(slug, filas, cur):
+    """Todo lo que muestran el listado y la ficha de un recurso, en la misma fila: así la
+    app abre la ficha al instante con lo que ya bajó para el listado."""
+    if slug != 'recursos':
+        return
+    for fila in filas:
+        fila['unidades'] = lugares_recurso_agrupado(cur, fila['id'])
+        fila['kit'] = kit_items_recurso(cur, fila['id'])
+        fila['vencido'] = _revisado_vencido(fila.get('fecha_revision'))
 
 
 def _int(texto):
@@ -619,3 +645,111 @@ def kit_item_eliminar(id, item_id):
     con.close()
     return redirect(url_for('gestion.detalle', slug='recursos', id=id))
 
+
+
+# --- API JSON de lo propio del área (ver bp_api arriba) -----------------------------
+# Mismo contrato que el CRUD genérico: cada escritura devuelve el recurso completo, ya
+# serializado, para que la app reemplace su copia local sin volver a pedir el inventario.
+
+def _api_recurso(cur, rid, **extra):
+    fila = cur.execute(f"{crud.select(ENTIDADES['recursos'])} WHERE id = ?", (rid,)).fetchone()
+    if fila is None:
+        return None
+    datos = crud.serializar(sys.modules[__name__], 'recursos', [fila], cur, bp_api.name)[0]
+    datos.update(extra)
+    return datos
+
+
+def _api_respuesta(con, rid, **extra):
+    cur = con.cursor()
+    datos = _api_recurso(cur, rid, **extra)
+    con.commit()
+    con.close()
+    if datos is None:
+        return jsonify({'error': 'Este recurso ya no existe.'}), 404
+    return jsonify(datos)
+
+
+def _api_cuerpo():
+    datos = request.get_json(silent=True)
+    return datos if isinstance(datos, dict) else {}
+
+
+@bp_api.post('/recursos/<int:id>/unidades/mover')
+@accesos.requiere(PERMISO_ESCRITURA)
+def api_unidades_mover(id):
+    datos = _api_cuerpo()
+    numeros = [n for n in (datos.get('numeros') or []) if isinstance(n, int) and n > 0]
+    ubicacion = str(datos.get('ubicacion') or '').strip()
+    if not numeros or not ubicacion:
+        return jsonify({'error': 'Indicá qué unidades y a qué lugar.'}), 422
+    con = conectar()
+    cur = con.cursor()
+    if _stock(cur, id) is None:
+        con.close()
+        return jsonify({'error': 'Este recurso ya no existe.'}), 404
+    resultado = mover_unidades(cur, id, ubicacion, numeros=numeros)
+    if not resultado['ok']:
+        con.close()
+        return jsonify({'error': resultado['error'], 'avisos': resultado['avisos']}), 422
+    return _api_respuesta(con, id, _avisos=resultado['avisos'])
+
+
+@bp_api.post('/recursos/<int:id>/unidades/quitar')
+@accesos.requiere(PERMISO_ESCRITURA)
+def api_unidad_quitar(id):
+    numero = _int(_api_cuerpo().get('numero'))
+    con = conectar()
+    con.execute("UPDATE recurso_unidades SET ubicacion = '' WHERE recurso_id = ? AND numero = ?",
+                (id, numero))
+    return _api_respuesta(con, id)
+
+
+def _kit_campos(datos):
+    return {k: str(datos.get(k) or '').strip() for k in ('titulo', 'cantidad', 'recurso_asignado')}
+
+
+@bp_api.post('/recursos/<int:id>/kit')
+@accesos.requiere(PERMISO_ESCRITURA)
+def api_kit_agregar(id):
+    campos = _kit_campos(_api_cuerpo())
+    if not campos['titulo']:
+        return jsonify({'error': 'El título es obligatorio.', 'errores': {'titulo': 'Obligatorio.'}}), 422
+    con = conectar()
+    cur = con.cursor()
+    if _stock(cur, id) is None:
+        con.close()
+        return jsonify({'error': 'Este recurso ya no existe.'}), 404
+    cur.execute("INSERT INTO kit_items (recurso_id, titulo, cantidad, recurso_asignado) VALUES (?,?,?,?)",
+                (id, campos['titulo'], campos['cantidad'], campos['recurso_asignado']))
+    return _api_respuesta(con, id)
+
+
+@bp_api.put('/recursos/<int:id>/kit/<int:item_id>')
+@accesos.requiere(PERMISO_ESCRITURA)
+def api_kit_editar(id, item_id):
+    campos = _kit_campos(_api_cuerpo())
+    if not campos['titulo']:
+        return jsonify({'error': 'El título es obligatorio.', 'errores': {'titulo': 'Obligatorio.'}}), 422
+    con = conectar()
+    if not editar_kit_item(con.cursor(), id, item_id, **campos):
+        con.close()
+        return jsonify({'error': 'Ese sub-recurso ya no existe.'}), 404
+    return _api_respuesta(con, id)
+
+
+@bp_api.delete('/recursos/<int:id>/kit/<int:item_id>')
+@accesos.requiere(PERMISO_ESCRITURA)
+def api_kit_eliminar(id, item_id):
+    con = conectar()
+    eliminar_kit_item(con.cursor(), id, item_id)
+    return _api_respuesta(con, id)
+
+
+@bp_api.get('/alias')
+@accesos.requiere(PERMISO_ALIAS)
+def api_alias():
+    con = conectar()
+    filas = con.execute("SELECT id, nombre, alias FROM recursos ORDER BY nombre COLLATE NOCASE").fetchall()
+    con.close()
+    return jsonify({'filas': [dict(f) for f in filas]})

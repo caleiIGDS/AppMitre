@@ -390,6 +390,30 @@ def registrar_acceso(bp, permiso, endpoints_pagina=None, endpoint_default='home'
         return redirect(url_for(f'{bp.name}.login'))
 
 
+def registrar_acceso_api(bp, permiso):
+    """El gate de un blueprint de la API JSON de la app (/app/api/...).
+
+    Mismo criterio que `registrar_acceso` (permiso base + `requiere()` para lo que pide
+    más), pero todo contesta JSON: 401 sin sesión, 403 sin permiso. No monta /login ni
+    /salir: la app entra y sale por `/app/api/sesion`.
+
+    Las escrituras exigen el encabezado `X-Mitre: 1`. Un formulario de otro sitio no puede
+    mandar encabezados propios, y un `fetch` de otro origen que lo intente dispara un
+    preflight CORS que este servidor no aprueba: es la defensa CSRF de la API, que la
+    cookie `SameSite=Lax` sola no cubre del todo.
+    """
+    @bp.before_request
+    def _gate_api():
+        if request.method not in ('GET', 'HEAD', 'OPTIONS') and \
+                request.headers.get('X-Mitre') != '1':
+            return jsonify({'error': 'Falta el encabezado X-Mitre.'}), 400
+        if actual() is None:
+            return jsonify({'error': 'Sin sesión'}), 401
+        necesario = getattr(request.url_rule, 'mitre_permiso', None) or permiso
+        if not puede(necesario):
+            return denegar(necesario, como_json=True)
+
+
 def requiere(permiso, como_json=False):
     """Marca una ruta como más exigente que el permiso base de su blueprint.
 
@@ -684,6 +708,39 @@ def registrar_app(app, modulos):
     app.jinja_env.globals['acceso_actual'] = actual
 
     app.register_blueprint(bp)
+
+    # Sesión de la app (/app): quién soy, entrar con la clave de admin, salir. Sin gate:
+    # es la puerta. Los internos no entran por acá sino por el link de invitación de
+    # siempre (/acceso/<token>), que deja la misma cookie.
+    @app.get('/app/api/sesion')
+    def app_sesion():
+        acc = actual()
+        return jsonify({
+            'acceso': None if acc is None else {
+                'tipo': acc['tipo'], 'nombre': acc['nombre'],
+                'permisos': sorted(acc['permisos'])},
+            'escuela': {'nombre': ESCUELA_NOMBRE, 'version': ESCUELA_VERSION},
+        })
+
+    @app.post('/app/api/sesion')
+    def app_sesion_entrar():
+        if request.headers.get('X-Mitre') != '1':
+            return jsonify({'error': 'Falta el encabezado X-Mitre.'}), 400
+        datos = request.get_json(silent=True) or {}
+        if datos.get('clave', '') != _clave():
+            return jsonify({'error': 'Contraseña incorrecta.'}), 401
+        session.clear()
+        session.permanent = True
+        session['acceso'] = {'tipo': 'admin', 'clave': huella_clave()}
+        g.pop('acceso_mitre', None)  # que `actual()` lea la sesión recién escrita
+        return app_sesion()
+
+    @app.delete('/app/api/sesion')
+    def app_sesion_salir():
+        if request.headers.get('X-Mitre') != '1':
+            return jsonify({'error': 'Falta el encabezado X-Mitre.'}), 400
+        session.clear()
+        return jsonify({'acceso': None})
 
     @app.route('/salir')
     def salir_general():

@@ -1,4 +1,5 @@
-from flask import Flask, render_template, jsonify, send_file
+from flask import Flask, redirect, render_template, jsonify, send_file, send_from_directory
+from werkzeug.security import safe_join
 import os
 import sqlite3
 from datetime import timedelta
@@ -56,6 +57,7 @@ if PRODUCCION:
 # Gestión de recursos (/gestion) — módulo independiente con DB propia (gestion.db).
 # init_db() en import para que también corra bajo gunicorn/WSGI (no solo en __main__).
 app.register_blueprint(gestion.bp)
+app.register_blueprint(gestion.bp_api)
 gestion.init_db()
 
 # Historia institucional (/historia) — módulo hermano de gestion, DB propia (historia.db).
@@ -714,6 +716,39 @@ def export_pdf_planilla_preceptores():
     output.write(pdf.output())
     output.seek(0)
     return send_file(output, mimetype='application/pdf', as_attachment=False, download_name='planilla_preceptores.pdf')
+
+# --- App instalable (/app) -------------------------------------------------------------
+# La compila Vite desde frontend/ a app_dist/ (ver agent_docs/app-instalable.md). Flask sólo la sirve:
+# los archivos de assets/ llevan un hash en el nombre, así que se cachean para siempre; el
+# resto (index.html, sw.js, manifest) se revalida siempre, que es lo que hace que una
+# versión nueva llegue. Cualquier otra ruta bajo /app/ es una pantalla de la app y devuelve
+# index.html: la navegación la resuelve el router del navegador.
+APP_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app_dist')
+
+
+@app.route('/app')
+def app_raiz():
+    return redirect('/app/')
+
+
+@app.route('/app/', defaults={'ruta': ''})
+@app.route('/app/<path:ruta>')
+def app_spa(ruta):
+    if ruta.startswith('api/'):
+        return jsonify({'error': 'No existe'}), 404
+    if ruta and os.path.isfile(safe_join(APP_DIST, ruta) or ''):
+        resp = send_from_directory(APP_DIST, ruta)
+        if ruta.startswith('assets/'):
+            resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+        else:
+            resp.headers['Cache-Control'] = 'no-cache'
+        return resp
+    if not os.path.isfile(os.path.join(APP_DIST, 'index.html')):
+        return ("La app todavía no está compilada: correr `npm run build` en frontend/.", 503)
+    resp = send_from_directory(APP_DIST, 'index.html')
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
 
 @app.route('/salidas/normativa')
 def normativa_visor():

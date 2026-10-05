@@ -6,6 +6,17 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-10-05] — App instalable (Vue + Vite + PWA) en `/app`; se acepta un paso de build
+
+Las páginas clásicas recargaban todo en cada paso y perdían filtros y scroll al volver. Se
+evaluó Turbo/htmx (sigue pidiendo HTML por pantalla) y un SPA sin framework (router y estado a
+mano); se eligió Vue + TanStack Query + Workbox, y por eso se abandona "sin build step":
+`app_dist/` se commitea porque el servidor no tiene Node. Versión por fila y `_revision` por DB
+los mantienen **triggers**, no Python: escriben el asistente, rutas propias y scripts, y un
+contador manual se olvidaría en alguno. Detalle en `agent_docs/app-instalable.md`.
+
+---
+
 ## [2026-08-24] — `puntaje_busqueda`: una palabra candidata más corta que la query no cuenta
 
 Buscar "pelacable" traía 7 resultados con el correcto ("Pela cable Weidmuller", vía alias

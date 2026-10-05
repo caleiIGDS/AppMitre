@@ -30,6 +30,9 @@
                    ☰ (bloque `.g-areas` al final del body). #}
                 <div class="g-header-actions">
                     <a class="g-btn-outline" href="/">‹ SISTEMA DE HORARIOS</a>
+                    {# La versión nueva de esta área (app instalable). Convive con estas
+                       páginas mientras dura la migración: agent_docs/app-instalable.md. #}
+                    <a class="g-btn-outline" href="/app/gestion/inventario">APP NUEVA ›</a>
                     {% if puede('gestion.alias') %}
                     <a class="g-btn-outline" href="{{ url_for('gestion.alias_lista') }}">ALIAS</a>
                     {% endif %}

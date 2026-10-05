@@ -37,6 +37,7 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(errors='replace')
 
 import accesos
+import crud
 import gestion
 import historia
 import agente
@@ -436,15 +437,18 @@ def migraciones_de_schema(dry):
 # Qué SQL describe a cada DB. `gestion.db` tiene dos dueños: el área y el asistente, que
 # guarda ahí sus tablas de auditoría y sesión. Sin sumar las dos, la limpieza se comería
 # `agente_log` y compañía por creerlas sobras.
+# El tercer elemento son las áreas del motor (crud.py) que viven en esa DB: además de su
+# SCHEMA, el motor les agrega el versionado de la app (`_revision` y `<tabla>.version`,
+# ver crud.instalar_versionado). Sin sumarlo, la limpieza los tomaría por sobras.
 DUENOS = (
-    (lambda: gestion.DB_PATH, lambda: (gestion.SCHEMA, agente_db.SCHEMA)),
-    (lambda: historia.DB_PATH, lambda: (historia.SCHEMA,)),
-    (lambda: accesos.DB_PATH, lambda: (accesos.SCHEMA,)),
-    (lambda: salidas.DB_PATH, lambda: (salidas.SCHEMA,)),
+    (lambda: gestion.DB_PATH, lambda: (gestion.SCHEMA, agente_db.SCHEMA), lambda: (gestion,)),
+    (lambda: historia.DB_PATH, lambda: (historia.SCHEMA,), lambda: (historia,)),
+    (lambda: accesos.DB_PATH, lambda: (accesos.SCHEMA,), lambda: ()),
+    (lambda: salidas.DB_PATH, lambda: (salidas.SCHEMA,), lambda: ()),
 )
 
 
-def _schema_de_referencia(*schemas):
+def _schema_de_referencia(schemas, areas=()):
     """{tabla: {columnas}} según el SQL declarado en el código, sin tocar disco.
 
     En vez de parsear el SQL a mano, se ejecuta en una DB en memoria y se le pregunta con
@@ -455,6 +459,8 @@ def _schema_de_referencia(*schemas):
     try:
         for sql in schemas:
             ref.executescript(sql)
+        for area in areas:
+            crud.instalar_versionado(area, ref.cursor())
         return {t: set(_columnas(ref, t))
                 for (t,) in ref.execute("SELECT name FROM sqlite_master WHERE type='table'")
                 if t != 'sqlite_sequence'}
@@ -489,12 +495,12 @@ def limpiar_sobras(dry, forzar):
 
     puede_drop_columna = sqlite3.sqlite_version_info >= SQLITE_MINIMO_DROP_COLUMN
 
-    for get_ruta, get_schemas in DUENOS:
+    for get_ruta, get_schemas, get_areas in DUENOS:
         ruta = get_ruta()
         if not os.path.exists(ruta):
             continue
         nombre_db = os.path.basename(ruta)
-        referencia = _schema_de_referencia(*get_schemas())
+        referencia = _schema_de_referencia(get_schemas(), get_areas())
 
         con = _conectar(ruta)
         try:
@@ -549,7 +555,7 @@ def limpiar_sobras(dry, forzar):
 
     # Compactar: los DROP dejan páginas libres adentro del archivo, no lo achican.
     if not dry:
-        for get_ruta, _ in DUENOS:
+        for get_ruta, _, _ in DUENOS:
             if os.path.exists(get_ruta()):
                 con = sqlite3.connect(get_ruta())
                 try:
