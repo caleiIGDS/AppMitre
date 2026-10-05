@@ -90,7 +90,8 @@ lista de inventarios, para marcar cuáles se abren sin tipear la clave.
 `PERMISOS_AMBITO` (que declara el área y junta `registrar_app` en `SIN_COMODIN`) es la lista
 de claves a las que `tiene()` **no** deja llegar al comodín. Es lo que hace que el admin
 general administre la lista de inventarios —crear, renombrar, ponerles la clave, eliminar—
-**sin poder entrar a ninguno**: adentro manda el encargado, y el break-glass del admin llega
+**sin poder entrar a ninguno** por el comodín (la sesión de `GESTION_CLAVE` entra igual,
+por `gestion._acceso_encargado` y `accesos.es_admin()`; un dispositivo con `'*'` no): adentro manda el encargado, y el break-glass del admin llega
 hasta la puerta. Fue un pedido explícito, no una consecuencia: ver `dev-log/DECISIONS.md`
 2026-09-02.
 

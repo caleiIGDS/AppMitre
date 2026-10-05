@@ -25,9 +25,12 @@ uno es imposible leer el de al lado aunque a alguien se le olvide un `WHERE`. `c
 pregunta por el hook `db_path()`, que resuelve el inventario del request (la URL) o el de la
 sesión (`inv_activo`, que es de dónde lo saca el asistente).
 
-**El admin general no entra a ningún inventario.** Crea, renombra, le pone la clave y lo
-elimina; el contenido es del encargado. Eso funciona porque las claves del área están en
-`PERMISOS_AMBITO` y el comodín `'*'` no las alcanza — ver `agent_docs/accesos.md`.
+**El admin general (GESTION_CLAVE) entra a todos y ve sus claves.** Desde 2026-10-05:
+`_acceso_encargado` le suma el juego completo de `PERMISOS_AMBITO` en el inventario activo,
+y la lista le muestra la clave de cada uno (`clave_ver`, cifrada con `SECRET_KEY`; las
+puestas antes de esa fecha o con otra `SECRET_KEY` no se pueden mostrar: hay que volver a
+ponerlas). El comodín `'*'` sigue sin alcanzar las claves de ámbito, así que un
+*dispositivo* con perfil admin NO entra — ver `agent_docs/accesos.md`.
 
 El blueprint `bp` se sigue llamando `gestion` aunque su prefijo pasó a ser `/gestion/<inv>`:
 un `url_value_preprocessor` guarda el `<inv>` en `g.inv` y un `url_defaults` lo vuelve a

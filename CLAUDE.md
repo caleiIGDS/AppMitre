@@ -7,7 +7,7 @@
 | Área | URL | Archivo | DB | Qué es |
 |---|---|---|---|---|
 | **Horarios** | `/horarios` | `horarios/` (paquete) | `database/escuela.db` | Consulta de horarios por curso (1°–7°), profesor, aula y preceptor; dashboard "En Vivo" para kiosco; export a PDF. Se regenera desde Google Sheets. **Sitio aparte**: login propio (`HORARIOS_CLAVE`), config y datos propios, **no pasa por `accesos`**. `/` sólo redirige acá. |
-| **Gestión de recursos** | `/gestion` | `gestion.py` | `gestion.db` (registro) + `inventarios/<slug>.db` | **Varios inventarios estancos**: `/gestion` es la lista y `/gestion/<inv>/…` uno abierto. Cada uno tiene su archivo, su clave y su encargado, que adentro reparte los permisos. El admin general los crea, nombra y elimina, y **no ve el contenido**. |
+| **Gestión de recursos** | `/gestion` | `gestion.py` | `gestion.db` (registro) + `inventarios/<slug>.db` | **Varios inventarios estancos**: `/gestion` es la lista y `/gestion/<inv>/…` uno abierto. Cada uno tiene su archivo, su clave y su encargado, que adentro reparte los permisos. El admin general (`GESTION_CLAVE`) los crea, nombra y elimina, **entra a todos y ve sus claves**. |
 | **Asistente** | `/agente` | `agente/` (paquete) | `agente.db` (+ las de arriba) | Chat con tool-calling. Único transversal: **lee horarios** y escribe en recursos. `agente.db` es sólo el registro de uso y de chats (`/agente/uso`). |
 | **Salidas educativas** | `/salidas` | `salidas.py` | `salidas.db` | Legajo digital de una salida (Anexos III–IX, Res. 3871/24): formulario de carga, guardado con vigencia de 1 año y generación de PDF por anexo. |
 
@@ -18,7 +18,7 @@
 
 **Quién entra a qué.** El sistema de horarios es un **sitio aparte** con su propia contraseña (`HORARIOS_CLAVE`, ver `horarios/acceso.py`): no usa nada de lo de abajo. El resto (gestión, agente, salidas, accesos) pasa por `accesos.py` — **tres niveles** (detalle en `agent_docs/accesos.md`): **Público** ya casi no ve nada, sólo el canje de invitación y el link de familias de salidas. **Interno** son dispositivos habilitados por un link de invitación de un solo uso, cada uno con su conjunto de permisos (`agente.escribir`, `salidas.leer`, …). **Admin** entra con `GESTION_CLAVE` y tiene el comodín `'*'`. Aparte, **`SALIDAS_CLAVE`** (opcional, en el `.env`) da todo Salidas y nada más, en `/salidas/login` o en el login de la app. Un área declara sus `PERMISOS` y entra sola al catálogo y a los perfiles: agregar un área nueva **no toca el gate ni migra los accesos ya dados**.
 
-**El comodín tiene un límite, y es a propósito.** Un permiso puede declararse **con ámbito** (`PERMISOS_AMBITO`): se guarda prefijado (`inv:7/gestion.editar`) y vale sólo adentro de ese compartimento — a esas claves `'*'` **no llega**. Hoy las usa gestión: el admin general administra la lista de inventarios sin poder abrir ninguno, y adentro manda el encargado, que entra con la clave de SU inventario y reparte permisos sólo ahí. Ser encargado de uno no da nada en el de al lado.
+**El comodín tiene un límite, y es a propósito.** Un permiso puede declararse **con ámbito** (`PERMISOS_AMBITO`): se guarda prefijado (`inv:7/gestion.editar`) y vale sólo adentro de ese compartimento — a esas claves `'*'` **no llega**. Hoy las usa gestión: un dispositivo con perfil admin no abre ningún inventario (la sesión de `GESTION_CLAVE` sí, por `gestion._acceso_encargado`), y adentro manda el encargado, que entra con la clave de SU inventario y reparte permisos sólo ahí. Ser encargado de uno no da nada en el de al lado.
 
 ### Dónde va cada cosa: tres capas
 

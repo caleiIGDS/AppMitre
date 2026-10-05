@@ -37,7 +37,13 @@ const consulta = useInventarios()
             <h3>{{ i.nombre.toUpperCase() }}</h3>
             <span class="g-count">{{ i.total < 0 ? '—' : i.total }}</span>
           </div>
-          <p v-if="i.sin_clave" class="g-error">Todavía no tiene clave: no puede entrar nadie.</p>
+          <p v-if="i.sin_clave" class="g-error">Todavía no tiene clave: sólo entra administración.</p>
+          <!-- `clave` sólo viene para el admin general. -->
+          <p v-else-if="'clave' in i" class="g-help">
+            CLAVE: <code v-if="i.clave">{{ i.clave }}</code>
+            <template v-else>no se puede mostrar (se puso antes de que se guardaran visibles):
+              volvé a ponerla en ADMINISTRAR INVENTARIOS, puede ser la misma.</template>
+          </p>
           <div class="g-card-actions">
             <RouterLink v-if="i.abre" class="g-btn" :to="{ name: 'recursos', params: { inv: i.slug } }">ABRIR</RouterLink>
             <RouterLink v-else-if="!i.sin_clave" class="g-btn-outline-dark" :to="{ name: 'inventario-entrar', params: { inv: i.slug } }">ENTRAR CON CLAVE</RouterLink>

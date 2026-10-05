@@ -23,16 +23,20 @@
 # (retiro interno de recursos). Se sacaron por decisión de producto, no por deuda técnica:
 # ver dev-log/DECISIONS.md 2026-08-21 si se retoman.
 
+import base64
 import contextlib
 import hashlib
+import hmac
 import os
 import re
+import secrets
 import sqlite3
 import sys
 from datetime import datetime
 
 from config import DIR_DATOS, ahora
-from flask import (Blueprint, abort, g, has_request_context, jsonify, redirect,
+from flask import (Blueprint, abort, current_app, g, has_app_context, has_request_context,
+                   jsonify, redirect,
                    render_template, request, session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -80,8 +84,9 @@ GRUPO_PERMISOS = 'Gestión de recursos'
 # Las claves que valen SÓLO adentro de un inventario. Son las mismas de siempre —nada en
 # crud.py, en los templates ni en las tools del agente cambió de nombre—, pero se guardan
 # prefijadas (`inv:7/gestion.editar`) y el comodín '*' no las alcanza. Ese detalle es todo
-# el aislamiento: tener `gestion.editar` en el taller no es tenerlo en el laboratorio, y
-# ser el admin de la escuela no es ser el encargado de ningún inventario.
+# el aislamiento: tener `gestion.editar` en el taller no es tenerlo en el laboratorio, ni
+# un dispositivo con perfil admin entra a ninguno. La excepción es la sesión de
+# GESTION_CLAVE: `_acceso_encargado` le da el juego completo en cualquier inventario.
 PERMISOS_AMBITO = frozenset({
     'gestion.leer', 'gestion.editar', 'gestion.alias', 'gestion.auditoria',
     'gestion.rotar', 'gestion.accesos',
@@ -128,6 +133,7 @@ CREATE TABLE IF NOT EXISTS inventarios (
     slug       TEXT NOT NULL UNIQUE,
     nombre     TEXT NOT NULL,
     clave_hash TEXT,
+    clave_ver  TEXT,
     creado     TEXT NOT NULL
 );
 """
@@ -144,6 +150,55 @@ def _hashear(clave):
     if hasattr(hashlib, 'scrypt'):
         return generate_password_hash(clave)
     return generate_password_hash(clave, method='pbkdf2:sha256')
+
+
+# La misma clave, además, cifrada con SECRET_KEY (`clave_ver`) para que el admin general la
+# pueda VER en la lista: el hash sirve para comprobarla pero no se puede dar vuelta. Cifrada
+# y no en claro para que una copia de gestion.db (un respaldo) sola no alcance para leerla.
+# Rotar SECRET_KEY la deja ilegible: la lista pide volver a ponerla, igual que a las que se
+# pusieron antes de que existiera esta columna. Cifrado de flujo HMAC-SHA256 en modo
+# contador + etiqueta HMAC: sólo biblioteca estándar, porque el hosting no tiene
+# `cryptography` garantizado.
+
+def _llaves_clave():
+    secreto = current_app.secret_key if has_app_context() else os.environ.get('SECRET_KEY', '')
+    base = secreto.encode('utf-8') if isinstance(secreto, str) else bytes(secreto or b'')
+    return (hmac.new(base, b'inv-clave-flujo', 'sha256').digest(),
+            hmac.new(base, b'inv-clave-etiqueta', 'sha256').digest())
+
+
+def _flujo(llave, nonce, largo):
+    bloques = (hmac.new(llave, nonce + i.to_bytes(4, 'big'), 'sha256').digest()
+               for i in range((largo + 31) // 32))
+    return b''.join(bloques)[:largo]
+
+
+def _cifrar_clave(clave):
+    flujo, etiqueta = _llaves_clave()
+    datos = clave.encode('utf-8')
+    nonce = secrets.token_bytes(16)
+    cifra = bytes(a ^ b for a, b in zip(datos, _flujo(flujo, nonce, len(datos))))
+    marca = hmac.new(etiqueta, nonce + cifra, 'sha256').digest()[:16]
+    return base64.urlsafe_b64encode(nonce + marca + cifra).decode('ascii')
+
+
+def clave_visible(fila):
+    """La clave del inventario en claro, o None si no se puede leer (puesta antes de que
+    se guardara así, o cifrada con otra SECRET_KEY). Sólo para el admin general."""
+    try:
+        crudo = base64.urlsafe_b64decode((fila.get('clave_ver') or '').encode('ascii'))
+    except (ValueError, TypeError):
+        return None
+    if len(crudo) < 32:
+        return None
+    nonce, marca, cifra = crudo[:16], crudo[16:32], crudo[32:]
+    flujo, etiqueta = _llaves_clave()
+    if not hmac.compare_digest(marca, hmac.new(etiqueta, nonce + cifra, 'sha256').digest()[:16]):
+        return None
+    try:
+        return bytes(a ^ b for a, b in zip(cifra, _flujo(flujo, nonce, len(cifra)))).decode('utf-8')
+    except UnicodeDecodeError:
+        return None
 
 
 def conectar_registro():
@@ -230,8 +285,8 @@ def crear_inventario(nombre, clave):
     cur = con.cursor()
     slug = slugificar(nombre, cur)
     cur.execute(
-        "INSERT INTO inventarios (slug, nombre, clave_hash, creado) VALUES (?,?,?,?)",
-        (slug, nombre, _hashear(clave) if clave else None,
+        "INSERT INTO inventarios (slug, nombre, clave_hash, clave_ver, creado) VALUES (?,?,?,?,?)",
+        (slug, nombre, _hashear(clave) if clave else None, _cifrar_clave(clave) if clave else None,
          ahora().strftime('%Y-%m-%d %H:%M:%S')))
     con.commit()
     con.close()
@@ -259,8 +314,8 @@ def fijar_clave(inv_id, clave):
     if not clave:
         return False
     con = conectar_registro()
-    con.execute("UPDATE inventarios SET clave_hash = ? WHERE id = ?",
-                (_hashear(clave), inv_id))
+    con.execute("UPDATE inventarios SET clave_hash = ?, clave_ver = ? WHERE id = ?",
+                (_hashear(clave), _cifrar_clave(clave), inv_id))
     con.commit()
     con.close()
     return True
@@ -690,6 +745,9 @@ def init_db():
     respaldos.respaldar(DB_PATH, PREFIJO_BACKUP_REGISTRO, 'inventarios')
     con = conectar_registro()
     con.executescript(SCHEMA_REGISTRO)
+    columnas = {c[1] for c in con.execute("PRAGMA table_info(inventarios)")}
+    if 'clave_ver' not in columnas:
+        con.execute("ALTER TABLE inventarios ADD COLUMN clave_ver TEXT")
     con.commit()
     con.close()
     for fila in listar_inventarios():
@@ -790,7 +848,12 @@ def _acceso_encargado():
     inventario y nada más — en el de al lado esta misma persona no tiene nada.
     """
     inv = inventario_activo()
-    if inv is None or not inv['clave_hash']:
+    if inv is None:
+        return None
+    # El admin general (GESTION_CLAVE) entra a todos con el juego completo, sin la clave.
+    if accesos.es_admin():
+        return {'tipo': 'admin', 'nombre': 'Administración', 'permisos': PERMISOS_AMBITO}
+    if not inv['clave_hash']:
         return None
     guardada = (session.get(CLAVES_SESION) or {}).get(str(inv['id']))
     if not guardada or guardada != _huella(inv['clave_hash']):
@@ -854,8 +917,8 @@ def _recordar_inventario():
 # ---------------------------------------------------------------------------
 # Es el panel de `/accesos` pero acotado: sólo reparte las claves del área, sólo ve los
 # dispositivos que tienen alguna de este inventario, y su "quitar" saca las de acá y
-# ninguna otra (ver accesos.quitar_ambito). El admin general no aparece por ningún lado —
-# su comodín no llega a estas claves.
+# ninguna otra (ver accesos.quitar_ambito). El admin general no aparece en la lista —
+# su comodín no llega a estas claves; entra por `_acceso_encargado`, no por invitación.
 
 def _catalogo_inventario():
     return [e for e in accesos.CATALOGO_AMBITO if e[3] == GRUPO_PERMISOS]
@@ -955,8 +1018,11 @@ def _puede_abrir(fila):
 
     Se pregunta por el ámbito de ESA fila y no con `puede()`, porque `puede()` responde
     siempre sobre el inventario activo y acá se está listando otro. El admin general da que
-    no, y es correcto: su comodín no llega a `gestion.leer` (ver PERMISOS_AMBITO).
+    no por el comodín (no llega a `gestion.leer`, ver PERMISOS_AMBITO), pero entra igual:
+    `_acceso_encargado` le da el juego completo en cualquiera.
     """
+    if accesos.es_admin():
+        return True
     if fila['clave_hash'] and (session.get(CLAVES_SESION) or {}).get(
             str(fila['id'])) == _huella(fila['clave_hash']):
         return True
@@ -994,8 +1060,10 @@ def panel():
     """La lista. Para el admin general es el tablero de altas y bajas; para el resto es
     nada más la puerta: los inventarios que puede abrir, y un candado en los otros."""
     filas = listar_inventarios()
+    admin = accesos.puede(PERMISO_REGISTRO)
     for f in filas:
         f['abre'] = _puede_abrir(f)
+        f['clave'] = clave_visible(f) if admin else None
     return render_template('inventarios/panel.html', inventarios=filas, activo='inventarios',
                            falta_migrar=not filas and _recursos_sin_mudar(),
                            error=request.args.get('error'))
@@ -1786,12 +1854,15 @@ def _api_no_existe():
 def api_inventarios():
     """La lista de inventarios con cuáles abre esta sesión, igual que `panel`."""
     filas = listar_inventarios()
-    return jsonify({
-        'inventarios': [{'slug': f['slug'], 'nombre': f['nombre'], 'total': f['total'],
-                         'sin_clave': f['sin_clave'], 'abre': _puede_abrir(f)}
-                        for f in filas],
-        'puede_administrar': accesos.puede(PERMISO_REGISTRO),
-    })
+    admin = accesos.puede(PERMISO_REGISTRO)
+    salida = []
+    for f in filas:
+        d = {'slug': f['slug'], 'nombre': f['nombre'], 'total': f['total'],
+             'sin_clave': f['sin_clave'], 'abre': _puede_abrir(f)}
+        if admin:
+            d['clave'] = clave_visible(f)
+        salida.append(d)
+    return jsonify({'inventarios': salida, 'puede_administrar': admin})
 
 
 @bp_api.post('/entrar')

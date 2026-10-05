@@ -82,7 +82,12 @@
         </div>
 
         {% if i.sin_clave %}
-        <p class="g-error">Todavía no tiene clave: no puede entrar nadie.</p>
+        <p class="g-error">Todavía no tiene clave: sólo entra administración.</p>
+        {% elif puede('inventarios.admin') %}
+        {# Sólo el admin general la ve (gestion.clave_visible). #}
+        <p class="g-help">CLAVE: {% if i.clave %}<code>{{ i.clave }}</code>{% else %}no se puede
+            mostrar (se puso antes de que se guardaran visibles): volvé a ponerla en ADMINISTRAR,
+            puede ser la misma.{% endif %}</p>
         {% endif %}
 
         <div class="g-card-actions">

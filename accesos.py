@@ -415,6 +415,13 @@ def _sesion():
     return g._acceso_sesion
 
 
+def es_admin():
+    """¿Entró con GESTION_CLAVE? (No un dispositivo con perfil admin: ése no abre los
+    inventarios sin su invitación.)"""
+    base = _sesion()
+    return bool(base and base['tipo'] == 'admin')
+
+
 def permisos_en(ambito):
     """El conjunto que la SESIÓN da en `ambito`, sea o no el ámbito activo.
 

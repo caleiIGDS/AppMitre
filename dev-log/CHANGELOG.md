@@ -6,6 +6,12 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-10-05] — El admin general entra a todos los inventarios y ve sus claves
+
+**Archivos**: `gestion.py` (`clave_ver`, `clave_visible`, `_acceso_encargado`, `_puede_abrir`), `accesos.py` (`es_admin`), `templates/inventarios/panel.html`, `Inventarios.vue`
+Columna nueva `inventarios.clave_ver` (la agrega `gestion.init_db`), cifrada con `SECRET_KEY`: rotarla deja las claves sin mostrar.
+`/app/api/inventarios` trae `clave` sólo para quien tiene `inventarios.admin`.
+
 ## [2026-10-05] — `SALIDAS_CLAVE` y manifest de `/app` con `scope: '/'`
 
 **Archivos**: `salidas.py`, `accesos.py` (`entrar_admin`, `registrar_entrada`, `registrar_acceso_extra(en_sesion=)`), `templates/*/base.html`, `frontend/vite.config.js`
