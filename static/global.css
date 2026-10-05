@@ -192,6 +192,13 @@ body {
     padding-left: calc(var(--escudo) + 8px);
 }
 
+/* En las áreas clásicas la marca es un link al menú principal (/app/). */
+a.marca {
+    color: inherit;
+    text-decoration: none;
+}
+a.marca:hover .marca-escudo { filter: brightness(1.08); }
+
 .marca-escudo {
     position: absolute;
     left: 0;

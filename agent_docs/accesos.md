@@ -10,6 +10,7 @@ que declara sus `ENTIDADES`.
 |---|---|---|
 | **Público** | nada | Casi nada: el canje de invitación (`/acceso/<token>`), el link de familias de salidas (`/salidas/completar/<token>`) y el visor `/salidas/normativa`. `/` redirige a `/horarios`, que tiene su propia contraseña (`HORARIOS_CLAVE`, fuera de este sistema) |
 | **Interno** | link de invitación de un solo uso → **dispositivo habilitado** | Lo que digan sus permisos |
+| **Clave de Salidas** | `SALIDAS_CLAVE` en `/salidas/login` o en el login de `/app` | `salidas.leer` y `salidas.editar`, nada más. Se suma a la sesión que haya (`registrar_acceso_extra(..., en_sesion=True)`); sin la variable no existe. Cambiarla corta a quien entró con la anterior |
 | **Admin** | `GESTION_CLAVE` en `/gestion/login` (o el de cualquier área) | Casi todo: tiene el comodín `'*'`, que **no** alcanza las claves con ámbito (ver abajo) |
 | **Encargado** | la clave de UN inventario, en `/gestion/<inv>/login` | Ese inventario entero y nada más. Puede no tener ningún otro acceso |
 

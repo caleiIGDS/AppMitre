@@ -18,13 +18,14 @@
     <div class="g-bg">
         <header class="g-header">
             <div class="g-container g-header-flex">
-                <div class="marca g-brand">
+                {# El escudo y el nombre vuelven al menú principal (el inicio de la app). #}
+                <a href="/app/" class="marca g-brand g-brand-link" title="Menú principal">
                     <img src="{{ static_v(escuela_logo) }}" alt="Escudo" class="marca-escudo">
                     <div class="g-titles">
                         <h1>{{ escuela_nombre }} <span class="g-serial">{{ escuela_version }}</span></h1>
                         <p>Salidas Educativas</p>
                     </div>
-                </div>
+                </a>
                 {# Saltar a otra área es el ☰ (bloque `.g-areas` al final del body).
                    Cada página puede reemplazar estas acciones por las suyas —
                    así el header sigue siendo uno solo (`g-header`/`g-btn*`)
@@ -58,6 +59,7 @@
        Un link por permiso, renderizado en el server. #}
     {% if acceso_actual() %}
     <nav class="g-areas" aria-label="Áreas">
+        <a href="/app/">⌂ MENÚ PRINCIPAL</a>
         {# El link va al REGISTRO y no a un inventario: cuál se abre lo decide esa
            página, que muestra los que este acceso puede abrir. Sin condición de permiso
            porque `gestion.leer` es de UN inventario y acá no hay ninguno activo. #}

@@ -48,7 +48,10 @@ export default defineConfig({
         description: 'Inventario, historia y salidas educativas de la Escuela Técnica Emilio Mitre.',
         lang: 'es-AR',
         start_url: '/app/',
-        scope: '/app/',
+        // Todo el sitio y no sólo /app/: las áreas que todavía son páginas clásicas
+        // (/salidas, /agente, /accesos) se abren dentro de la misma ventana, sin la barra
+        // gris de "fuera de la app". El service worker sigue cubriendo sólo /app/.
+        scope: '/',
         display: 'standalone',
         background_color: '#F1F5F9',
         theme_color: '#1A365D',

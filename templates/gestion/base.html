@@ -20,7 +20,8 @@
     <div class="g-bg">
         <header class="g-header">
             <div class="g-container g-header-flex">
-                <div class="marca g-brand">
+                {# El escudo y el nombre vuelven al menú principal (el inicio de la app). #}
+                <a href="/app/" class="marca g-brand g-brand-link" title="Menú principal">
                     <img src="{{ static_v(escuela_logo) }}" alt="Escudo" class="marca-escudo">
                     <div class="g-titles">
                         <h1>{{ escuela_nombre }} <span class="g-serial">{{ escuela_version }}</span></h1>
@@ -28,7 +29,7 @@
                            en cuál se está cargando y borrando. #}
                         <p>{% if inventario %}Inventario · {{ inventario.nombre }}{% else %}Sistema de Gestión de Conocimiento{% endif %}</p>
                     </div>
-                </div>
+                </a>
                 {# El header queda para acciones de ESTA página. Saltar a otra área es el
                    ☰ (bloque `.g-areas` al final del body). #}
                 <div class="g-header-actions">
@@ -76,6 +77,7 @@
        aparece en celular (para el nav y las acciones). #}
     {% if acceso_actual() %}
     <nav class="g-areas" aria-label="Áreas">
+        <a href="/app/">⌂ MENÚ PRINCIPAL</a>
         {% if puede('agente.leer') %}
         <a href="{{ url_for('agente.chat_page') }}">🤖 ASISTENTE</a>
         {% endif %}

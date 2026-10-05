@@ -242,6 +242,8 @@ def tiene(permisos, permiso):
 
 _AMBITO = []
 _EXTRA = []
+_EXTRA_SESION = []
+_ENTRADAS = []
 
 
 def registrar_ambito(fn):
@@ -249,10 +251,21 @@ def registrar_ambito(fn):
     _AMBITO.append(fn)
 
 
-def registrar_acceso_extra(fn):
+def registrar_acceso_extra(fn, en_sesion=False):
     """`fn() -> {'tipo','nombre','permisos'} | None`: un acceso que el área suma a este
-    request (permisos YA sin prefijo, porque son del ámbito activo)."""
+    request (permisos YA sin prefijo, porque son del ámbito activo).
+
+    `en_sesion=True` para el que no depende de ningún ámbito (la clave de un área entera):
+    ése además lo informa `/app/api/sesion`, así la app muestra el área en el inicio."""
     _EXTRA.append(fn)
+    if en_sesion:
+        _EXTRA_SESION.append(fn)
+
+
+def registrar_entrada(fn):
+    """`fn(clave) -> bool`: otra clave que acepta el login de la app (`/app/api/sesion`)
+    además de la de admin. Si es la suya, deja lo que haga falta en la sesión y da True."""
+    _ENTRADAS.append(fn)
 
 
 def ambito_actual():
@@ -325,6 +338,18 @@ def huella_clave():
     admin en el request siguiente. Es el botón de pánico, y sale gratis.
     """
     return hashlib.sha256(_clave().encode('utf-8')).hexdigest()[:12]
+
+
+def entrar_admin(clave):
+    """Entrar con `GESTION_CLAVE`: admin con el comodín. Devuelve si la clave era ésa."""
+    if clave != _clave():
+        return False
+    # clear() antes de escribir: si el navegador traía una conversación del agente o
+    # una sesión de dispositivo, se arranca limpio.
+    session.clear()
+    session.permanent = True
+    session['acceso'] = {'tipo': 'admin', 'clave': huella_clave()}
+    return True
 
 
 def _dispositivo(disp_id):
@@ -524,17 +549,7 @@ def registrar_acceso(bp, permiso, endpoints_pagina=None, endpoint_default='home'
         destino = url_for(f'{bp.name}.login')
         return destino[:-len('/login')] or '/'
 
-    def _entrar_admin(clave):
-        if clave != _clave():
-            return False
-        # clear() antes de escribir: si el navegador traía una conversación del agente o
-        # una sesión de dispositivo, se arranca limpio.
-        session.clear()
-        session.permanent = True
-        session['acceso'] = {'tipo': 'admin', 'clave': huella_clave()}
-        return True
-
-    entrar = entrar or _entrar_admin
+    entrar = entrar or entrar_admin
 
     @bp.before_request
     def _gate():
@@ -1010,10 +1025,16 @@ def registrar_app(app, modulos):
     # `/meta` de su API, que es donde ese ámbito está activo.
     def _sesion_json():
         base = _sesion()
+        # Las claves de un área entera (salidas) se suman, o son lo único que hay.
+        extras = [e for e in (fn() for fn in _EXTRA_SESION) if e]
+        permisos_sesion = set(_efectivos(base['permisos'], None)) if base else set()
+        for e in extras:
+            permisos_sesion |= set(e['permisos'])
+        quien = base or (extras[0] if extras else None)
         return jsonify({
-            'acceso': None if base is None else {
-                'tipo': base['tipo'], 'nombre': base['nombre'],
-                'permisos': sorted(_efectivos(base['permisos'], None))},
+            'acceso': None if quien is None else {
+                'tipo': quien.get('tipo', 'extra'), 'nombre': quien['nombre'],
+                'permisos': sorted(permisos_sesion)},
             'areas': sorted(m.bp.name for m in montados
                             if getattr(m, 'bp', None) is not None),
             'escuela': {'nombre': ESCUELA_NOMBRE, 'version': ESCUELA_VERSION},
@@ -1034,12 +1055,11 @@ def registrar_app(app, modulos):
         if corte:
             return corte
         datos = request.get_json(silent=True) or {}
-        if datos.get('clave', '') != _clave():
+        clave = datos.get('clave', '')
+        # Primero la de admin (igual que el login de siempre: arranca limpio); si no, la
+        # de algún área entera (SALIDAS_CLAVE), que se suma a lo que ya hubiera.
+        if not (entrar_admin(clave) or any(fn(clave) for fn in _ENTRADAS)):
             return jsonify({'error': 'Contraseña incorrecta.'}), 401
-        # Igual que el login de admin de siempre: arranca limpio.
-        session.clear()
-        session.permanent = True
-        session['acceso'] = {'tipo': 'admin', 'clave': huella_clave()}
         g.pop('_acceso_sesion', None)
         g.pop('acceso_mitre', None)
         return _sesion_json()

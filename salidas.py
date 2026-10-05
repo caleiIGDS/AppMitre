@@ -18,6 +18,8 @@
 # no vinieron en lo que se guardó quedan en blanco en la hoja: es lo correcto, porque son
 # justamente los que se completan a mano después de imprimir.
 
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -1267,7 +1269,48 @@ def _procesar_form_familia(anexo, form):
 
 # --- Acceso y contexto compartido ---------------------------------------------
 
-accesos.registrar_acceso(bp, PERMISO_LECTURA, endpoint_default='lista')
+# Clave propia del área: `SALIDAS_CLAVE` en el .env. Quien la pone tiene todo Salidas
+# (ver y cargar) y nada más. Se SUMA a la sesión que haya —no la limpia— y en la cookie
+# va su huella, no un booleano: cambiar la clave en el .env corta en el acto a todos los
+# que entraron con la anterior. Sin la variable, esta puerta no existe y sólo entra el
+# admin o un dispositivo con permiso de salidas.
+SESION_CLAVE = 'salidas_clave'
+
+
+def _clave_propia():
+    return os.environ.get('SALIDAS_CLAVE') or None
+
+
+def _huella(clave):
+    return hashlib.sha256(('salidas:' + clave).encode('utf-8')).hexdigest()[:12]
+
+
+def _acceso_con_clave():
+    """Hook de `accesos`: lo que da haber entrado con SALIDAS_CLAVE."""
+    clave = _clave_propia()
+    if not clave or session.get(SESION_CLAVE) != _huella(clave):
+        return None
+    return {'tipo': 'salidas', 'nombre': 'Salidas educativas',
+            'permisos': [PERMISO_LECTURA, PERMISO_ESCRITURA]}
+
+
+def _entrar_con_clave(clave):
+    propia = _clave_propia()
+    if not propia or not hmac.compare_digest(clave.encode('utf-8'), propia.encode('utf-8')):
+        return False
+    session.permanent = True
+    session[SESION_CLAVE] = _huella(propia)
+    return True
+
+
+def _entrar(clave):
+    """`/salidas/login`: la de admin de siempre o la del área."""
+    return accesos.entrar_admin(clave) or _entrar_con_clave(clave)
+
+
+accesos.registrar_acceso_extra(_acceso_con_clave, en_sesion=True)
+accesos.registrar_entrada(_entrar_con_clave)
+accesos.registrar_acceso(bp, PERMISO_LECTURA, endpoint_default='lista', entrar=_entrar)
 
 
 @bp.context_processor

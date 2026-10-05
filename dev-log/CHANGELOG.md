@@ -6,6 +6,12 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-10-05] — `SALIDAS_CLAVE` y manifest de `/app` con `scope: '/'`
+
+**Archivos**: `salidas.py`, `accesos.py` (`entrar_admin`, `registrar_entrada`, `registrar_acceso_extra(en_sesion=)`), `templates/*/base.html`, `frontend/vite.config.js`
+`/app/api/sesion` ahora informa también los accesos `en_sesion` (tipo `salidas`). La marca de las bases clásicas es un link a `/app/`.
+El scope de la app instalada pasa a todo el sitio: las páginas clásicas se abren en la misma ventana.
+
 ## [2026-10-05] — API `/app-horarios/api/*` y `acceso.comprobar_clave` en horarios
 
 **Archivos**: `horarios/app_api.py` (nuevo), `horarios/acceso.py`, `horarios/__init__.py` (`bp_app`), `app.py`, `frontend/horarios/`, `app_horarios_dist/`

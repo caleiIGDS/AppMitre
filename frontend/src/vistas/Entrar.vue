@@ -1,5 +1,6 @@
 <script setup>
-// La clave de ADMINISTRACIÓN (GESTION_CLAVE), igual que crud/login.html. Los internos no
+// La clave de ADMINISTRACIÓN (GESTION_CLAVE), o la de Salidas educativas (SALIDAS_CLAVE),
+// que abre sólo esa área: el servidor prueba las dos (accesos.app_sesion_entrar). Los internos no
 // pasan por acá: entran por su link de invitación; los encargados, con la clave de su
 // inventario (InventarioEntrar.vue).
 import { ref } from 'vue'
@@ -37,10 +38,10 @@ async function enviar() {
   <div v-if="error" class="g-error" role="alert">{{ error }}</div>
   <form class="g-form" @submit.prevent="enviar">
     <div class="g-field">
-      <label for="campo-clave">CONTRASEÑA DE ADMINISTRACIÓN</label>
+      <label for="campo-clave">CONTRASEÑA</label>
       <input id="campo-clave" v-model="clave" type="password" required autofocus autocomplete="current-password">
-      <span class="g-help">Si te habilitaron el acceso por link, no necesitás contraseña:
-        entrá con el link que te mandaron.</span>
+      <span class="g-help">La de administración, o la de Salidas educativas. Si te habilitaron
+        el acceso por link, no necesitás contraseña: entrá con el link que te mandaron.</span>
     </div>
     <div class="g-form-actions">
       <button type="submit" class="g-btn" :disabled="entrar.isPending.value">
