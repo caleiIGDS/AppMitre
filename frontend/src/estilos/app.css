@@ -151,3 +151,19 @@ body.g-sin-scroll { overflow: hidden; }
 @media (min-width: 901px) {
     .a-solo-movil { display: none !important; }
 }
+
+/* --- Filtros activos ---------------------------------------------------------------- */
+/* Arriba de la tabla mientras haya algún filtro o búsqueda: en celular el panel de filtros
+   está cerrado, y sin esto no hay forma rápida de volver a ver todo. */
+.a-filtros-activos {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 12px 0;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--g-muted);
+}

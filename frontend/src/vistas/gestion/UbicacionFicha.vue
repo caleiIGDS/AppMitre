@@ -2,7 +2,7 @@
 // "Ubicación" de la ficha (templates/gestion/detalle.html): las unidades agrupadas por
 // lugar. Con permiso, se tocan los números para elegir cuáles mover o dejar sin ubicar;
 // el cambio se aplica en la ficha, sin navegar.
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useMoverUnidades, useQuitarUbicacion } from '@/gestion/datos'
 import { avisar, avisarError } from '@/avisos'
 
@@ -18,6 +18,9 @@ const quitar = useQuitarUbicacion(() => props.inv)
 const elegidas = ref(new Set())
 const lugar = ref('')
 const campoLugar = ref(null)
+
+// Si la misma pantalla pasa a mostrar otro recurso, lo elegido era del anterior.
+watch(() => props.recurso.id, () => { elegidas.value = new Set(); lugar.value = '' })
 
 const lista = computed(() => [...elegidas.value].sort((a, b) => a - b))
 const ocupado = computed(() => mover.isPending.value || quitar.isPending.value)

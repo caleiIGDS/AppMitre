@@ -169,6 +169,11 @@ function abrir(r, evento) {
     </div>
   </div>
 
+  <div v-if="hayFiltros && recursos.data.value" class="a-filtros-activos">
+    <span>Mostrando {{ visibles.length }} de {{ totalActivos }}<template v-if="q"> · "{{ q }}"</template></span>
+    <button type="button" class="g-btn-mini g-btn-outline-dark" @click="limpiar">✕ QUITAR FILTROS</button>
+  </div>
+
   <EstadoCarga :consulta="recursos" que="el inventario" />
 
   <template v-if="recursos.data.value">

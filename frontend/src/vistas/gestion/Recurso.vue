@@ -6,6 +6,7 @@
 import { computed } from 'vue'
 import { useRecurso, useMeta, useSubirFoto, useEliminarFoto, useRotarFoto } from '@/gestion/datos'
 import { volverA } from '@/navegacion'
+import { norm } from '@/texto'
 import { avisar, avisarError } from '@/avisos'
 import EstadoCarga from '@/componentes/EstadoCarga.vue'
 import Galeria from '@/componentes/Galeria.vue'
@@ -26,6 +27,16 @@ const campos = computed(() => m.value.entidades?.recursos?.campos || [])
 const specs = computed(() => campos.value.filter((c) =>
   !['nombre', 'descripcion', 'tipo'].includes(c.nombre) && recurso.value?.[c.nombre]))
 const listado = computed(() => ({ name: 'recursos', params: { inv: props.inv } }))
+
+// Sugerencias para "Mover acá": los lugares habituales más todos los que ya se usan en
+// este inventario, así un lugar nuevo aparece apenas se carga una vez.
+const lugares = computed(() => {
+  const todos = new Map()
+  const sumar = (l) => { if (l && l !== 'Sin ubicar' && !todos.has(norm(l))) todos.set(norm(l), l) }
+  for (const l of m.value.lugares_sugeridos || []) sumar(l)
+  for (const r of consulta.data.value || []) for (const g of r.unidades) sumar(g.ubicacion)
+  return [...todos.values()].sort((a, b) => norm(a).localeCompare(norm(b)))
+})
 
 function subir(archivo) {
   subirFoto.mutate({ id: recurso.value.id, archivo }, {
@@ -82,7 +93,7 @@ function rotar(foto, imagen) {
     </header>
 
     <div class="g-ficha-col-main">
-      <UbicacionFicha :inv="inv" :recurso="recurso" :puede-editar="!!m.puede_escribir" :lugares="m.lugares_sugeridos || []" />
+      <UbicacionFicha :inv="inv" :recurso="recurso" :puede-editar="!!m.puede_escribir" :lugares="lugares" />
 
       <template v-if="recurso.kit.length">
         <div class="g-ficha-bar"><span>SUB-RECURSOS (KIT)</span></div>
