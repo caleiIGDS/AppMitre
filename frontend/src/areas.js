@@ -1,7 +1,7 @@
-// El menú ☰: las áreas del sistema. Mientras dura la migración, las que todavía no pasaron
-// a la app abren su versión clásica (página del servidor): `ruta` es de la app, `href` es
-// una página clásica. `bp` es el blueprint que tiene que estar montado en el servidor
-// (/app/api/sesion lo informa) para que el link no lleve a un 404.
+// El menú ☰: las áreas del sistema. Las que todavía no pasaron a la app abren su página
+// del servidor: `ruta` es de la app, `href` es una página del servidor. `bp` es el área
+// que tiene que estar montada en el servidor (/app/api/sesion lo informa) para que el link
+// no lleve a un 404.
 
 export const AREAS = [
   {

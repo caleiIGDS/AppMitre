@@ -1,5 +1,5 @@
 <script setup>
-// DAR DE BAJA / REVERTIR BAJA dentro de EDITAR (templates/gestion/form.html). Un recurso no
+// DAR DE BAJA / REVERTIR BAJA dentro de EDITAR. Un recurso no
 // se borra nunca: sale del inventario dándolo de baja, y la baja exige decir qué le pasó.
 import { ref } from 'vue'
 import { useBaja, useRevertirBaja } from '@/gestion/datos'

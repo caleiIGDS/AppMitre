@@ -1,6 +1,6 @@
 <script setup>
 // Varios horarios superpuestos: cada día se parte en una sub-columna por horario, cada uno
-// con su color (generarCalendarioComparacion de script.js).
+// con su color.
 import { computed } from 'vue'
 import { rango, bloquesColumna, nombreProfesor, indicadorBloque } from '../calendario'
 import { esSeleccionada, verClase, verSuperposicion, mostrarCartel, ocultarCartel } from '../ventanas'

@@ -1,6 +1,6 @@
 # Salidas educativas (`/salidas`)
 
-Cuarta área de la app (las otras: el SPA de horarios, `/gestion`, `/agente`).
+Cuarta área de la app (las otras: horarios, `/gestion`, `/agente`).
 Arma el legajo digital de una salida educativa/de representación institucional (Anexos III
 a IX de la Resolución RESOC-2024-3871-GDEBA-DGCYE), lo guarda en el servidor con **vigencia
 de 1 año**, y genera un PDF por anexo para previsualizar/imprimir. `salidas.db` es la fuente
@@ -19,7 +19,7 @@ rutas propias, escritas a mano, reutilizando sólo lo compartido (`accesos`,
 
 - **`salidas.py`** — el área: blueprint Flask (`bp`, prefix `/salidas`), `SCHEMA`, `PERMISOS`,
   las rutas (`lista`, `nueva`, `api_guardar`, `detalle`, `ver_pdf`) y el **renderer de PDF
-  genérico** (ver abajo). `ENTIDADES = {}` a propósito — no pasa por `crud.registrar_rutas`.
+  genérico** (ver abajo). `ENTIDADES = {}` a propósito — no pasa por el motor CRUD.
   También define `bp_publico`, un **segundo blueprint sin gate** para el link de
   familias/estudiantes — ver "Link público" más abajo.
 - **`salidas.db`** — SQLite propia. Igual que `gestion.db`/`accesos.db`:

@@ -24,7 +24,7 @@ propios** —`agente.leer`, `agente.escribir`, `agente.vision`, `agente.auditar`
 cambia lo que el agente es**: con solo `agente.leer` las tools de escritura ni se le mandan al
 modelo, y sin `agente.vision` no hay botón para adjuntar fotos ni tools que las miren. Ver
 "Permisos" más abajo y `agent_docs/accesos.md`.
-- Widget flotante, incluido en `/gestion` y `/salidas` — para consultar sin salir de la
+- Widget flotante, incluido en `/salidas` — para consultar sin salir de la
   página en la que se está. Hoy no hay ningún botón que lo abra en la UI (se sacó del header
   por duplicar el ☰, ver `dev-log/DECISIONS.md`): el markup y el JS quedan listos por si se
   reactiva.
@@ -204,9 +204,9 @@ a contestar por uno cuando le preguntaron por otro. Cada inventario tiene entonc
 prefijo cacheado en el proveedor — es lo que se paga por que no los mezcle.
 
 **Context processor propio**: `agente.bp` construye su `_contexto_base()` localmente
-(`escuela_nombre`/`escuela_logo`/`escuela_version` salen de `config.py`). No usa el context
-processor genérico de `crud.registrar_rutas` porque `/agente` no es un área CRUD: no tiene
-`ENTIDADES` propias ni nav de entidades. Los context processors de un blueprint no corren
+(`escuela_nombre`/`escuela_logo`/`escuela_version` salen de `config.py`). El motor CRUD ya
+no tiene context processor (sus páginas se sacaron el 2026-10-05) y `/agente` tampoco es un
+área CRUD. Los context processors de un blueprint no corren
 para requests de otro, así que sin esto el header renderiza vacío.
 
 ### Contar en qué anda mientras tarda (`/chat/stream`)
@@ -375,7 +375,7 @@ escribir en una galería sin `agente.escribir`. Ver `agent_docs/accesos.md`.
   `buscar_entidad` cuando no hay ningún match `exacto`, y la **única** entrada por ubicación
   que tiene el agente, ver abajo
 - `detalle_entidad(slug, id)` — detalle completo + relaciones (ver "Claves de `relaciones`")
-- `listar_alias(slug)` — **solo admin** (`gestion.alias`, igual que `/gestion/alias`): todos los
+- `listar_alias(slug)` — **solo admin** (`gestion.alias`, igual que `/gestion/<inv>/alias`): todos los
   recursos con su alias en texto, para que el asistente los audite/mejore. Es la única tool que
   expone ese texto — `buscar_entidad` sólo marca `match:"alias"` sin mostrarlo
 - `leer_foto(modo?, foto?)` — mira las fotos adjuntadas en ESTE turno y las devuelve en texto,
@@ -578,7 +578,7 @@ quedar guardado. Circuito:
    mensaje como una **tarjeta editable** (`tarjetaFicha()`), un input por campo, con
    `confirmaciones[].campos` (`[{nombre, label, tipo, valor, opciones?, redactado?}, …]`,
    armado por `fichas._campos_para_editar()` reusando el mismo `tipo`/`opciones` que declara
-   `ENTIDADES` para el form de /gestion). El asistente sólo agrega, debajo, 1 a 3
+   `ENTIDADES` para el formulario de la app de Gestión). El asistente sólo agrega, debajo, 1 a 3
    preguntas cortas por lo que falta ("¿de qué medida es?", "¿sabés la marca?"). **No son
    bloqueantes**: si el usuario no contesta, se guarda igual — está en el prompt y en el
    `instruccion` de la ficha.

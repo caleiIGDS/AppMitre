@@ -1,5 +1,5 @@
 <script setup>
-// El header de /horarios: escudo, nombre, tema claro/oscuro, ACTUALIZAR HORARIOS y SALIR.
+// El header de la app: escudo, nombre, tema claro/oscuro, ACTUALIZAR HORARIOS y SALIR.
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSesion, useSalir } from '../sesion'
@@ -15,7 +15,7 @@ const salir = useSalir()
 const actualizar = useActualizarDesdePlanilla()
 const exito = ref(false)
 
-// --- Tema: blueprint (claro) ↔ nocturno. La misma preferencia que /horarios. ---------
+// --- Tema: blueprint (claro) ↔ nocturno. ---------------------------------------------
 const TEMA = 'appmitre-theme'
 const oscuro = ref(document.body.getAttribute('data-theme') === 'nocturno')
 function cambiarTema() {

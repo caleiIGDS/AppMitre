@@ -4,13 +4,13 @@ import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // La app de HORARIOS: otra app instalable, aparte de la de Gestión (vite.config.js).
-// Vive en /app-horarios/ para que el celular la instale como una app distinta, con su
-// ícono, su service worker y su memoria. Comparte con la otra sólo piezas sueltas de
+// Vive en /horarios/ (su API, en /app-horarios/api/) para que el celular la instale como
+// una app distinta, con su ícono, su service worker y su memoria. Comparte con la otra sólo piezas sueltas de
 // src/ (avisos, aviso de sin conexión) y las hojas de static/.
 // `npm run build:horarios` compila a ../app_horarios_dist, que sirve app.py.
 export default defineConfig({
   root: fileURLToPath(new URL('./horarios', import.meta.url)),
-  base: '/app-horarios/',
+  base: '/horarios/',
   define: {
     __VERSION_APP__: JSON.stringify(new Date().toISOString().slice(0, 16)),
   },
@@ -30,7 +30,7 @@ export default defineConfig({
     fs: { allow: ['..'] },
     proxy: {
       '/app-horarios/api': 'http://127.0.0.1:5000',
-      '/horarios': 'http://127.0.0.1:5000',
+      '/horarios/export': 'http://127.0.0.1:5000',
       '/static': 'http://127.0.0.1:5000',
     },
   },
@@ -43,13 +43,15 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['escudo.svg'],
       manifest: {
+        // El id de cuando vivía en /app-horarios/: con otro, el celular la tomaría por una
+        // app distinta de la que ya está instalada.
         id: '/app-horarios/',
         name: 'Emilio Mitre — Horarios',
         short_name: 'Horarios',
         description: 'Horarios de cursos, profesores, aulas y preceptores de la Escuela Técnica Emilio Mitre.',
         lang: 'es-AR',
-        start_url: '/app-horarios/',
-        scope: '/app-horarios/',
+        start_url: '/horarios/',
+        scope: '/horarios/',
         display: 'standalone',
         background_color: '#F1F5F9',
         theme_color: '#1A365D',
@@ -60,9 +62,10 @@ export default defineConfig({
         ],
       },
       workbox: {
-        navigateFallback: '/app-horarios/index.html',
-        navigateFallbackAllowlist: [/^\/app-horarios\//],
-        navigateFallbackDenylist: [/^\/app-horarios\/api\//],
+        navigateFallback: '/horarios/index.html',
+        navigateFallbackAllowlist: [/^\/horarios(\/|$)/],
+        // Los PDF son del servidor: abrirlos no puede devolver la app.
+        navigateFallbackDenylist: [/^\/horarios\/export\//],
         globPatterns: ['**/*.{js,css,html,svg,png,ttf,woff2}'],
       },
     }),

@@ -347,14 +347,13 @@ El acento es **único**: naranja (`--accent: #D97A34` en `:root`, alias `--secon
 - **Blueprint** (default): estética industrial, grilla blueprint, tabs con clip-path, acento naranja.
 - **Nocturno**: modo **oscuro**. Fondos carbón/pizarra, texto claro, esquinas redondeadas, sombras profundas. `--primary` pasa a azul acero claro (legible como texto y como fondo en oscuro).
 
-**Nocturno** es el único con `data-dark`; usa los overrides de superficies claras hardcodeadas vía `body[data-dark] { ... }` (seteado por `applyTheme`). Define sus variables (`--tech-bg`, `--surface`/`--white`, `--primary`, `--border`, `--muted`, `--text`, `--panel`, `--block-bg`). Los tokens `--text` (texto claro), `--panel` (header/inputs) y `--block-bg` (bloques) son exclusivos del tema oscuro. **No se puede sobrescribir `--dark`** en oscuro porque también se usa como fondo (status bar, slide-panel, tooltip, dropdown, reloj); por eso los textos oscuros hardcodeados (`.info-valor`, etc.) se corrigen puntualmente en `body[data-dark]`.
+**Nocturno** es el único con `data-dark`; usa los overrides de superficies claras hardcodeadas vía `body[data-dark] { ... }` (lo setea el botón de tema de la app). Define sus variables (`--tech-bg`, `--surface`/`--white`, `--primary`, `--border`, `--muted`, `--text`, `--panel`, `--block-bg`). Los tokens `--text` (texto claro), `--panel` (header/inputs) y `--block-bg` (bloques) son exclusivos del tema oscuro. **No se puede sobrescribir `--dark`** en oscuro porque también se usa como fondo (status bar, slide-panel, tooltip, dropdown, reloj); por eso los textos oscuros hardcodeados (`.info-valor`, etc.) se corrigen puntualmente en `body[data-dark]`.
 
-### Flujo (JS en `script.js`)
+### Flujo (`frontend/horarios/src/componentes/Encabezado.vue`)
 
-- `applyTheme(nombre)`: setea `data-theme` (y `data-dark` si es oscuro) en `<body>`, guarda en `localStorage`, y actualiza el ícono/título del botón (`#btn-tema`) — 🌙 luna en claro, ☀ sol en oscuro.
-- `toggleTheme()`: alterna blueprint ↔ nocturno; es el `onclick` del botón del header.
-- `initTheme()`: lee `localStorage` (default `blueprint`), se llama en `DOMContentLoaded`.
-- **Anti-flash**: un script inline al inicio de `<body>` (en `index.html`) aplica el tema guardado antes de pintar el contenido.
+- El botón de tema alterna blueprint ↔ nocturno: setea `data-theme` (y `data-dark` si es oscuro) en `<body>` y lo guarda en `localStorage`.
+- **Anti-flash**: un script inline en `frontend/horarios/index.html` aplica el tema guardado antes de pintar.
+- Hasta 2026-10-05 esto lo hacían `applyTheme`/`toggleTheme`/`initTheme` de `static/js/script.js` (borrado con la página clásica).
 
 ### Botón de tema
 
@@ -366,5 +365,5 @@ En el header (`.header-actions`, junto a `#btn-actualizar`): un botón `#btn-tem
 - Para tintes suaves del acento usar `var(--accent-soft)` o `color-mix(in srgb, var(--accent) N%, ...)`.
 - Fuente: usar `var(--font-ui)`, no `'Roboto Mono'` literal.
 - `data-theme` / `data-dark` y la clase `is-fullscreen` **coexisten** en `<body>` sin conflicto (ejes distintos).
-- Para agregar un tema oscuro nuevo: sumarlo a `TEMAS_VALIDOS` en `script.js`, marcarlo como oscuro (`data-dark`) en `applyTheme`, definir sus variables en `body[data-theme="..."]`, y reusar los overrides compartidos de `body[data-dark]`.
-- Pendiente conocido: `COMPARACION_COLORS` en `script.js` es una paleta fija de 6 colores.
+- Para agregar un tema oscuro nuevo: sumarlo al botón de `Encabezado.vue` (y al anti-flash de `index.html`), marcarlo como oscuro (`data-dark`), definir sus variables en `body[data-theme="..."]`, y reusar los overrides compartidos de `body[data-dark]`.
+- Pendiente conocido: `COLORES_COMPARACION` en `frontend/horarios/src/calendario.js` es una paleta fija de 6 colores.

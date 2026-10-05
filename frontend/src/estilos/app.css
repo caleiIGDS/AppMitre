@@ -1,6 +1,6 @@
 /* Lo propio de la app instalable. La paleta, la fuente, el header, las tablas, la ficha y
    los formularios son los de static/global.css y static/gestion.css (se importan enteras,
-   igual que en las páginas clásicas). Acá va sólo lo que la app agrega: estados de carga,
+   igual que en las páginas del servidor). Acá va sólo lo que la app agrega: estados de carga,
    avisos, conflictos, aviso de versión. Clases con prefijo `a-` para no chocar con `g-`. */
 
 #app { min-height: 100vh; }
@@ -173,3 +173,8 @@ body.g-sin-scroll { overflow: hidden; }
     border-color: var(--g-accent);
     color: white;
 }
+
+/* --- Quién entra (Accesos.vue) --- */
+/* Los títulos de sección no se pegan a la tabla de arriba. */
+.a-seccion { margin-top: 32px; }
+.a-link-nuevo { border-color: var(--g-accent); margin-bottom: 24px; }

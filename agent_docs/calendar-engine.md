@@ -1,6 +1,10 @@
 # Motor de Calendario — AppMitre
 
-> Complementa `CLAUDE.md`. Toda la lógica aquí está en `static/js/script.js`.
+> Complementa `CLAUDE.md`. Las reglas viven hoy en `frontend/horarios/src/calendario.js`
+> (`aMinutos`, `rango`, `bloquesColumna`, `estilosBloques`) y el dibujo en
+> `componentes/Calendario.vue` / `CalendarioComparacion.vue`. Hasta el 2026-10-05 estaban en
+> `static/js/script.js` (borrado con la página clásica): los nombres de función de abajo son
+> los de ese archivo, pero las reglas se portaron tal cual.
 
 ---
 

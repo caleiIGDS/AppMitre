@@ -41,7 +41,7 @@ autónomo con su propia config, su propio gate y sus propios datos. No importa `
 También se comparte lo que no es lógica de dominio: `static/global.css` (paleta, reset y escudo del header), `static/gestion.css` (estilos específicos de gestión/agente/salidas), `static/img-utils.js` (compresión de imágenes client-side, la usan el chat y la galería de fotos), `static/gestion-agente.js`, `static/mobile-nav.js` (menú lateral de celular) y el widget del chat.
 
 **Usuarios principales:** alumnos, docentes, preceptores y administración.  
-**Stack:** Flask + SQLite. Las páginas clásicas y el SPA de horarios son Vanilla JS sin build. La **app instalable** (`/app`, carpeta `frontend/`) es Vue 3 + Vite + PWA y le pide al servidor sólo datos (API JSON en `/app/api/`): hoy cubre el uso diario de Gestión y convive con las páginas clásicas, que siguen andando. Horarios tiene su propia app instalable aparte (`/app-horarios`, fuente en `frontend/horarios/`, API en `/app-horarios/api/`). Los compilados (`app_dist/`, `app_horarios_dist/`) se commitean. Sin tests, sin linter.
+**Stack:** Flask + SQLite. Gestión y Horarios son **apps instalables** (Vue 3 + Vite + PWA, carpeta `frontend/`) que le piden al servidor sólo datos: Gestión en `/gestion/` (API en `/app/api/`), Horarios en `/horarios/` (API en `/app-horarios/api/`). Las APIs conservan el prefijo viejo a propósito; las direcciones `/app/...` y `/app-horarios/...` redirigen a las nuevas. Agente, salidas y `/accesos` siguen siendo páginas Jinja sin build. Los compilados (`app_dist/`, `app_horarios_dist/`) se commitean. Sin tests, sin linter.
 
 ---
 
@@ -51,13 +51,13 @@ También se comparte lo que no es lógica de dominio: `static/global.css` (palet
 pip install -r requirements.txt   # instalar dependencias
 python app.py                      # dev en http://localhost:5000
 gunicorn app:app                   # producción
-# POST /horarios/api/actualizar    # regenerar DB desde Google Sheets
+# POST /app-horarios/api/actualizar # regenerar DB desde Google Sheets
 
 python actualizar.py --dry-run     # deploy: qué le falta a las DB del server (no escribe)
 python actualizar.py               # aplicarlo, antes del Reload del web app
 
-cd frontend && npm install         # app instalable (/app): una vez
-npm run dev                        # dev en http://localhost:5173/app/ (con Flask en :5000)
+cd frontend && npm install         # apps instalables: una vez
+npm run dev                        # dev en http://localhost:5173/gestion/ (con Flask en :5000)
 npm run build                      # compila a app_dist/ — correrlo y commitearlo antes de subir
 npm run build:horarios             # la app de horarios: compila a app_horarios_dist/ (ídem)
 ```
@@ -70,8 +70,9 @@ npm run build:horarios             # la app de horarios: compila a app_horarios_
 Google Sheets (CSV export por año: 1ro–7mo + preceptores + personal)
   → horarios/datos.py: descargar_sheet() + cargar_desde_sheets()
   → escuela.db (SQLite: clases | horarios_preceptores | personal_no_docente)
-  → horarios/rutas.py: rutas /horarios/api/* y /horarios/export/*
-  → static/js/script.js: calendario, dashboard, PDF, comparación
+  → horarios/app_api.py: /app-horarios/api/* (datos, sesión, actualizar)
+  → horarios/rutas.py: /horarios/export/* (PDF)
+  → frontend/horarios/: la app (calendario, dashboard, comparación)
 ```
 
 **Archivos clave:**
@@ -82,49 +83,41 @@ Google Sheets (CSV export por año: 1ro–7mo + preceptores + personal)
 | `texto.py` | Normalización de texto y búsqueda difusa (capa 0). Único dueño de `UMBRAL_SIMILITUD` |
 | `respaldos.py` | Respaldos rotativos de SQLite, parametrizados por área (capa 0) |
 | `fotos_disco.py` | Archivo en disco de cada foto de entidad (`database/fotos/<uuid><ext>`), capa 0: no nombra ninguna tabla, sólo guarda/sirve/borra por uuid. No entra en la rotación de `respaldos.py` (son inmutables) |
-| `crud.py` | Motor CRUD genérico + rutas (capa 1). No importa ningún área |
+| `crud.py` | Motor CRUD genérico + su API JSON (`registrar_api`, capa 1). No importa ningún área |
 | `accesos.py` | Motor de accesos y permisos (capa 1), hermano de `crud.py`: gate, catálogo de permisos, perfiles, links de invitación y panel `/accesos`. DB propia `accesos.db`. No nombra ningún permiso de área. **Horarios no pasa por acá** |
 | `actualizar.py` | Script de consola para el deploy: pone al día una `gestion.db` vieja. Hace lo que `migrar()` no puede porque cruza DBs (permisos `gestion.*` al pasar a varios inventarios) y limpia tablas y columnas que el código ya no declara. Idempotente, con `--dry-run`. No toca `escuela.db` |
-| `app.py` | Bootstrap Flask: crea la app, `SECRET_KEY`, config de sesión, registra los blueprints de las áreas, `/` → redirect a `/horarios/` |
-| `horarios/` | Sistema de horarios (`/horarios`): paquete autónomo. `__init__.py` (blueprint + guards), `config.py` (SHEET_ID, GIDs, FLOOR_MAPPING, branding propio), `acceso.py` (login con `HORARIOS_CLAVE`), `datos.py` (schema `escuela.db`, descarga CSV, normalización), `rutas.py` (SPA + API + PDF). Expone `bp`, `init_db`, `cargar_inicial`. Su DB es lo único que no vive adentro del paquete: está en `database/`, como todas |
-| `templates/index.html` | Shell SPA — pasa `window.APP_DATA` al JS |
-| `static/js/script.js` | Toda la lógica frontend (~1500 líneas) |
+| `app.py` | Bootstrap Flask: crea la app, `SECRET_KEY`, config de sesión, registra los blueprints de las áreas, sirve las dos apps compiladas (`/gestion/`, `/horarios/`), redirige las direcciones viejas `/app/...` y `/app-horarios/...` (con un service worker que se da de baja solo en `/app/sw.js` y `/app-horarios/sw.js`), `/` → `/horarios/` |
+| `horarios/` | Sistema de horarios (`/horarios`): paquete autónomo. `__init__.py` (blueprint + guards), `config.py` (SHEET_ID, GIDs, FLOOR_MAPPING, branding propio), `acceso.py` (sesión con `HORARIOS_CLAVE`), `datos.py` (schema `escuela.db`, descarga CSV, normalización), `app_api.py` (la API de la app: datos, entrar/salir, actualizar), `rutas.py` (sólo los PDF). Expone `bp`, `bp_app`, `init_db`, `cargar_inicial`. Su DB es lo único que no vive adentro del paquete: está en `database/`, como todas |
 | `static/global.css` | Paleta compartida, reset base, escudo (`.marca`), header genérico y el `@font-face` de Roboto Mono auto-hospedada (capa 0). Va como `<link>` propio en cada plantilla, **antes** de `gestion.css`/`horarios.css` |
 | `static/gestion.css` | Estilos específicos de gestión/agente/salidas (tablas, fichas, widget del agente, galería, etc). No importa `global.css`: la plantilla carga las dos hojas en paralelo |
-| `static/horarios.css` | Estilos específicos del sistema de horarios (calendario, dashboard, tema oscuro, etc). Mismo criterio que `gestion.css` |
+| `static/horarios.css` | Estilos del sistema de horarios (calendario, dashboard, tema oscuro, etc). Hoy lo importa la app de horarios (`frontend/horarios/src/main.js`) |
 | `horarios/nombre_mapeos.json` | Correcciones manuales de nombres de docentes (lo lee `horarios/datos.py`; opcional — si no está, no se aplica ningún mapeo) |
-| `gestion.py` | Gestión de recursos: el registro de inventarios (`bp_inv`, `/gestion`) y un inventario abierto (`bp`, `/gestion/<inv>`), sus entidades y hooks (incluidos `db_path`/`prefijo_backup`, que resuelven el archivo por request) + el desglose de recursos por ubicación |
+| `gestion.py` | Gestión de recursos: la API del registro de inventarios (`bp_api_registro`, `/app/api/gestion/inventarios`) y la de un inventario abierto (`bp_api`, `/app/api/gestion/<inv>/…`, incluido su "quién entra"), sus entidades y hooks (incluidos `db_path`/`prefijo_backup`, que resuelven el archivo por request) + el desglose de recursos por ubicación |
 | `agente/` | Asistente conversacional (`/agente`): paquete con blueprint, tools, prompt y loop + templates en `templates/agente/`. Expone `bp` e `init_db`; el mapa de los módulos está en `agente/__init__.py` |
-| `templates/crud/` | `lista/form/detalle/login.html` genéricos; cada área deja un stub que los extiende |
-| `static/mobile-nav.js` | Menú lateral ocultable de celular para `/gestion` y `/agente` (≤900px). No toca escritorio |
-| `frontend/` | Las apps instalables: Vue 3 + Vite + PWA. Gestión (`/app`): fuente en `frontend/src/`, compila a `app_dist/`. Horarios (`/app-horarios`): fuente en `frontend/horarios/`, compila a `app_horarios_dist/`. Los dos compilados se commitean y los sirve `app.py` |
+| `templates/crud/` | `login.html` y `403.html` genéricos, los usa el gate de `accesos` para agente/salidas/`/accesos` |
+| `static/mobile-nav.js` | Menú lateral ocultable de celular para las páginas Jinja (agente, salidas, accesos). No toca escritorio |
+| `frontend/` | Las apps instalables: Vue 3 + Vite + PWA. Gestión (`/gestion/`): fuente en `frontend/src/`, compila a `app_dist/`. Horarios (`/horarios/`): fuente en `frontend/horarios/`, compila a `app_horarios_dist/`. Los dos compilados se commitean y los sirve `app.py` |
 
 ---
 
-## API routes (horarios/rutas.py)
+## Rutas de horarios
 
-Todas cuelgan del blueprint `horarios` (en `horarios/__init__.py`) con prefijo **`/horarios`**
-y detrás del gate propio del área (`horarios/acceso.py`: sesión con `HORARIOS_CLAVE`, sin
-relación con `accesos`). El `fetch`/`window.open` del front usa `API_BASE = '/horarios'`.
-`/` (a nivel app) sólo redirige a `/horarios/`.
+La app vive en `/horarios/` (la sirve `app.py` desde `app_horarios_dist/`). Los datos los da
+`horarios/app_api.py` (`/app-horarios/api`) y los PDF `horarios/rutas.py` (`/horarios/export`).
+Las dos van detrás del gate propio del área (`horarios/acceso.py`: sesión con
+`HORARIOS_CLAVE`, sin relación con `accesos`; sin sesión, 401). `/` sólo redirige a `/horarios/`.
 
 | Ruta | Método | Descripción |
 |------|--------|-------------|
-| `/horarios/` | GET | Sirve el SPA; pasa `datos`, `floor_mapping`, `dias`, branding |
-| `/horarios/api/<tipo>/<valor>` | GET | Horario por `tipo` = `profesor\|aula\|curso\|planilla` |
-| `/horarios/api/preceptor/<valor>` | GET | Preceptor asignado a un curso (T.M / T.T / T.N) |
-| `/horarios/api/horario_preceptor/<nombre>` | GET | Horario personal de un preceptor |
-| `/horarios/api/personal/<nombre>` | GET | Horario de personal no docente |
-| `/horarios/api/dashboard` | GET | Todas las clases (el JS filtra por hora actual) |
-| `/horarios/api/actualizar` | POST | Borra y reconstruye `escuela.db` desde Sheets |
+| `/app-horarios/api/sesion` | GET | Si hay sesión de horarios |
+| `/app-horarios/api/entrar` · `/salir` | POST | Entrar con `HORARIOS_CLAVE` / salir |
+| `/app-horarios/api/datos` | GET | El horario entero (clases, preceptores, personal); con ETag |
+| `/app-horarios/api/actualizar` | POST | Borra y reconstruye `escuela.db` desde Sheets |
 | `/horarios/export/pdf/<tipo>/<valor>` | GET | Genera y devuelve PDF (landscape A4, fpdf2) |
 | `/horarios/export/pdf/cursos/<seleccion>` | GET | PDF multipágina de cursos: `todos` o lista `1° A,2° B` |
+| `/horarios/export/pdf/planilla_preceptores` | GET | PDF de la planilla de preceptores |
 
-**Lógica de búsqueda en `/api/<tipo>/<valor>`:**
-- `profesor` → `WHERE profesor = ?`
-- `aula` → `WHERE aula = ?`
-- `curso` → parsea "1° A" → `WHERE curso='1' AND division='A'`
-- `planilla` → parsea "Lunes|Piso 1" → `WHERE dia=? AND aula IN (rooms del floor)`
+Las búsquedas (por profesor, aula, curso, preceptor) se hacen en el navegador sobre `/datos`.
 
 ---
 
@@ -176,33 +169,31 @@ Completa `hora_fin` faltante buscando el patrón horario conocido más cercano; 
 
 ---
 
-## Frontend (script.js)
+## Frontend de horarios (`frontend/horarios/src/`)
 
-### Calendario (`generarCalendario`)
-- Grid CSS: columna de horas (60px) + 5 columnas de días
-- Bloques con `position: absolute`, top/height calculados desde minutos
-- Clustering: agrupa bloques solapados, divide ancho según grupos y `superposicion`
-- Click → modal con detalle de clase + links para navegar al docente/aula
+Todo el horario baja de una vez (`datos.js` → `useHorarios()`, con vue-query y caché en el
+dispositivo) y las búsquedas se resuelven en el navegador (`clasesDe`, `clasesDePiso`,
+`horarioPreceptor`, `opcionesBuscador`).
 
-### Modo Comparación (`generarCalendarioComparacion`)
-- Agrega hasta 6 entidades al grid (docentes, aulas o cursos)
-- Cada una recibe un color distinto de `COMPARACION_COLORS`
-- Grid se expande: `60px + (días × entidades × 200px)`
+### Calendario (`componentes/Calendario.vue` + `calendario.js`)
+- Grid CSS: columna de horas + 5 columnas de días (o aulas, en la planilla general)
+- Bloques con `position: absolute`, top/height calculados desde minutos (`aMinutos`, `rango`)
+- Clustering: `bloquesColumna` agrupa bloques solapados y divide el ancho según grupos y `superposicion`
+- Click → `Ventana.vue` con el detalle de la clase + links para navegar al docente/aula
 
-### Dashboard En Vivo (`renderizarDashboard`)
-- Filtra `clases` por día actual y hora
-- Columna izquierda: "En Curso" (inicio ≤ ahora ≤ fin)
-- Columna derecha: "Próximas" (inicio dentro de 2h)
-- Refresca cada 1 segundo; soporta modo manual con date/time pickers
-- F11 activa modo kiosco (CSS class `is-fullscreen` en `body`, oculta header/footer)
+### Modo Comparación (`componentes/CalendarioComparacion.vue`)
+- Hasta 6 entidades en el mismo grid (docentes, aulas o cursos), un color de `COLORES_COMPARACION` cada una
+- Va en la URL: `?comparar=modo:valor,…`
+
+### Dashboard En Vivo (`vistas/TiempoReal.vue`)
+- "En Curso" (inicio ≤ ahora ≤ fin) y "Próximas" (inicio dentro de 2h); modo manual con date/time pickers
+- F11 activa modo kiosco (clase `is-fullscreen` en `body`, en `main.js`)
 
 ### Planilla General
-- Activa desde tab AULAS → panel lateral → "PLANILLA GENERAL"
-- Grid: horas en filas, aulas del piso seleccionado en columnas
-- Tipo de búsqueda `planilla` en el backend
+- Tab AULAS → "PLANILLA GENERAL": horas en filas, aulas del piso en columnas (`Calendario.vue` con `variante: 'planilla'`)
 
-### Autocompletado
-- `filtrarOpciones()`: normaliza query (sin acentos, sin espacios), substring match
+### Autocompletado (`componentes/Buscador.vue`)
+- `opcionesBuscador()`: normaliza (sin acentos ni espacios) y busca por substring
 - En modo "profesor" fusiona docentes + personal no docente con badge de rol
 
 ---
@@ -284,7 +275,7 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 - Motor CRUD compartido, criterio de capas, contrato de área, hooks, templates genéricos (`crud.py`, `texto.py`, `respaldos.py`, `templates/crud/`) → leer `agent_docs/crud-motor.md`
 - Quién puede entrar a qué: los tres niveles (público/interno/admin), permisos por área, **permisos con ámbito** (el comodín que no llega), links de invitación y dispositivos (`accesos.py`, `accesos.db`, `/accesos`) → leer `agent_docs/accesos.md`
 - Gestión de recursos: varios inventarios estancos, uno por archivo (`/gestion`, `gestion.py`, `gestion.db` + `inventarios/<slug>.db`) → leer `agent_docs/gestion-conocimiento.md`
-- Apps instalables (`/app` y `/app-horarios`, `frontend/`, `app_dist/`, `app_horarios_dist/`): API JSON, versionado por triggers, conflictos, caché, service worker, build y deploy → leer `agent_docs/app-instalable.md`
+- Apps instalables (`/gestion/` y `/horarios/`, `frontend/`, `app_dist/`, `app_horarios_dist/`): API JSON, versionado por triggers, conflictos, caché, service worker, build y deploy → leer `agent_docs/app-instalable.md`
 - Salidas educativas (`/salidas`, `salidas.py`, `salidas.db`, `salidas_pdfs/`, generación de PDF por anexo, vigencia y purga) → leer `agent_docs/salidas-educativas.md`
 - Asistente conversacional (`/agente`, paquete `agente/`, tools, fichas de confirmación, fotos) → leer `agent_docs/agente-asistente.md`
 - Qué guarda cada `.db`, qué se regenera y qué no, y cómo restaurar un respaldo → leer `database/LEEME.md`

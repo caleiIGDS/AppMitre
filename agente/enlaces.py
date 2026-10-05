@@ -1,8 +1,8 @@
 """Los nombres del calendario, enlazados a su horario, en lo que muestra el chat.
 
 Cuando la respuesta nombra a un docente, a un preceptor o a un curso, ese nombre pasa a
-ser un link markdown al deep link del SPA de horarios (`/horarios/#/profesor/...`), que ya
-existía para poder compartir una búsqueda por URL. El chat lo pinta como `<a>` (ver
+ser un link markdown a su pantalla en la app de horarios (`/horarios/profesores/...`): cada
+búsqueda de la app es una dirección propia, justamente para poder compartirla. El chat lo pinta como `<a>` (ver
 `inlineMarkdown` en `static/gestion-agente.js`, que sólo acepta destinos internos).
 
 Es un filtro de PRESENTACIÓN y no uno de salida como los de `filtros.py`: se aplica a lo
@@ -28,8 +28,11 @@ from horarios import datos as database
 
 from .padrones import _etiqueta_curso, _lista_preceptores, _padron_horarios
 
-# El SPA resuelve `#/modo/valor` al cargar (ver el bootstrap de `static/js/script.js`).
-BASE = '/horarios/#/'
+# Las pantallas de la app de horarios (frontend/horarios/src/router.js): cada modo de
+# búsqueda tiene su segmento, y el valor va como último tramo de la dirección.
+BASE = '/horarios/'
+SEGMENTO = {'curso': 'cursos', 'profesor': 'profesores', 'aula': 'aulas',
+            'horario_preceptor': 'preceptores'}
 
 # Un apellido suelto de cuatro letras ("LEON", "CRUZ") aparece en el medio de una frase por
 # casualidad; uno de cinco o más, casi nunca. Sólo aplica a los nombres de una palabra: con
@@ -131,7 +134,8 @@ def enlace_comparacion(comparacion):
     items = (comparacion or {}).get('items') or []
     if len(items) < 2:
         return ''
-    # `safe=''` también escapa la coma y los dos puntos, que acá son separadores del fragmento.
+    # `safe=''` también escapa la coma y los dos puntos, que acá son separadores de la lista
+    # (el formato que lee `leerComparacion` de la app). Se abre en la pestaña del primero.
     partes = ','.join('{}:{}'.format(modo, quote(valor, safe='')) for modo, valor in items)
     afuera = (comparacion or {}).get('afuera') or []
     aclaracion = ''
@@ -141,8 +145,8 @@ def enlace_comparacion(comparacion):
         quienes = ', '.join(afuera)
         aclaracion = (' (sin {}: el calendario comparado sólo superpone horarios de clase)'
                       .format(quienes))
-    return '\n\n[Ver los horarios superpuestos en el calendario]({}comparar/{}){}'.format(
-        BASE, partes, aclaracion)
+    return '\n\n[Ver los horarios superpuestos en el calendario]({}{}?comparar={}){}'.format(
+        BASE, SEGMENTO[items[0][0]], quote(partes, safe=':,'), aclaracion)
 
 
 def enlazar(respuesta):
@@ -170,7 +174,7 @@ def enlazar(respuesta):
         modo, valor = destino
         piezas.append(respuesta[fin:m.start()])
         piezas.append('[{}]({}{}/{})'.format(respuesta[m.start():m.end()],
-                                             BASE, modo, quote(valor, safe='')))
+                                             BASE, SEGMENTO[modo], quote(valor, safe='')))
         fin = m.end()
     piezas.append(respuesta[fin:])
     return ''.join(piezas)

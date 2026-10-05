@@ -1,5 +1,5 @@
 <script setup>
-// El armado de templates/index.html: header, pestañas, la pantalla de turno, la ventana de
+// El armado de la app: header, pestañas, la pantalla de turno, la ventana de
 // detalle y el pie.
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'

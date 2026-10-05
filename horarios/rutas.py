@@ -1,68 +1,19 @@
-"""Rutas del sistema de horarios: el SPA, su API JSON y los PDF (fpdf2).
+"""Los PDF del sistema de horarios (fpdf2): `/horarios/export/...`.
 
-Ex-mitad de `app.py`. Importar este módulo (lo hace `horarios/__init__.py`) define las
-rutas sobre `bp` y monta el gate propio (`acceso.registrar`). El paquete no importa nada
-del resto de la app.
+Las pantallas son la app (frontend/horarios/, servida en /horarios/ por `app.py`) y sus
+datos salen de `app_api.py`. Importar este módulo (lo hace `horarios/__init__.py`) define
+los exports sobre `bp` y les monta el gate propio (`acceso.registrar`). El paquete no
+importa nada del resto de la app.
 """
 import io
-import sqlite3
 
-from flask import jsonify, render_template, send_file
+from flask import send_file
 from fpdf import FPDF
 
 from . import acceso, bp, datos
 from .datos import obtener_filas
-from .config import (DIAS, ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION,
-                     ESPECIALIDAD_CURSOS, FLOOR_MAPPING, GID_HORARIOS_PRECEPTORES,
-                     GID_PERSONAL_NO_DOCENTE, GIDS_CURSOS, SHEET_ID, TURNO_CURSOS,
-                     TURNO_DEFAULT, ahora)
+from .config import FLOOR_MAPPING, TURNO_CURSOS, TURNO_DEFAULT, ahora
 
-
-@bp.context_processor
-def _branding_horarios():
-    # `horarios/base.html` (login) necesita el branding.
-    return dict(escuela_nombre=ESCUELA_NOMBRE, escuela_logo=ESCUELA_LOGO,
-                escuela_version=ESCUELA_VERSION)
-
-
-@bp.route('/')
-def index():
-    con = datos.conectar()
-    cur = con.cursor()
-    cur.execute("SELECT DISTINCT profesor FROM clases WHERE profesor != '' ORDER BY profesor")
-    profes = [r[0] for r in cur.fetchall()]
-    cur.execute("SELECT DISTINCT aula FROM clases WHERE aula != '' ORDER BY aula")
-    aulas = [r[0] for r in cur.fetchall()]
-    cur.execute("SELECT DISTINCT curso, division FROM clases WHERE curso != '' ORDER BY curso, division")
-    cursos = []
-    for r in cur.fetchall():
-        curso_str = r[0]
-        div_str = r[1]
-        valor = f"{curso_str}° {div_str}"
-        especialidad = ESPECIALIDAD_CURSOS.get((curso_str, div_str), "ESPECIALIDAD")
-        display = f"{valor} ({especialidad})"
-        cursos.append({'valor': valor, 'display': display})
-    
-    preceptores_horario = datos.obtener_lista_preceptores_horario()
-    personal = datos.obtener_lista_personal()
-
-    con.close()
-    return render_template('index.html',
-        datos={'profesor': profes, 'aula': aulas, 'curso': cursos, 'horario_preceptor': preceptores_horario, 'personal': personal},
-        floor_mapping=FLOOR_MAPPING,
-        dias=DIAS,
-        escuela_nombre=ESCUELA_NOMBRE,
-        escuela_logo=ESCUELA_LOGO,
-        escuela_version=ESCUELA_VERSION,
-    )
-
-@bp.route('/api/<tipo>/<valor>')
-def api(tipo, valor):
-    # Remove the degree symbol from the search value if searching by course
-    search_valor = valor
-    if tipo == 'curso' and '°' in valor:
-        search_valor = valor.replace('°', '')
-    return jsonify(obtener_filas(tipo, search_valor))
 
 def time_to_min(t):
     if not t or not isinstance(t, str) or ':' not in t:
@@ -502,101 +453,11 @@ def export_pdf_cursos(seleccion):
     output.seek(0)
     return send_file(output, mimetype='application/pdf', as_attachment=False, download_name="horarios_cursos.pdf")
 
-@bp.route('/api/preceptor/<valor>')
-def api_preceptor(valor):
-    try:
-        partes = valor.strip().split(' ', 1)
-        curso = partes[0]
-        division = partes[1].strip() if len(partes) > 1 else ""
-        data = datos.obtener_preceptores_por_curso(curso, division)
-        if data:
-            data['turno'] = TURNO_CURSOS.get((str(curso), str(division)), TURNO_DEFAULT)
-        return jsonify(data)
-    except Exception as e:
-        print(f"Error preceptor: {e}")
-        return jsonify(None)
-
-@bp.route('/api/actualizar', methods=['POST'])
-def api_actualizar():
-    """Borra y reconstruye escuela.db desde Google Sheets.
-
-    No pide más que la sesión de horarios: en cada deploy nuevo la DB nace vacía y el que
-    la puebla no siempre es admin. Sigue siendo POST para que no la dispare un crawler ni
-    el prefetch del navegador con un GET.
-    """
-    try:
-        datos.crear_tablas()
-        datos.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
-        datos.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
-        datos.cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)
-        return jsonify({"status": "success", "message": "Datos actualizados correctamente"})
-    except Exception as e:
-        print(f"Error actualizando datos: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-# Las columnas de `clases` que el front realmente lee. La lista es explícita y no un
-# `SELECT *` por dos motivos: la tabla guarda `dni`, `telefono` y `email` de cada docente
-# —que no tienen por qué viajar al navegador de cualquiera que abra el horario— y este
-# endpoint devuelve las 2.299 filas de una, así que cada columna de más se paga entera.
-# Al recortarlo el JSON pasó de 804 KB a 586 KB. Si el front empieza a usar otra
-# columna (`especialidad`, `tipo_materia`, `tipo_aula`), hay que sumarla acá.
-COLUMNAS_DASHBOARD = (
-    'curso', 'division', 'materia', 'profesor', 'aula', 'dia',
-    'hora_inicio', 'hora_fin', 'grupo', 'superposicion',
-    'suplente_activo', 'prof_suplente', 'sup_ini', 'sup_fin',
-)
-
-
-@bp.route('/api/dashboard')
-def api_dashboard():
-    try:
-        con = datos.conectar()
-        con.row_factory = sqlite3.Row
-        cur = con.cursor()
-        cur.execute(f"SELECT {', '.join(COLUMNAS_DASHBOARD)} FROM clases")
-        filas = [dict(row) for row in cur.fetchall()]
-        con.close()
-        return jsonify(filas)
-    except Exception as e:
-        print(f"Error en dashboard: {e}")
-        return jsonify([])
-
-@bp.route('/api/personal/<nombre>')
-def api_personal(nombre):
-    return jsonify(datos.obtener_personal_por_nombre(nombre))
-
-@bp.route('/api/personal_todos')
-def api_personal_todos():
-    return jsonify(datos.obtener_personal_todos())
-
-@bp.route('/api/horario_preceptor/<nombre>')
-def api_horario_preceptor(nombre):
-    """
-    Endpoint para obtener el horario individual de un preceptor.
-    """
-    return jsonify(datos.obtener_horario_preceptor(nombre))
-
 def _planilla_preceptores_con_turnos():
     filas = datos.obtener_planilla_preceptores_todos()
     for f in filas:
         f['turno'] = TURNO_CURSOS.get((str(f['curso']), str(f['division'])), TURNO_DEFAULT)
     return filas
-
-@bp.route('/api/planilla_preceptores')
-def api_planilla_preceptores():
-    return jsonify(_planilla_preceptores_con_turnos())
-
-@bp.route('/api/preceptores_data')
-def api_preceptores_data():
-    # Todo lo de preceptores en una sola respuesta para cachear en el cliente:
-    # - horarios: {nombre: horario individual} (reusa la lógica LIKE + estado/turno)
-    # - planilla: lista por curso con turnos (sirve también para el preceptor-por-curso)
-    nombres = datos.obtener_lista_preceptores_horario()
-    horarios = {n: datos.obtener_horario_preceptor(n) for n in nombres}
-    return jsonify({
-        'horarios': horarios,
-        'planilla': _planilla_preceptores_con_turnos(),
-    })
 
 @bp.route('/export/pdf/planilla_preceptores')
 def export_pdf_planilla_preceptores():

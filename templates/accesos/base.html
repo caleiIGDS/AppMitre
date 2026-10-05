@@ -16,7 +16,7 @@
         <header class="g-header">
             <div class="g-container g-header-flex">
                 {# El escudo y el nombre vuelven al menú principal (el inicio de la app). #}
-                <a href="/app/" class="marca g-brand g-brand-link" title="Menú principal">
+                <a href="/gestion/" class="marca g-brand g-brand-link" title="Menú principal">
                     <img src="{{ static_v(escuela_logo) }}" alt="Escudo" class="marca-escudo">
                     <div class="g-titles">
                         <h1>{{ escuela_nombre }} <span class="g-serial">{{ escuela_version }}</span></h1>
@@ -41,11 +41,11 @@
        Un link por permiso, renderizado en el server. #}
     {% if acceso_actual() %}
     <nav class="g-areas" aria-label="Áreas">
-        <a href="/app/">⌂ MENÚ PRINCIPAL</a>
+        <a href="/gestion/">⌂ MENÚ PRINCIPAL</a>
         {# El link va al REGISTRO y no a un inventario: cuál se abre lo decide esa
            página, que muestra los que este acceso puede abrir. Sin condición de permiso
            porque `gestion.leer` es de UN inventario y acá no hay ninguno activo. #}
-        <a href="{{ url_for('inventarios.panel') }}">INVENTARIOS</a>
+        <a href="/gestion/inventarios">INVENTARIOS</a>
         {% if puede('agente.leer') %}
         <a href="{{ url_for('agente.chat_page') }}">🤖 ASISTENTE</a>
         {% endif %}

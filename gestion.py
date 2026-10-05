@@ -12,8 +12,8 @@
 #   inventarios/<slug>.db   recursos / recurso_unidades / kit_items / recurso_bajas
 #
 # QUIÉN PUEDE QUÉ. El admin general (`GESTION_CLAVE`) crea inventarios, les pone nombre y
-# clave y los elimina — y NO ve el contenido de ninguno: sus claves están en
-# `PERMISOS_AMBITO`, adonde el comodín '*' no llega (ver accesos.tiene). Adentro manda el
+# clave, ve esas claves y los elimina; además entra a todos con el juego completo (ver
+# `_acceso_encargado`: el comodín '*' solo no llega a `PERMISOS_AMBITO`). Adentro manda el
 # encargado, que entra con la clave del inventario y desde ahí invita y revoca, sólo ahí.
 # El encargado de un inventario es una persona cualquiera para el de al lado.
 #
@@ -35,9 +35,8 @@ import sys
 from datetime import datetime
 
 from config import DIR_DATOS, ahora
-from flask import (Blueprint, abort, current_app, g, has_app_context, has_request_context,
-                   jsonify, redirect,
-                   render_template, request, session, url_for)
+from flask import (Blueprint, current_app, g, has_app_context, has_request_context, jsonify,
+                   request, session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import accesos
@@ -50,9 +49,12 @@ import texto
 DB_PATH = os.path.join(DIR_DATOS, 'gestion.db')
 DIR_INVENTARIOS = os.path.join(DIR_DATOS, 'inventarios')
 
-# Slugs que no puede tomar un inventario porque son rutas del registro (`/gestion/admin/…`,
-# `/gestion/login`). Sin esto, un inventario llamado "admin" se comería el panel.
-SLUGS_RESERVADOS = {'admin', 'login', 'salir', 'static'}
+# Slugs que no puede tomar un inventario porque ya son otra cosa debajo de `/gestion/`, la
+# dirección de la app: sus pantallas fijas (`/gestion/inventarios`, `/gestion/entrar`) y
+# sus archivos (`/gestion/assets/…`). Sin esto, un inventario llamado "entrar" quedaría
+# tapado por la pantalla de entrar. Los otros son los de las páginas que hubo antes.
+SLUGS_RESERVADOS = {'admin', 'login', 'salir', 'static', 'entrar', 'inventarios', 'assets',
+                    'api'}
 
 # Permisos que declara el área al catálogo de `accesos`. El VERBO es lo que hace que un
 # perfil los agarre solo: 'leer' entra en interno-lectura, 'escribir' en interno-gestion.
@@ -108,9 +110,6 @@ PERMISO_ROTAR_FOTO = 'gestion.rotar'
 # (ver `prefijo_backup`), o los respaldos de cada uno se comerían los del resto.
 TABLA_TESTIGO = 'recursos'
 PREFIJO_BACKUP_REGISTRO = 'gestion-registro'
-
-bp = Blueprint('gestion', __name__, url_prefix='/gestion/<inv>')
-
 
 def conectar():
     """Conexión al .db del inventario ACTIVO — `crud.conectar` con esta área ya puesta.
@@ -365,7 +364,7 @@ def total_recursos(slug):
 # Cuál es el inventario de ESTE request
 # ---------------------------------------------------------------------------
 # Tres fuentes, en orden: el forzado (scripts de consola y el arranque, que corren sin
-# request), la URL (`/gestion/<inv>/…`) y la sesión (`inv_activo`, que es lo que le
+# request), la URL de la API (`/app/api/gestion/<inv>/…`) y la sesión (`inv_activo`, que es lo que le
 # permite al agente saber de qué inventario está hablando cuando el chat se abre en
 # `/agente` y no adentro de una ficha).
 
@@ -445,7 +444,7 @@ ESTADOS_RECURSO = ["Funcional", "Dañado usable", "Roto"]
 MOTIVOS_BAJA = ["Uso", "Desgaste", "Extravío", "Rotura", "Otro"]
 # "" primero: permite dejar el valor sin definir (recursos previos al inventario).
 VALORES_RECURSO = ["", "Básico", "Secundario", "Alto valor"]
-# Sugerencias de lugar para el desglose por unidad (templates/gestion/detalle.html): NUNCA
+# Sugerencias de lugar para el desglose por unidad (la ficha de un recurso en la app): NUNCA
 # restringen el valor, sólo aparecen como opciones de autocompletado — hace falta poder
 # escribir excepciones como "panel solar instalado en el techo".
 LUGARES_RECURSO = ["Laboratorio Armario 1", "Laboratorio Armario 2", "Laboratorio",
@@ -470,8 +469,8 @@ ENTIDADES = {
             {'nombre': 'tipo', 'label': 'Tipo', 'tipo': 'text', 'ayuda': 'Ej: Instrumento, Equipo, Estructura, Material'},
             # `solo_alta`: en el alta se escribe cuántas unidades hay (salen 1..N). Después
             # `cantidad` es el COUNT espejo de `recurso_unidades` y NO se edita a mano: se
-            # ajusta con + / − por número desde EDITAR (ver el bloque "UNIDADES" de
-            # templates/gestion/form.html y las rutas unidad_agregar / unidad_eliminar).
+            # ajusta con + / − por número desde EDITAR (ver EditorUnidades.vue en la app
+            # y `agregar_unidades` / `eliminar_unidades`).
             {'nombre': 'cantidad', 'label': 'Cantidad', 'tipo': 'number', 'solo_alta': True,
              'ayuda': 'Cuántas unidades hay. Después del alta se ajusta con + / − desde EDITAR'},
             {'nombre': 'descripcion', 'label': 'Descripción', 'tipo': 'textarea'},
@@ -482,7 +481,7 @@ ENTIDADES = {
             {'nombre': 'estado', 'label': 'Estado', 'tipo': 'select', 'opciones': ESTADOS_RECURSO},
             {'nombre': 'valor', 'label': 'Valor', 'tipo': 'select', 'opciones': VALORES_RECURSO, 'ayuda': 'Importancia del recurso dentro del inventario'},
             # `boton_hoy` (el formato de la fecha) le pone al lado el botón HOY, ver
-            # templates/crud/form.html.
+            # CampoFormulario.vue en la app.
             {'nombre': 'fecha_revision', 'label': 'Última revisión', 'tipo': 'text', 'boton_hoy': FORMATO_FECHA_REVISION, 'ayuda': 'Fecha del último control de inventario (día/mes/año). En un alta arranca en hoy'},
         ],
         # 'valor' no está acá a propósito: sigue siendo un campo real (se carga y edita
@@ -497,7 +496,7 @@ ENTIDADES = {
         # Términos alternativos (no necesariamente sinónimos estrictos: "zapatilla" y
         # "alargue" son cosas distintas pero se confunden) que completa el asistente
         # (agente/tools/esquemas.py), nunca el humano: a propósito NO está en 'campos', así
-        # que ni el form web (templates/crud/form.html) ni la ficha de detalle ni la ficha
+        # que ni el formulario de la app ni la ficha de detalle ni la ficha
         # de confirmación del chat (agente/tools/fichas.py::_campos_validos) la ven. crud.py
         # la usa para la segunda pasada de búsqueda y para el whitelist de escritura de
         # guardar_entidad(). Ver dev-log/DECISIONS.md 2026-08-08 y 2026-08-21: el
@@ -672,9 +671,8 @@ def migrar(cur):
 ERROR_DUPLICADO = {}
 
 
-# Slider "sin revisar hace +N meses" del listado (rediseño de templates/gestion/lista.html):
-# el JS convierte meses a días con este mismo factor (ver gestion.js) para comparar contra
-# `_dias_sin_revisar`.
+# Slider "sin revisar hace +N meses" del listado: la app convierte meses a días con este
+# mismo factor (le llega en el /meta) para comparar contra `_dias_sin_revisar`.
 DIAS_POR_MES = 30.5
 
 
@@ -695,17 +693,6 @@ def _dias_sin_revisar(fecha_texto):
     return (ahora() - fecha).days
 
 
-def valores_iniciales(slug):
-    """Con qué valores arranca el formulario de alta, antes de que el usuario escriba.
-
-    Dar de alta un recurso ES un control de inventario, así que la fecha de revisión
-    arranca en hoy. Antes quedaba vacía y casi ningún recurso terminaba con fecha.
-    """
-    if slug == 'recursos':
-        return {'fecha_revision': ahora().strftime(FORMATO_FECHA_REVISION)}
-    return {}
-
-
 def secciones_detalle(slug, id, cur):
     """Relaciones a mostrar en la vista de detalle."""
     secciones = []
@@ -722,14 +709,6 @@ def secciones_detalle(slug, id, cur):
                           'items': kit_items_recurso(cur, id), 'tipo': 'kit_items',
                           'oculto_si_vacio': True})
     return secciones
-
-
-def resultados_extra_busqueda(slug, q, cur):
-    """Sub-recursos de un kit que matchean la búsqueda `q`, para mostrar aparte del
-    listado principal de recursos (que nunca los muestra sueltos sin buscar)."""
-    if slug == 'recursos' and q:
-        return buscar_kit_items(cur, q)
-    return []
 
 
 def init_db():
@@ -754,81 +733,12 @@ def init_db():
         init_inventario(fila['slug'])
 
 
-def extras_template(vista, slug, id=None):
-    """Kwargs extra para el render. En la ficha: la lista fija de lugares, para el datalist
-    del mini form de mover/ubicar unidades (templates/gestion/detalle.html). En el listado:
-    los lugares y estados de cada recurso (para la columna y los filtros) y los días desde
-    la última revisión, para el slider. En el formulario de edición: los sub-recursos del
-    kit, que se cargan y se borran ahí y no en la ficha (templates/gestion/form.html)."""
-    if slug == 'recursos' and vista == 'detalle':
-        return {'lugares_recurso': LUGARES_RECURSO}
-    if slug == 'recursos' and vista == 'editar':
-        con = conectar()
-        cur = con.cursor()
-        items = kit_items_recurso(cur, id)
-        unidades = unidades_recurso(cur, id)
-        por_lugar = lugares_recurso_agrupado(cur, id)
-        con.commit()  # unidades_recurso puede sembrar unidades que faltaban
-        con.close()
-        return {'kit_items': items, 'unidades': unidades, 'unidades_por_lugar': por_lugar}
-    if slug == 'recursos' and vista == 'lista':
-        con = conectar()
-        cur = con.cursor()
-        filas = cur.execute("SELECT id, fecha_revision FROM recursos").fetchall()
-        dias_revision = {f['id']: _dias_sin_revisar(f['fecha_revision']) for f in filas}
-        # Insignia fija de "Sin revisar" en la tarjeta de celular (visual "6a"): un umbral
-        # por defecto (6 meses), no el del slider — ése filtra, esto es sólo un aviso.
-        vencidos = {id for id, dias in dias_revision.items() if dias is not None and dias >= 6 * DIAS_POR_MES}
-        ubicaciones = lugares_por_recurso(cur)
-        con.commit()  # lugares_por_recurso puede crear unidades que faltaban (_asegurar_unidades)
-        con.close()
-        lugares = sorted({g['ubicacion'] for lugs in ubicaciones.values() for g in lugs if g['ubicacion'] != 'Sin ubicar'},
-                          key=texto.norm)
-        return {'dias_revision': dias_revision, 'vencidos_recurso': vencidos, 'lugares_filtro': lugares,
-                'ubicaciones_recurso': ubicaciones, 'estados_filtro': ESTADOS_RECURSO}
-    return {}
-
-
-def inicio():
-    """La raíz de un inventario (`/gestion/<inv>/`) va directo a la lista de recursos: con
-    una sola entidad, el home de tarjetas era una escala de más. La ruta sigue existiendo
-    porque el login del inventario vuelve ahí por defecto (y por los links viejos)."""
-    return url_for('gestion.lista', slug='recursos')
-
-
-def contexto_extra():
-    """Constantes que necesitan varios templates del área: el estado que marca una baja
-    (para no repetir el string suelto en el listado y la ficha), los motivos del cuadro de
-    baja del formulario, y cuál es el inventario abierto — que el header muestra al lado
-    del título, porque con varios hay que saber en cuál se está escribiendo.
-
-    `inventarios`/`inv_activo` son para el selector del widget del asistente (ver
-    _agente_widget.html): acá el `<inv>` ya está fijo por la URL, pero el selector se
-    muestra en todos lados por igual — ver dev-log/DECISIONS.md."""
-    return {'estado_baja': ESTADO_BAJA, 'motivos_baja': MOTIVOS_BAJA,
-            'inventario': inventario_activo(), 'inventarios': abribles(),
-            'inv_activo': slug_activo(), 'permiso_accesos': PERMISO_ACCESOS}
-
-
 # ---------------------------------------------------------------------------
 # El gate de un inventario
 # ---------------------------------------------------------------------------
-# `bp` está montado en `/gestion/<inv>`, y el par preprocessor/url_defaults es lo que hace
-# que ningún `url_for('gestion.…')` de los templates tenga que enterarse: el `<inv>` sale
-# de la URL al entrar y se vuelve a poner solo al construir cualquier link del área.
-
-@bp.url_value_preprocessor
-def _tomar_inventario(endpoint, valores):
-    g.inv = (valores or {}).pop('inv', None)
-    if inventario(g.inv) is None:
-        abort(404)
-
-
-@bp.url_defaults
-def _poner_inventario(endpoint, valores):
-    if 'inv' not in valores and getattr(g, 'inv', None):
-        valores['inv'] = g.inv
-
+# Quién entra a cada inventario lo resuelve `accesos` con dos hooks de acá: el ámbito del
+# inventario activo y el acceso que da su clave. La puerta (entrar/salir con la clave) es
+# de la API, más abajo.
 
 # La clave de un inventario en la sesión: {'<id>': '<huella del hash>'}. Se guarda la
 # huella y no un booleano por lo mismo que la sesión de admin guarda la de GESTION_CLAVE
@@ -863,7 +773,7 @@ def _acceso_encargado():
 
 
 def _entrar_inventario(clave):
-    """Hook de `accesos.registrar_acceso`: qué valida `/gestion/<inv>/login`.
+    """Qué valida la puerta de un inventario (`POST …/<inv>/entrar` de la API).
 
     NO hace `session.clear()`, a diferencia del login de admin: entrar al taller no puede
     echarte del laboratorio ni cortarte la conversación del agente.
@@ -880,7 +790,7 @@ def _entrar_inventario(clave):
 
 
 def _salir_inventario():
-    """Ídem para `/gestion/<inv>/salir`: cierra ESTE inventario, no la sesión entera."""
+    """Ídem para `…/<inv>/salir`: cierra ESTE inventario, no la sesión entera."""
     inv = inventario_activo()
     if inv is not None:
         claves = dict(session.get(CLAVES_SESION) or {})
@@ -889,33 +799,15 @@ def _salir_inventario():
     session.pop('inv_activo', None)
 
 
-def _contexto_login():
-    return {'inventario': inventario_activo()}
-
-
 accesos.registrar_ambito(ambito)
 accesos.registrar_acceso_extra(_acceso_encargado)
-accesos.registrar_acceso(bp, PERMISO_LECTURA, entrar=_entrar_inventario,
-                         al_salir=_salir_inventario, contexto_login=_contexto_login)
-crud.registrar_rutas(bp, sys.modules[__name__])
-
-
-@bp.before_request
-def _recordar_inventario():
-    """Deja anotado en la sesión en qué inventario se está trabajando.
-
-    Corre después del gate, así que sólo se anota uno al que el acceso puede entrar. Es lo
-    que le permite al asistente saber de qué inventario le están hablando cuando el chat se
-    abre en `/agente` y no adentro de una ficha (ver `slug_activo`).
-    """
-    if g.inv and session.get('inv_activo') != g.inv:
-        session['inv_activo'] = g.inv
 
 
 # ---------------------------------------------------------------------------
 # El panel del encargado: quién entra a ESTE inventario
 # ---------------------------------------------------------------------------
-# Es el panel de `/accesos` pero acotado: sólo reparte las claves del área, sólo ve los
+# La API de este panel está con el resto de la API, más abajo (`/accesos`). Es el panel de
+# `/accesos` pero acotado: sólo reparte las claves del área, sólo ve los
 # dispositivos que tienen alguna de este inventario, y su "quitar" saca las de acá y
 # ninguna otra (ver accesos.quitar_ambito). El admin general no aparece en la lista —
 # su comodín no llega a estas claves; entra por `_acceso_encargado`, no por invitación.
@@ -929,89 +821,12 @@ def _perfiles_inventario():
     return [(p, accesos.ETIQUETA_PERFIL.get(p, p)) for p in accesos.PERFILES if p != 'admin']
 
 
-def _render_accesos(link_nuevo=None, link_multiuso=False, error=None):
-    catalogo = _catalogo_inventario()
-    return render_template(
-        'gestion/accesos.html', activo='accesos',
-        dispositivos=accesos.listar_dispositivos(ambito()),
-        invitaciones=accesos.listar_invitaciones(ambito()),
-        grupos=accesos.catalogo_por_grupo(catalogo),
-        perfiles=_perfiles_inventario(),
-        preset={p: accesos.permisos_de_perfil(p, catalogo) for p, _e in _perfiles_inventario()},
-        link_nuevo=link_nuevo, link_multiuso=link_multiuso, error=error)
-
-
-@bp.route('/accesos')
-@accesos.requiere(PERMISO_ACCESOS)
-def accesos_panel():
-    return _render_accesos()
-
-
-@bp.route('/accesos/invitar', methods=['POST'])
-@accesos.requiere(PERMISO_ACCESOS)
-def accesos_invitar():
-    etiqueta = ' '.join((request.form.get('etiqueta') or '').split())[:80]
-    if len(etiqueta) < 2:
-        return _render_accesos(error='Poné para quién es el link (te sirve a vos después).')
-
-    perfil = request.form.get('perfil', 'interno-lectura')
-    catalogo = _catalogo_inventario()
-    validos = {c for c, _e, _v, _g in catalogo}
-    if perfil not in dict(_perfiles_inventario()):
-        perfil = 'interno-lectura'
-    # La intersección con `validos` es el corte real: un POST a mano con
-    # `permisos=accesos.admin` no puede sacar una clave de afuera del inventario.
-    marcados = sorted(set(request.form.getlist('permisos')) & validos)
-    if not marcados:
-        return _render_accesos(error='Elegí al menos un permiso.')
-    if marcados != sorted(accesos.permisos_de_perfil(perfil, catalogo)):
-        perfil = 'custom'
-
-    multiuso = request.form.get('multiuso') == 'on'
-    token = accesos.crear_invitacion(etiqueta, perfil, marcados, multiuso=multiuso,
-                                     ambito=ambito())
-    return _render_accesos(link_nuevo=url_for('acceso_canjear_ver', token=token,
-                                              _external=True),
-                           link_multiuso=multiuso)
-
-
-@bp.route('/accesos/quitar/<int:disp_id>', methods=['POST'])
-@accesos.requiere(PERMISO_ACCESOS)
-def accesos_quitar(disp_id):
-    """Le saca a un dispositivo el acceso a ESTE inventario. Si no le quedaba nada más,
-    `quitar_ambito` lo revoca entero; si tenía el agente o el inventario de al lado, eso
-    sigue intacto — no es asunto de este panel."""
-    accesos.quitar_ambito(disp_id, ambito())
-    return redirect(url_for('gestion.accesos_panel'))
-
-
-@bp.route('/accesos/invitacion/<int:invitacion_id>/borrar', methods=['POST'])
-@accesos.requiere(PERMISO_ACCESOS)
-def accesos_borrar_invitacion(invitacion_id):
-    accesos.borrar_invitacion(invitacion_id, ambito())
-    return redirect(url_for('gestion.accesos_panel'))
-
-
 # ---------------------------------------------------------------------------
-# El registro: /gestion, la lista de inventarios
+# El registro: la lista de inventarios
 # ---------------------------------------------------------------------------
-# Blueprint aparte porque no cuelga de ningún inventario. Su permiso base es None: la
-# lista la ve cualquiera que esté identificado —le muestra los que puede abrir— y lo que
-# pide `inventarios.admin` son las acciones, marcadas una por una con `requiere()`.
-#
-# Las rutas de administración cuelgan de `/gestion/admin/...` y no de `/gestion/<id>/...`
-# para no chocar con `/gestion/<inv>/<slug>` del área (ver SLUGS_RESERVADOS).
-
-bp_inv = Blueprint('inventarios', __name__, url_prefix='/gestion')
-
-
-@bp_inv.context_processor
-def _contexto_registro():
-    from config import ESCUELA_LOGO, ESCUELA_NOMBRE, ESCUELA_VERSION
-    return {'escuela_nombre': ESCUELA_NOMBRE, 'escuela_logo': ESCUELA_LOGO,
-            'escuela_version': ESCUELA_VERSION, 'area_nombre': 'inventarios',
-            'base_template': 'inventarios/base.html'}
-
+# La ve cualquiera que esté identificado —le muestra los que puede abrir— y lo que pide
+# `inventarios.admin` son las acciones (crear, renombrar, clave, eliminar). Su API es
+# `bp_api_registro`, más abajo.
 
 def _puede_abrir(fila):
     """¿Este acceso entra a este inventario sin tipear la clave?
@@ -1032,7 +847,7 @@ def _puede_abrir(fila):
 def abribles():
     """Los inventarios que esta sesión abre sin tipear la clave, por nombre.
 
-    Lo mismo que muestra el panel del registro, pero como lista y no como página: lo
+    Lo mismo que muestra la lista de inventarios de la app, sin los que no abre: lo
     necesita el selector del chat (`/agente`), donde no hay `<inv>` en la URL y el
     inventario sale de la sesión. Vive acá y no en el agente porque nombra el registro y
     el ámbito de `accesos`, que son de esta área.
@@ -1043,7 +858,7 @@ def abribles():
 def activar(slug):
     """Deja `slug` como el inventario de esta sesión, si es uno que se puede abrir.
 
-    Es la misma anotación que hace `_recordar_inventario` al navegar `/gestion/<inv>/…`,
+    Es la misma anotación que hace `_api_recordar_inventario` al usar un inventario,
     pero pedida desde afuera del área. Valida contra `abribles()` y no contra el registro
     a secas: sin eso, cualquiera podría fijarse un inventario ajeno como activo y, aunque
     los permisos del ámbito igual lo dejarían sin tools, ya estaría apuntando a otro .db.
@@ -1055,112 +870,12 @@ def activar(slug):
     return fila
 
 
-@bp_inv.route('/')
-def panel():
-    """La lista. Para el admin general es el tablero de altas y bajas; para el resto es
-    nada más la puerta: los inventarios que puede abrir, y un candado en los otros."""
-    filas = listar_inventarios()
-    admin = accesos.puede(PERMISO_REGISTRO)
-    for f in filas:
-        f['abre'] = _puede_abrir(f)
-        f['clave'] = clave_visible(f) if admin else None
-    return render_template('inventarios/panel.html', inventarios=filas, activo='inventarios',
-                           falta_migrar=not filas and _recursos_sin_mudar(),
-                           error=request.args.get('error'))
-
-
-def _recursos_sin_mudar():
-    """¿`gestion.db` todavía tiene la tabla `recursos` del inventario único?
-
-    Pasa en un deploy al que le llegó el código nuevo pero no se le corrió
-    `actualizar.py`: el registro nace vacío y la lista queda en blanco, con los datos ahí
-    al lado y sin nada que lo diga. Un aviso barato en la página evita el rato de creer
-    que la migración perdió el inventario.
-    """
-    con = conectar_registro()
-    hay = con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='recursos'"
-                      ).fetchone() is not None
-    con.close()
-    return hay
-
-
-@bp_inv.route('/admin/crear', methods=['POST'])
-@accesos.requiere(PERMISO_REGISTRO)
-def crear():
-    fila = crear_inventario(request.form.get('nombre', ''), request.form.get('clave', ''))
-    if fila is None:
-        return redirect(url_for('inventarios.panel', error='Poné un nombre.'))
-    return redirect(url_for('inventarios.panel'))
-
-
-@bp_inv.route('/admin/<int:inv_id>/renombrar', methods=['POST'])
-@accesos.requiere(PERMISO_REGISTRO)
-def renombrar(inv_id):
-    renombrar_inventario(inv_id, request.form.get('nombre', ''))
-    return redirect(url_for('inventarios.panel'))
-
-
-@bp_inv.route('/admin/<int:inv_id>/clave', methods=['POST'])
-@accesos.requiere(PERMISO_REGISTRO)
-def clave(inv_id):
-    if not fijar_clave(inv_id, request.form.get('clave', '')):
-        return redirect(url_for('inventarios.panel', error='La clave no puede quedar vacía.'))
-    return redirect(url_for('inventarios.panel'))
-
-
-@bp_inv.route('/admin/<int:inv_id>/eliminar', methods=['POST'])
-@accesos.requiere(PERMISO_REGISTRO)
-def eliminar(inv_id):
-    """Borra el inventario entero. El formulario exige escribir el nombre: es lo único
-    irreversible del panel (queda el último respaldo, ver `eliminar_inventario`)."""
-    fila = inventario_por_id(inv_id)
-    if fila is None:
-        abort(404)
-    if texto.norm(request.form.get('confirmar', '')) != texto.norm(fila['nombre']):
-        return redirect(url_for('inventarios.panel',
-                                error='Para eliminar hay que escribir el nombre exacto.'))
-    eliminar_inventario(inv_id)
-    return redirect(url_for('inventarios.panel'))
-
-
-accesos.registrar_acceso(bp_inv, None, endpoint_default='panel')
-
-
 def _int(texto):
     """Entero desde texto de la DB/form; 0 si está vacío o no es número."""
     try:
         return int(str(texto).strip())
     except (TypeError, ValueError):
         return 0
-
-
-@bp.route('/alias')
-@accesos.requiere(PERMISO_ALIAS)
-def alias_lista():
-    """Qué alias tiene cada recurso — los completa el asistente, pero el admin del
-    inventario (único que llega acá, ver `PERMISO_ALIAS`) los puede corregir a mano.
-
-    Es la única ventana al campo oculto (`recursos.alias`); a un humano que no sea admin
-    de este inventario no se le muestra ni se le deja editar en ningún otro lado, ver
-    `agent_docs/gestion-conocimiento.md`.
-    """
-    con = conectar()
-    filas = con.execute(
-        "SELECT id, nombre, alias FROM recursos ORDER BY nombre COLLATE NOCASE").fetchall()
-    con.close()
-    return render_template('gestion/alias_lista.html', filas=filas, activo='alias')
-
-
-@bp.route('/alias/<int:id>/guardar', methods=['POST'])
-@accesos.requiere(PERMISO_ALIAS)
-def alias_guardar(id):
-    """Guarda el alias editado a mano desde `/gestion/alias`. Mismo campo y mismo formato
-    CSV que usa el asistente vía `editar_entidad(alias=...)`: reemplaza el valor entero."""
-    con = conectar()
-    if guardar_alias(con.cursor(), id, request.form.get('alias', '')):
-        con.commit()
-    con.close()
-    return redirect(url_for('gestion.alias_lista'))
 
 
 def guardar_alias(cur, rid, alias):
@@ -1240,44 +955,6 @@ def bajas_registro(cur):
         "FROM recurso_bajas b LEFT JOIN recursos r ON r.id = b.recurso_id "
         "ORDER BY b.id DESC").fetchall()
     return [dict(f, existe=f['nombre_actual'] is not None) for f in filas]
-
-
-@bp.route('/recursos/<int:id>/baja', methods=['POST'])
-@accesos.requiere(PERMISO_ESCRITURA)
-def recurso_baja(id):
-    con = conectar()
-    cur = con.cursor()
-    hecho = dar_de_baja(cur, id, request.form.get('motivo', ''),
-                        request.form.get('detalle', ''))
-    con.commit()
-    con.close()
-    # Sin motivo se vuelve al formulario, que es donde está el cuadro de la baja; con la
-    # baja hecha, a la ficha, que ya la muestra dada de baja.
-    if not hecho:
-        return redirect(url_for('gestion.editar', slug='recursos', id=id))
-    return redirect(url_for('gestion.detalle', slug='recursos', id=id))
-
-
-@bp.route('/recursos/<int:id>/baja/revertir', methods=['POST'])
-@accesos.requiere(PERMISO_ESCRITURA)
-def recurso_baja_revertir(id):
-    con = conectar()
-    revertir_baja(con.cursor(), id)
-    con.commit()
-    con.close()
-    return redirect(url_for('gestion.detalle', slug='recursos', id=id))
-
-
-@bp.route('/bajas')
-@accesos.requiere(PERMISO_AUDITORIA)
-def bajas_lista():
-    """Registro de bajas. Mismo permiso que el chip "mostrar dados de baja" del listado
-    (`gestion.auditoria`): lo que salió del inventario es información de auditoría, no
-    parte de la consulta del día a día."""
-    con = conectar()
-    filas = bajas_registro(con.cursor())
-    con.close()
-    return render_template('gestion/bajas.html', filas=filas, activo='bajas')
 
 
 # --- Desglose de recursos por unidad ------------------------------------------
@@ -1448,68 +1125,10 @@ def mover_unidades(cur, rid, destino, numeros=None, cantidad=None, origen=None):
 # Rutas propias (no son una entidad de ENTIDADES): mover unidades puntuales o dejarlas sin
 # ubicar desde la ficha del recurso. Sin tope contra `recursos.cantidad` a propósito, mismo
 # criterio de no bloquear.
-@bp.route('/recursos/<int:id>/unidades/mover', methods=['POST'])
-@accesos.requiere(PERMISO_ESCRITURA)
-def unidad_mover(id):
-    numeros = [_int(n) for n in request.form.get('numeros', '').split(',') if n.strip()]
-    ubicacion = request.form.get('ubicacion', '').strip()
-    if numeros and ubicacion:
-        con = conectar()
-        cur = con.cursor()
-        cur.execute("SELECT 1 FROM recursos WHERE id = ?", (id,))
-        if cur.fetchone():
-            mover_unidades(cur, id, ubicacion, numeros=numeros)
-            con.commit()
-        con.close()
-    return redirect(url_for('gestion.detalle', slug='recursos', id=id))
-
-
-@bp.route('/recursos/<int:id>/unidades/quitar', methods=['POST'])
-@accesos.requiere(PERMISO_ESCRITURA)
-def unidad_quitar(id):
-    # `numeros` (CSV) para la selección múltiple de la ficha; `numero` suelto sigue andando.
-    nums = [_int(n) for n in request.form.get('numeros', '').split(',') if n.strip()]
-    uno = _int(request.form.get('numero', ''))
-    if uno:
-        nums.append(uno)
-    if nums:
-        con = conectar()
-        cur = con.cursor()
-        cur.executemany("UPDATE recurso_unidades SET ubicacion = '' WHERE recurso_id = ? AND numero = ?",
-                        [(id, n) for n in nums])
-        con.commit()
-        con.close()
-    return redirect(url_for('gestion.detalle', slug='recursos', id=id))
-
-
 # --- Alta / baja de unidades por número (desde EDITAR) ------------------------
 # `cantidad` es el COUNT espejo de `recurso_unidades`: no se edita a mano. Se suman unidades
 # eligiendo qué números (IDs) van a tener, y se eliminan por número diciendo qué les pasó
-# (cada una queda en `recurso_bajas` con su `numero`). Ver el bloque "UNIDADES" de
-# templates/gestion/form.html.
-
-@bp.route('/recursos/<int:id>/unidades/agregar', methods=['POST'])
-@accesos.requiere(PERMISO_ESCRITURA)
-def unidad_agregar(id):
-    """Agrega unidades con los números (IDs) que se pidan en `numeros` (CSV). El form sólo
-    ofrece números libres; acá se rechaza igual como red de seguridad — si alguno
-    choca, es <= 0 o está repetido, no se inserta nada y se vuelve a EDITAR con el error."""
-    pedidos = [_int(n) for n in request.form.get('numeros', '').split(',') if n.strip()]
-    if not pedidos:
-        return redirect(url_for('gestion.editar', slug='recursos', id=id))
-    con = conectar()
-    cur = con.cursor()
-    if not cur.execute("SELECT 1 FROM recursos WHERE id = ?", (id,)).fetchone():
-        con.close()
-        abort(404)
-    error = agregar_unidades(cur, id, pedidos)
-    if error:
-        con.close()
-        return redirect(url_for('gestion.editar', slug='recursos', id=id, error=error))
-    con.commit()
-    con.close()
-    return redirect(url_for('gestion.editar', slug='recursos', id=id))
-
+# (cada una queda en `recurso_bajas` con su `numero`). Ver EditorUnidades.vue en la app.
 
 def agregar_unidades(cur, rid, pedidos):
     """Crea las unidades con los números pedidos. Devuelve el motivo de rechazo (y no
@@ -1530,29 +1149,6 @@ def agregar_unidades(cur, rid, pedidos):
                     [(rid, n) for n in pedidos])
     _sincronizar_cantidad(cur, rid)
     return None
-
-
-@bp.route('/recursos/<int:id>/unidades/eliminar', methods=['POST'])
-@accesos.requiere(PERMISO_ESCRITURA)
-def unidad_eliminar(id):
-    """Elimina unidades puntuales (se rompieron, se perdieron). Exige `motivo` y anota una
-    fila por unidad en `recurso_bajas` con su `numero`. Nunca borra la última unidad que
-    queda: para sacar el recurso entero está la baja de recurso (`recurso_baja`)."""
-    nums = [_int(n) for v in request.form.getlist('numeros')
-            for n in str(v).split(',') if n.strip()]
-    motivo = (request.form.get('motivo') or '').strip()
-    detalle = (request.form.get('detalle') or '').strip()
-    if not nums or not motivo:
-        return redirect(url_for('gestion.editar', slug='recursos', id=id))
-    con = conectar()
-    cur = con.cursor()
-    if not cur.execute("SELECT 1 FROM recursos WHERE id = ?", (id,)).fetchone():
-        con.close()
-        abort(404)
-    if eliminar_unidades(cur, id, nums, motivo, detalle):
-        con.commit()
-    con.close()
-    return redirect(url_for('gestion.editar', slug='recursos', id=id))
 
 
 def eliminar_unidades(cur, rid, nums, motivo, detalle=''):
@@ -1577,19 +1173,6 @@ def eliminar_unidades(cur, rid, nums, motivo, detalle=''):
                         [(rid, n) for n in aeliminar])
         _sincronizar_cantidad(cur, rid)
     return aeliminar
-
-
-@bp.route('/bajas/<int:baja_id>/revertir-unidad', methods=['POST'])
-@accesos.requiere(PERMISO_ESCRITURA)
-def unidad_baja_revertir(baja_id):
-    """Revierte la baja de UNA unidad desde el registro (`/gestion/bajas`): re-crea la fila
-    de `recurso_unidades` si ese número está libre y marca la baja como revertida. Si el
-    número se reusó con un `+` posterior, no hace nada."""
-    con = conectar()
-    if revertir_baja_unidad(con.cursor(), baja_id):
-        con.commit()
-    con.close()
-    return redirect(url_for('gestion.bajas_lista'))
 
 
 def revertir_baja_unidad(cur, baja_id):
@@ -1671,73 +1254,12 @@ def eliminar_kit_item(cur, recurso_id, item_id):
     return cur.rowcount > 0
 
 
-def buscar_kit_items(cur, q):
-    """Sub-recursos de cualquier kit cuyo título matchea `q` (fuzzy, ver texto.puntaje_busqueda),
-    puntuados y ordenados igual que el listado principal. Cada resultado trae también
-    `kit_id`/`kit_nombre` para poder linkear al recurso que lo contiene."""
-    q_norm = texto.norm(q)
-    filas = cur.execute(
-        "SELECT ki.id, ki.titulo, ki.cantidad, ki.recurso_asignado, "
-        "ki.recurso_id AS kit_id, r.nombre AS kit_nombre "
-        "FROM kit_items ki JOIN recursos r ON r.id = ki.recurso_id").fetchall()
-    puntuadas = []
-    for f in filas:
-        puntaje = texto.puntaje_busqueda(q_norm, f['titulo'])
-        if puntaje is not None:
-            puntuadas.append((puntaje, dict(f)))
-    puntuadas.sort(key=lambda par: (-par[0], texto.norm(par[1]['titulo'])))
-    return [item for _, item in puntuadas]
-
-
-@bp.route('/recursos/<int:id>/kit/agregar', methods=['POST'])
-@accesos.requiere(PERMISO_ESCRITURA)
-def kit_item_agregar(id):
-    titulo = request.form.get('titulo', '').strip()
-    cantidad = request.form.get('cantidad', '').strip()
-    recurso_asignado = request.form.get('recurso_asignado', '').strip()
-    if titulo:
-        con = conectar()
-        cur = con.cursor()
-        cur.execute("SELECT 1 FROM recursos WHERE id = ?", (id,))
-        if cur.fetchone():
-            cur.execute(
-                "INSERT INTO kit_items (recurso_id, titulo, cantidad, recurso_asignado) VALUES (?,?,?,?)",
-                (id, titulo, cantidad, recurso_asignado))
-            con.commit()
-        con.close()
-    return redirect(url_for('gestion.editar', slug='recursos', id=id))
-
-
-@bp.route('/recursos/<int:id>/kit/<int:item_id>/editar', methods=['POST'])
-@accesos.requiere(PERMISO_ESCRITURA)
-def kit_item_editar(id, item_id):
-    titulo = request.form.get('titulo', '').strip()
-    if titulo:
-        con = conectar()
-        editar_kit_item(con.cursor(), id, item_id, titulo,
-                         request.form.get('cantidad', '').strip(),
-                         request.form.get('recurso_asignado', '').strip())
-        con.commit()
-        con.close()
-    return redirect(url_for('gestion.editar', slug='recursos', id=id))
-
-
-@bp.route('/recursos/<int:id>/kit/<int:item_id>/eliminar', methods=['POST'])
-@accesos.requiere(PERMISO_ESCRITURA)
-def kit_item_eliminar(id, item_id):
-    con = conectar()
-    eliminar_kit_item(con.cursor(), id, item_id)
-    con.commit()
-    con.close()
-    return redirect(url_for('gestion.editar', slug='recursos', id=id))
-
-
 # ---------------------------------------------------------------------------
 # API JSON de la app instalable (/app) — ver agent_docs/app-instalable.md
 # ---------------------------------------------------------------------------
-# Dos blueprints, igual que las páginas: `bp_api_registro` es la lista de inventarios
+# Dos blueprints: `bp_api_registro` es la lista de inventarios
 # (`/app/api/gestion/inventarios`) y `bp_api` es UN inventario abierto
-# (`/app/api/gestion/<inv>/…`). El `<inv>` se resuelve exactamente igual que en `bp` (g.inv),
+# (`/app/api/gestion/<inv>/…`). El `<inv>` de la URL queda en `g.inv`,
 # así que `db_path`, `ambito` y la clave del encargado funcionan sin enterarse de que el
 # pedido vino de la app. Toda escritura devuelve el recurso completo serializado, mismo
 # contrato que el CRUD genérico (crud.registrar_api).
@@ -1860,9 +1382,50 @@ def api_inventarios():
         d = {'slug': f['slug'], 'nombre': f['nombre'], 'total': f['total'],
              'sin_clave': f['sin_clave'], 'abre': _puede_abrir(f)}
         if admin:
+            d['id'] = f['id']
             d['clave'] = clave_visible(f)
         salida.append(d)
     return jsonify({'inventarios': salida, 'puede_administrar': admin})
+
+
+# --- Administrar la lista (sólo `inventarios.admin`) ---------------------------------
+
+@bp_api_registro.post('/inventarios')
+@accesos.requiere(PERMISO_REGISTRO, como_json=True)
+def api_inventario_crear():
+    datos = _api_cuerpo()
+    fila = crear_inventario(str(datos.get('nombre') or ''), str(datos.get('clave') or ''))
+    if fila is None:
+        return jsonify({'error': 'Poné un nombre (dos letras o más).'}), 422
+    return jsonify({'slug': fila['slug']}), 201
+
+
+@bp_api_registro.patch('/inventarios/<int:inv_id>')
+@accesos.requiere(PERMISO_REGISTRO, como_json=True)
+def api_inventario_cambiar(inv_id):
+    """Nombre y/o clave. El slug (la dirección) no cambia nunca."""
+    if inventario_por_id(inv_id) is None:
+        return jsonify({'error': 'Ese inventario no existe.'}), 404
+    datos = _api_cuerpo()
+    if 'nombre' in datos and not renombrar_inventario(inv_id, str(datos['nombre'] or '')):
+        return jsonify({'error': 'Poné un nombre (dos letras o más).'}), 422
+    if 'clave' in datos and not fijar_clave(inv_id, str(datos['clave'] or '')):
+        return jsonify({'error': 'La clave no puede quedar vacía.'}), 422
+    return jsonify({'ok': True})
+
+
+@bp_api_registro.delete('/inventarios/<int:inv_id>')
+@accesos.requiere(PERMISO_REGISTRO, como_json=True)
+def api_inventario_eliminar(inv_id):
+    """Borra el inventario entero. Hay que mandar el nombre exacto en `confirmar`: es lo
+    único irreversible de la lista (queda el último respaldo, ver `eliminar_inventario`)."""
+    fila = inventario_por_id(inv_id)
+    if fila is None:
+        return jsonify({'error': 'Ese inventario no existe.'}), 404
+    if texto.norm(str(_api_cuerpo().get('confirmar') or '')) != texto.norm(fila['nombre']):
+        return jsonify({'error': 'Para eliminar hay que escribir el nombre exacto.'}), 422
+    eliminar_inventario(inv_id)
+    return jsonify({'ok': True})
 
 
 @bp_api.post('/entrar')
@@ -2041,3 +1604,71 @@ def api_baja_unidad_revertir(baja_id):
         return jsonify({'error': 'Esa baja ya no se puede revertir (el número se volvió '
                                  'a usar, o ya estaba revertida).'}), 409
     return _api_recurso(con, rid)
+
+
+# --- Quién entra a ESTE inventario (el panel del encargado) ----------------------------
+# Todo lleva el ámbito del inventario pegado: reparte sólo sus permisos, lista sólo los
+# dispositivos que tienen alguno, y QUITAR saca los de acá y nada más (ver
+# accesos.quitar_ambito). Lo que esa persona tenga en otra área no es asunto de este panel.
+
+def _api_lista_accesos():
+    catalogo = _catalogo_inventario()
+    campos_disp = ('id', 'nombre', 'etiqueta', 'perfil_etiqueta', 'dispositivo',
+                   'ultimo_uso', 'revocado')
+    campos_inv = ('id', 'etiqueta', 'perfil_etiqueta', 'multiuso', 'usos', 'expira')
+    return {
+        'dispositivos': [{k: d.get(k) for k in campos_disp}
+                         for d in accesos.listar_dispositivos(ambito())],
+        'invitaciones': [{k: i.get(k) for k in campos_inv}
+                         for i in accesos.listar_invitaciones(ambito())],
+        'permisos': [{'clave': c, 'etiqueta': e} for c, e, _v, _g in catalogo],
+        'perfiles': [{'clave': p, 'etiqueta': e, 'permisos': sorted(accesos.permisos_de_perfil(p, catalogo))}
+                     for p, e in _perfiles_inventario()],
+    }
+
+
+@bp_api.get('/accesos')
+@accesos.requiere(PERMISO_ACCESOS, como_json=True)
+def api_accesos():
+    return jsonify(_api_lista_accesos())
+
+
+@bp_api.post('/accesos/invitaciones')
+@accesos.requiere(PERMISO_ACCESOS, como_json=True)
+def api_accesos_invitar():
+    datos = _api_cuerpo()
+    etiqueta = ' '.join(str(datos.get('etiqueta') or '').split())[:80]
+    if len(etiqueta) < 2:
+        return jsonify({'error': 'Poné para quién es el link (te sirve a vos después).'}), 422
+    catalogo = _catalogo_inventario()
+    validos = {c for c, _e, _v, _g in catalogo}
+    perfil = str(datos.get('perfil') or 'interno-lectura')
+    if perfil not in dict(_perfiles_inventario()):
+        perfil = 'interno-lectura'
+    # La intersección con `validos` es el corte real: un pedido a mano con
+    # `permisos=["accesos.admin"]` no puede sacar una clave de afuera del inventario.
+    pedidos = datos.get('permisos') if isinstance(datos.get('permisos'), list) else []
+    marcados = sorted({str(p) for p in pedidos} & validos)
+    if not marcados:
+        return jsonify({'error': 'Elegí al menos un permiso.'}), 422
+    if marcados != sorted(accesos.permisos_de_perfil(perfil, catalogo)):
+        perfil = 'custom'
+    multiuso = bool(datos.get('multiuso'))
+    token = accesos.crear_invitacion(etiqueta, perfil, marcados, multiuso=multiuso,
+                                     ambito=ambito())
+    return jsonify({'link': url_for('acceso_canjear_ver', token=token, _external=True),
+                    'multiuso': multiuso}), 201
+
+
+@bp_api.post('/accesos/dispositivos/<int:disp_id>/quitar')
+@accesos.requiere(PERMISO_ACCESOS, como_json=True)
+def api_accesos_quitar(disp_id):
+    accesos.quitar_ambito(disp_id, ambito())
+    return jsonify({'ok': True})
+
+
+@bp_api.delete('/accesos/invitaciones/<int:invitacion_id>')
+@accesos.requiere(PERMISO_ACCESOS, como_json=True)
+def api_accesos_anular(invitacion_id):
+    accesos.borrar_invitacion(invitacion_id, ambito())
+    return jsonify({'ok': True})

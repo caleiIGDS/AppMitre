@@ -35,7 +35,7 @@ export async function api(ruta, { metodo = 'GET', cuerpo } = {}) {
   return datos
 }
 
-// Los PDF los sigue haciendo el sistema de siempre (/horarios/export/...), que reconoce la
+// Los PDF los hace el servidor (/horarios/export/..., horarios/rutas.py), que reconoce la
 // misma sesión. Se abren en otra pestaña.
 export function abrirPdf(ruta) {
   window.open('/horarios/export/pdf/' + ruta, '_blank', 'noopener')

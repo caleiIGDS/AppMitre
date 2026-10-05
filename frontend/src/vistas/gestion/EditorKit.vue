@@ -1,5 +1,5 @@
 <script setup>
-// SUB-RECURSOS (KIT) dentro de EDITAR (templates/gestion/form.html): cada renglón se edita
+// SUB-RECURSOS (KIT) dentro de EDITAR: cada renglón se edita
 // y se guarda por su cuenta; el cambio se ve al instante y vuelve atrás si el servidor lo
 // rechaza.
 import { reactive, ref, watch } from 'vue'

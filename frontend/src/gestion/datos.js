@@ -228,3 +228,49 @@ queryClient.getMutationCache().subscribe((evento) => {
     queryClient.invalidateQueries({ queryKey: ['gestion'], predicate: (q) => q.queryKey[2] === 'bajas', refetchType: 'none' })
   }
 })
+
+// --- La lista de inventarios (sólo administración) -----------------------------------
+
+function useCambioLista(fn) {
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['gestion', 'inventarios'] }),
+  })
+}
+
+export const useCrearInventario = () =>
+  useCambioLista(({ nombre, clave }) => api('/gestion/inventarios', { metodo: 'POST', cuerpo: { nombre, clave } }))
+
+// `cambios`: { nombre } y/o { clave }.
+export const useCambiarInventario = () =>
+  useCambioLista(({ id, ...cambios }) => api(`/gestion/inventarios/${id}`, { metodo: 'PATCH', cuerpo: cambios }))
+
+export const useEliminarInventario = () =>
+  useCambioLista(({ id, confirmar }) => api(`/gestion/inventarios/${id}`, { metodo: 'DELETE', cuerpo: { confirmar } }))
+
+// --- Quién entra a un inventario (el panel del encargado) -----------------------------
+
+const claveAccesos = (inv) => ['gestion', inv, 'accesos']
+
+export function useAccesos(inv) {
+  return useQuery({
+    queryKey: computed(() => claveAccesos(toValue(inv))),
+    queryFn: () => api(`${base(toValue(inv))}/accesos`),
+  })
+}
+
+function useCambioAccesos(inv, fn) {
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: claveAccesos(toValue(inv)) }),
+  })
+}
+
+export const useInvitar = (inv) =>
+  useCambioAccesos(inv, (datos) => api(`${base(toValue(inv))}/accesos/invitaciones`, { metodo: 'POST', cuerpo: datos }))
+
+export const useQuitarDispositivo = (inv) =>
+  useCambioAccesos(inv, (id) => api(`${base(toValue(inv))}/accesos/dispositivos/${id}/quitar`, { metodo: 'POST' }))
+
+export const useAnularInvitacion = (inv) =>
+  useCambioAccesos(inv, (id) => api(`${base(toValue(inv))}/accesos/invitaciones/${id}`, { metodo: 'DELETE' }))

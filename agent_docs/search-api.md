@@ -1,6 +1,10 @@
 # Sistema de Búsqueda y API — AppMitre
 
-> Complementa `CLAUDE.md`. Backend en `horarios/rutas.py`, frontend en `script.js`.
+> Complementa `CLAUDE.md`. Hoy los datos salen de `GET /app-horarios/api/datos` (`horarios/app_api.py`)
+> y la búsqueda se resuelve en la app (`frontend/horarios/src/datos.js`, `Buscador.vue`); cada
+> búsqueda es una URL (`/horarios/cursos/3° B`, `?comparar=…`). Lo de abajo describe
+> `static/js/script.js` y las rutas `/horarios/api/*`, borrados el 2026-10-05 con la página
+> clásica: sirve como historia de las reglas, que se portaron.
 
 ---
 

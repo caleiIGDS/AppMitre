@@ -1,5 +1,5 @@
 <script setup>
-// Los alias de los recursos (templates/gestion/alias_lista.html): tira de tags editable por
+// Los alias de los recursos: tira de tags editable por
 // fila. Enter o coma agrega, × saca, borrar con el campo vacío saca el último. "Guardar"
 // aparece sólo en la fila que cambió. Mismo formato CSV que escribe el asistente.
 import { reactive, watch } from 'vue'

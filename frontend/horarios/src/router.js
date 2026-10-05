@@ -1,5 +1,5 @@
-// Cada pantalla y cada búsqueda es una dirección propia: atrás y adelante andan como en
-// cualquier app, y un horario se puede compartir con el link.
+// Todo cuelga de /horarios/. Cada pantalla y cada búsqueda es una dirección propia: atrás
+// y adelante andan como en cualquier app, y un horario se puede compartir con el link.
 //
 //   /tiempo-real                       el tablero en vivo (la pantalla de inicio)
 //   /cursos/1° A, /profesores/NOMBRE, /aulas/12, /preceptores/NOMBRE
@@ -16,7 +16,7 @@ const busqueda = (modo, segmento) => ({
 })
 
 const router = createRouter({
-  history: createWebHistory('/app-horarios/'),
+  history: createWebHistory('/horarios/'),
   routes: [
     { path: '/', redirect: { name: 'envivo' } },
     { path: '/entrar', name: 'entrar', component: () => import('./vistas/Entrar.vue'), meta: { publica: true } },
@@ -44,7 +44,7 @@ router.beforeEach(async (to) => {
 export default router
 
 // Lista de comparación <-> texto de la URL. Mismo formato que el link que arma el asistente
-// para /horarios (agente/enlaces.py): "curso:1%C2%B0%20A,profesor:MACIEL%20MARTIN".
+// en el chat (agente/enlaces.py): "curso:1%C2%B0%20A,profesor:MACIEL%20MARTIN".
 export function leerComparacion(texto) {
   return String(texto || '').split(',').map((parte) => {
     const corte = parte.indexOf(':')

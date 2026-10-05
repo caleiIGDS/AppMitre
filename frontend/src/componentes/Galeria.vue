@@ -1,5 +1,5 @@
 <script setup>
-// Fotos de una ficha (templates/crud/_detalle_fotos.html): miniaturas, visor a pantalla
+// Fotos de una ficha: miniaturas, visor a pantalla
 // completa (flechas, Esc), y con permiso subir, borrar y ROTAR. Las imágenes se piden por
 // URL: el dispositivo las guarda y no las vuelve a bajar.
 //

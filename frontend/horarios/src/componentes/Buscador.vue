@@ -1,5 +1,5 @@
 <script setup>
-// El campo de búsqueda con su lista desplegable (filtrarOpciones de script.js): al
+// El campo de búsqueda con su lista desplegable: al
 // enfocarlo muestra todo, al escribir filtra, Enter elige la primera.
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useHorarios, opcionesBuscador } from '../datos'
@@ -18,7 +18,7 @@ const abierto = ref(false)
 const campo = ref(null)
 const caja = ref(null)
 // El foco que pone la pantalla al abrirse deja el cursor listo pero no despliega la lista:
-// se despliega cuando la persona toca el campo o escribe (como en /horarios).
+// se despliega cuando la persona toca el campo o escribe.
 let silencioso = false
 
 watch(() => props.valor, (v) => { texto.value = v })

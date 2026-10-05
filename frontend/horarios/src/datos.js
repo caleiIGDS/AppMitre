@@ -1,7 +1,5 @@
 // El horario entero, bajado de una vez (GET /datos) y guardado en el dispositivo. Todas
-// las búsquedas salen de acá, sin red: es la misma lógica que static/js/script.js
-// (filtrarClasesLocal, personalToFila, obtenerPreceptorLocal, filtrarOpciones), ahora en
-// funciones puras.
+// las búsquedas salen de acá, sin red, en funciones puras.
 
 import { computed } from 'vue'
 import { useQuery, useMutation } from '@tanstack/vue-query'
@@ -25,7 +23,7 @@ export function useActualizarDesdePlanilla() {
 }
 
 // --- Texto ---------------------------------------------------------------------------
-// Igual que `normalize` de script.js: sin mayúsculas, acentos, espacios ni "°".
+// Sin mayúsculas, acentos, espacios ni "°".
 export function normalizar(texto) {
   if (!texto) return ''
   return String(texto).toLowerCase()
@@ -51,7 +49,7 @@ export function personalAFila(p, dias) {
 }
 
 // Las clases de un curso, profesor o aula. En profesor (fuera de la comparación) suma el
-// horario de personal no docente con ese nombre, como hace la página clásica.
+// horario de personal no docente con ese nombre.
 export function clasesDe(d, modo, valor, { conPersonal = true } = {}) {
   if (!d) return []
   const clases = d.clases

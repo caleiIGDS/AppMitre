@@ -3,14 +3,15 @@
 Consulta de horarios por curso, profesor, aula y preceptor; dashboard "En Vivo" para
 kiosco; export a PDF. Se regenera desde Google Sheets.
 
-Es independiente del resto de la app: **login propio** (`HORARIOS_CLAVE`, ver
+Es independiente del resto de la app: **clave propia** (`HORARIOS_CLAVE`, ver
 `acceso.py`), config propia (`config.py`), datos propios (`datos.py` → `escuela.db`). No
 importa `accesos`, ni el `config.py` de la raíz, ni `crud`, ni las otras áreas. La
 dependencia va en un solo sentido: el agente importa `horarios.datos` para leer, nunca al
 revés.
 
-`app.py` sólo necesita `bp`, `bp_app` (la API de la app instalable), `init_db` y
-`cargar_inicial`.
+La interfaz es la app instalable (`frontend/horarios/`, servida en `/horarios/` por
+`app.py`). Acá queda la API (`bp_app`, `/app-horarios/api`) y los PDF (`bp`,
+`/horarios/export`). `app.py` sólo necesita `bp`, `bp_app`, `init_db` y `cargar_inicial`.
 """
 import os
 

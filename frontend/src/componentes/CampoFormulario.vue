@@ -1,6 +1,6 @@
 <script setup>
 // Un campo del formulario a partir de la config declarativa de la entidad (los mismos
-// `campos` de gestion.py), con el mismo markup que templates/crud/form.html.
+// `campos` de gestion.py), con las clases de formulario de gestion.css.
 import { computed } from 'vue'
 
 const props = defineProps({

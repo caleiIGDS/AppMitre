@@ -6,6 +6,16 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-10-05] — Las apps pasan a `/gestion/` y `/horarios/`; las APIs se quedan en `/app/api`
+
+Las páginas clásicas se borraron: no conviven más. Las APIs no se movieron a propósito (mover
+la página no lo pedía, y así nada que las llame cambia). `/app/sw.js` y `/app-horarios/sw.js`
+quedan sirviendo un service worker que se da de baja: sin él, un celular con la app vieja
+abriría su copia precacheada para siempre. El widget flotante del asistente no se pasó a la
+app (no tenía botón desde 2026-09-17); el asistente sigue en `/agente`.
+
+---
+
 ## [2026-10-05] — Horarios como otra app instalable (`/app-horarios`), no dentro de `/app`
 
 Pedido explícito: un canal aparte. Una dirección propia es lo que hace que el celular la

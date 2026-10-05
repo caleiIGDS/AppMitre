@@ -215,7 +215,7 @@ def _listar_alias_fmt(slug):
 
     Es la única tool que expone el TEXTO del alias (no solo `match:"alias"` como
     `buscar_entidad`): por eso pide el permiso admin `gestion.alias`, igual que
-    `/gestion/alias` — la única ventana humana a este campo (ver gestion.py y
+    la pantalla ALIAS de la app — la única ventana humana a este campo (ver gestion.py y
     dev-log/DECISIONS.md 2026-08-21).
     """
     if slug not in SLUGS_ENTIDAD:

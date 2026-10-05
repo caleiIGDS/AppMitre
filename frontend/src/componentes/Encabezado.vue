@@ -1,6 +1,6 @@
 <script setup>
-// El header de las páginas clásicas de gestión (templates/gestion/base.html), con sus
-// mismas clases: gestion.css lo pinta igual. El panel ☰ es el de static/mobile-nav.js:
+// El header de la app, con las mismas clases que el de las páginas del servidor
+// (salidas, agente, accesos): gestion.css los pinta igual. El panel ☰ es el de static/mobile-nav.js:
 // lleva el menú de áreas a cualquier ancho y, en celular, las acciones del header (acá hay
 // una copia en cada lugar y app.css muestra una sola, en vez de mover nodos).
 import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'

@@ -1,5 +1,5 @@
 <script setup>
-// La clave DE ESTE INVENTARIO (templates/gestion/login.html), no la de la escuela.
+// La clave DE ESTE INVENTARIO, no la de la escuela.
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useEntrarInventario } from '@/gestion/datos'
@@ -14,7 +14,7 @@ const sinClave = ref(false)
 
 function destino() {
   const volver = route.query.volver
-  const propio = `/gestion/${props.inv}/`
+  const propio = `/${props.inv}/`
   return typeof volver === 'string' && volver.startsWith(propio) ? volver : { name: 'recursos', params: { inv: props.inv } }
 }
 

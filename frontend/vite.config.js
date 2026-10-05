@@ -3,11 +3,11 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// La app vive en /app/ del mismo Flask: mismo dominio, misma cookie de sesión, sin CORS.
-// `npm run build` compila a ../app_dist, que es lo que sirve app.py (y lo que se sube con
-// git: el servidor de producción no tiene Node).
+// La app vive en /gestion/ del mismo Flask: mismo dominio, misma cookie de sesión, sin
+// CORS. `npm run build` compila a ../app_dist, que es lo que sirve app.py (y lo que se sube
+// con git: el servidor de producción no tiene Node). Sus datos siguen en /app/api/.
 export default defineConfig({
-  base: '/app/',
+  base: '/gestion/',
   define: {
     __VERSION_APP__: JSON.stringify(new Date().toISOString().slice(0, 16)),
   },
@@ -43,14 +43,17 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['escudo.svg'],
       manifest: {
+        // El id es el de cuando la app vivía en /app/: con otro, el celular la tomaría
+        // por una app distinta de la que ya está instalada.
+        id: '/app/',
         name: 'Emilio Mitre — Sistema de Gestión',
         short_name: 'Mitre',
         description: 'Inventario, historia y salidas educativas de la Escuela Técnica Emilio Mitre.',
         lang: 'es-AR',
-        start_url: '/app/',
-        // Todo el sitio y no sólo /app/: las áreas que todavía son páginas clásicas
+        start_url: '/gestion/',
+        // Todo el sitio y no sólo /gestion/: las áreas que todavía son páginas clásicas
         // (/salidas, /agente, /accesos) se abren dentro de la misma ventana, sin la barra
-        // gris de "fuera de la app". El service worker sigue cubriendo sólo /app/.
+        // gris de "fuera de la app". El service worker sigue cubriendo sólo /gestion/.
         scope: '/',
         display: 'standalone',
         background_color: '#F1F5F9',
@@ -63,9 +66,8 @@ export default defineConfig({
       },
       workbox: {
         // Cualquier pantalla de la app abre desde el dispositivo, con o sin red.
-        navigateFallback: '/app/index.html',
-        navigateFallbackAllowlist: [/^\/app\//],
-        navigateFallbackDenylist: [/^\/app\/api\//],
+        navigateFallback: '/gestion/index.html',
+        navigateFallbackAllowlist: [/^\/gestion(\/|$)/],
         globPatterns: ['**/*.{js,css,html,svg,png,ttf,woff2}'],
         runtimeCaching: [
           {

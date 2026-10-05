@@ -1,6 +1,5 @@
-// Motor del calendario: dónde va cada bloque. Es el de static/js/script.js
-// (generarCalendario, generarCalendarioComparacion, generarPlanillaGeneral y
-// calcularEstilosBloques, ver agent_docs/calendar-engine.md) separado del dibujo: acá se
+// Motor del calendario: dónde va cada bloque (ver agent_docs/calendar-engine.md),
+// separado del dibujo: acá se
 // calculan posiciones y tipos de bloque; los componentes sólo los pintan.
 
 export function aMinutos(t) {

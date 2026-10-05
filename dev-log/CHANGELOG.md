@@ -6,6 +6,12 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-10-05] — Gestión y Horarios: sólo las apps, en `/gestion/` y `/horarios/`
+
+**Archivos**: `app.py`, `gestion.py`, `crud.py` (sin `registrar_rutas`/`contexto_base`), `horarios/{rutas,acceso,app_api}.py`, `frontend/`, `agente/enlaces.py`; borrados `templates/{gestion,inventarios,horarios,index.html}`, `templates/crud/{lista,form,detalle,_detalle_fotos}.html`, `static/{gestion.js,js/script.js}`
+Sin páginas clásicas de esas áreas. Las APIs NO se mueven (`/app/api/…`, `/app-horarios/api/…`); `/app/…` y `/app-horarios/…` redirigen (302) y sus `sw.js` se dan de baja solos.
+Nuevas en la API: `POST/PATCH/DELETE /app/api/gestion/inventarios` y `/app/api/gestion/<inv>/accesos…`. Se van `/horarios/api/*` (incluido `actualizar` → `/app-horarios/api/actualizar`) y `/horarios/login`.
+
 ## [2026-10-05] — El admin general entra a todos los inventarios y ve sus claves
 
 **Archivos**: `gestion.py` (`clave_ver`, `clave_visible`, `_acceso_encargado`, `_puede_abrir`), `accesos.py` (`es_admin`), `templates/inventarios/panel.html`, `Inventarios.vue`

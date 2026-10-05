@@ -1,5 +1,5 @@
 <script setup>
-// "Ubicación" de la ficha (templates/gestion/detalle.html): las unidades agrupadas por
+// "Ubicación" de la ficha: las unidades agrupadas por
 // lugar. Con permiso, se tocan los números para elegir cuáles mover o dejar sin ubicar;
 // el cambio se aplica en la ficha, sin navegar.
 import { computed, ref, watch } from 'vue'

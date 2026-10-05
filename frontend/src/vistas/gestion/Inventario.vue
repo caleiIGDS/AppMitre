@@ -1,6 +1,5 @@
 <script setup>
-// El listado de un inventario: mismo markup que templates/gestion/lista.html y mismo
-// filtrado que static/gestion.js. Los filtros viven en la URL
+// El listado de un inventario. Los filtros viven en la URL
 // (?q=…&lugar=…&estado=…&meses=…&baja=1): volver atrás, recargar o compartir el link deja
 // la lista exactamente como estaba. Todo el filtrado es local, sobre la lista que ya está
 // en el dispositivo.
@@ -57,7 +56,7 @@ const lugares = computed(() => {
 
 const qNorm = computed(() => norm(q.value))
 
-// Misma jerarquía que crud.py::lista y gestion.js: primero lo que coincide por nombre o
+// Misma jerarquía que la búsqueda del asistente: primero lo que coincide por nombre o
 // descripción (en orden alfabético), después lo que coincide sólo por el alias oculto.
 const visibles = computed(() => {
   const porNombre = []
@@ -94,7 +93,7 @@ const subrecursos = computed(() => {
 const hayFiltroActivo = computed(() => !!(lugar.value || estado.value || mesesVivo.value > 0 || baja.value))
 const hayFiltros = computed(() => !!(q.value || hayFiltroActivo.value))
 
-// --- Panel de filtros en celular (mismo desplegable que gestion.js) -------------------
+// --- Panel de filtros en celular ---------------------------------------------------
 const filtrosAbiertos = ref(false)
 const panel = ref(null)
 const botonFiltros = ref(null)

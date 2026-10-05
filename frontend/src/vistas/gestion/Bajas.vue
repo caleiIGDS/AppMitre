@@ -1,5 +1,5 @@
 <script setup>
-// Registro de bajas (templates/gestion/bajas.html): qué salió del inventario y por qué. Es
+// Registro de bajas: qué salió del inventario y por qué. Es
 // un historial: una baja revertida sigue figurando, tachada.
 import { computed } from 'vue'
 import { useBajas, useMeta, useRevertirBajaUnidad } from '@/gestion/datos'

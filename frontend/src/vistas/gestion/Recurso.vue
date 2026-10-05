@@ -1,8 +1,8 @@
 <script setup>
-// Ficha de un recurso: la maqueta de templates/gestion/detalle.html (cabecera con chips,
+// Ficha de un recurso (cabecera con chips,
 // fotos a la izquierda, ubicación + kit + detalle a la derecha). Sale de la lista que ya
 // está en el dispositivo: abre al instante. La ficha no edita campos ni da de baja: eso
-// vive en EDITAR, igual que en las páginas clásicas.
+// vive en EDITAR.
 import { computed } from 'vue'
 import { useRecurso, useMeta, useSubirFoto, useEliminarFoto, useRotarFoto } from '@/gestion/datos'
 import { volverA } from '@/navegacion'
@@ -76,7 +76,7 @@ function rotar(foto, imagen) {
     <header class="g-ficha-head">
       <div class="g-ficha-id">
         <span class="g-ficha-crumb">
-          <a :href="`/app/gestion/${inv}/recursos`" @click.prevent="volverA(listado)">INVENTARIO</a>
+          <a :href="`/gestion/${inv}/recursos`" @click.prevent="volverA(listado)">INVENTARIO</a>
           <template v-if="recurso.tipo"> / {{ recurso.tipo }}</template>
         </span>
         <h2 class="g-ficha-title">{{ recurso.nombre }}</h2>

@@ -14,15 +14,11 @@ propia app Flask.
 import os
 import time
 
-from flask import abort, redirect, render_template, request, session, url_for
+from flask import abort, session
 
 from .config import PRODUCCION
 
 SESSION_FLAG = 'horarios_ok'
-
-# Sólo estos endpoints redirigen al login cuando no hay sesión. El resto (los `/api/*` y
-# los `/export/*`) contesta 401 pelado, que es lo que el `fetch` del SPA sabe leer.
-PAGINAS = {'horarios.index'}
 
 # Rate limiting: máximo 5 intentos fallidos por IP en 15 minutos
 MAX_INTENTOS = 5
@@ -70,8 +66,8 @@ def autenticado():
 
 
 def comprobar_clave(ip, clave):
-    """El chequeo de la contraseña, con su límite de intentos por IP. Lo usan el login de
-    la página y el de la app (`app_api.py`): los dos cuentan contra el mismo límite.
+    """El chequeo de la contraseña, con su límite de intentos por IP. Lo usa el login de
+    la app (`app_api.py`).
 
     Devuelve 'ok' (y deja la sesión abierta), 'mal' o 'bloqueado'."""
     _limpiar_intentos_expirados(ip)
@@ -87,34 +83,13 @@ def comprobar_clave(ip, clave):
 
 
 def registrar(bp):
-    """Monta el gate + /horarios/login + /horarios/salir sobre el blueprint."""
+    """Monta el gate sobre el blueprint de los PDF (`/horarios/export/...`).
+
+    Sin sesión contesta 401: a los PDF se llega desde la app, que es la que pide la clave
+    (`app_api.py`, POST /entrar). No hay página de login propia.
+    """
 
     @bp.before_request
     def _gate():
-        if request.endpoint in ('horarios.login', 'horarios.salir'):
-            return
         if not autenticado():
-            if request.endpoint in PAGINAS:
-                return redirect(url_for('horarios.login', next=request.path))
             abort(401)
-
-    @bp.route('/login', methods=['GET', 'POST'])
-    def login():
-        error = None
-        if request.method == 'POST':
-            resultado = comprobar_clave(request.remote_addr, request.form.get('clave', ''))
-            if resultado == 'bloqueado':
-                abort(429)  # Too Many Requests
-            if resultado == 'ok':
-                volver = request.form.get('next', '')
-                if not volver.startswith('/horarios'):
-                    volver = url_for('horarios.index')
-                return redirect(volver)
-            error = 'Contraseña incorrecta.'
-        return render_template('horarios/login.html', error=error,
-                               next=request.values.get('next', ''))
-
-    @bp.route('/salir')
-    def salir():
-        session.pop(SESSION_FLAG, None)
-        return redirect(url_for('horarios.login'))

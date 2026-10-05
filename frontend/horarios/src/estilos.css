@@ -1,6 +1,6 @@
 /* Lo propio de la app de horarios. El resto es static/global.css + static/horarios.css
-   (las mismas hojas que /horarios) y los avisos de src/estilos/app.css. Clases `h-`, o
-   las `hz-` de la tarjeta de acceso, que son las de templates/horarios/base.html. */
+   y los avisos de src/estilos/app.css. Clases `h-`, o las `hz-` de la tarjeta
+   de acceso. */
 
 /* Las pestañas son links (cada una es una dirección), no botones. */
 a.tech-tag { color: #000; text-decoration: none; display: inline-block; }
@@ -22,7 +22,7 @@ a.tech-tag.active, a.tech-tag:hover { color: #fff; }
 }
 .h-btn-claro { background: transparent; color: var(--secondary); }
 
-/* Tarjeta de acceso: la de templates/horarios/base.html. */
+/* Tarjeta de acceso (la pantalla de entrar). */
 .hz-main {
     display: flex; align-items: center; justify-content: center;
     min-height: 60vh; padding: 32px 0;

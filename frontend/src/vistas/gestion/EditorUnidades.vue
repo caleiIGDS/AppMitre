@@ -1,5 +1,5 @@
 <script setup>
-// UNIDADES dentro de EDITAR (bloque de templates/gestion/form.html). `cantidad` es el COUNT
+// UNIDADES dentro de EDITAR. `cantidad` es el COUNT
 // de las unidades y no se edita a mano: se agregan tocando qué números libres van a tener,
 // y se eliminan tocando cuáles y diciendo qué les pasó (cada una va al registro de bajas).
 // Nunca se elimina la última: para sacar el recurso entero está DAR DE BAJA.

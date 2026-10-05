@@ -15,7 +15,7 @@ usa `crud` ni `accesos`. `agente/` lo importa para leer (`horarios.datos`); nunc
 ```
 capa 2   gestion.py   agente/                                        ← nombran tablas reales
               │            │
-capa 1   crud.py + templates/crud/  ·  accesos.py + templates/accesos/
+capa 1   crud.py                    ·  accesos.py + templates/accesos/
               │                                    │                   ← saben "entidad" y "permiso",
               └────────────────┬───────────────────┘                     no cuáles
 capa 0        config.py    texto.py    respaldos.py                    ← no nombran nada del dominio
@@ -34,7 +34,7 @@ decorar sus rutas de escritura), nunca al revés. Ver `agent_docs/accesos.md`.
 | Si… | va en | ejemplo |
 |---|---|---|
 | No nombra tablas, ni entidades, ni rutas, ni Flask | **capa 0** | `texto.norm`, `respaldos.respaldar` |
-| Nombra el *concepto* de entidad (slug, `ENTIDADES`, relación M2M) pero ninguna concreta | **capa 1** | `crud.select`, `crud.registrar_rutas` |
+| Nombra el *concepto* de entidad (slug, `ENTIDADES`, relación M2M) pero ninguna concreta | **capa 1** | `crud.select`, `crud.registrar_api` |
 | Nombra una tabla, un slug o una ruta reales | **capa 2** | `gestion.secciones_detalle`, `gestion.mover_unidades` |
 
 `crud.py` **nunca importa un área**: la recibe como argumento (`area`). Eso es lo
@@ -55,7 +55,7 @@ pared de la escuela (`ZONA_HORARIA = "America/Argentina/Buenos_Aires"`) como **d
   cae a un offset fijo `-3`. Argentina no aplica horario de verano desde 2009, así que da igual.
 
 Consumidores: `agente/llm.py` (hora del system prompt), `agente/rutas.py` (sello de hora por
-mensaje), `agente/db.py`, `gestion._ahora` y `valores_iniciales`,
+mensaje), `agente/db.py`, `gestion._ahora`,
 `crud.py` (fecha de foto) y `respaldos.py` (nombre del archivo). El sistema de horarios
 tiene su propia `ahora()` en `horarios/config.py` (no importa este `config.py`).
 
@@ -82,7 +82,7 @@ esté simplemente no se usa.
 | `PERMISOS` | `[(clave, etiqueta, verbo)]` que declara al catálogo de `accesos` |
 | `GRUPO_PERMISOS` | título bajo el que se agrupan en el panel `/accesos` |
 | `PERMISO_LECTURA` | el permiso base: hace falta para ver cualquier cosa del área |
-| `PERMISO_ESCRITURA` | el que piden `nuevo`/`editar`/`eliminar`/fotos y los botones que los muestran |
+| `PERMISO_ESCRITURA` | el que piden las escrituras de la API (alta, edición, borrado, fotos) |
 
 ### Hooks opcionales
 
@@ -92,25 +92,18 @@ acá, nunca por un `if slug == '...'` dentro de `crud.py`.
 | hook | cuándo se llama | quién lo usa hoy |
 |---|---|---|
 | `BACKUP_MAX_DIAS` | atributo, no función: techo de antigüedad de sus respaldos. Sin él, el "primero de cada día" de `respaldos.py` no caduca nunca — lo declara un área cuyos datos vencen, para que purgar la fila purgue de verdad | `salidas` (60 días, su vigencia es de 365) |
-| `PERMISO_ROTAR_FOTO` | atributo, no función: quién puede girar una foto ya cargada (`rotar_foto` y el botón del visor). Si el área no lo declara, es `PERMISO_ESCRITURA` | `gestion` (`gestion.rotar`, solo admin) |
+| `PERMISO_ROTAR_FOTO` | atributo, no función: quién puede girar una foto ya cargada (la API de rotar y el botón del visor). Si el área no lo declara, es `PERMISO_ESCRITURA` | `gestion` (`gestion.rotar`, solo admin) |
 | `migrar(cur)` | en cada `init_db`, después del SCHEMA | `gestion` |
 | `seed(cur)` | sólo si la DB arranca vacía | ninguna hoy (`gestion` arranca vacía a propósito) |
-| `secciones_detalle(slug, id, cur)` | al armar la ficha de detalle | `gestion` |
+| `secciones_detalle(slug, id, cur)` | al armar la ficha de detalle del asistente | `gestion` |
 | `derivados(slug, valores)` | antes de cada INSERT/UPDATE; devuelve columnas calculadas | ninguna hoy |
-| `valores_iniciales(slug)` | defaults del form de alta | `gestion` (`fecha_revision` = hoy) |
-| `extras_template(vista, slug, id)` | kwargs extra para `render_template`; `id` sólo en `detalle` y `editar`, si no `None` | `gestion`: lugares, estados y días de revisión del listado, y los sub-recursos del kit en `editar` |
-| `tarjetas_extra(cur)` | tarjetas del home que no salen de `ENTIDADES` | ninguna hoy (ídem, la tarjeta de Préstamos) |
-| `inicio()` | URL a la que redirige la raíz del área en vez de renderizar el home de tarjetas; el área no necesita `home.html` | `gestion` (la raíz de un inventario va a la lista de recursos) |
-| `contexto_extra()` | claves extra del context processor | ninguna hoy (ídem, `carrito_count`) |
-| `NAV_EXTRA` | `[(slug, label)]` extra para la nav | ninguna hoy (ídem, el ítem "Préstamos") |
 | `ERROR_DUPLICADO` | `{slug: mensaje}` cuando un UNIQUE rechaza el guardado | ninguna hoy (`gestion.ERROR_DUPLICADO = {}`) |
 | `api_serializar(slug, filas, cur)` | al devolver filas por la API JSON de la app (`/app/api/...`) | `gestion` (unidades, kit, días sin revisar) |
 | `api_meta()` | claves extra del `GET /meta` de la API | `gestion` (inventario, motivos, permisos del ámbito) |
 | `api_etag()` | prefijo del ETag de los listados, si la misma URL puede ser de otra .db | `gestion` (`inv<id>-`) |
 | `TABLAS_CON_REVISION` | atributo: tablas que no son hijas de una entidad pero cambian lo que devuelve la API (sólo suben `_revision`) | `gestion` (`recurso_bajas`) |
 
-Además de las rutas HTML, el motor monta la API JSON de la app instalable
-(`crud.registrar_api`) y, en cada `init_db`, el versionado por triggers (`version` por fila,
+El motor monta la API JSON de la app instalable (`crud.registrar_api`) y, en cada `init_db`, el versionado por triggers (`version` por fila,
 `_revision` por DB; nada en un área con `ENTIDADES` vacío, como salidas). Cómo funcionan:
 `agent_docs/app-instalable.md`.
 
@@ -134,14 +127,14 @@ que el código ya no declara: `migrar` no puede saber qué sobra en la DB de al 
 Cada campo de `campos` declara `nombre`, `label`, `tipo` (`text`, `number`, `textarea`, `select`
 con `opciones`, `text_datalist`), y opcionales `requerido`, `ayuda`, **`boton_hoy`** y
 **`solo_alta`**. `boton_hoy` es el formato strftime de una fecha guardada como texto libre:
-`templates/crud/form.html` le pone al lado un botón **HOY** que la completa con la fecha del día
-(la calcula el server con `config.ahora()` y llega al template por el helper `hoy(formato)` de
-`crud.contexto_base`, así el motor no conoce ni el campo ni el formato). Hoy la declara
+la app (`CampoFormulario.vue`) le pone al lado un botón **HOY** que la completa con la fecha
+del día (la calcula el área con `config.ahora()` y la manda en el `hoy` de su `api_meta`, así el motor
+no conoce ni el campo ni el formato). Hoy la declara
 `gestion.recursos.fecha_revision`.
 
 `solo_alta`: un campo así se muestra y se escribe **sólo al crear**. En edición
-`templates/crud/form.html` no lo renderiza y `_guardar_form` lo saca de las columnas del UPDATE,
-para que el input ausente no vacíe la columna. Es para un valor que después del alta lo maneja
+la app no lo muestra ni lo manda y `_campos_escribibles` lo saca de las columnas del UPDATE,
+para que el campo ausente no vacíe la columna. Es para un valor que después del alta lo maneja
 otra cosa: hoy `gestion.recursos.cantidad`, que pasa a ser el COUNT espejo de `recurso_unidades`
 y se ajusta por unidades desde EDITAR (ver `agent_docs/gestion-conocimiento.md`). `crud.guardar_entidad`
 (el camino del agente) **sí** lo escribe: el agente puede cambiar `cantidad` por el chat.
@@ -154,18 +147,18 @@ validación de obligatorio usan `crud.campo_nombre(cfg)`.
 
 `campo_alias` (default `None`, mismo criterio que `campo_nombre`) declara una columna extra de
 texto libre — no necesariamente sinónimos estrictos, alcanza con que la gente confunda dos cosas
-("zapatilla"/"alargue") — que `crud.buscar_entidad()`/`lista()` prueban en una segunda pasada
+("zapatilla"/"alargue") — que `crud.buscar_entidad()` y el listado de la app prueban en una segunda pasada
 cuando nombre/descripcion no matchean; los que entran solo por ahí se muestran al final, marcados
 aparte, nunca mezclados con los matches normales. `crud.guardar_entidad()` la agrega a su
 whitelist de escritura **sin** que esté en `campos`, que es justo lo que la mantiene fuera del
-form web y de la ficha de confirmación del agente (los dos leen `cfg.campos`, nunca esta clave).
+formulario de la app y de la ficha de confirmación del agente (los dos leen `cfg.campos`, nunca esta clave).
 Hoy solo la declara `gestion.ENTIDADES['recursos']` (`'campo_alias': 'alias'`): un campo que
 completa el asistente y el humano nunca ve ni edita — ver `agent_docs/gestion-conocimiento.md`,
 `agent_docs/agente-asistente.md` y `dev-log/DECISIONS.md` 2026-08-08/2026-08-21 (por qué se
 había descartado y por qué el override).
 
-`sin_eliminar` (default `False`) marca la entidad que **no se borra nunca**: la ruta `eliminar`
-devuelve 404 para ese slug y `templates/crud/detalle.html` no dibuja el botón. El agente ni
+`sin_eliminar` (default `False`) marca la entidad que **no se borra nunca**: el `DELETE` de la
+API devuelve 404 para ese slug y la app no dibuja el botón (`/meta` lo dice). El agente ni
 siquiera tiene una tool que borre entidades — no hace falta que rechace nada del lado del
 chat. Lo declara `gestion.recursos`, que en vez de borrarse se **da de baja** (ver
 `agent_docs/gestion-conocimiento.md`). Una entidad así necesita su propia salida del listado:
@@ -182,28 +175,27 @@ que lo necesite:
 'una_entidad': {..., 'permiso': 'area.algo'},
 ```
 
-Con eso, sin ese permiso desaparecen de una vez **la tarjeta del home, la entrada de la nav, el
-listado, la ficha, los dos formularios, las dos rutas de fotos y el bloque de esa entidad dentro de
-la ficha de otra** (una entidad relacionada deja de listarla). El motor lo resuelve en tres lugares:
+Con eso, sin ese permiso esa entidad desaparece de `/meta` y todas sus rutas de la API contestan
+403, y el bloque de esa entidad dentro de la ficha de otra también se va (una entidad relacionada
+deja de listarla). El motor lo resuelve en tres lugares:
 
 | función | qué corta |
 |---|---|
 | `permiso_entidad(area, slug)` / `ve_entidad(area, slug)` | la pregunta, en un solo lado |
-| un `before_request` de `registrar_rutas` | **todas** las rutas: el slug está en la URL de las siete |
-| `relaciones_visibles(area, cfg)` | el fieldset del form **y** el `_guardar_form` |
+| un `before_request` de `registrar_api` (`_gate_entidad_api`) | **todas** las rutas: el slug está en la URL |
+| `relaciones_visibles(area, cfg)` | las relaciones que se serializan **y** las que se guardan |
 
 Lo del `before_request` es lo que evita repetir el chequeo en cada vista, y corre después del gate
-de sesión porque el área monta `registrar_acceso` primero. Devuelve `accesos.denegar(permiso)` →
+de sesión porque el área monta `registrar_acceso_api` primero. Devuelve `accesos.denegar(permiso)` →
 **403**, igual que `accesos.requiere()`; no se puede usar el decorador porque el permiso depende del
 slug de la URL, que recién existe en tiempo de request.
 
-Lo de `relaciones_visibles` **no es cosmético**: el form postea la lista entera de cada relación, así
-que un fieldset que se esconde y no se saca también de `_guardar_form` haría que guardar una
-entidad desde un acceso sin el permiso le borrara los vínculos con la relacionada. Por eso
-`form.html` itera `relaciones` (la lista ya filtrada que pasa la vista) y no `cfg.relaciones`.
+Lo de `relaciones_visibles` **no es cosmético**: guardar reemplaza la lista entera de cada
+relación, así que una relación que no se ve y no se saca también del guardado haría que guardar
+una entidad desde un acceso sin el permiso le borrara los vínculos con la relacionada.
 
-`crud.guardar_entidad` — el camino del agente, sin `request.form` — ya era seguro: sólo toca las
-relaciones que vengan explícitas en el dict.
+`crud.guardar_entidad` — el camino del agente — ya era seguro: sólo toca las relaciones que
+vengan explícitas en el dict.
 
 El motor sigue sin nombrar ninguna clave: la pone el área, igual que con `PERMISO_ESCRITURA`. Del
 lado del asistente el mismo dato se respeta con `agente.dominio.ve_entidad` (ver
@@ -211,68 +203,31 @@ lado del asistente el mismo dato se respeta con `agente.dominio.ve_entidad` (ver
 
 ## Cómo se monta un área
 
-Al final del módulo, dos líneas:
+El área expone un blueprint de API (hoy sólo `gestion.bp_api`, en `/app/api/gestion/<inv>`) y
+al final del módulo:
 
 ```python
-accesos.registrar_acceso(bp, PERMISO_LECTURA)
-crud.registrar_rutas(bp, sys.modules[__name__])
+accesos.registrar_acceso_api(bp_api, PERMISO_LECTURA)
+crud.registrar_api(bp_api, sys.modules[__name__])
 ```
 
-`registrar_rutas` monta `home`, `lista`, `nuevo`, `detalle`, `editar`, `eliminar`, `subir_foto`,
-`foto_archivo` (sirve el archivo de una foto, sin permiso propio: cae bajo el mismo
-`_gate_entidad` que `detalle`), `eliminar_foto` y `rotar_foto`, más el context processor. **Los endpoints y las carpetas de templates salen de
-`bp.name`** (`url_for(f'{bp.name}.detalle')`, `render_template(f'{bp.name}/lista.html')`), que ya
-coincide con el nombre de la carpeta en `templates/` — no hay nada que configurar. Las rutas
-que escriben las decora con `accesos.requiere(area.PERMISO_ESCRITURA)` (salvo `rotar_foto`, que usa
-`PERMISO_ROTAR_FOTO`): el motor no nombra ningún permiso, lee la clave que declaró el área (mismo
-criterio que `campo_nombre`).
+`registrar_api` monta `GET /meta`, el listado (con ETag), el detalle, alta, edición (con
+`version`: 409 si cambió), borrado y las fotos (subir, servir, rotar, borrar). Las escrituras las
+decora con `accesos.requiere(area.PERMISO_ESCRITURA)` (rotar usa `PERMISO_ROTAR_FOTO`): el motor
+no nombra ningún permiso, lee la clave que declaró el área (mismo criterio que `campo_nombre`).
+La interfaz es la app instalable (`frontend/`, ver `agent_docs/app-instalable.md`).
 
-`registrar_acceso` vive en **`accesos.py`**, no acá: el gate dejó de ser "una clave y un booleano" y
-es un motor aparte, con catálogo de permisos, perfiles, dispositivos y panel. Ver
-`agent_docs/accesos.md`. Lo que hay que saber para montar un área:
+> Hasta 2026-10-05 el motor también montaba páginas HTML genéricas (`registrar_rutas`, con los
+> templates `crud/lista|form|detalle.html` y sus hooks `valores_iniciales`, `extras_template`,
+> `inicio`, `tarjetas_extra`, `contexto_extra`, `NAV_EXTRA`). Se sacaron cuando la app pasó a
+> cubrir todo Gestión — ver `dev-log/DECISIONS.md`.
 
-- El primer argumento es el **permiso base**: el que hace falta para ver cualquier cosa del área.
-- `endpoints_pagina`: si el blueprint mezcla páginas HTML con endpoints JSON (el caso de `/agente`),
-  acá van los que devuelven HTML. Sólo esos redirigen al login; el resto contesta **401**, que es lo
-  que un `fetch` sabe leer — un redirect a HTML le llega como un 200 sin sentido. Si es `None`, todo
-  redirige (áreas 100% server-rendered).
-- `endpoint_default`: a dónde volver tras loguearse sin `next` válido (`home`, o `chat_page` en el
-  agente).
-
-Sin acceso → login o 401. Con acceso pero sin el permiso → **403** (`templates/crud/403.html`),
-nunca el login: mandar al login a quien ya entró es un bucle, y si acierta la clave se convertiría
-en admin.
-
-## Templates
-
-`templates/crud/` tiene `lista.html`, `form.html`, `detalle.html` y `login.html` genéricos, más
-el partial `_detalle_fotos.html` (galería + visor de fotos, que `detalle.html` y la ficha
-propia de `gestion` comparten). Se adaptan a cualquier área con dos variables que inyecta
-`crud.contexto_base()`:
-
-- `base_template` → `{% extends base_template %}`, así cada área conserva su layout y su nav
-- `area_nombre` → `url_for(area_nombre ~ '.detalle', ...)`
-
-**Cada área conserva un stub con el mismo nombre**, para que `render_template(f'{bp.name}/lista.html')`
-siga funcionando y para que cualquier excepción sea explícita:
-
-```jinja
-{# templates/gestion/lista.html — usa el genérico tal cual #}
-{% extends 'crud/lista.html' %}
-```
-
-Cuando un área necesita un retoque puntual, llena un bloque en vez de forkear el template:
-`acciones_fila` (celda de acciones de cada fila del listado), `acciones` (toolbar del detalle)
-y `seccion` (cada bloque de relaciones del detalle). `acciones_fila` y `seccion` están
-declarados **`scoped`** en el genérico: están dentro de un `for` y quien los sobreescriba
-necesita ver `fila` / `s`. Sin `scoped` esas variables no llegan al override.
-
-Cuando la maqueta cambia de raíz —no un botón de más— el área reescribe entero el bloque
-`contenido`: lo hace `gestion/detalle.html` para la ficha de recurso (ver
-`agent_docs/gestion-conocimiento.md`), reusando el partial `crud/_detalle_fotos.html` para
-la galería y su visor.
-
-`base.html` y `home.html` **no** son genéricos: son la identidad visual y el texto de cada área.
+Los gates viven en **`accesos.py`**, no acá: con catálogo de permisos, perfiles, dispositivos y
+panel. Ver `agent_docs/accesos.md`. `registrar_acceso_api` contesta todo en JSON (401 sin
+sesión, 403 sin el permiso) y exige `X-Mitre: 1` en las escrituras. Las páginas Jinja que quedan
+(agente, salidas, `/accesos`) usan `registrar_acceso`, con su login (`templates/crud/login.html`)
+y su **403** (`templates/crud/403.html`), nunca el login para quien ya entró: mandar al login a
+quien ya entró es un bucle, y si acierta la clave se convertiría en admin.
 
 ## Cómo agregar…
 
@@ -280,18 +235,17 @@ la galería y su visor.
 `migrar()` — `init_db()` hace el `ALTER TABLE` solo en las DBs existentes.
 
 **…una entidad a un área**: una entrada en `ENTIDADES`, su tabla en `SCHEMA`, su fila en
-`LIMPIEZA_M2M`, y si tiene relaciones que mostrar, una rama en `secciones_detalle`. Las rutas salen
-solas. Si la entidad debe ser visible para el asistente, no hay nada más que hacer:
+`LIMPIEZA_M2M`, y si tiene relaciones que mostrar, una rama en `secciones_detalle`. Las rutas de la
+API salen solas; las pantallas, en la app. Si la entidad debe ser visible para el asistente, no hay nada más que hacer:
 `agente.dominio.SLUGS_ENTIDAD` se deriva de `gestion.ENTIDADES`.
 
 **…una entidad que no vea todo el mundo**: declarar el permiso en los `PERMISOS` del área (con el
 verbo que corresponda — `'admin'` si es sólo del admin) y colgárselo a la entidad con la clave
-`permiso` de su cfg. Web y asistente quedan cubiertos por ese único dato; no hay que tocar ninguna
-ruta, ningún template ni el gate.
+`permiso` de su cfg. API y asistente quedan cubiertos por ese único dato; no hay que tocar ninguna
+ruta ni el gate.
 
-**…un área nueva**: un archivo con el contrato de arriba, `templates/<area>/` con `base.html`,
-`home.html`, `login.html` y los cuatro stubs, las dos líneas de registro, y
-`app.register_blueprint(...)` + `init_db()` en `app.py`. Sumarla también a la lista de
+**…un área nueva**: un archivo con el contrato de arriba, su blueprint de API con las dos líneas
+de registro, `app.register_blueprint(...)` + `init_db()` en `app.py`, y sus pantallas en la app. Sumarla también a la lista de
 `accesos.registrar_app(app, [...])`, que está ahí al lado: con eso sus `PERMISOS` entran solos al
 catálogo y a los perfiles, **sin tocar el gate ni migrar los accesos ya dados**. Si además tiene que
 entrar al asistente, sumarla a `agente.dominio._modulo()` (hoy devuelve siempre `gestion`;

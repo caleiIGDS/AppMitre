@@ -1,4 +1,5 @@
-from flask import Flask, jsonify, render_template, redirect, send_from_directory, url_for
+from flask import (Flask, Response, jsonify, redirect, render_template, request,
+                   send_from_directory, url_for)
 from werkzeug.security import safe_join
 import os
 from datetime import timedelta
@@ -120,13 +121,11 @@ def static_v(filename):
     return url_for('static', filename=filename, v=_mtimes[filename])
 
 
-# Gestión de recursos (/gestion) — N inventarios estancos, cada uno con su .db, su clave
-# y su encargado. Dos blueprints: `bp_inv` es el registro (/gestion, la lista) y `bp` es un
-# inventario abierto (/gestion/<inv>/...). init_db() en import para que también corra bajo
-# gunicorn/WSGI (no solo en __main__); pone al día el registro y cada inventario.
-app.register_blueprint(gestion.bp_inv)
-app.register_blueprint(gestion.bp)
-# La misma área como API JSON, para la app instalable (/app, ver más abajo).
+# Gestión de recursos — N inventarios estancos, cada uno con su .db, su clave y su
+# encargado. Las pantallas son la app (/gestion, ver más abajo) y esto es su API JSON:
+# `bp_api_registro` es la lista de inventarios y `bp_api` un inventario abierto.
+# init_db() en import para que también corra bajo gunicorn/WSGI (no solo en __main__);
+# pone al día el registro y cada inventario.
 app.register_blueprint(gestion.bp_api_registro)
 app.register_blueprint(gestion.bp_api)
 gestion.init_db()
@@ -142,9 +141,10 @@ app.register_blueprint(salidas.bp)
 app.register_blueprint(salidas.bp_publico)
 salidas.init_db()
 
-# Sistema de horarios (/horarios) — sitio aparte: login propio (HORARIOS_CLAVE), config y
-# datos propios, NO pasa por `accesos`. El paquete monta su gate al importarse; acá sólo
-# se registra el blueprint y se crea el schema.
+# Sistema de horarios — sitio aparte: clave propia (HORARIOS_CLAVE), config y datos
+# propios, NO pasa por `accesos`. Las pantallas son la app (/horarios, ver más abajo); `bp`
+# son los PDF (/horarios/export/...) y `bp_app` la API de la app. El paquete monta su gate
+# al importarse; acá sólo se registran los blueprints y se crea el schema.
 app.register_blueprint(horarios.bp)
 app.register_blueprint(horarios.bp_app)
 horarios.init_db()
@@ -165,7 +165,7 @@ def normativa_visor():
 
 
 # ---------------------------------------------------------------------------
-# Apps instalables (/app y /app-horarios)
+# Apps instalables (/gestion y /horarios)
 # ---------------------------------------------------------------------------
 # Las compila Vite desde frontend/ (ver agent_docs/app-instalable.md); Flask sólo las sirve.
 # Cada una vive en su propia dirección para que el celular las instale como dos apps
@@ -173,6 +173,8 @@ def normativa_visor():
 # nombre, así que se cachean un año; el resto (index.html, sw.js, manifest) se revalida
 # siempre, que es lo que hace que una versión nueva llegue. Cualquier otra ruta es una
 # pantalla de la app y devuelve index.html: la navegación la resuelve el router del navegador.
+#
+# Sus APIs siguen donde nacieron (/app/api y /app-horarios/api): son de la app, no se ven.
 APP_DIST = os.path.join(RAIZ, 'app_dist')
 APP_HORARIOS_DIST = os.path.join(RAIZ, 'app_horarios_dist')
 
@@ -193,32 +195,96 @@ def _servir_app(carpeta, ruta, como_compilar):
     return resp
 
 
-@app.route('/app')
-def app_raiz():
-    return redirect('/app/')
+@app.route('/gestion')
+def gestion_raiz():
+    return redirect('/gestion/')
 
 
-@app.route('/app/', defaults={'ruta': ''})
-@app.route('/app/<path:ruta>')
-def app_spa(ruta):
+@app.route('/gestion/', defaults={'ruta': ''})
+@app.route('/gestion/<path:ruta>')
+def gestion_app(ruta):
     return _servir_app(APP_DIST, ruta, 'npm run build')
 
 
-@app.route('/app-horarios')
-def app_horarios_raiz():
-    return redirect('/app-horarios/')
+@app.route('/horarios')
+def horarios_raiz():
+    return redirect('/horarios/')
 
 
-@app.route('/app-horarios/', defaults={'ruta': ''})
-@app.route('/app-horarios/<path:ruta>')
-def app_horarios_spa(ruta):
+# Los PDF (/horarios/export/...) son rutas más específicas del blueprint `horarios`: Flask
+# las prefiere a ésta, que se queda con todo lo demás.
+@app.route('/horarios/', defaults={'ruta': ''})
+@app.route('/horarios/<path:ruta>')
+def horarios_app(ruta):
     return _servir_app(APP_HORARIOS_DIST, ruta, 'npm run build:horarios')
 
 
 @app.route('/')
 def raiz():
-    """La raíz manda al sistema de horarios, que tiene su propio gate."""
-    return redirect(url_for('horarios.index'))
+    """La raíz manda a horarios, que tiene su propia clave."""
+    return redirect('/horarios/')
+
+
+# --- Las direcciones de antes: /app y /app-horarios -----------------------------------
+# Hasta el 2026-10-05 las apps vivían ahí (y las páginas clásicas en /gestion y
+# /horarios). Un link guardado o un acceso directo viejo llega a la pantalla equivalente.
+#
+# Un celular que ya tenía la app instalada trae además su service worker viejo, que
+# contesta /app/... desde su caché sin preguntarle nada al servidor: el redirect no le
+# llegaría nunca. Lo que sí pide siempre al servidor es su propio sw.js, para ver si hay
+# versión nueva. Por eso en esa dirección va uno que se desinstala: borra su caché, se da
+# de baja y recarga las pestañas, que ahora sí llegan al redirect.
+SW_RETIRADO = """// Esta app se mudó (ver app.py): este service worker se desinstala solo.
+self.addEventListener('install', () => self.skipWaiting())
+self.addEventListener('activate', (evento) => evento.waitUntil((async () => {
+  const alcance = self.registration.scope
+  for (const nombre of await caches.keys()) {
+    if (nombre.includes(alcance)) await caches.delete(nombre)
+  }
+  await self.registration.unregister()
+  for (const cliente of await self.clients.matchAll({ type: 'window' })) cliente.navigate(cliente.url)
+})()))
+"""
+
+
+def _sw_retirado():
+    resp = Response(SW_RETIRADO, mimetype='text/javascript')
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
+
+def _a_donde(destino):
+    """El redirect con la misma query (los filtros de la lista, `volver`, `comparar`)."""
+    query = request.query_string.decode()
+    return redirect(destino + ('?' + query if query else ''))
+
+
+@app.route('/app', defaults={'ruta': ''})
+@app.route('/app/', defaults={'ruta': ''})
+@app.route('/app/<path:ruta>')
+def app_vieja(ruta):
+    if ruta == 'sw.js':
+        return _sw_retirado()
+    if ruta.startswith('api/'):
+        return jsonify({'error': 'No existe'}), 404
+    if ruta == 'entrar':
+        return _a_donde('/gestion/entrar')
+    if ruta == 'gestion' or ruta == 'gestion/':
+        return _a_donde('/gestion/inventarios')
+    if ruta.startswith('gestion/'):
+        return _a_donde('/' + ruta)
+    return _a_donde('/gestion/')
+
+
+@app.route('/app-horarios', defaults={'ruta': ''})
+@app.route('/app-horarios/', defaults={'ruta': ''})
+@app.route('/app-horarios/<path:ruta>')
+def app_horarios_vieja(ruta):
+    if ruta == 'sw.js':
+        return _sw_retirado()
+    if ruta.startswith('api/'):
+        return jsonify({'error': 'No existe'}), 404
+    return _a_donde('/horarios/' + ruta)
 
 
 if __name__ == '__main__':

@@ -6,12 +6,12 @@ resuelven ahí, sin red. Al servidor sólo le pide:
 
   GET  /sesion      ¿hay sesión de horarios?
   POST /entrar      {clave} → abre la sesión (misma clave y mismo límite de intentos que
-                    /horarios/login, ver `acceso.comprobar_clave`)
+                    los PDF, ver `acceso.comprobar_clave`)
   POST /salir
   GET  /datos       todo el horario, con ETag: si nada cambió contesta 304 sin cuerpo
-  POST /actualizar  rearma escuela.db desde la planilla (lo mismo que /horarios/api/actualizar)
+  POST /actualizar  rearma escuela.db desde la planilla
 
-Los PDF no pasan por acá: la app abre los /horarios/export/... de siempre, que reconocen
+Los PDF no pasan por acá: la app abre los /horarios/export/... (rutas.py), que reconocen
 la misma sesión.
 
 Mismo aislamiento que el resto del paquete: no importa `accesos` ni nada de afuera. Los
@@ -28,7 +28,19 @@ from . import acceso, datos
 from .config import (DIAS, ESCUELA_NOMBRE, ESCUELA_VERSION, ESPECIALIDAD_CURSOS,
                      FLOOR_MAPPING, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE,
                      GIDS_CURSOS, SHEET_ID, TURNO_CURSOS, TURNO_DEFAULT)
-from .rutas import COLUMNAS_DASHBOARD, _planilla_preceptores_con_turnos
+from .rutas import _planilla_preceptores_con_turnos
+
+# Las columnas de `clases` que el front realmente lee. La lista es explícita y no un
+# `SELECT *` por dos motivos: la tabla guarda `dni`, `telefono` y `email` de cada docente
+# —que no tienen por qué viajar al navegador de cualquiera que abra el horario— y /datos
+# devuelve las 2.299 filas de una, así que cada columna de más se paga entera.
+# Al recortarlo el JSON pasó de 804 KB a 586 KB. Si el front empieza a usar otra
+# columna (`especialidad`, `tipo_materia`, `tipo_aula`), hay que sumarla acá.
+COLUMNAS_DASHBOARD = (
+    'curso', 'division', 'materia', 'profesor', 'aula', 'dia',
+    'hora_inicio', 'hora_fin', 'grupo', 'superposicion',
+    'suplente_activo', 'prof_suplente', 'sup_ini', 'sup_fin',
+)
 
 bp_app = Blueprint('horarios_app', __name__, url_prefix='/app-horarios/api')
 

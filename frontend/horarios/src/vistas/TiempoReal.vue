@@ -1,6 +1,6 @@
 <script setup>
 // TIEMPO REAL: qué clases están en curso y cuáles empiezan en las próximas 2 horas
-// (renderizarDashboard de script.js). Se repinta cada segundo desde lo que ya está en el
+// Se repinta cada segundo desde lo que ya está en el
 // dispositivo; el horario en sí se vuelve a pedir cada 10 minutos (consultas.js).
 // MODO MANUAL fija otro día y otra hora, para ver cómo va a estar la escuela.
 import { computed, ref, onMounted, onUnmounted } from 'vue'

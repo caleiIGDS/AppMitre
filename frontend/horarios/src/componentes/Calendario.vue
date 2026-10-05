@@ -1,7 +1,7 @@
 <script setup>
 // El calendario semanal (columnas = días) o la planilla general (columnas = aulas de un
-// piso). Las posiciones salen de calendario.js; acá sólo se pintan, con el mismo markup
-// que armaba script.js para que horarios.css lo vista igual.
+// piso). Las posiciones salen de calendario.js; acá sólo se pintan, con el markup que
+// viste horarios.css.
 import { computed } from 'vue'
 import { rango, bloquesColumna, detalleBloque, indicadorBloque } from '../calendario'
 import { esSeleccionada, verClase, verSuperposicion, mostrarCartel, ocultarCartel } from '../ventanas'

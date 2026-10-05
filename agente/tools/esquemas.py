@@ -669,7 +669,7 @@ PERMISO_POR_TOOL = {
     'listar_todos': 'agente.leer',
     'detalle_entidad': 'agente.leer',
     # Admin puro y no 'agente.leer': es la única tool que expone el TEXTO del alias, mismo
-    # gate que la web (/gestion/alias, permiso gestion.alias) — ver entidades._listar_alias_fmt.
+    # gate que la pantalla ALIAS de la app (permiso gestion.alias) — ver entidades._listar_alias_fmt.
     'listar_alias': gestion.PERMISO_ALIAS,
     # No toca la base: lo que gasta es la API de visión, no el inventario.
     'leer_foto': 'agente.leer',

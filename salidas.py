@@ -1316,7 +1316,7 @@ accesos.registrar_acceso(bp, PERMISO_LECTURA, endpoint_default='lista', entrar=_
 @bp.context_processor
 def _contexto():
     # inventarios/inv_activo: los pide el widget del asistente (ver _agente_widget.html),
-    # que acá no tiene un `<inv>` en la URL que se lo fije como en /gestion/<inv>/… — el
+    # que acá no tiene un `<inv>` en la URL que se lo fije como en la app de Gestión — el
     # selector es la única forma de ver o cambiar en cuál está trabajando.
     inventarios = gestion.abribles()
     inv_activo = gestion.slug_activo()

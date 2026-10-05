@@ -1,5 +1,5 @@
 <script setup>
-// Alta y edición de un recurso: la pantalla de templates/crud/form.html + gestion/form.html.
+// Alta y edición de un recurso.
 // Arriba los campos (GUARDAR); en edición, abajo, lo que se guarda por su cuenta: unidades,
 // kit y la baja.
 //

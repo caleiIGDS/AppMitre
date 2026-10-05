@@ -11,7 +11,7 @@ Eso es lo que hace que sumar un área nueva mañana no obligue a tocar nada de a
 sus `PERMISOS` con su verbo y entra sola en los perfiles.
 
 TRES NIVELES
-    Público   el SPA de horarios (`/`): sin sesión, abierto.
+    Aparte    horarios (`/horarios/`): tiene su propia clave, fuera de este sistema.
     Interno   dispositivos habilitados por link de invitación, con permisos sueltos.
     Admin     la clave `GESTION_CLAVE`; tiene el comodín '*'.
 
@@ -994,6 +994,11 @@ def borrar_inv(inv_id):
 registrar_acceso(bp, 'accesos.admin', endpoint_default='panel')
 
 
+def _nombres_areas(montados):
+    return {m.__name__ for m in montados
+            if getattr(m, 'bp', None) is not None or getattr(m, 'bp_api', None) is not None}
+
+
 def registrar_app(app, modulos):
     """Junta el catálogo de todas las áreas y engancha lo que es de la app entera.
 
@@ -1013,12 +1018,12 @@ def registrar_app(app, modulos):
     app.jinja_env.globals['puede'] = puede
     app.jinja_env.globals['acceso_actual'] = actual
 
-    # Qué áreas quedaron montadas, por nombre de blueprint, para el menú que comparten
+    # Qué áreas quedaron montadas, por nombre de módulo (el de su blueprint, si tiene uno:
+    # gestion ya no tiene páginas, sólo la API de la app), para el menú que comparten
     # todos los headers. `puede()` no alcanza para esconder un área apagada: el admin tiene
     # el comodín '*', así que le diría que sí a un permiso que ya no está en el catálogo y
     # el `url_for` de un blueprint que nadie registró reventaría la página entera.
-    app.jinja_env.globals['areas'] = frozenset(
-        m.bp.name for m in montados if getattr(m, 'bp', None) is not None)
+    app.jinja_env.globals['areas'] = frozenset(_nombres_areas(montados))
     # También el ámbito activo, para que un header pueda preguntar si está adentro de un
     # compartimento sin que el template tenga que saber cómo se resuelve.
     app.jinja_env.globals['ambito_actual'] = ambito_actual
@@ -1042,8 +1047,7 @@ def registrar_app(app, modulos):
             'acceso': None if quien is None else {
                 'tipo': quien.get('tipo', 'extra'), 'nombre': quien['nombre'],
                 'permisos': sorted(permisos_sesion)},
-            'areas': sorted(m.bp.name for m in montados
-                            if getattr(m, 'bp', None) is not None),
+            'areas': sorted(_nombres_areas(montados)),
             'escuela': {'nombre': ESCUELA_NOMBRE, 'version': ESCUELA_VERSION},
         })
 
@@ -1083,15 +1087,15 @@ def registrar_app(app, modulos):
 
     @app.route('/salir')
     def salir_general():
-        """Cerrar sesión y volver a la home pública.
+        """Cerrar sesión y volver al inicio de la app de Gestión.
 
         Cada área tiene su `/salir`, que devuelve a SU login — bien para el staff que se
-        va a volver a loguear ahí. Éste es para el menú del SPA de horarios: mandar a
-        `/gestion/login` a alguien que entró por link y no tiene ninguna contraseña sería
-        un callejón.
+        va a volver a loguear ahí. Éste es el SALIR del menú ☰ de las páginas del servidor:
+        mandar a un login a alguien que entró por link y no tiene ninguna contraseña sería
+        un callejón. El inicio de la app le muestra cómo entrar.
         """
         session.clear()
-        return redirect('/')
+        return redirect('/gestion/')
 
     # El canje va sobre `app` y no sobre un blueprint con gate: es justamente la puerta
     # por la que entra alguien que todavía no tiene ningún acceso. Por eso ningún

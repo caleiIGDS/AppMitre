@@ -1,8 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { pedirMeta } from './gestion/datos'
 
-// Las direcciones son las mismas que las de las páginas clásicas, debajo de /app:
-// /gestion/<inv>/recursos/<id> acá es /app/gestion/<inv>/recursos/<id>.
+// Todo cuelga de /gestion/: el inicio (las áreas) es /gestion/, la lista de inventarios
+// /gestion/inventarios y cada inventario /gestion/<inv>/… Los nombres fijos de este nivel
+// (entrar, inventarios, assets) no los puede tomar un inventario: gestion.SLUGS_RESERVADOS.
 //
 // Las pantallas de un inventario declaran qué necesitan (meta.requiere: una bandera del
 // /meta del inventario, ej. 'puede_escribir'). El servidor lo vuelve a controlar en cada
@@ -11,40 +12,45 @@ const routes = [
   { path: '/', name: 'inicio', component: () => import('./vistas/Inicio.vue') },
   { path: '/entrar', name: 'entrar', component: () => import('./vistas/Entrar.vue'), meta: { titulo: 'Entrar' } },
 
-  { path: '/gestion', name: 'inventarios', component: () => import('./vistas/gestion/Inventarios.vue'), meta: { titulo: 'Inventarios' } },
-  { path: '/gestion/:inv', redirect: (to) => ({ name: 'recursos', params: to.params }) },
+  { path: '/inventarios', name: 'inventarios', component: () => import('./vistas/gestion/Inventarios.vue'), meta: { titulo: 'Inventarios' } },
+  { path: '/:inv', redirect: (to) => ({ name: 'recursos', params: to.params }) },
   {
-    path: '/gestion/:inv/entrar', name: 'inventario-entrar', props: true,
+    path: '/:inv/entrar', name: 'inventario-entrar', props: true,
     component: () => import('./vistas/gestion/InventarioEntrar.vue'),
     meta: { inventario: true, abierta: true, titulo: 'Entrar al inventario' },
   },
   {
-    path: '/gestion/:inv/recursos', name: 'recursos', props: true,
+    path: '/:inv/recursos', name: 'recursos', props: true,
     component: () => import('./vistas/gestion/Inventario.vue'),
     meta: { inventario: true, titulo: 'Inventario' },
   },
   {
-    path: '/gestion/:inv/recursos/nuevo', name: 'recurso-nuevo', props: true,
+    path: '/:inv/recursos/nuevo', name: 'recurso-nuevo', props: true,
     component: () => import('./vistas/gestion/RecursoFormulario.vue'),
     meta: { inventario: true, requiere: 'puede_escribir', titulo: 'Crear recurso' },
   },
   {
-    path: '/gestion/:inv/recursos/:id(\\d+)', name: 'recurso', props: true,
+    path: '/:inv/recursos/:id(\\d+)', name: 'recurso', props: true,
     component: () => import('./vistas/gestion/Recurso.vue'),
     meta: { inventario: true, titulo: 'Recurso' },
   },
   {
-    path: '/gestion/:inv/recursos/:id(\\d+)/editar', name: 'recurso-editar', props: true,
+    path: '/:inv/recursos/:id(\\d+)/editar', name: 'recurso-editar', props: true,
     component: () => import('./vistas/gestion/RecursoFormulario.vue'),
     meta: { inventario: true, requiere: 'puede_escribir', titulo: 'Editar recurso' },
   },
   {
-    path: '/gestion/:inv/alias', name: 'alias', props: true,
+    path: '/:inv/alias', name: 'alias', props: true,
     component: () => import('./vistas/gestion/Alias.vue'),
     meta: { inventario: true, requiere: 'puede_alias', titulo: 'Alias' },
   },
   {
-    path: '/gestion/:inv/bajas', name: 'bajas', props: true,
+    path: '/:inv/accesos', name: 'accesos', props: true,
+    component: () => import('./vistas/gestion/Accesos.vue'),
+    meta: { inventario: true, requiere: 'puede_accesos', titulo: 'Quién entra' },
+  },
+  {
+    path: '/:inv/bajas', name: 'bajas', props: true,
     component: () => import('./vistas/gestion/Bajas.vue'),
     meta: { inventario: true, requiere: 'puede_auditoria', titulo: 'Registro de bajas' },
   },
@@ -53,7 +59,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory('/app/'),
+  history: createWebHistory('/gestion/'),
   routes,
   scrollBehavior(to, from, guardada) {
     // Atrás/adelante: el scroll exacto donde estaba. Los datos salen de la memoria, así

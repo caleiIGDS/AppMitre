@@ -28,17 +28,7 @@ concreta entra por un **hook opcional**, nunca por un `if slug == '...'` acá ad
       prefijo_backup()                el prefijo de respaldo que le corresponde
       migrar(cur)                     ALTERs aditivos para DBs viejas
       seed(cur)                       datos de ejemplo en instalación nueva
-      secciones_detalle(slug, id, cur)  relaciones a mostrar en el detalle
-      resultados_extra_busqueda(slug, q, cur)  filas extra para el listado cuando hay `q`
       derivados(slug, valores)        columnas calculadas al guardar (no van en 'campos')
-      valores_iniciales(slug)         defaults del form de alta
-      extras_template(vista, slug, id)  kwargs extra para render_template (`id` sólo en
-                                      las vistas de una fila: detalle y editar; si no, None)
-      tarjetas_extra(cur)             tarjetas del home que no salen de ENTIDADES
-      inicio()                        URL a la que redirige la raíz del área en vez del
-                                      home de tarjetas (el área no tiene home.html)
-      contexto_extra()                claves extra del context processor
-      NAV_EXTRA                       [(slug, label)] extra para la nav
       ERROR_DUPLICADO                 {slug: mensaje} cuando un UNIQUE rechaza el guardado
       api_serializar(slug, filas, cur)  completa las filas que devuelve la API JSON (/app)
       api_meta()                      claves extra del GET /meta de la API
@@ -47,7 +37,7 @@ concreta entra por un **hook opcional**, nunca por un `if slug == '...'` acá ad
 
 Cada cfg de ENTIDADES: tabla, singular, plural, descripcion, campos, columnas,
 relaciones y (opcional) campo_nombre, permiso y `sin_eliminar` (la entidad no se borra
-nunca: la ruta de eliminar devuelve 404 y los templates no ofrecen el botón — lo usa
+nunca: la ruta de eliminar devuelve 404 y la app no ofrece el botón — lo usa
 `gestion.recursos`, que en vez de borrarse se da de baja).
 """
 
@@ -56,13 +46,13 @@ import json
 import os
 import sqlite3
 
-from flask import abort, jsonify, redirect, render_template, request, send_file, url_for
+from flask import abort, jsonify, request, send_file, url_for
 
 import accesos
 import fotos_disco
 import respaldos
 import texto
-from config import ESCUELA_NOMBRE, ESCUELA_LOGO, ESCUELA_VERSION, ahora
+from config import ahora
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +145,7 @@ def relaciones_visibles(area, cfg_ent):
 def select(cfg_ent):
     """SELECT que SIEMPRE expone una columna `nombre`, se llame como se llame en la tabla.
 
-    Todo lo que consume filas (templates genéricos, búsqueda, el agente) lee
+    Todo lo que consume filas (la API, la búsqueda, el agente) lee
     `fila['nombre']`. Con el alias, una entidad puede tener su columna con otro nombre sin
     que ninguno de esos consumidores se entere.
     """
@@ -460,40 +450,6 @@ def snapshot_entidad(area, slug, id, con=None):
     return {'fila': dict(fila), 'relaciones': relaciones, 'm2m': m2m}
 
 
-def agregar_relacion_m2m(area, tabla, col_propia, col_ajena, id_propio, id_ajeno, con=None):
-    """Agregar una fila a una tabla M2M."""
-    debe_cerrar = con is None
-    if con is None:
-        con = conectar(area)
-    try:
-        con.execute(f"INSERT OR IGNORE INTO {tabla} ({col_propia}, {col_ajena}) VALUES (?,?)",
-                    (id_propio, id_ajeno))
-        con.commit()
-        return True
-    except Exception:
-        return False
-    finally:
-        if debe_cerrar:
-            con.close()
-
-
-def quitar_relacion_m2m(area, tabla, col_propia, col_ajena, id_propio, id_ajeno, con=None):
-    """Quitar una fila de una tabla M2M."""
-    debe_cerrar = con is None
-    if con is None:
-        con = conectar(area)
-    try:
-        con.execute(f"DELETE FROM {tabla} WHERE {col_propia} = ? AND {col_ajena} = ?",
-                    (id_propio, id_ajeno))
-        con.commit()
-        return True
-    except Exception:
-        return False
-    finally:
-        if debe_cerrar:
-            con.close()
-
-
 def agregar_foto(area, slug, id, b64, tipo):
     """Agrega una foto ya en base64 a la galería de una entidad: la decodifica y la
     escribe en `database/fotos/` (ver `fotos_disco.py`) — en la fila sólo queda
@@ -525,42 +481,11 @@ def agregar_foto(area, slug, id, b64, tipo):
 # Helpers de formulario
 # ---------------------------------------------------------------------------
 
-def _opciones_relaciones(area, relaciones, cur):
-    """Opciones disponibles para cada relación M2M del formulario."""
-    opciones = {}
-    for rel in relaciones:
-        cfg_ajeno = area.ENTIDADES[rel['slug_ajeno']]
-        opciones[rel['campo']] = cur.execute(
-            f"SELECT id, {campo_nombre(cfg_ajeno)} AS nombre FROM {cfg_ajeno['tabla']} "
-            f"ORDER BY nombre COLLATE NOCASE").fetchall()
-    return opciones
-
-
-def _seleccion_relaciones(relaciones, id, cur):
-    """IDs actualmente vinculados, por campo de relación."""
-    seleccion = {}
-    for rel in relaciones:
-        filas = cur.execute(
-            f"SELECT {rel['col_ajena']} FROM {rel['tabla']} WHERE {rel['col_propia']} = ?",
-            (id,)).fetchall()
-        seleccion[rel['campo']] = {f[0] for f in filas}
-    return seleccion
-
-
 def _campos_escribibles(cfg_ent, editando):
     """`solo_alta`: un campo así se escribe sólo al crear; en edición ni se renderiza (ver
-    templates/crud/form.html) ni se toca, para que el input ausente no vacíe la columna.
+    el formulario de la app) ni se toca, para que el input ausente no vacíe la columna.
     Lo usa `gestion.recursos.cantidad`, que en edición pasa a manejarse por unidades."""
     return [c['nombre'] for c in cfg_ent['campos'] if not (editando and c.get('solo_alta'))]
-
-
-def _guardar_form(area, slug, cfg_ent, cur, id=None):
-    """Inserta o actualiza desde request.form y sincroniza las M2M. Devuelve el id."""
-    valores = {n: request.form.get(n, '').strip()
-               for n in _campos_escribibles(cfg_ent, id is not None)}
-    seleccion = {rel['campo']: request.form.getlist(rel['campo'])
-                 for rel in relaciones_visibles(area, cfg_ent)}
-    return _guardar(area, slug, cfg_ent, cur, valores, seleccion, id)
 
 
 def _guardar(area, slug, cfg_ent, cur, valores, seleccion, id=None):
@@ -607,387 +532,10 @@ def _guardar(area, slug, cfg_ent, cur, valores, seleccion, id=None):
 
 
 # ---------------------------------------------------------------------------
-# Rutas genéricas
+# API JSON — lo que consume la app instalable (carpeta frontend/)
 # ---------------------------------------------------------------------------
-
-def contexto_base(bp, area):
-    """Lo que todo template del área necesita. `area_nombre` y `base_template` son lo que
-    permite que los templates de `templates/crud/` sirvan para cualquier área sin saber
-    de cuál son."""
-    nav = [(slug, e['plural']) for slug, e in area.ENTIDADES.items()
-           if ve_entidad(area, slug)]
-    nav += list(_hook(area, 'NAV_EXTRA', []))
-    ctx = {
-        'escuela_nombre': ESCUELA_NOMBRE,
-        'escuela_logo': ESCUELA_LOGO,
-        'escuela_version': ESCUELA_VERSION,
-        'nav_entidades': nav,
-        'area_nombre': bp.name,
-        'base_template': f'{bp.name}/base.html',
-        # Para que `lista.html`/`detalle.html` escondan los botones de escritura sin que
-        # este archivo nombre ningún permiso: la clave la pone el área.
-        'permiso_escritura': _hook(area, 'PERMISO_ESCRITURA'),
-        # Girar una foto puede pedir un permiso más alto que el resto de la escritura
-        # (en gestión lo pide: `PERMISO_ROTAR_FOTO`). El área que no lo declara cae en
-        # el de escritura y no cambia nada.
-        'permiso_rotar_foto': _hook(area, 'PERMISO_ROTAR_FOTO')
-                              or _hook(area, 'PERMISO_ESCRITURA'),
-        # Para el botón "HOY" de un campo de fecha de texto libre (`boton_hoy` en el cfg
-        # del campo): el formato lo pone el área, la fecha sale del reloj de la escuela.
-        'hoy': lambda formato: ahora().strftime(formato),
-    }
-    extra = _hook(area, 'contexto_extra')
-    if extra:
-        ctx.update(extra())
-    return ctx
-
-
-def registrar_rutas(bp, area):
-    """Monta home / lista / nuevo / detalle / editar / eliminar / fotos sobre `bp`.
-
-    Los endpoints y las carpetas de templates salen de `bp.name`, que ya coincide con el
-    nombre de la carpeta en `templates/` — así esto no necesita configuración extra.
-    """
-    nombre = bp.name
-    # Qué permiso pide una ruta que escribe. Lo nombra el área; este archivo sólo lo
-    # pasa, igual que hace con `campo_nombre`.
-    escritura = _hook(area, 'PERMISO_ESCRITURA')
-    rotar = _hook(area, 'PERMISO_ROTAR_FOTO') or escritura
-
-    def _extras(vista, slug, id=None):
-        hook = _hook(area, 'extras_template')
-        return hook(vista, slug, id) if hook else {}
-
-    @bp.context_processor
-    def _contexto():
-        return contexto_base(bp, area)
-
-    @bp.before_request
-    def _gate_entidad():
-        """La entidad de la URL, si pide un permiso propio (ver `permiso_entidad`).
-
-        Va acá y no en cada vista porque el slug está en la URL de TODAS: una sola puerta
-        para lista, detalle, nuevo, editar, eliminar y las dos de fotos. Corre después del
-        gate de sesión de `accesos.registrar_acceso`, que el área monta primero.
-        """
-        slug = (request.view_args or {}).get('slug')
-        permiso = permiso_entidad(area, slug) if slug else None
-        if permiso and not accesos.puede(permiso):
-            return accesos.denegar(permiso)
-
-    @bp.route('/')
-    def home():
-        inicio = _hook(area, 'inicio')
-        if inicio:
-            return redirect(inicio())
-        con = conectar(area)
-        cur = con.cursor()
-        tarjetas = []
-        for slug, e in area.ENTIDADES.items():
-            if not ve_entidad(area, slug):
-                continue
-            total = cur.execute(f"SELECT COUNT(*) FROM {e['tabla']}").fetchone()[0]
-            tarjetas.append({'slug': slug, 'plural': e['plural'], 'singular': e['singular'],
-                             'descripcion': e['descripcion'], 'total': total})
-        extra = _hook(area, 'tarjetas_extra')
-        if extra:
-            tarjetas.extend(extra(cur))
-        con.close()
-        return render_template(f'{nombre}/home.html', tarjetas=tarjetas, activo='home')
-
-    @bp.route('/<slug>')
-    def lista(slug):
-        cfg_ent = cfg(area, slug)
-        q = request.args.get('q', '').strip()
-        con = conectar(area)
-        cur = con.cursor()
-        filas = cur.execute(f"{select(cfg_ent)} ORDER BY nombre COLLATE NOCASE").fetchall()
-        campo_al = campo_alias(cfg_ent)
-        via_alias = set()
-        if q:
-            # Búsqueda tolerante (ver texto.puntaje_busqueda): acentos/mayúsculas no
-            # importan y se perdonan typos. Se filtra y ordena en Python — con esta
-            # cantidad de filas el costo es despreciable frente a que "perdone".
-            q_norm = texto.norm(q)
-            puntuadas, por_alias = [], []
-            for fila in filas:
-                puntaje = texto.puntaje_busqueda(q_norm, fila['nombre'], fila['descripcion'])
-                if puntaje is not None:
-                    puntuadas.append((puntaje, fila))
-                elif campo_al:
-                    # Segunda pasada, solo si no matcheó por nombre/descripcion: los que
-                    # entran acá se muestran al final, marcados aparte (ver
-                    # agent_docs/gestion-conocimiento.md).
-                    puntaje_al = texto.puntaje_busqueda(q_norm, fila[campo_al])
-                    if puntaje_al is not None:
-                        por_alias.append((puntaje_al, fila))
-            puntuadas.sort(key=lambda par: (-par[0], texto.norm(par[1]['nombre'])))
-            por_alias.sort(key=lambda par: (-par[0], texto.norm(par[1]['nombre'])))
-            via_alias = {fila['id'] for _, fila in por_alias}
-            filas = [fila for _, fila in puntuadas] + [fila for _, fila in por_alias]
-        # Texto ya normalizado por fila, para el filtrado en vivo del navegador
-        # (data-buscar / data-alias). El alias viaja APARTE, no concatenado al nombre: si
-        # va todo junto, el filtro en vivo no puede saber de dónde vino el match y una fila
-        # que sólo coincide por alias queda mezclada entre las que coinciden por nombre
-        # (buscar "pinza" ponía "Alicate" arriba de "Pinza de fuerza", por orden alfabético).
-        # Con los dos campos separados, gestion.js puede repetir la misma jerarquía que la
-        # segunda pasada de acá arriba: los de alias, al final.
-        def _texto_buscar(fila):
-            return texto.norm(f"{fila['nombre']} {fila['descripcion'] or ''}")
-        buscar = {fila['id']: _texto_buscar(fila) for fila in filas}
-        buscar_alias = {fila['id']: texto.norm(fila[campo_al] or '') if campo_al else ''
-                        for fila in filas}
-        # Filas que no son de esta entidad pero matchean la búsqueda (ej: sub-recursos de
-        # un kit): el hook decide qué son, el motor sólo las reenvía a la plantilla.
-        extra_filas = []
-        if q:
-            extra_hook = _hook(area, 'resultados_extra_busqueda')
-            if extra_hook:
-                extra_filas = extra_hook(slug, q, cur)
-        con.close()
-        return render_template(f'{nombre}/lista.html', cfg=cfg_ent, slug=slug, filas=filas,
-                               q=q, activo=slug, buscar=buscar, buscar_alias=buscar_alias,
-                               via_alias=via_alias, extra_filas=extra_filas,
-                               **_extras('lista', slug))
-
-    @bp.route('/<slug>/nuevo', methods=['GET', 'POST'])
-    @accesos.requiere(escritura)
-    def nuevo(slug):
-        cfg_ent = cfg(area, slug)
-        con = conectar(area)
-        cur = con.cursor()
-        error = None
-        if request.method == 'POST':
-            if not request.form.get(campo_nombre(cfg_ent), '').strip():
-                error = 'El nombre es obligatorio.'
-            else:
-                try:
-                    id = _guardar_form(area, slug, cfg_ent, cur)
-                except sqlite3.IntegrityError:
-                    error = _hook(area, 'ERROR_DUPLICADO', {}).get(
-                        slug, 'Ya existe un registro igual.')
-                else:
-                    con.commit()
-                    con.close()
-                    return redirect(url_for(f'{nombre}.detalle', slug=slug, id=id))
-        relaciones = relaciones_visibles(area, cfg_ent)
-        opciones = _opciones_relaciones(area, relaciones, cur)
-        con.close()
-        seleccion = {rel['campo']: {int(v) for v in request.form.getlist(rel['campo'])}
-                     for rel in relaciones}
-        # En el GET el form arranca con los defaults; en un POST fallido se respeta lo tipeado.
-        iniciales = _hook(area, 'valores_iniciales')
-        valores = request.form if request.method == 'POST' else (
-            iniciales(slug) if iniciales else {})
-        return render_template(f'{nombre}/form.html', cfg=cfg_ent, slug=slug, fila=None,
-                               valores=valores, opciones=opciones, seleccion=seleccion,
-                               relaciones=relaciones, error=error, activo=slug,
-                               **_extras('nuevo', slug))
-
-    @bp.route('/<slug>/<int:id>')
-    def detalle(slug, id):
-        cfg_ent = cfg(area, slug)
-        con = conectar(area)
-        cur = con.cursor()
-        fila = cur.execute(f"{select(cfg_ent)} WHERE id = ?", (id,)).fetchone()
-        if fila is None:
-            con.close()
-            abort(404)
-        secciones_hook = _hook(area, 'secciones_detalle')
-        secciones = secciones_hook(slug, id, cur) if secciones_hook else []
-        # Una sección que apunta a una entidad con permiso propio no se muestra: si esa
-        # entidad esconde datos detrás de un permiso extra, listarlos desde la ficha de
-        # otra sería la puerta de atrás. Las que no apuntan a una entidad (gestion: "Por
-        # ubicación") pasan.
-        secciones = [s for s in secciones if ve_entidad(area, s.get('slug'))]
-        con.close()
-        fila_dict = dict(fila)
-        fila_dict['fotos'] = json.loads(fila_dict.get('fotos', '[]'))
-        return render_template(f'{nombre}/detalle.html', cfg=cfg_ent, slug=slug,
-                               fila=fila_dict, secciones=secciones, activo=slug,
-                               **_extras('detalle', slug, id))
-
-    @bp.route('/<slug>/<int:id>/editar', methods=['GET', 'POST'])
-    @accesos.requiere(escritura)
-    def editar(slug, id):
-        cfg_ent = cfg(area, slug)
-        con = conectar(area)
-        cur = con.cursor()
-        fila = cur.execute(f"{select(cfg_ent)} WHERE id = ?", (id,)).fetchone()
-        if fila is None:
-            con.close()
-            abort(404)
-        # Una acción propia del área (ej. gestion.unidad_agregar) puede redirigir de vuelta
-        # al form con un motivo de rechazo en la query. Jinja lo autoescapea al pintarlo.
-        error = request.args.get('error') if request.method == 'GET' else None
-        if request.method == 'POST':
-            if not request.form.get(campo_nombre(cfg_ent), '').strip():
-                error = 'El nombre es obligatorio.'
-            else:
-                try:
-                    _guardar_form(area, slug, cfg_ent, cur, id)
-                except sqlite3.IntegrityError:
-                    error = _hook(area, 'ERROR_DUPLICADO', {}).get(
-                        slug, 'Ya existe un registro igual.')
-                else:
-                    con.commit()
-                    con.close()
-                    return redirect(url_for(f'{nombre}.detalle', slug=slug, id=id))
-        relaciones = relaciones_visibles(area, cfg_ent)
-        opciones = _opciones_relaciones(area, relaciones, cur)
-        seleccion = _seleccion_relaciones(relaciones, id, cur)
-        con.close()
-        valores = request.form if request.method == 'POST' else fila
-        return render_template(f'{nombre}/form.html', cfg=cfg_ent, slug=slug, fila=fila,
-                               valores=valores, opciones=opciones, seleccion=seleccion,
-                               relaciones=relaciones, error=error, activo=slug,
-                               **_extras('editar', slug, id))
-
-    @bp.route('/<slug>/<int:id>/eliminar', methods=['POST'])
-    @accesos.requiere(escritura)
-    def eliminar(slug, id):
-        cfg_ent = cfg(area, slug)
-        # Entidad que no se borra nunca (`sin_eliminar`): la ruta ni existe para ese slug.
-        # Los templates ya no muestran el botón, pero esto es lo que cierra la URL a mano.
-        if cfg_ent.get('sin_eliminar'):
-            abort(404)
-        con = conectar(area)
-        cur = con.cursor()
-        cur.execute(f"DELETE FROM {cfg_ent['tabla']} WHERE id = ?", (id,))
-        for tabla, columna in area.LIMPIEZA_M2M[slug]:
-            cur.execute(f"DELETE FROM {tabla} WHERE {columna} = ?", (id,))
-        con.commit()
-        con.close()
-        return redirect(url_for(f'{nombre}.lista', slug=slug))
-
-    @bp.route('/<slug>/<int:id>/foto', methods=['POST'])
-    @accesos.requiere(escritura)
-    def subir_foto(slug, id):
-        """Sube una foto (ya comprimida client-side, ver `_detalle_fotos.html`), la
-        convierte a base64 y la manda a `agregar_foto`, que la escribe en disco."""
-        cfg(area, slug)  # 404 temprano si el slug no existe
-
-        if 'file' not in request.files:
-            return jsonify({'ok': False, 'error': 'No hay archivo'}), 400
-
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'ok': False, 'error': 'Archivo vacío'}), 400
-
-        if not file.content_type.startswith('image/'):
-            return jsonify({'ok': False, 'error': 'Solo se aceptan imágenes'}), 400
-
-        try:
-            b64 = base64.b64encode(file.read()).decode('utf-8')
-            if not agregar_foto(area, slug, id, b64, file.content_type):
-                return jsonify({'ok': False, 'error': 'No existe el registro'}), 404
-            return jsonify({'ok': True})
-        except Exception as e:
-            return jsonify({'ok': False, 'error': str(e)}), 500
-
-    @bp.route('/<slug>/<int:id>/foto/<foto_id>')
-    def foto_archivo(slug, id, foto_id):
-        """Sirve el archivo de una foto (ver `fotos_disco.py`).
-
-        No usa `/static` porque la galería es privada: no lleva su propio decorador de
-        permiso, cae bajo el mismo `_gate_entidad` (`before_request`, filtra por `slug`)
-        que `detalle`/`lista` — mismo nivel de acceso. Además valida acá que `foto_id`
-        pertenezca a ESTA fila: el uuid random no alcanza solo como control de acceso,
-        porque no es secreto frente a alguien que ya tiene lectura de otra entidad del
-        área.
-        """
-        cfg_ent = cfg(area, slug)
-        con = conectar(area)
-        cur = con.cursor()
-        fila = cur.execute(f"SELECT fotos FROM {cfg_ent['tabla']} WHERE id = ?", (id,)).fetchone()
-        con.close()
-        if fila is None:
-            abort(404)
-        fotos = json.loads(fila['fotos'] or '[]')
-        foto = next((f for f in fotos if f.get('id') == foto_id), None)
-        if foto is None:
-            abort(404)
-        archivo = fotos_disco.ruta(foto['id'], foto['tipo'])
-        if not os.path.exists(archivo):
-            abort(404)
-        return send_file(archivo, mimetype=foto['tipo'])
-
-    @bp.route('/<slug>/<int:id>/foto/<foto_id>/eliminar', methods=['POST'])
-    @accesos.requiere(escritura)
-    def eliminar_foto(slug, id, foto_id):
-        """Borra una foto de la galería (fila + archivo en disco) por su `id` (uuid).
-
-        Un `foto_id` que no está no es error: se ignora y se vuelve a la ficha (pasa si
-        dos pestañas borran a la vez, o un doble click).
-        """
-        cfg_ent = cfg(area, slug)
-        con = conectar(area)
-        cur = con.cursor()
-        fila = cur.execute(f"SELECT fotos FROM {cfg_ent['tabla']} WHERE id = ?", (id,)).fetchone()
-        if fila is None:
-            con.close()
-            abort(404)
-        fotos = json.loads(fila['fotos'] or '[]')
-        borrada = next((f for f in fotos if f.get('id') == foto_id), None)
-        if borrada is not None:
-            fotos_disco.eliminar(borrada['id'], borrada['tipo'])
-            restantes = [f for f in fotos if f.get('id') != foto_id]
-            cur.execute(f"UPDATE {cfg_ent['tabla']} SET fotos = ? WHERE id = ?",
-                        (json.dumps(restantes), id))
-            con.commit()
-        con.close()
-        return redirect(url_for(f'{nombre}.detalle', slug=slug, id=id))
-
-    @bp.route('/<slug>/<int:id>/foto/<foto_id>/rotar', methods=['POST'])
-    @accesos.requiere(rotar)
-    def rotar_foto(slug, id, foto_id):
-        """Reemplaza el ARCHIVO de una foto por la misma imagen girada, conservando su
-        `id` (y su `fecha`).
-
-        El giro lo hace el navegador (un canvas en `crud/_detalle_fotos.html`) y acá llega
-        la imagen ya girada, cruda en el body con su `Content-Type`: así no hace falta
-        Pillow ni ninguna dependencia nueva en el server. Como la ruta acepta el contenido
-        que le mandan, pide el permiso que declaró el área (`PERMISO_ROTAR_FOTO`), que
-        puede ser más alto que el de escritura.
-        """
-        cfg_ent = cfg(area, slug)
-        tipo = (request.content_type or '').split(';')[0].strip()
-        crudo = request.get_data()
-        if not tipo.startswith('image/'):
-            return jsonify({'ok': False, 'error': 'Tipo de imagen inválido'}), 400
-        if not crudo:
-            return jsonify({'ok': False, 'error': 'Imagen vacía'}), 400
-        if len(crudo) > 24 * 1024 * 1024:
-            return jsonify({'ok': False, 'error': 'Imagen demasiado grande'}), 400
-
-        con = conectar(area)
-        cur = con.cursor()
-        fila = cur.execute(f"SELECT fotos FROM {cfg_ent['tabla']} WHERE id = ?", (id,)).fetchone()
-        if fila is None:
-            con.close()
-            abort(404)
-        fotos = json.loads(fila['fotos'] or '[]')
-        foto = next((f for f in fotos if f.get('id') == foto_id), None)
-        if foto is None:
-            con.close()
-            return jsonify({'ok': False, 'error': 'No existe esa foto'}), 404
-        fotos_disco.reemplazar(foto['id'], foto['tipo'], crudo, tipo)
-        foto['tipo'] = tipo
-        # La app instalable guarda cada imagen por su URL, y la URL lleva esta marca (ver
-        # `serializar`): sin ella seguiría mostrando la foto sin girar.
-        foto['girada'] = ahora().isoformat()
-        cur.execute(f"UPDATE {cfg_ent['tabla']} SET fotos = ? WHERE id = ?",
-                    (json.dumps(fotos), id))
-        con.commit()
-        con.close()
-        return jsonify({'ok': True})
-
-
-# ---------------------------------------------------------------------------
-# API JSON — lo que consume la app instalable (/app, carpeta frontend/)
-# ---------------------------------------------------------------------------
-# Mismas reglas que las rutas HTML de arriba (permisos, relaciones visibles, solo_alta,
-# sin_eliminar, hooks), pero devolviendo datos. Convenciones, iguales para todas las áreas:
+# Permisos, relaciones visibles, solo_alta, sin_eliminar y hooks del área, devolviendo
+# datos. Convenciones, iguales para todas las áreas:
 #
 #   GET    /meta                       campos, relaciones y qué puede este acceso
 #   GET    /<slug>                     todas las filas serializadas. ETag = _revision.n

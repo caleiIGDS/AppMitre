@@ -1,5 +1,5 @@
 <script setup>
-// La ventana de detalle de /horarios (#modal-detalles): una clase, una superposición o
+// La ventana de detalle: una clase, una superposición o
 // elegir cursos para imprimir. Tocar un profesor, curso o aula lleva a su horario.
 import { computed, onMounted, onUnmounted } from 'vue'
 import { ventana, cerrarVentana } from '../ventanas'
