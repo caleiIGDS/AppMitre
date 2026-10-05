@@ -1,1 +1,0 @@
-import{t as e}from"./index-udAtoCxg.js";function t(t){let r=e.resolve(t),i=window.history.state?.back;i&&e.resolve(i).name===r.name&&n(e.resolve(i).params,r.params)?e.back():e.replace(t)}function n(e,t){let n=new Set([...Object.keys(e),...Object.keys(t)]);for(let r of n)if(String(e[r])!==String(t[r]))return!1;return!0}export{t};

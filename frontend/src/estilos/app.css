@@ -166,9 +166,10 @@ body.g-sin-scroll { overflow: hidden; }
 
 /* La fila de pestañas lleva al lado lo que ponga la pantalla (Teleport a #nav-acciones). */
 .a-nav-acciones { display: contents; }
+.a-nav-vacia:not(:has(.g-nav-tag)) { display: none; }
 .a-quitar-filtros {
     cursor: pointer;
-    background: var(--g-primary);
-    border-color: var(--g-primary);
+    background: var(--g-accent);
+    border-color: var(--g-accent);
     color: white;
 }
