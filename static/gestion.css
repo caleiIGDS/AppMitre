@@ -3418,20 +3418,35 @@ body.g-sidebar-abierto { overflow: hidden; }
         background: var(--g-primary);
         border: none;
         padding: 12px 14px;
+        /* La franja queda pegada arriba al scrollear la lista: buscar sin volver hasta
+           arriba. Alto fijo (12 + 44 + 12): el encabezado de columnas se pega justo
+           debajo, con `top: var(--g-franja-alto)`. */
+        position: sticky;
+        top: 0;
     }
+
+    .g-shell { --g-franja-alto: 68px; }
 
     /* Título + conteo de fichas: sobra en celular, el bloque de filtros de
        abajo ya nombra la vista y cuenta las filas visibles. !important
        porque ese div trae `style="display: flex"` inline en lista.html. */
     .g-panel-top .g-toolbar > div:first-child { display: none !important; }
 
-    .g-panel-top .g-toolbar { margin-bottom: 10px; }
+    .g-panel-top .g-toolbar { margin-bottom: 0; }
 
-    .g-panel-top .g-toolbar-actions { width: 100%; flex-wrap: nowrap; }
+    /* Buscador, filtro y "+" del mismo alto (44px, el mínimo cómodo para el dedo). */
+    .g-panel-top .g-toolbar-actions {
+        width: 100%;
+        flex-wrap: nowrap;
+        align-items: stretch;
+        height: 44px;
+    }
 
     .g-panel-top .g-search-mini {
         flex: 1;
         min-width: 0;
+        box-sizing: border-box;
+        height: 44px;
         background: rgba(0, 0, 0, 0.2);
         border-color: rgba(255, 255, 255, 0.4);
     }
@@ -3448,15 +3463,22 @@ body.g-sidebar-abierto { overflow: hidden; }
        reemplaza visualmente con el "+" del ::before. */
     .g-panel-top .g-toolbar-actions .g-btn {
         flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
         width: 44px;
+        height: 44px;
         padding: 0;
         font-size: 0;
+        letter-spacing: 0;
     }
 
     .g-panel-top .g-toolbar-actions .g-btn::before {
         content: '+';
-        font-size: 22px;
+        font-size: 24px;
         line-height: 1;
+        letter-spacing: 0;
     }
 
     /* Símbolo de filtro: reemplaza a la tira de filtros de siempre, que en
@@ -3469,9 +3491,10 @@ body.g-sidebar-abierto { overflow: hidden; }
         align-items: center;
         justify-content: center;
         flex: 0 0 auto;
-        width: 40px;
-        height: 100%;
-        border: 1px solid rgba(255, 255, 255, 0.4);
+        box-sizing: border-box;
+        width: 44px;
+        height: 44px;
+        border: 2px solid rgba(255, 255, 255, 0.4);
         background: rgba(0, 0, 0, 0.2);
         color: white;
         cursor: pointer;
@@ -3539,7 +3562,7 @@ body.g-sidebar-abierto { overflow: hidden; }
     .g-panel-top + .g-table-wrap .g-table thead {
         display: block;
         position: sticky;
-        top: 0;
+        top: var(--g-franja-alto, 0);
         z-index: 1;
     }
 

@@ -156,14 +156,19 @@ body.g-sin-scroll { overflow: hidden; }
 /* Arriba de la tabla mientras haya algún filtro o búsqueda: en celular el panel de filtros
    está cerrado, y sin esto no hay forma rápida de volver a ver todo. */
 .a-filtros-activos {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin: 12px 0;
+    align-self: center;
     font-size: 12px;
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: var(--g-muted);
+    white-space: nowrap;
+}
+
+/* La fila de pestañas lleva al lado lo que ponga la pantalla (Teleport a #nav-acciones). */
+.a-nav-acciones { display: contents; }
+.a-quitar-filtros {
+    cursor: pointer;
+    background: var(--g-primary);
+    border-color: var(--g-primary);
+    color: white;
 }

@@ -169,10 +169,13 @@ function abrir(r, evento) {
     </div>
   </div>
 
-  <div v-if="hayFiltros && recursos.data.value" class="a-filtros-activos">
-    <span>Mostrando {{ visibles.length }} de {{ totalActivos }}<template v-if="q"> · "{{ q }}"</template></span>
-    <button type="button" class="g-btn-mini g-btn-outline-dark" @click="limpiar">✕ QUITAR FILTROS</button>
-  </div>
+  <!-- En la fila de las pestañas, al lado de INVENTARIO: abajo de la franja lo tapaba el
+       desplegable de filtros abierto. Y nada entre la franja y la tabla: en celular el
+       listado compacto cuelga de `.g-panel-top + .g-table-wrap`. -->
+  <Teleport v-if="hayFiltros" defer to="#nav-acciones">
+    <button type="button" class="g-nav-tag a-quitar-filtros" @click="limpiar">✕ QUITAR FILTROS</button>
+    <span v-if="recursos.data.value" class="a-filtros-activos">{{ visibles.length }} de {{ totalActivos }}</span>
+  </Teleport>
 
   <EstadoCarga :consulta="recursos" que="el inventario" />
 

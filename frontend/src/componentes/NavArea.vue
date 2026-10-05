@@ -11,5 +11,7 @@ const activa = computed(() => ['recursos', 'recurso', 'recurso-nuevo', 'recurso-
 <template>
   <nav v-if="mostrar" class="g-nav" aria-label="Secciones">
     <RouterLink :to="{ name: 'recursos', params: { inv: route.params.inv } }" class="g-nav-tag" :class="{ active: activa }">INVENTARIO</RouterLink>
+    <!-- Lo que la pantalla abierta quiera poner en esta fila (Inventario.vue: QUITAR FILTROS). -->
+    <span id="nav-acciones" class="a-nav-acciones" />
   </nav>
 </template>
