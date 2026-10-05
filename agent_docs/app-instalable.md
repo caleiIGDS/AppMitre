@@ -9,7 +9,8 @@ de **Gestión**: lista de inventarios, entrar con la clave del inventario, lista
 ficha, alta, EDITAR (unidades +/−, kit, baja), fotos (subir, rotar, borrar), alias y registro
 de bajas. Siguen clásicas, con link desde la app: administrar la lista de inventarios
 (`/gestion/`) y el panel del encargado (`/gestion/<inv>/accesos`); y las otras áreas
-(asistente, salidas, accesos) desde el ☰. Horarios es un sitio aparte y no entra.
+(asistente, salidas, accesos) desde el ☰. Horarios tiene su propia app aparte: ver
+"La app de horarios" al final.
 
 ## Piezas
 
@@ -84,3 +85,36 @@ El servidor de producción no tiene Node: **antes de commitear un cambio de `fro
 `npm run build`** y commitear `app_dist/` junto con el código. En el server no hay nada nuevo
 que hacer: `git pull` + `actualizar.py` + Reload, como siempre; el versionado lo crea
 `init_db` en el arranque.
+
+## La app de horarios (`/app-horarios`, carpeta `frontend/horarios/`)
+
+Otra app instalable, **separada** de la de Gestión: otra dirección (`/app-horarios/`), otro
+manifest, otro service worker y otra memoria, para que el celular la instale como una app
+distinta (ícono con un reloj). Cubre todo `/horarios`: las cinco pestañas, comparar,
+planilla general, PDF, imprimir varios, ACTUALIZAR HORARIOS, tema nocturno y modo manual.
+La página clásica sigue andando igual, en paralelo.
+
+- **Datos:** `GET /app-horarios/api/datos` (`horarios/app_api.py`) manda el horario entero
+  de una vez (~600 KB) con ETag (mtime de `escuela.db` + huella de `horarios/config.py`). La
+  app lo guarda en **IndexedDB** (no localStorage: es grande y localStorage lo comparte con
+  la app de Gestión) y todo se resuelve en el dispositivo: buscar, comparar, planilla,
+  TIEMPO REAL. Se vuelve a preguntar cada 10 minutos (304 si nada cambió).
+- **Sesión:** la misma `HORARIOS_CLAVE` y el mismo flag de sesión que `/horarios/login`;
+  `acceso.comprobar_clave` es el chequeo compartido (mismo límite de intentos). No usa
+  `accesos`. Escrituras con `X-Mitre`, igual que `/app/api`.
+- **PDF:** la app abre los `/horarios/export/pdf/...` de siempre; reconocen la misma sesión.
+- **Direcciones:** cada búsqueda es una URL (`/cursos/3° B`, `/aulas?planilla=1&dia=…&piso=…`,
+  `?comparar=curso:…,profesor:…` con el mismo formato que el link del asistente).
+- **Motor del calendario:** `frontend/horarios/src/calendario.js` es el de `static/js/script.js`
+  (ver `calendar-engine.md`) separado del dibujo. Un cambio de reglas va en los dos lados
+  mientras convivan.
+- **Look:** importa `static/global.css` + `static/horarios.css` y repite el markup de
+  `templates/index.html`. Lo único propio está en `frontend/horarios/src/estilos.css`,
+  incluido el diseño para celular (la página clásica no tiene).
+
+```bash
+cd frontend
+npm run dev:horarios     # http://localhost:5174/app-horarios/, con Flask en :5000
+npm run build:horarios   # compila a ../app_horarios_dist (commitear el resultado)
+npm run build:todo       # las dos apps
+```

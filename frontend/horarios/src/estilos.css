@@ -1,0 +1,93 @@
+/* Lo propio de la app de horarios. El resto es static/global.css + static/horarios.css
+   (las mismas hojas que /horarios) y los avisos de src/estilos/app.css. Clases `h-`, o
+   las `hz-` de la tarjeta de acceso, que son las de templates/horarios/base.html. */
+
+/* Las pestañas son links (cada una es una dirección), no botones. */
+a.tech-tag { color: #000; text-decoration: none; display: inline-block; }
+a.tech-tag.active, a.tech-tag:hover { color: #fff; }
+
+/* El ‹ con su panel: en /horarios eran dos hermanos sueltos dentro del grupo. */
+.h-menu { display: flex; align-items: center; }
+
+.h-estado {
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    padding: 40px 16px; text-align: center; color: var(--muted);
+    font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase;
+}
+
+.h-btn {
+    font-family: var(--font-ui); font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+    background: var(--secondary); color: #fff; border: 2px solid var(--secondary);
+    padding: 8px 14px; cursor: pointer;
+}
+.h-btn-claro { background: transparent; color: var(--secondary); }
+
+/* Tarjeta de acceso: la de templates/horarios/base.html. */
+.hz-main {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 60vh; padding: 32px 0;
+}
+.hz-card {
+    background: var(--g-surface); border: 2px solid var(--g-primary); max-width: 360px;
+    width: 100%; padding: 28px 24px; box-shadow: 6px 6px 0 rgba(26, 54, 93, .15);
+}
+.hz-card h2 { margin: 0 0 18px; font-size: .95rem; letter-spacing: .08em; color: var(--g-primary); }
+.hz-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+.hz-field label { font-size: .7rem; letter-spacing: .08em; font-weight: 700; color: var(--g-primary); }
+.hz-field input {
+    font-family: inherit; font-size: 1rem; padding: 9px 10px;
+    border: 2px solid var(--g-border); background: var(--g-surface); color: inherit;
+}
+.hz-field input:focus { outline: none; border-color: var(--g-accent); }
+.hz-btn {
+    font-family: inherit; font-size: .8rem; letter-spacing: .1em; font-weight: 700;
+    background: var(--g-accent); color: #fff; border: 0; padding: 11px 20px;
+    cursor: pointer; width: 100%; text-transform: uppercase;
+}
+.hz-btn:hover { filter: brightness(1.08); }
+.hz-btn:disabled { opacity: .6; cursor: wait; }
+.hz-error {
+    background: #fde8e8; border: 1px solid var(--g-alert); color: #991b1b;
+    padding: 9px 12px; font-size: .78rem; margin-bottom: 16px;
+}
+
+/* --- Celular -------------------------------------------------------------------------
+   /horarios no tiene diseño para celular (sin <meta viewport>, el teléfono la muestra como
+   en la PC pero achicada). La app ocupa el ancho real del teléfono: acá se acomoda lo de
+   horarios.css a una pantalla angosta. El calendario conserva su ancho de PC y se desliza
+   de costado dentro de su caja, sin mover la página. */
+@media (max-width: 760px) {
+    .tech-container { padding: 12px; }
+    .tech-container.header-flex { flex-wrap: wrap; gap: 8px; padding-top: 8px; padding-bottom: 8px; }
+    .tech-titles h1 { font-size: 20px; letter-spacing: 2px; gap: 8px; }
+    .tech-titles .serial { font-size: 11px; padding: 1px 6px; }
+    .institution { font-size: 12px; }
+    .header-actions { width: 100%; display: flex; gap: 8px; justify-content: flex-end; }
+    .header-actions .tech-btn-update { padding: 8px 10px; font-size: 11px; }
+    .tech-btn-tema { width: 34px; height: 34px; }
+
+    .tech-tags { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; margin-bottom: 12px; }
+    .tech-tags::-webkit-scrollbar { display: none; }
+    .tech-tag { flex-shrink: 0; }
+
+    .tech-search-module { padding: 12px; }
+    .tech-field-group { flex-wrap: wrap; gap: 8px; }
+    .tech-field { min-width: 0; flex-basis: calc(100% - 60px); }
+    .slide-panel.open { max-width: calc(100vw - 90px); overflow-x: auto; }
+    .planilla-section { flex-wrap: wrap; }
+
+    .tech-title-center { font-size: 16px; white-space: normal; }
+    .preceptor-info-container { flex-direction: column; align-items: flex-start; gap: 4px; font-size: 12px; }
+
+    .tech-grid-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .tech-grid-container > .calendario-grid { min-width: 720px; }
+    .tech-data-table { overflow-x: auto; }
+
+    .tech-live-module { flex-wrap: wrap; gap: 10px; }
+    .tech-live-module .sys-inputs { margin-left: 0 !important; flex: 1; }
+    .tech-live-module .sys-inputs input[type="text"] { width: 100% !important; }
+    .dashboard-grid-light { grid-template-columns: 1fr; gap: 12px; }
+    .class-item-light { gap: 10px; grid-template-columns: 70px 1fr auto; }
+
+    .modo-comparacion-banner { flex-wrap: wrap; gap: 8px; }
+}

@@ -146,6 +146,7 @@ salidas.init_db()
 # datos propios, NO pasa por `accesos`. El paquete monta su gate al importarse; acá sólo
 # se registra el blueprint y se crea el schema.
 app.register_blueprint(horarios.bp)
+app.register_blueprint(horarios.bp_app)
 horarios.init_db()
 
 # Accesos y permisos (accesos.db) — junta el catálogo que declaró cada área, engancha los
@@ -164,14 +165,32 @@ def normativa_visor():
 
 
 # ---------------------------------------------------------------------------
-# App instalable (/app)
+# Apps instalables (/app y /app-horarios)
 # ---------------------------------------------------------------------------
-# La compila Vite desde frontend/ a app_dist/ (ver agent_docs/app-instalable.md); Flask sólo
-# la sirve. Los archivos de assets/ llevan un hash en el nombre, así que se cachean un año;
-# el resto (index.html, sw.js, manifest) se revalida siempre, que es lo que hace que una
-# versión nueva llegue. Cualquier otra ruta bajo /app/ es una pantalla de la app y devuelve
-# index.html: la navegación la resuelve el router del navegador.
+# Las compila Vite desde frontend/ (ver agent_docs/app-instalable.md); Flask sólo las sirve.
+# Cada una vive en su propia dirección para que el celular las instale como dos apps
+# separadas, con su ícono y su memoria. Los archivos de assets/ llevan un hash en el
+# nombre, así que se cachean un año; el resto (index.html, sw.js, manifest) se revalida
+# siempre, que es lo que hace que una versión nueva llegue. Cualquier otra ruta es una
+# pantalla de la app y devuelve index.html: la navegación la resuelve el router del navegador.
 APP_DIST = os.path.join(RAIZ, 'app_dist')
+APP_HORARIOS_DIST = os.path.join(RAIZ, 'app_horarios_dist')
+
+
+def _servir_app(carpeta, ruta, como_compilar):
+    if ruta.startswith('api/'):
+        return jsonify({'error': 'No existe'}), 404
+    archivo = safe_join(carpeta, ruta) if ruta else None
+    if archivo and os.path.isfile(archivo):
+        resp = send_from_directory(carpeta, ruta)
+        resp.headers['Cache-Control'] = ('public, max-age=31536000, immutable'
+                                         if ruta.startswith('assets/') else 'no-cache')
+        return resp
+    if not os.path.isfile(os.path.join(carpeta, 'index.html')):
+        return f"La app todavía no está compilada: correr `{como_compilar}` en frontend/.", 503
+    resp = send_from_directory(carpeta, 'index.html')
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
 
 
 @app.route('/app')
@@ -182,19 +201,18 @@ def app_raiz():
 @app.route('/app/', defaults={'ruta': ''})
 @app.route('/app/<path:ruta>')
 def app_spa(ruta):
-    if ruta.startswith('api/'):
-        return jsonify({'error': 'No existe'}), 404
-    archivo = safe_join(APP_DIST, ruta) if ruta else None
-    if archivo and os.path.isfile(archivo):
-        resp = send_from_directory(APP_DIST, ruta)
-        resp.headers['Cache-Control'] = ('public, max-age=31536000, immutable'
-                                         if ruta.startswith('assets/') else 'no-cache')
-        return resp
-    if not os.path.isfile(os.path.join(APP_DIST, 'index.html')):
-        return "La app todavía no está compilada: correr `npm run build` en frontend/.", 503
-    resp = send_from_directory(APP_DIST, 'index.html')
-    resp.headers['Cache-Control'] = 'no-cache'
-    return resp
+    return _servir_app(APP_DIST, ruta, 'npm run build')
+
+
+@app.route('/app-horarios')
+def app_horarios_raiz():
+    return redirect('/app-horarios/')
+
+
+@app.route('/app-horarios/', defaults={'ruta': ''})
+@app.route('/app-horarios/<path:ruta>')
+def app_horarios_spa(ruta):
+    return _servir_app(APP_HORARIOS_DIST, ruta, 'npm run build:horarios')
 
 
 @app.route('/')

@@ -32,6 +32,9 @@
                     <button id="btn-tema" class="tech-btn-tema" onclick="toggleTheme()" title="Modo nocturno" aria-label="Cambiar tema"></button>
                     {# Cualquiera con sesión de horarios puede regenerar la DB desde Sheets. #}
                     <button id="btn-actualizar" class="tech-btn-update" onclick="actualizarDatos()">ACTUALIZAR HORARIOS</button>
+                    {# La app instalable de horarios, que convive con esta página mientras dura
+                       la migración: agent_docs/app-instalable.md. #}
+                    <a class="tech-btn-update" href="/app-horarios/">APP NUEVA ›</a>
                     {# Horarios es un sitio aparte: su único control de sesión es salir.
                        No hay puente al resto de la app (eso vive en su propio menú). #}
                     <a class="tech-btn-update" href="{{ url_for('horarios.salir') }}">SALIR</a>

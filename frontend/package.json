@@ -1,1 +1,27 @@
-{"name":"appmitre-app","private":true,"type":"module","scripts":{"dev":"vite","build":"vite build","preview":"vite preview"},"dependencies":{"@tanstack/query-persist-client-core":"^5.104.1","@tanstack/query-sync-storage-persister":"^5.104.1","@tanstack/vue-query":"^5.104.1","vue":"^3.5.43","vue-router":"^5.3.1"},"devDependencies":{"@vitejs/plugin-vue":"^6.0.9","vite":"^8.3.2","vite-plugin-pwa":"^2.0.0"}}
+{
+  "name": "appmitre-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "dev:horarios": "vite --config vite.horarios.config.js",
+    "build:horarios": "vite build --config vite.horarios.config.js",
+    "build:todo": "vite build && vite build --config vite.horarios.config.js"
+  },
+  "dependencies": {
+    "@tanstack/query-async-storage-persister": "^5.104.1",
+    "@tanstack/query-persist-client-core": "^5.104.1",
+    "@tanstack/query-sync-storage-persister": "^5.104.1",
+    "@tanstack/vue-query": "^5.104.1",
+    "idb-keyval": "^6.3.0",
+    "vue": "^3.5.43",
+    "vue-router": "^5.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.9",
+    "vite": "^8.3.2",
+    "vite-plugin-pwa": "^2.0.0"
+  }
+}

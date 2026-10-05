@@ -9,7 +9,8 @@ importa `accesos`, ni el `config.py` de la raíz, ni `crud`, ni las otras áreas
 dependencia va en un solo sentido: el agente importa `horarios.datos` para leer, nunca al
 revés.
 
-`app.py` sólo necesita `bp`, `init_db` y `cargar_inicial`.
+`app.py` sólo necesita `bp`, `bp_app` (la API de la app instalable), `init_db` y
+`cargar_inicial`.
 """
 import os
 
@@ -32,3 +33,5 @@ if PRODUCCION and not (os.environ.get('SHEETS_PROXY_URL') and os.environ.get('SH
 # exista). `datos` expone init_db/cargar_inicial que llama app.py al arrancar.
 from . import rutas  # noqa: E402,F401
 from .datos import init_db, cargar_inicial  # noqa: E402,F401
+# La API de la app instalable de horarios (/app-horarios/api). Mismo gate de sesión.
+from .app_api import bp_app  # noqa: E402,F401

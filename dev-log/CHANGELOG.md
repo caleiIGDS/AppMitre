@@ -6,6 +6,13 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-10-05] — API `/app-horarios/api/*` y `acceso.comprobar_clave` en horarios
+
+**Archivos**: `horarios/app_api.py` (nuevo), `horarios/acceso.py`, `horarios/__init__.py` (`bp_app`), `app.py`, `frontend/horarios/`, `app_horarios_dist/`
+
+`/horarios/login` y la app comparten `acceso.comprobar_clave` (límite de intentos incluido).
+`/app-horarios/api/datos` lee `COLUMNAS_DASHBOARD` y `_planilla_preceptores_con_turnos` de `rutas.py`: si cambian, cambia lo que baja la app.
+
 ## [2026-10-05] — API JSON `/app/api/*` y versionado por triggers en las DB del motor
 
 **Archivos**: `crud.py`, `accesos.py`, `gestion.py`, `app.py`, `actualizar.py`, `frontend/`, `app_dist/`

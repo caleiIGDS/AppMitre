@@ -1,0 +1,149 @@
+"""API JSON de la app instalable de horarios (`/app-horarios/api`).
+
+La app (frontend/horarios/, compilada a app_horarios_dist/) baja TODO el horario de una
+vez y lo guarda en el dispositivo: buscar, comparar, la planilla general y TIEMPO REAL se
+resuelven ahí, sin red. Al servidor sólo le pide:
+
+  GET  /sesion      ¿hay sesión de horarios?
+  POST /entrar      {clave} → abre la sesión (misma clave y mismo límite de intentos que
+                    /horarios/login, ver `acceso.comprobar_clave`)
+  POST /salir
+  GET  /datos       todo el horario, con ETag: si nada cambió contesta 304 sin cuerpo
+  POST /actualizar  rearma escuela.db desde la planilla (lo mismo que /horarios/api/actualizar)
+
+Los PDF no pasan por acá: la app abre los /horarios/export/... de siempre, que reconocen
+la misma sesión.
+
+Mismo aislamiento que el resto del paquete: no importa `accesos` ni nada de afuera. Los
+pedidos que escriben exigen la cabecera `X-Mitre` (defensa CSRF, igual que /app/api).
+"""
+import hashlib
+import json
+import os
+import sqlite3
+
+from flask import Blueprint, jsonify, request, session
+
+from . import acceso, datos
+from .config import (DIAS, ESCUELA_NOMBRE, ESCUELA_VERSION, ESPECIALIDAD_CURSOS,
+                     FLOOR_MAPPING, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE,
+                     GIDS_CURSOS, SHEET_ID, TURNO_CURSOS, TURNO_DEFAULT)
+from .rutas import COLUMNAS_DASHBOARD, _planilla_preceptores_con_turnos
+
+bp_app = Blueprint('horarios_app', __name__, url_prefix='/app-horarios/api')
+
+ABIERTOS = {'horarios_app.sesion', 'horarios_app.entrar', 'horarios_app.salir'}
+
+# Lo que sale de config.py también es parte de los datos (pisos, turnos, especialidades):
+# si cambia con un deploy, el ETag tiene que cambiar aunque escuela.db sea la misma.
+_HUELLA_CONFIG = hashlib.sha1(json.dumps(
+    [DIAS, FLOOR_MAPPING, sorted(map(list, TURNO_CURSOS.items())), TURNO_DEFAULT,
+     sorted(map(list, ESPECIALIDAD_CURSOS.items())), ESCUELA_NOMBRE, ESCUELA_VERSION],
+    ensure_ascii=False, default=str).encode()).hexdigest()[:12]
+
+
+@bp_app.before_request
+def _gate():
+    if request.method not in ('GET', 'HEAD') and not request.headers.get('X-Mitre'):
+        return jsonify({'error': 'Pedido no permitido.'}), 403
+    if request.endpoint not in ABIERTOS and not acceso.autenticado():
+        return jsonify({'error': 'Hace falta la clave de horarios.'}), 401
+
+
+@bp_app.get('/sesion')
+def sesion():
+    return jsonify({'autenticado': acceso.autenticado(),
+                    'escuela': {'nombre': ESCUELA_NOMBRE, 'version': ESCUELA_VERSION}})
+
+
+@bp_app.post('/entrar')
+def entrar():
+    cuerpo = request.get_json(silent=True) or {}
+    resultado = acceso.comprobar_clave(request.remote_addr, str(cuerpo.get('clave') or ''))
+    if resultado == 'bloqueado':
+        return jsonify({'error': 'Demasiados intentos. Esperá 15 minutos y probá de nuevo.'}), 429
+    if resultado == 'mal':
+        return jsonify({'error': 'Contraseña incorrecta.'}), 422
+    return sesion()
+
+
+@bp_app.post('/salir')
+def salir():
+    session.pop(acceso.SESSION_FLAG, None)
+    return jsonify({'autenticado': False})
+
+
+def _etag():
+    try:
+        st = os.stat(datos.DB_PATH)
+        marca = f'{st.st_mtime_ns}-{st.st_size}'
+    except OSError:
+        marca = 'sin-db'
+    return f'"h-{marca}-{_HUELLA_CONFIG}"'
+
+
+def _cursos(cur):
+    """La lista de cursos del buscador, igual que la arma `rutas.index`."""
+    cur.execute("SELECT DISTINCT curso, division FROM clases WHERE curso != '' ORDER BY curso, division")
+    cursos = []
+    for curso, division in cur.fetchall():
+        valor = f"{curso}° {division}"
+        especialidad = ESPECIALIDAD_CURSOS.get((curso, division), "ESPECIALIDAD")
+        cursos.append({'valor': valor, 'display': f"{valor} ({especialidad})"})
+    return cursos
+
+
+@bp_app.get('/datos')
+def todo():
+    etag = _etag()
+    if request.headers.get('If-None-Match') == etag:
+        resp = jsonify()
+        resp.status_code = 304
+    else:
+        con = datos.conectar()
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        cur.execute(f"SELECT {', '.join(COLUMNAS_DASHBOARD)} FROM clases")
+        clases = [dict(r) for r in cur.fetchall()]
+        cur.execute("SELECT DISTINCT profesor FROM clases WHERE profesor != '' ORDER BY profesor")
+        profesores = [r[0] for r in cur.fetchall()]
+        cur.execute("SELECT DISTINCT aula FROM clases WHERE aula != '' ORDER BY aula")
+        aulas = [r[0] for r in cur.fetchall()]
+        cursos = _cursos(cur)
+        con.close()
+
+        nombres = datos.obtener_lista_preceptores_horario()
+        resp = jsonify({
+            'clases': clases,
+            'personal': datos.obtener_personal_todos(),
+            'preceptores': {
+                'horarios': {n: datos.obtener_horario_preceptor(n) for n in nombres},
+                'planilla': _planilla_preceptores_con_turnos(),
+            },
+            'listas': {
+                'profesor': profesores,
+                'aula': aulas,
+                'curso': cursos,
+                'horario_preceptor': nombres,
+                'personal': datos.obtener_lista_personal(),
+            },
+            'pisos': FLOOR_MAPPING,
+            'dias': DIAS,
+        })
+    resp.headers['ETag'] = etag
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
+
+@bp_app.post('/actualizar')
+def actualizar():
+    """Lo mismo que `rutas.api_actualizar`: borra escuela.db y la rearma desde la planilla."""
+    try:
+        datos.crear_tablas()
+        datos.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
+        datos.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
+        datos.cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)
+    except Exception as e:
+        print(f"Error actualizando datos: {e}")
+        return jsonify({'error': str(e)}), 500
+    return jsonify({'ok': True})

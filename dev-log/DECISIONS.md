@@ -6,6 +6,16 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-10-05] — Horarios como otra app instalable (`/app-horarios`), no dentro de `/app`
+
+Pedido explícito: un canal aparte. Una dirección propia es lo que hace que el celular la
+instale como otra app (scope y service worker distintos); dentro de `/app` quedaría bajo el
+service worker de Gestión. El horario se guarda en IndexedDB y no en localStorage (~600 KB,
+y localStorage es del origen entero, compartido con Gestión). Sesión: la de `/horarios`,
+sin `accesos`, para no romper el aislamiento del paquete.
+
+---
+
 ## [2026-10-05] — App instalable (Vue + Vite + PWA) en `/app`; se acepta un paso de build
 
 Las páginas clásicas recargaban todo en cada paso y perdían filtros y scroll al volver. Se

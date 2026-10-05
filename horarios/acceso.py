@@ -69,6 +69,23 @@ def autenticado():
     return bool(session.get(SESSION_FLAG))
 
 
+def comprobar_clave(ip, clave):
+    """El chequeo de la contraseña, con su límite de intentos por IP. Lo usan el login de
+    la página y el de la app (`app_api.py`): los dos cuentan contra el mismo límite.
+
+    Devuelve 'ok' (y deja la sesión abierta), 'mal' o 'bloqueado'."""
+    _limpiar_intentos_expirados(ip)
+    if ip in _INTENTOS_FALLIDOS and len(_INTENTOS_FALLIDOS[ip]) >= MAX_INTENTOS:
+        return 'bloqueado'
+    if clave == _clave():
+        _INTENTOS_FALLIDOS.pop(ip, None)
+        session.permanent = True
+        session[SESSION_FLAG] = True
+        return 'ok'
+    _registrar_intento_fallido(ip)
+    return 'mal'
+
+
 def registrar(bp):
     """Monta el gate + /horarios/login + /horarios/salir sobre el blueprint."""
 
@@ -85,21 +102,14 @@ def registrar(bp):
     def login():
         error = None
         if request.method == 'POST':
-            ip = request.remote_addr
-            _limpiar_intentos_expirados(ip)
-            # Chequear si ya superó el límite
-            if ip in _INTENTOS_FALLIDOS and len(_INTENTOS_FALLIDOS[ip]) >= MAX_INTENTOS:
+            resultado = comprobar_clave(request.remote_addr, request.form.get('clave', ''))
+            if resultado == 'bloqueado':
                 abort(429)  # Too Many Requests
-            if request.form.get('clave', '') == _clave():
-                _INTENTOS_FALLIDOS.pop(ip, None)  # Limpiar intentos fallidos tras login exitoso
-                session.permanent = True
-                session[SESSION_FLAG] = True
+            if resultado == 'ok':
                 volver = request.form.get('next', '')
                 if not volver.startswith('/horarios'):
                     volver = url_for('horarios.index')
                 return redirect(volver)
-            # Contraseña incorrecta: registrar intento fallido
-            _registrar_intento_fallido(ip)
             error = 'Contraseña incorrecta.'
         return render_template('horarios/login.html', error=error,
                                next=request.values.get('next', ''))
