@@ -207,29 +207,25 @@ body.g-sin-scroll { overflow: hidden; }
   .g-table td[data-label="RECURSO"] .a-chip-kit { display: table; margin: 3px 0 1px; padding: 1px 6px; }
 }
 
-/* El bloque de sub-recursos al final del listado (Inventario.vue): un divisor naranja con
-   su título, y las filas con un tinte y un filete naranja a la izquierda, para que se lea
-   como un cuadro aparte dentro de la misma tabla. */
+/* El bloque de sub-recursos al final del listado (Inventario.vue): lo abre una franja
+   naranja con su título, y cada fila lleva un filete naranja a la izquierda. El fondo de
+   las filas es el de siempre. */
 .g-table tbody tr.a-sep-kits,
-.g-table tbody tr.a-sep-kits:hover { background: transparent; cursor: default; }
+.g-table tbody tr.a-sep-kits:hover { background: var(--g-accent); cursor: default; }
 .g-table tbody tr.a-sep-kits td {
-  padding: 20px 14px 6px;
-  border-bottom: 2px solid var(--g-accent);
-  color: var(--g-accent);
+  padding: 3px 14px;
+  background: var(--g-accent);
+  color: #fff;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .12em;
+  line-height: 1.4;
 }
-.g-table tbody tr.a-fila-kit:not(.g-recurso-roto),
-.g-panel-top + .g-table-wrap .g-table tbody tr.a-fila-kit:not(.g-recurso-roto) {
-  background: color-mix(in srgb, var(--g-accent) 5%, #fff);
-}
-.g-table tbody tr.a-fila-kit:not(.g-recurso-roto):hover { background: color-mix(in srgb, var(--g-accent) 9%, #fff); }
 .g-table tbody tr.a-fila-kit > td:first-child { box-shadow: inset 3px 0 0 var(--g-accent); }
 
 @media (max-width: 700px) {
   .g-panel-top + .g-table-wrap .g-table tbody tr.a-sep-kits { display: block; border-bottom: none; }
-  .g-panel-top + .g-table-wrap .g-table tbody tr.a-sep-kits td { display: block; padding: 18px 12px 5px; }
+  .g-panel-top + .g-table-wrap .g-table tbody tr.a-sep-kits td { display: block; padding: 3px 12px; }
   /* En la lista compacta la fila es una grilla: el filete va en la fila entera. */
   .g-panel-top + .g-table-wrap .g-table tbody tr.a-fila-kit { box-shadow: inset 3px 0 0 var(--g-accent); }
   .g-panel-top + .g-table-wrap .g-table tbody tr.a-fila-kit > td:first-child { box-shadow: none; }
