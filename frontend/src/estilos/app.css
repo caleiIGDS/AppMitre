@@ -182,12 +182,11 @@ body.g-sin-scroll { overflow: hidden; }
 /* El final de la tanda de filas dibujadas en el listado (ver Inventario.vue). */
 .a-centinela { height: 1px; }
 
-/* El recuadro de un sub-recurso en el listado: de qué kit es (Inventario.vue). Se ve
-   también en celular, donde el tipo se oculta: sin él la fila parecería un recurso. */
+/* El recuadro de un sub-recurso en el listado, en la columna del estado: de qué kit es
+   (Inventario.vue). */
 .a-chip-kit {
   display: inline-block;
   max-width: 100%;
-  margin-left: 6px;
   padding: 1px 6px;
   border: 1px solid var(--g-accent);
   color: var(--g-accent);
@@ -202,9 +201,8 @@ body.g-sin-scroll { overflow: hidden; }
   vertical-align: middle;
 }
 @media (max-width: 700px) {
-  /* En la lista compacta, siempre en su propio renglón: al lado del nombre quedaba a veces
-     sí y a veces no, según el largo. */
-  .g-table td[data-label="RECURSO"] .a-chip-kit { display: table; margin: 3px 0 1px; padding: 1px 6px; }
+  /* En la lista compacta, como el badge de estado: angosto y hasta dos renglones. */
+  .g-table td[data-label="ESTADO"] .a-chip-kit { max-width: 110px; white-space: normal; text-align: center; }
 }
 
 /* El bloque de sub-recursos al final del listado (Inventario.vue): lo abre una franja

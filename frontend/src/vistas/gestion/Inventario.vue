@@ -114,8 +114,8 @@ const subrecursos = computed(() => {
   return encontrados.sort((a, b) => b.p - a.p)
 })
 
-// Una sola lista para la tabla: los recursos y, después, los sub-recursos con el estado de
-// su kit (y su ficha: el sub-recurso no tiene una propia).
+// Una sola lista para la tabla: los recursos y, después, los sub-recursos (que abren la
+// ficha de su kit: el sub-recurso no tiene una propia).
 const lista = computed(() => [
   ...visibles.value.map((r) => ({ clave: `r${r.id}`, r, nombre: r.nombre, cantidad: r.cantidad, tipo: r.tipo, item: null })),
   ...subrecursos.value.map((s, i) => ({ clave: `k${s.item.id}`, r: s.kit, nombre: s.item.titulo, cantidad: s.item.cantidad, tipo: '', item: s.item, primera: i === 0 })),
@@ -249,21 +249,20 @@ function abrir(r, evento) {
         </thead>
         <tbody>
           <!-- Los sub-recursos van al final, en un bloque aparte que abre un divisor naranja.
-               Cada uno es la misma fila con el recuadro de su kit; estado y ficha son los del
-               kit, el lugar queda vacío. -->
+               Cada uno es la misma fila, con el lugar vacío y, donde va el estado, el recuadro
+               naranja con el nombre de su kit; el click abre la ficha del kit. -->
           <template v-for="f in mostradas" :key="f.clave">
           <tr v-if="f.primera" class="a-sep-kits">
             <td colspan="4"><span>SUB-RECURSOS DE KITS</span></td>
           </tr>
           <tr
             data-href
-            :class="{ 'g-recurso-baja': f.r.estado === ESTADO_BAJA, 'g-recurso-roto': f.r.estado === 'Roto', 'a-fila-kit': f.item }"
+            :class="f.item ? 'a-fila-kit' : { 'g-recurso-baja': f.r.estado === ESTADO_BAJA, 'g-recurso-roto': f.r.estado === 'Roto' }"
             @click="abrir(f.r, $event)"
           >
             <td data-label="RECURSO">
               <a class="g-item-link" :href="hrefRecurso(f.r)">{{ f.nombre }}</a>
-              <span v-if="f.item" class="a-chip-kit" :title="`Es parte del kit ${f.r.nombre}`">KIT · {{ f.r.nombre }}</span>
-              <span v-else-if="f.tipo" class="g-recurso-sub">{{ f.tipo }}</span>
+              <span v-if="f.tipo" class="g-recurso-sub">{{ f.tipo }}</span>
             </td>
             <td data-label="CANT.">{{ f.cantidad }}</td>
             <!-- Un sub-recurso no muestra lugar: el del kit confundía (no es dónde está él). -->
@@ -274,7 +273,9 @@ function abrir(r, evento) {
               </div>
               <template v-else-if="f.r.unidades.length">{{ f.r.unidades[0].ubicacion }}</template>
             </td>
-            <td data-label="ESTADO" :data-estado="f.r.estado"><span v-if="f.r.estado" class="g-badge">{{ f.r.estado }}</span></td>
+            <!-- En la columna del estado, un sub-recurso lleva de qué kit es (su estado no se muestra). -->
+            <td v-if="f.item" data-label="ESTADO"><span class="a-chip-kit" :title="`Es parte del kit ${f.r.nombre}`">{{ f.r.nombre }}</span></td>
+            <td v-else data-label="ESTADO" :data-estado="f.r.estado"><span v-if="f.r.estado" class="g-badge">{{ f.r.estado }}</span></td>
           </tr>
           </template>
         </tbody>
