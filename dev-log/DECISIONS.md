@@ -6,6 +6,16 @@ Buscar acá con Grep (por archivo o símbolo) antes de "corregir" algo que parec
 
 ---
 
+## [2026-10-05] — App instalable (Vue + Vite + PWA) en `/app`; se acepta un paso de build
+
+Las páginas clásicas recargaban todo en cada paso y perdían filtros y scroll al volver. Se
+descartaron Turbo/htmx (siguen pidiendo HTML por pantalla) y un SPA sin framework (router y
+estado a mano). `app_dist/` se commitea porque el server no tiene Node. La versión por fila y
+`_revision` por DB los mantienen **triggers** y no Python: escriben el asistente, rutas propias
+y scripts, y un contador manual se olvidaría en alguno. Detalle: `agent_docs/app-instalable.md`.
+
+---
+
 ## [2026-09-17] — Selector de inventario también en el widget flotante, no sólo en `/agente`
 
 `_agente_widget.html` ahora incluye el mismo `<select>` de inventario que la pestaña

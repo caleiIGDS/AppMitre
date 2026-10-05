@@ -33,6 +33,11 @@
                    ☰ (bloque `.g-areas` al final del body). #}
                 <div class="g-header-actions">
                     <a class="g-btn-outline" href="{{ url_for('inventarios.panel') }}">‹ INVENTARIOS</a>
+                    {# La versión nueva de este inventario (app instalable), que convive con
+                       estas páginas mientras dura la migración: agent_docs/app-instalable.md. #}
+                    {% if inventario %}
+                    <a class="g-btn-outline" href="/app/gestion/{{ inventario.slug }}/recursos">APP NUEVA ›</a>
+                    {% endif %}
                     {% if puede(permiso_accesos) %}
                     <a class="g-btn-outline" href="{{ url_for('gestion.accesos_panel') }}">🔑 QUIÉN ENTRA</a>
                     {% endif %}

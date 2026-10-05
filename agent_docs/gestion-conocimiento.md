@@ -59,6 +59,11 @@ ninguna — ver `agent_docs/crud-motor.md`.
   rutas CRUD las monta `crud.registrar_rutas(bp, ...)` y el gate `accesos.registrar_acceso(bp,
   ...)` — ver `agent_docs/crud-motor.md`. Server-rendered con Jinja. El JS propio es
   `static/gestion.js`: una sola mejora progressive-enhancement, la búsqueda en vivo del listado.
+  **Además** expone lo mismo como API JSON para la app instalable: `bp_api_registro`
+  (`/app/api/gestion/inventarios`) y `bp_api` (`/app/api/gestion/<inv>/…`, mismo `g.inv`,
+  misma clave del encargado), con las acciones propias (bajas, unidades, kit, alias)
+  sacadas a funciones que usan las dos puertas (`agregar_unidades`, `eliminar_unidades`,
+  `revertir_baja_unidad`, `guardar_alias`). Ver `agent_docs/app-instalable.md`.
 - **`gestion.db`** — el **registro**: la tabla `inventarios` (id, slug, nombre,
   `clave_hash`, creado) y nada de dominio. Alberga además las tablas del asistente
   (`agente_log`, `agente_conversaciones`, `agente_fotos_pendientes`), que son auditoría/

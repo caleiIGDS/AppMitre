@@ -6,6 +6,14 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-10-05] — API JSON `/app/api/*` y versionado por triggers en las DB del motor
+
+**Archivos**: `crud.py`, `accesos.py`, `gestion.py`, `app.py`, `actualizar.py`, `frontend/`, `app_dist/`
+
+Las tablas de `ENTIDADES` suman `version` y cada DB del motor `_revision`, con triggers `_v_*`
+que crea `crud.instalar_versionado` en cada `init_db`: no escribir `version` a mano.
+`actualizar.py` los cuenta como schema (`crud.schema_versionado`). Rotar una foto anota `girada`.
+
 ## [2026-09-17] — `salidas.py` importa `gestion` para el selector de inventario del widget
 
 **Archivos**: `salidas.py` (`import gestion`, `_contexto()` agrega `inventarios`/`inv_activo`),

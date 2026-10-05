@@ -53,6 +53,7 @@ if hasattr(sys.stdout, 'reconfigure'):
 load_dotenv(os.path.join(RAIZ, '.env'))
 
 import accesos
+import crud
 import fotos_disco
 import gestion
 import agente
@@ -712,8 +713,11 @@ def _duenos():
     alcanzando a `recurso_ubicaciones` y compañía adentro de cada inventario."""
     inventarios = gestion.listar_inventarios() if os.path.exists(gestion.DB_PATH) else []
     return list(DUENOS_FIJOS) + [
+        # Más el versionado que el motor le agrega a cada inventario (`_revision` y
+        # `recursos.version`, ver crud.instalar_versionado): sin sumarlo, la limpieza los
+        # tomaría por sobras y `--limpiar` los borraría.
         (lambda slug=f['slug']: os.path.join(gestion.DIR_INVENTARIOS, f'{slug}.db'),
-         lambda: (gestion.SCHEMA,))
+         lambda: (gestion.SCHEMA, crud.schema_versionado(gestion)))
         for f in inventarios]
 
 

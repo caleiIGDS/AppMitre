@@ -32,7 +32,7 @@ import sys
 from datetime import datetime
 
 from config import DIR_DATOS, ahora
-from flask import (Blueprint, abort, g, has_request_context, redirect,
+from flask import (Blueprint, abort, g, has_request_context, jsonify, redirect,
                    render_template, request, session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -459,6 +459,11 @@ ENTIDADES = {
 LIMPIEZA_M2M = {
     'recursos': [('recurso_unidades', 'recurso_id'), ('kit_items', 'recurso_id')],
 }
+
+# El registro de bajas no es hijo de una fila (sobrevive a la fila), pero lo que devuelve
+# la API de la app cambia con él: el motor le pone un trigger que sube la revisión de la DB
+# (ver crud.instalar_versionado).
+TABLAS_CON_REVISION = ('recurso_bajas',)
 
 # El schema de UN inventario (`inventarios/<slug>.db`). El del registro, que vive en
 # gestion.db, es SCHEMA_REGISTRO — son dos bases distintas y ninguna referencia a la otra.
@@ -1083,14 +1088,19 @@ def alias_lista():
 def alias_guardar(id):
     """Guarda el alias editado a mano desde `/gestion/alias`. Mismo campo y mismo formato
     CSV que usa el asistente vía `editar_entidad(alias=...)`: reemplaza el valor entero."""
-    alias = request.form.get('alias', '').strip()
     con = conectar()
-    cur = con.cursor()
-    if cur.execute("SELECT 1 FROM recursos WHERE id = ?", (id,)).fetchone():
-        cur.execute("UPDATE recursos SET alias = ? WHERE id = ?", (alias, id))
+    if guardar_alias(con.cursor(), id, request.form.get('alias', '')):
         con.commit()
     con.close()
     return redirect(url_for('gestion.alias_lista'))
+
+
+def guardar_alias(cur, rid, alias):
+    """Reemplaza el alias entero de un recurso. False si el recurso no existe."""
+    if not cur.execute("SELECT 1 FROM recursos WHERE id = ?", (rid,)).fetchone():
+        return False
+    cur.execute("UPDATE recursos SET alias = ? WHERE id = ?", ((alias or '').strip(), rid))
+    return True
 
 
 def _stock(cur, rid):
@@ -1424,28 +1434,34 @@ def unidad_agregar(id):
     if not cur.execute("SELECT 1 FROM recursos WHERE id = ?", (id,)).fetchone():
         con.close()
         abort(404)
-    _asegurar_unidades(cur, id)  # persistir 1..cantidad si el recurso todavía no las tenía
-    usados = {f['numero'] for f in
-              cur.execute("SELECT numero FROM recurso_unidades WHERE recurso_id = ?", (id,)).fetchall()}
-    choque = sorted(set(pedidos) & usados)
-    if any(n <= 0 for n in pedidos):
-        error = 'Los IDs tienen que ser números mayores a 0.'
-    elif len(pedidos) != len(set(pedidos)):
-        error = 'Hay IDs repetidos en la lista.'
-    elif choque:
-        error = ('Ya ' + ('existen las unidades ' if len(choque) > 1 else 'existe la unidad ')
-                 + ', '.join('#' + str(n) for n in choque) + '.')
-    else:
-        error = None
+    error = agregar_unidades(cur, id, pedidos)
     if error:
         con.close()
         return redirect(url_for('gestion.editar', slug='recursos', id=id, error=error))
-    cur.executemany("INSERT INTO recurso_unidades (recurso_id, numero, ubicacion) VALUES (?,?,'')",
-                    [(id, n) for n in pedidos])
-    _sincronizar_cantidad(cur, id)
     con.commit()
     con.close()
     return redirect(url_for('gestion.editar', slug='recursos', id=id))
+
+
+def agregar_unidades(cur, rid, pedidos):
+    """Crea las unidades con los números pedidos. Devuelve el motivo de rechazo (y no
+    inserta nada) si alguno choca, es <= 0 o está repetido; None si las creó. El recurso
+    tiene que existir (lo verifica quien llama)."""
+    _asegurar_unidades(cur, rid)  # persistir 1..cantidad si el recurso todavía no las tenía
+    usados = {f['numero'] for f in
+              cur.execute("SELECT numero FROM recurso_unidades WHERE recurso_id = ?", (rid,)).fetchall()}
+    choque = sorted(set(pedidos) & usados)
+    if any(n <= 0 for n in pedidos):
+        return 'Los IDs tienen que ser números mayores a 0.'
+    if len(pedidos) != len(set(pedidos)):
+        return 'Hay IDs repetidos en la lista.'
+    if choque:
+        return ('Ya ' + ('existen las unidades ' if len(choque) > 1 else 'existe la unidad ')
+                + ', '.join('#' + str(n) for n in choque) + '.')
+    cur.executemany("INSERT INTO recurso_unidades (recurso_id, numero, ubicacion) VALUES (?,?,'')",
+                    [(rid, n) for n in pedidos])
+    _sincronizar_cantidad(cur, rid)
+    return None
 
 
 @bp.route('/recursos/<int:id>/unidades/eliminar', methods=['POST'])
@@ -1462,13 +1478,24 @@ def unidad_eliminar(id):
         return redirect(url_for('gestion.editar', slug='recursos', id=id))
     con = conectar()
     cur = con.cursor()
-    fila = cur.execute("SELECT nombre FROM recursos WHERE id = ?", (id,)).fetchone()
-    if fila is None:
+    if not cur.execute("SELECT 1 FROM recursos WHERE id = ?", (id,)).fetchone():
         con.close()
         abort(404)
-    _asegurar_unidades(cur, id)  # persistir 1..cantidad si el recurso todavía no las tenía
+    if eliminar_unidades(cur, id, nums, motivo, detalle):
+        con.commit()
+    con.close()
+    return redirect(url_for('gestion.editar', slug='recursos', id=id))
+
+
+def eliminar_unidades(cur, rid, nums, motivo, detalle=''):
+    """Elimina las unidades pedidas que existan, anotando una baja por cada una. Nunca
+    la última que queda. Devuelve los números efectivamente eliminados."""
+    fila = cur.execute("SELECT nombre FROM recursos WHERE id = ?", (rid,)).fetchone()
+    if fila is None or not (motivo or '').strip():
+        return []
+    _asegurar_unidades(cur, rid)  # persistir 1..cantidad si el recurso todavía no las tenía
     todas = {f['numero'] for f in
-             cur.execute("SELECT numero FROM recurso_unidades WHERE recurso_id = ?", (id,)).fetchall()}
+             cur.execute("SELECT numero FROM recurso_unidades WHERE recurso_id = ?", (rid,)).fetchall()}
     aeliminar = sorted(n for n in set(nums) if n in todas)
     if len(aeliminar) >= len(todas):
         aeliminar = aeliminar[:max(len(todas) - 1, 0)]
@@ -1477,13 +1504,11 @@ def unidad_eliminar(id):
         cur.executemany(
             "INSERT INTO recurso_bajas (recurso_id, recurso_nombre, motivo, detalle, fecha, numero) "
             "VALUES (?,?,?,?,?,?)",
-            [(id, fila['nombre'], motivo, detalle, hoy, n) for n in aeliminar])
+            [(rid, fila['nombre'], motivo.strip(), (detalle or '').strip(), hoy, n) for n in aeliminar])
         cur.executemany("DELETE FROM recurso_unidades WHERE recurso_id = ? AND numero = ?",
-                        [(id, n) for n in aeliminar])
-        _sincronizar_cantidad(cur, id)
-        con.commit()
-    con.close()
-    return redirect(url_for('gestion.editar', slug='recursos', id=id))
+                        [(rid, n) for n in aeliminar])
+        _sincronizar_cantidad(cur, rid)
+    return aeliminar
 
 
 @bp.route('/bajas/<int:baja_id>/revertir-unidad', methods=['POST'])
@@ -1493,22 +1518,30 @@ def unidad_baja_revertir(baja_id):
     de `recurso_unidades` si ese número está libre y marca la baja como revertida. Si el
     número se reusó con un `+` posterior, no hace nada."""
     con = conectar()
-    cur = con.cursor()
-    b = cur.execute(
-        "SELECT recurso_id, numero, revertida FROM recurso_bajas WHERE id = ?", (baja_id,)).fetchone()
-    if b and b['numero'] is not None and not b['revertida']:
-        libre = not cur.execute(
-            "SELECT 1 FROM recurso_unidades WHERE recurso_id = ? AND numero = ?",
-            (b['recurso_id'], b['numero'])).fetchone()
-        existe = cur.execute("SELECT 1 FROM recursos WHERE id = ?", (b['recurso_id'],)).fetchone()
-        if libre and existe:
-            cur.execute("INSERT INTO recurso_unidades (recurso_id, numero, ubicacion) VALUES (?,?,'')",
-                        (b['recurso_id'], b['numero']))
-            cur.execute("UPDATE recurso_bajas SET revertida = 1 WHERE id = ?", (baja_id,))
-            _sincronizar_cantidad(cur, b['recurso_id'])
-            con.commit()
+    if revertir_baja_unidad(con.cursor(), baja_id):
+        con.commit()
     con.close()
     return redirect(url_for('gestion.bajas_lista'))
+
+
+def revertir_baja_unidad(cur, baja_id):
+    """Re-crea la unidad de una baja puntual si su número sigue libre. Devuelve el id del
+    recurso si la revirtió, None si no correspondía."""
+    b = cur.execute(
+        "SELECT recurso_id, numero, revertida FROM recurso_bajas WHERE id = ?", (baja_id,)).fetchone()
+    if not b or b['numero'] is None or b['revertida']:
+        return None
+    libre = not cur.execute(
+        "SELECT 1 FROM recurso_unidades WHERE recurso_id = ? AND numero = ?",
+        (b['recurso_id'], b['numero'])).fetchone()
+    existe = cur.execute("SELECT 1 FROM recursos WHERE id = ?", (b['recurso_id'],)).fetchone()
+    if not (libre and existe):
+        return None
+    cur.execute("INSERT INTO recurso_unidades (recurso_id, numero, ubicacion) VALUES (?,?,'')",
+                (b['recurso_id'], b['numero']))
+    cur.execute("UPDATE recurso_bajas SET revertida = 1 WHERE id = ?", (baja_id,))
+    _sincronizar_cantidad(cur, b['recurso_id'])
+    return b['recurso_id']
 
 
 # --- Kits: sub-recursos de un recurso ------------------------------------------
@@ -1630,3 +1663,310 @@ def kit_item_eliminar(id, item_id):
     con.close()
     return redirect(url_for('gestion.editar', slug='recursos', id=id))
 
+
+# ---------------------------------------------------------------------------
+# API JSON de la app instalable (/app) — ver agent_docs/app-instalable.md
+# ---------------------------------------------------------------------------
+# Dos blueprints, igual que las páginas: `bp_api_registro` es la lista de inventarios
+# (`/app/api/gestion/inventarios`) y `bp_api` es UN inventario abierto
+# (`/app/api/gestion/<inv>/…`). El `<inv>` se resuelve exactamente igual que en `bp` (g.inv),
+# así que `db_path`, `ambito` y la clave del encargado funcionan sin enterarse de que el
+# pedido vino de la app. Toda escritura devuelve el recurso completo serializado, mismo
+# contrato que el CRUD genérico (crud.registrar_api).
+
+bp_api_registro = Blueprint('inventarios_api', __name__, url_prefix='/app/api/gestion')
+bp_api = Blueprint('gestion_api', __name__, url_prefix='/app/api/gestion/<inv>')
+
+
+@bp_api.url_value_preprocessor
+def _api_tomar_inventario(endpoint, valores):
+    g.inv = (valores or {}).pop('inv', None)
+
+
+@bp_api.url_defaults
+def _api_poner_inventario(endpoint, valores):
+    if 'inv' not in valores and getattr(g, 'inv', None):
+        valores['inv'] = g.inv
+
+
+@bp_api.before_request
+def _api_inventario_existe():
+    """Antes que el gate: un inventario que no existe es 404, no "sin sesión"."""
+    if inventario(g.inv) is None:
+        return jsonify({'error': 'Ese inventario no existe.'}), 404
+
+
+# La puerta de un inventario (entrar con su clave) tiene que poder alcanzarse sin ningún
+# acceso previo: es justamente cómo entra el encargado.
+bp_api.mitre_sin_gate = ('gestion_api.api_entrar',)
+accesos.registrar_acceso_api(bp_api, PERMISO_LECTURA)
+accesos.registrar_acceso_api(bp_api_registro, None)
+
+
+@bp_api.before_request
+def _api_recordar_inventario():
+    """Lo mismo que `_recordar_inventario`: el asistente sabe de qué inventario se habla."""
+    if request.endpoint != 'gestion_api.api_entrar' and session.get('inv_activo') != g.inv:
+        session['inv_activo'] = g.inv
+
+
+crud.registrar_api(bp_api, sys.modules[__name__])
+
+
+def api_meta():
+    """Hook de crud.registrar_api: lo fijo del inventario abierto y lo que puede este acceso."""
+    inv = inventario_activo()
+    return {
+        'inventario': {'slug': inv['slug'], 'nombre': inv['nombre']},
+        'estado_baja': ESTADO_BAJA,
+        'estados': ESTADOS_RECURSO,
+        'motivos_baja': MOTIVOS_BAJA,
+        'lugares_sugeridos': LUGARES_RECURSO,
+        'dias_por_mes': DIAS_POR_MES,
+        'hoy': ahora().strftime(FORMATO_FECHA_REVISION),
+        'puede_alias': accesos.puede(PERMISO_ALIAS),
+        'puede_auditoria': accesos.puede(PERMISO_AUDITORIA),
+        'puede_accesos': accesos.puede(PERMISO_ACCESOS),
+    }
+
+
+def api_serializar(slug, filas, cur):
+    """Hook de crud.registrar_api: todo lo que muestran el listado, la ficha y EDITAR va en
+    la misma fila, así la app abre cualquiera de las tres sin pedir nada más."""
+    if slug != 'recursos':
+        return
+    for fila in filas:
+        fila['unidades'] = lugares_recurso_agrupado(cur, fila['id'])
+        fila['kit'] = kit_items_recurso(cur, fila['id'])
+        fila['dias_revision'] = _dias_sin_revisar(fila.get('fecha_revision'))
+
+
+def api_etag():
+    """Hook de crud.registrar_api: la misma URL de listado no apunta siempre a la misma .db
+    (el `<inv>` es parte de la URL, pero el ETag tiene que distinguirlas igual)."""
+    inv = inventario_activo()
+    return f"inv{inv['id']}-" if inv else ''
+
+
+def _api_recurso(con, rid, **extra):
+    """Respuesta estándar de las rutas propias: el recurso como quedó, o 404."""
+    cur = con.cursor()
+    datos = crud.una_fila_api(sys.modules[__name__], 'recursos', cur, rid, bp_api.name)
+    con.commit()
+    con.close()
+    if datos is None:
+        return jsonify({'error': 'Este recurso ya no existe.'}), 404
+    datos.update(extra)
+    return jsonify(datos)
+
+
+def _api_cuerpo():
+    datos = request.get_json(silent=True)
+    return datos if isinstance(datos, dict) else {}
+
+
+def _api_numeros(datos):
+    return [n for n in (datos.get('numeros') or []) if isinstance(n, int)]
+
+
+def _api_con_recurso(rid):
+    """Conexión al inventario + si el recurso existe. Si no existe la cierra."""
+    con = conectar()
+    if con.execute("SELECT 1 FROM recursos WHERE id = ?", (rid,)).fetchone():
+        return con
+    con.close()
+    return None
+
+
+def _api_no_existe():
+    return jsonify({'error': 'Este recurso ya no existe.'}), 404
+
+
+@bp_api_registro.get('/inventarios')
+def api_inventarios():
+    """La lista de inventarios con cuáles abre esta sesión, igual que `panel`."""
+    filas = listar_inventarios()
+    return jsonify({
+        'inventarios': [{'slug': f['slug'], 'nombre': f['nombre'], 'total': f['total'],
+                         'sin_clave': f['sin_clave'], 'abre': _puede_abrir(f)}
+                        for f in filas],
+        'puede_administrar': accesos.puede(PERMISO_REGISTRO),
+    })
+
+
+@bp_api.post('/entrar')
+def api_entrar():
+    if not inventario_activo()['clave_hash']:
+        return jsonify({'error': 'Este inventario todavía no tiene clave. Pedile a '
+                                 'administración que le ponga una.'}), 409
+    if not _entrar_inventario(_api_cuerpo().get('clave', '')):
+        return jsonify({'error': 'Contraseña incorrecta.'}), 401
+    return jsonify({'ok': True})
+
+
+@bp_api.post('/salir')
+def api_salir():
+    _salir_inventario()
+    return jsonify({'ok': True})
+
+
+@bp_api.post('/recursos/<int:id>/baja')
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
+def api_baja(id):
+    datos = _api_cuerpo()
+    con = _api_con_recurso(id)
+    if con is None:
+        return _api_no_existe()
+    if not dar_de_baja(con.cursor(), id, datos.get('motivo', ''), datos.get('detalle', '')):
+        con.close()
+        return jsonify({'error': 'Contá qué le pasó: el motivo es obligatorio.',
+                        'errores': {'motivo': 'Obligatorio.'}}), 422
+    return _api_recurso(con, id)
+
+
+@bp_api.post('/recursos/<int:id>/baja/revertir')
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
+def api_baja_revertir(id):
+    con = _api_con_recurso(id)
+    if con is None:
+        return _api_no_existe()
+    revertir_baja(con.cursor(), id)
+    return _api_recurso(con, id)
+
+
+@bp_api.post('/recursos/<int:id>/unidades/agregar')
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
+def api_unidades_agregar(id):
+    pedidos = _api_numeros(_api_cuerpo())
+    if not pedidos:
+        return jsonify({'error': 'Elegí qué números agregar.'}), 422
+    con = _api_con_recurso(id)
+    if con is None:
+        return _api_no_existe()
+    error = agregar_unidades(con.cursor(), id, pedidos)
+    if error:
+        con.close()
+        return jsonify({'error': error}), 422
+    return _api_recurso(con, id)
+
+
+@bp_api.post('/recursos/<int:id>/unidades/eliminar')
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
+def api_unidades_eliminar(id):
+    datos = _api_cuerpo()
+    nums = _api_numeros(datos)
+    if not nums or not str(datos.get('motivo') or '').strip():
+        return jsonify({'error': 'Elegí qué unidades eliminar y qué les pasó.'}), 422
+    con = _api_con_recurso(id)
+    if con is None:
+        return _api_no_existe()
+    eliminadas = eliminar_unidades(con.cursor(), id, nums, datos['motivo'], datos.get('detalle', ''))
+    return _api_recurso(con, id, _eliminadas=eliminadas)
+
+
+@bp_api.post('/recursos/<int:id>/unidades/mover')
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
+def api_unidades_mover(id):
+    datos = _api_cuerpo()
+    nums = _api_numeros(datos)
+    if not nums or not str(datos.get('ubicacion') or '').strip():
+        return jsonify({'error': 'Indicá qué unidades y a qué lugar.'}), 422
+    con = _api_con_recurso(id)
+    if con is None:
+        return _api_no_existe()
+    resultado = mover_unidades(con.cursor(), id, datos['ubicacion'], numeros=nums)
+    if not resultado['ok']:
+        con.close()
+        return jsonify({'error': resultado['error'], 'avisos': resultado['avisos']}), 422
+    return _api_recurso(con, id, _avisos=resultado['avisos'])
+
+
+@bp_api.post('/recursos/<int:id>/unidades/quitar')
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
+def api_unidades_quitar(id):
+    nums = _api_numeros(_api_cuerpo())
+    con = _api_con_recurso(id)
+    if con is None:
+        return _api_no_existe()
+    con.executemany("UPDATE recurso_unidades SET ubicacion = '' WHERE recurso_id = ? AND numero = ?",
+                    [(id, n) for n in nums])
+    return _api_recurso(con, id)
+
+
+def _api_kit_campos(datos):
+    return {k: str(datos.get(k) or '').strip() for k in ('titulo', 'cantidad', 'recurso_asignado')}
+
+
+@bp_api.post('/recursos/<int:id>/kit')
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
+def api_kit_agregar(id):
+    campos = _api_kit_campos(_api_cuerpo())
+    if not campos['titulo']:
+        return jsonify({'error': 'El título es obligatorio.', 'errores': {'titulo': 'Obligatorio.'}}), 422
+    con = _api_con_recurso(id)
+    if con is None:
+        return _api_no_existe()
+    con.execute("INSERT INTO kit_items (recurso_id, titulo, cantidad, recurso_asignado) VALUES (?,?,?,?)",
+                (id, campos['titulo'], campos['cantidad'], campos['recurso_asignado']))
+    return _api_recurso(con, id)
+
+
+@bp_api.put('/recursos/<int:id>/kit/<int:item_id>')
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
+def api_kit_editar(id, item_id):
+    campos = _api_kit_campos(_api_cuerpo())
+    if not campos['titulo']:
+        return jsonify({'error': 'El título es obligatorio.', 'errores': {'titulo': 'Obligatorio.'}}), 422
+    con = conectar()
+    if not editar_kit_item(con.cursor(), id, item_id, **campos):
+        con.close()
+        return jsonify({'error': 'Ese sub-recurso ya no existe.'}), 404
+    return _api_recurso(con, id)
+
+
+@bp_api.delete('/recursos/<int:id>/kit/<int:item_id>')
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
+def api_kit_eliminar(id, item_id):
+    con = conectar()
+    eliminar_kit_item(con.cursor(), id, item_id)
+    return _api_recurso(con, id)
+
+
+@bp_api.get('/alias')
+@accesos.requiere(PERMISO_ALIAS, como_json=True)
+def api_alias():
+    con = conectar()
+    filas = con.execute("SELECT id, nombre, alias FROM recursos ORDER BY nombre COLLATE NOCASE").fetchall()
+    con.close()
+    return jsonify({'filas': [dict(f) for f in filas]})
+
+
+@bp_api.put('/alias/<int:id>')
+@accesos.requiere(PERMISO_ALIAS, como_json=True)
+def api_alias_guardar(id):
+    con = conectar()
+    if not guardar_alias(con.cursor(), id, str(_api_cuerpo().get('alias') or '')):
+        con.close()
+        return _api_no_existe()
+    return _api_recurso(con, id)
+
+
+@bp_api.get('/bajas')
+@accesos.requiere(PERMISO_AUDITORIA, como_json=True)
+def api_bajas():
+    con = conectar()
+    filas = bajas_registro(con.cursor())
+    con.close()
+    return jsonify({'filas': filas})
+
+
+@bp_api.post('/bajas/<int:baja_id>/revertir')
+@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
+def api_baja_unidad_revertir(baja_id):
+    con = conectar()
+    rid = revertir_baja_unidad(con.cursor(), baja_id)
+    if rid is None:
+        con.close()
+        return jsonify({'error': 'Esa baja ya no se puede revertir (el número se volvió '
+                                 'a usar, o ya estaba revertida).'}), 409
+    return _api_recurso(con, rid)

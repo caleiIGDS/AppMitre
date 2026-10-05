@@ -40,6 +40,10 @@ concreta entra por un **hook opcional**, nunca por un `if slug == '...'` acá ad
       contexto_extra()                claves extra del context processor
       NAV_EXTRA                       [(slug, label)] extra para la nav
       ERROR_DUPLICADO                 {slug: mensaje} cuando un UNIQUE rechaza el guardado
+      api_serializar(slug, filas, cur)  completa las filas que devuelve la API JSON (/app)
+      api_meta()                      claves extra del GET /meta de la API
+      api_etag()                      prefijo del ETag de los listados de la API, si la
+                                      misma URL puede apuntar a .db distintas
 
 Cada cfg de ENTIDADES: tabla, singular, plural, descripcion, campos, columnas,
 relaciones y (opcional) campo_nombre, permiso y `sin_eliminar` (la entidad no se borra
@@ -184,6 +188,7 @@ def init_db(area):
     migrar = _hook(area, 'migrar')
     if migrar:
         migrar(cur)
+    instalar_versionado(area, cur)
 
     sembrar = _hook(area, 'seed')
     if cur.execute(f"SELECT COUNT(*) FROM {area.TABLA_TESTIGO}").fetchone()[0] == 0:
@@ -211,6 +216,97 @@ def init_db(area):
             sembrar(cur)
     con.commit()
     con.close()
+
+
+# ---------------------------------------------------------------------------
+# Versionado: lo que usa la app (/app) para no pisar cambios ajenos ni re-bajar datos
+# ---------------------------------------------------------------------------
+# Dos contadores, los dos mantenidos por TRIGGERS de SQLite y no por el código Python:
+#
+#   <tabla>.version   uno por fila. Sube con cualquier cambio de la fila o de sus tablas
+#                     hijas (las de LIMPIEZA_M2M: unidades, ítems de kit). La app lo manda
+#                     al guardar; si no coincide, alguien cambió la fila mientras se
+#                     editaba y el guardado contesta 409 en vez de pisar.
+#   _revision.n       uno por DB. Sube con cualquier alta, baja o cambio. Es el ETag de
+#                     los listados: si no cambió, el servidor contesta 304 sin datos.
+#
+# Por qué triggers: a estas tablas escriben el motor, las rutas propias de cada área, el
+# asistente (agente/tools) y scripts sueltos. Un contador mantenido a mano en Python se
+# olvidaría en alguno de esos caminos; el trigger no se puede saltear.
+
+def instalar_versionado(area, cur):
+    """Columna `version` + triggers. Idempotente: los triggers se recrean en cada
+    `init_db`, así un cambio acá (o en LIMPIEZA_M2M) entra sin migración aparte.
+
+    Un área que usa `init_db` sin entidades propias (salidas: sólo quiere el respaldo y la
+    guarda anti-pérdida) no tiene nada que versionar."""
+    if not getattr(area, 'ENTIDADES', None):
+        return
+    cur.execute("CREATE TABLE IF NOT EXISTS _revision "
+                "(id INTEGER PRIMARY KEY CHECK (id = 1), n INTEGER NOT NULL)")
+    cur.execute("INSERT OR IGNORE INTO _revision (id, n) VALUES (1, 0)")
+    sube = "UPDATE _revision SET n = n + 1 WHERE id = 1;"
+
+    for slug, cfg_ent in area.ENTIDADES.items():
+        tabla = cfg_ent['tabla']
+        columnas = {c[1] for c in cur.execute(f"PRAGMA table_info({tabla})").fetchall()}
+        if 'version' not in columnas:
+            cur.execute(f"ALTER TABLE {tabla} ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+
+        cur.executescript(f"""
+            DROP TRIGGER IF EXISTS _v_{tabla}_upd;
+            DROP TRIGGER IF EXISTS _v_{tabla}_ins;
+            DROP TRIGGER IF EXISTS _v_{tabla}_del;
+            CREATE TRIGGER _v_{tabla}_upd AFTER UPDATE ON {tabla}
+            WHEN NEW.version = OLD.version
+            BEGIN
+                UPDATE {tabla} SET version = OLD.version + 1 WHERE id = NEW.id;
+                {sube}
+            END;
+            CREATE TRIGGER _v_{tabla}_ins AFTER INSERT ON {tabla} BEGIN {sube} END;
+            CREATE TRIGGER _v_{tabla}_del AFTER DELETE ON {tabla} BEGIN {sube} END;
+        """)
+
+        # Un cambio en una tabla hija es un cambio de la fila madre: mover una unidad de
+        # lugar cambia lo que muestra la ficha del recurso.
+        for hija, col in getattr(area, 'LIMPIEZA_M2M', {}).get(slug, []):
+            for evento, ref in (('INSERT', 'NEW'), ('UPDATE', 'NEW'), ('DELETE', 'OLD')):
+                nombre = f"_v_{hija}_{col}_{evento.lower()}"
+                cur.executescript(f"""
+                    DROP TRIGGER IF EXISTS {nombre};
+                    CREATE TRIGGER {nombre} AFTER {evento} ON {hija}
+                    BEGIN
+                        UPDATE {tabla} SET version = version + 1 WHERE id = {ref}.{col};
+                        {sube}
+                    END;
+                """)
+
+    # Tablas propias del área que no son hijas de una entidad pero cambian lo que la API
+    # devuelve (gestion: el registro de bajas). Sólo suben la revisión de la DB.
+    for tabla in getattr(area, 'TABLAS_CON_REVISION', ()):
+        for evento in ('INSERT', 'UPDATE', 'DELETE'):
+            nombre = f"_v_{tabla}_{evento.lower()}"
+            cur.executescript(f"""
+                DROP TRIGGER IF EXISTS {nombre};
+                CREATE TRIGGER {nombre} AFTER {evento} ON {tabla} BEGIN {sube} END;
+            """)
+
+
+def schema_versionado(area):
+    """Las tablas y columnas que `instalar_versionado` le agrega a una DB del área, como
+    SQL que se aplica DESPUÉS de su SCHEMA. Lo usa `actualizar.py` para no tomarlas por
+    sobras al comparar la DB real con lo que declara el código."""
+    sql = ["CREATE TABLE IF NOT EXISTS _revision "
+           "(id INTEGER PRIMARY KEY CHECK (id = 1), n INTEGER NOT NULL);"]
+    sql += [f"ALTER TABLE {e['tabla']} ADD COLUMN version INTEGER NOT NULL DEFAULT 1;"
+            for e in area.ENTIDADES.values()]
+    return '\n'.join(sql)
+
+
+def revision(con):
+    """Contador de cambios de toda la DB (ver `instalar_versionado`)."""
+    fila = con.execute("SELECT n FROM _revision WHERE id = 1").fetchone()
+    return fila[0] if fila else 0
 
 
 # ---------------------------------------------------------------------------
@@ -451,18 +547,26 @@ def _seleccion_relaciones(relaciones, id, cur):
     return seleccion
 
 
+def _campos_escribibles(cfg_ent, editando):
+    """`solo_alta`: un campo así se escribe sólo al crear; en edición ni se renderiza (ver
+    templates/crud/form.html) ni se toca, para que el input ausente no vacíe la columna.
+    Lo usa `gestion.recursos.cantidad`, que en edición pasa a manejarse por unidades."""
+    return [c['nombre'] for c in cfg_ent['campos'] if not (editando and c.get('solo_alta'))]
+
+
 def _guardar_form(area, slug, cfg_ent, cur, id=None):
-    """Inserta o actualiza desde request.form y sincroniza las M2M. Devuelve el id.
+    """Inserta o actualiza desde request.form y sincroniza las M2M. Devuelve el id."""
+    valores = {n: request.form.get(n, '').strip()
+               for n in _campos_escribibles(cfg_ent, id is not None)}
+    seleccion = {rel['campo']: request.form.getlist(rel['campo'])
+                 for rel in relaciones_visibles(area, cfg_ent)}
+    return _guardar(area, slug, cfg_ent, cur, valores, seleccion, id)
 
-    `solo_alta`: un campo así se escribe sólo al crear; en edición ni se renderiza (ver
-    templates/crud/form.html) ni se toca acá, para que el input ausente no vacíe la columna.
-    Lo usa `gestion.recursos.cantidad`, que en edición pasa a manejarse por unidades.
-    """
-    editando = id is not None
-    nombres = [c['nombre'] for c in cfg_ent['campos']
-               if not (editando and c.get('solo_alta'))]
-    valores = {n: request.form.get(n, '').strip() for n in nombres}
 
+def _guardar(area, slug, cfg_ent, cur, valores, seleccion, id=None):
+    """Lo común al form web y a la API JSON: `valores` {campo: texto} con los campos
+    escribibles, y `seleccion` {campo_rel: [ids]} con SOLO las relaciones visibles para
+    este acceso (las que no vienen no se tocan)."""
     derivados = _hook(area, 'derivados')
     if derivados:
         valores.update(derivados(slug, valores))
@@ -481,11 +585,13 @@ def _guardar_form(area, slug, cfg_ent, cur, id=None):
     # Sólo las visibles: una relación que el form no mostró tampoco se pisa (ver
     # `relaciones_visibles`).
     for rel in relaciones_visibles(area, cfg_ent):
+        if rel['campo'] not in seleccion:
+            continue
         cur.execute(f"DELETE FROM {rel['tabla']} WHERE {rel['col_propia']} = ?", (id,))
-        for rid in request.form.getlist(rel['campo']):
+        for rid in seleccion[rel['campo']]:
             try:
                 rid = int(rid)
-            except ValueError:
+            except (TypeError, ValueError):
                 continue
             cur.execute(
                 f"INSERT OR IGNORE INTO {rel['tabla']} "
@@ -867,8 +973,375 @@ def registrar_rutas(bp, area):
             return jsonify({'ok': False, 'error': 'No existe esa foto'}), 404
         fotos_disco.reemplazar(foto['id'], foto['tipo'], crudo, tipo)
         foto['tipo'] = tipo
+        # La app instalable guarda cada imagen por su URL, y la URL lleva esta marca (ver
+        # `serializar`): sin ella seguiría mostrando la foto sin girar.
+        foto['girada'] = ahora().isoformat()
         cur.execute(f"UPDATE {cfg_ent['tabla']} SET fotos = ? WHERE id = ?",
                     (json.dumps(fotos), id))
         con.commit()
         con.close()
         return jsonify({'ok': True})
+
+
+# ---------------------------------------------------------------------------
+# API JSON — lo que consume la app instalable (/app, carpeta frontend/)
+# ---------------------------------------------------------------------------
+# Mismas reglas que las rutas HTML de arriba (permisos, relaciones visibles, solo_alta,
+# sin_eliminar, hooks), pero devolviendo datos. Convenciones, iguales para todas las áreas:
+#
+#   GET    /meta                       campos, relaciones y qué puede este acceso
+#   GET    /<slug>                     todas las filas serializadas. ETag = _revision.n
+#   GET    /<slug>/<id>                una fila
+#   POST   /<slug>                     alta        → 201 + fila
+#   PUT    /<slug>/<id>                edición     → fila | 409 {actual} | 422 {errores}
+#   DELETE /<slug>/<id>                baja física (404 si la entidad es `sin_eliminar`)
+#   POST   /<slug>/<id>/fotos          subir foto (multipart, campo `file`) → fila
+#   DELETE /<slug>/<id>/fotos/<fid>    → fila
+#   PUT    /<slug>/<id>/fotos/<fid>    rotar: imagen cruda en el body → fila
+#   GET    /<slug>/<id>/fotos/<fid>?v= la imagen
+#
+# Toda escritura devuelve la fila COMPLETA tal como quedó: la app la usa para reemplazar
+# su copia local, así lo que calcula el servidor (derivados, desglose, vencimientos) nunca
+# se tiene que adivinar del lado del navegador. Las escrituras de una fila mandan la
+# `version` que vio la app (ver `instalar_versionado`).
+
+def _validar(cfg_ent, valores, actuales=None):
+    """{campo: mensaje} con lo que no se puede guardar. Vacío = válido.
+
+    `actuales`: la fila tal como está (en una edición). Un select puede conservar un valor
+    que ya no está entre sus opciones — el "Dado de baja" de gestión, que pone sólo la baja:
+    el form clásico lo manda tal cual en un hidden y la API lo tiene que aceptar igual."""
+    actuales = actuales or {}
+    errores = {}
+    for c in cfg_ent['campos']:
+        if c['nombre'] not in valores:
+            continue
+        valor = valores[c['nombre']]
+        if c.get('requerido') and not valor:
+            errores[c['nombre']] = f"{c['label']} es obligatorio."
+        elif valor and c['tipo'] == 'number':
+            try:
+                float(valor.replace(',', '.'))
+            except ValueError:
+                errores[c['nombre']] = f"{c['label']} tiene que ser un número."
+        elif valor and c['tipo'] == 'select' and valor not in c['opciones'] \
+                and valor != str(actuales.get(c['nombre']) or ''):
+            errores[c['nombre']] = f"{c['label']}: '{valor}' no es una opción válida."
+    return errores
+
+
+def serializar(area, slug, filas, cur, bp_name):
+    """Filas de la DB → dicts para la API.
+
+    Las fotos salen como URLs (la imagen nunca viaja dentro de la fila), con un `v` que
+    cambia si la foto se rota: misma URL, misma imagen, así el navegador la guarda. El
+    alias, campo oculto (ver `campo_alias`), no viaja: sólo su texto de búsqueda ya
+    normalizado, aparte del de nombre/descripción, igual que en el listado HTML.
+    """
+    cfg_ent = area.ENTIDADES[slug]
+    campo_al = campo_alias(cfg_ent)
+    relaciones = relaciones_visibles(area, cfg_ent)
+    salida = []
+    for fila in filas:
+        d = dict(fila)
+        fotos = json.loads(d.pop('fotos', None) or '[]')
+        d['fotos'] = [{
+            'id': f['id'], 'tipo': f.get('tipo', ''), 'fecha': f.get('fecha', ''),
+            'url': url_for(f'{bp_name}.api_foto', slug=slug, id=d['id'], foto_id=f['id'],
+                           v=f"{f.get('girada') or f.get('fecha', '')}-{f.get('tipo', '')}"),
+        } for f in fotos if f.get('id')]
+        alias = d.pop(campo_al, '') if campo_al else ''
+        d['_buscar'] = texto.norm(f"{d.get('nombre', '')} {d.get('descripcion') or ''}")
+        d['_buscar_alias'] = texto.norm(alias or '')
+        d['relaciones'] = {
+            rel['campo']: [r[0] for r in cur.execute(
+                f"SELECT {rel['col_ajena']} FROM {rel['tabla']} WHERE {rel['col_propia']} = ?",
+                (d['id'],)).fetchall()]
+            for rel in relaciones}
+        salida.append(d)
+    extra = _hook(area, 'api_serializar')
+    if extra and salida:
+        extra(slug, salida, cur)
+        # El hook puede escribir (gestion siembra unidades que faltaban) y eso, por los
+        # triggers, sube la versión: se relee para no devolver una que ya quedó vieja y
+        # que haría fallar con 409 el próximo guardado de la app.
+        ids = [d['id'] for d in salida]
+        marcas = ','.join('?' * len(ids))
+        versiones = dict(cur.execute(
+            f"SELECT id, version FROM {cfg_ent['tabla']} WHERE id IN ({marcas})", ids).fetchall())
+        for d in salida:
+            d['version'] = versiones.get(d['id'], d.get('version'))
+    return salida
+
+
+def una_fila_api(area, slug, cur, id, bp_name):
+    """Una fila ya serializada, o None. La usan las rutas propias de un área para
+    contestar con el mismo formato que el motor."""
+    fila = cur.execute(f"{select(area.ENTIDADES[slug])} WHERE id = ?", (id,)).fetchone()
+    return serializar(area, slug, [fila], cur, bp_name)[0] if fila else None
+
+
+def chequear_version(cur, tabla, id, version):
+    """None si `version` es la actual; si no, ('no_existe' | 'conflicto'). Llamar con la
+    transacción ya tomada (`BEGIN IMMEDIATE`) para que nadie se cuele entre medio."""
+    fila = cur.execute(f"SELECT version FROM {tabla} WHERE id = ?", (id,)).fetchone()
+    if fila is None:
+        return 'no_existe'
+    return None if version == fila[0] else 'conflicto'
+
+
+def registrar_api(bp, area):
+    """Monta la API JSON de un área sobre `bp`, que ya tiene que traer el gate de
+    `accesos.registrar_acceso_api` (sesión + permiso base, todo en JSON)."""
+    escritura = _hook(area, 'PERMISO_ESCRITURA')
+    rotar = _hook(area, 'PERMISO_ROTAR_FOTO') or escritura
+
+    def _una(cur, slug, id):
+        return una_fila_api(area, slug, cur, id, bp.name)
+
+    def _cuerpo():
+        datos = request.get_json(silent=True)
+        if not isinstance(datos, dict):
+            abort(400)
+        return datos
+
+    def _valores(cfg_ent, datos, editando):
+        valores = {}
+        for nombre in _campos_escribibles(cfg_ent, editando):
+            v = datos.get(nombre)
+            valores[nombre] = '' if v is None else str(v).strip()
+        return valores
+
+    def _seleccion(cfg_ent, datos):
+        rels = datos.get('relaciones') or {}
+        return {rel['campo']: [i for i in rels[rel['campo']] if isinstance(i, int)]
+                for rel in relaciones_visibles(area, cfg_ent)
+                if isinstance(rels.get(rel['campo']), list)}
+
+    def _duplicado(slug):
+        return jsonify({'error': _hook(area, 'ERROR_DUPLICADO', {}).get(
+            slug, 'Ya existe un registro igual.')}), 422
+
+    def _no_existe():
+        return jsonify({'error': 'Este registro ya no existe.'}), 404
+
+    def _fotos(cur, cfg_ent, id):
+        fila = cur.execute(f"SELECT fotos FROM {cfg_ent['tabla']} WHERE id = ?", (id,)).fetchone()
+        return None if fila is None else json.loads(fila['fotos'] or '[]')
+
+    @bp.before_request
+    def _gate_entidad_api():
+        slug = (request.view_args or {}).get('slug')
+        if slug is not None and slug not in area.ENTIDADES:
+            return jsonify({'error': 'No existe'}), 404
+        permiso = permiso_entidad(area, slug) if slug else None
+        if permiso and not accesos.puede(permiso):
+            return accesos.denegar(permiso, como_json=True)
+
+    @bp.get('/meta')
+    def api_meta():
+        """Lo que la app necesita para dibujar formularios y decidir qué botones mostrar."""
+        entidades = {}
+        for slug, e in area.ENTIDADES.items():
+            if not ve_entidad(area, slug):
+                continue
+            entidades[slug] = {
+                'singular': e['singular'], 'plural': e['plural'],
+                'descripcion': e['descripcion'], 'campos': e['campos'],
+                'columnas': e['columnas'], 'sin_eliminar': bool(e.get('sin_eliminar')),
+                'relaciones': [{'campo': r['campo'], 'label': r['label'],
+                                'slug': r['slug_ajeno']}
+                               for r in relaciones_visibles(area, e)],
+            }
+        meta = {'entidades': entidades, 'puede_escribir': accesos.puede(escritura),
+                'puede_rotar': accesos.puede(rotar)}
+        extra = _hook(area, 'api_meta')
+        if extra:
+            meta.update(extra())
+        return jsonify(meta)
+
+    @bp.get('/<slug>')
+    def api_lista(slug):
+        cfg_ent = area.ENTIDADES[slug]
+        con = conectar(area)
+        cur = con.cursor()
+        filas = cur.execute(f"{select(cfg_ent)} ORDER BY nombre COLLATE NOCASE").fetchall()
+        datos = serializar(area, slug, filas, cur, bp.name)
+        # Los hooks de serialización pueden completar filas que faltaban: se commitea y
+        # RECIÉN AHÍ se lee la revisión, para que el ETag ya incluya ese cambio.
+        con.commit()
+        prefijo = _hook(area, 'api_etag')
+        etag = f"{prefijo() if prefijo else ''}{slug}-{revision(con)}"
+        con.close()
+        resp = jsonify({'filas': datos})
+        resp.set_etag(etag)
+        # no-cache = "guardala, pero preguntá antes de usarla": con el ETag, la pregunta
+        # se contesta 304 sin cuerpo cuando nada cambió.
+        resp.headers['Cache-Control'] = 'private, no-cache'
+        return resp.make_conditional(request)
+
+    @bp.get('/<slug>/<int:id>')
+    def api_detalle(slug, id):
+        con = conectar(area)
+        fila = _una(con.cursor(), slug, id)
+        con.commit()
+        con.close()
+        return jsonify(fila) if fila else _no_existe()
+
+    @bp.post('/<slug>')
+    @accesos.requiere(escritura, como_json=True)
+    def api_crear(slug):
+        cfg_ent = area.ENTIDADES[slug]
+        datos = _cuerpo()
+        valores = _valores(cfg_ent, datos, editando=False)
+        errores = _validar(cfg_ent, valores)
+        if errores:
+            return jsonify({'error': 'Revisá los campos marcados.', 'errores': errores}), 422
+        con = conectar(area)
+        cur = con.cursor()
+        try:
+            id = _guardar(area, slug, cfg_ent, cur, valores, _seleccion(cfg_ent, datos))
+        except sqlite3.IntegrityError:
+            con.close()
+            return _duplicado(slug)
+        fila = _una(cur, slug, id)
+        con.commit()
+        con.close()
+        return jsonify(fila), 201
+
+    @bp.put('/<slug>/<int:id>')
+    @accesos.requiere(escritura, como_json=True)
+    def api_editar(slug, id):
+        cfg_ent = area.ENTIDADES[slug]
+        datos = _cuerpo()
+        valores = _valores(cfg_ent, datos, editando=True)
+        con = conectar(area)
+        con.execute('BEGIN IMMEDIATE')
+        cur = con.cursor()
+        actuales = cur.execute(f"SELECT * FROM {cfg_ent['tabla']} WHERE id = ?", (id,)).fetchone()
+        errores = _validar(cfg_ent, valores, dict(actuales) if actuales else None)
+        if errores:
+            con.rollback()
+            con.close()
+            return jsonify({'error': 'Revisá los campos marcados.', 'errores': errores}), 422
+        problema = chequear_version(cur, cfg_ent['tabla'], id, datos.get('version'))
+        if problema:
+            fila = _una(cur, slug, id)
+            con.rollback()
+            con.close()
+            if problema == 'no_existe':
+                return _no_existe()
+            return jsonify({'error': 'conflicto', 'actual': fila}), 409
+        try:
+            _guardar(area, slug, cfg_ent, cur, valores, _seleccion(cfg_ent, datos), id)
+        except sqlite3.IntegrityError:
+            con.rollback()
+            con.close()
+            return _duplicado(slug)
+        fila = _una(cur, slug, id)
+        con.commit()
+        con.close()
+        return jsonify(fila)
+
+    @bp.delete('/<slug>/<int:id>')
+    @accesos.requiere(escritura, como_json=True)
+    def api_eliminar(slug, id):
+        cfg_ent = area.ENTIDADES[slug]
+        if cfg_ent.get('sin_eliminar'):
+            return jsonify({'error': 'Esto no se elimina: se da de baja.'}), 404
+        con = conectar(area)
+        cur = con.cursor()
+        cur.execute(f"DELETE FROM {cfg_ent['tabla']} WHERE id = ?", (id,))
+        for tabla, columna in area.LIMPIEZA_M2M[slug]:
+            cur.execute(f"DELETE FROM {tabla} WHERE {columna} = ?", (id,))
+        con.commit()
+        con.close()
+        return jsonify({'id': id})
+
+    @bp.post('/<slug>/<int:id>/fotos')
+    @accesos.requiere(escritura, como_json=True)
+    def api_subir_foto(slug, id):
+        archivo = request.files.get('file')
+        if archivo is None or not archivo.filename:
+            return jsonify({'error': 'No llegó ninguna imagen.'}), 400
+        if not (archivo.content_type or '').startswith('image/'):
+            return jsonify({'error': 'Solo se aceptan imágenes.'}), 400
+        b64 = base64.b64encode(archivo.read()).decode('utf-8')
+        if not agregar_foto(area, slug, id, b64, archivo.content_type):
+            return _no_existe()
+        con = conectar(area)
+        fila = _una(con.cursor(), slug, id)
+        con.commit()
+        con.close()
+        return jsonify(fila)
+
+    @bp.delete('/<slug>/<int:id>/fotos/<foto_id>')
+    @accesos.requiere(escritura, como_json=True)
+    def api_eliminar_foto(slug, id, foto_id):
+        """Una foto que ya no está no es error (otra pestaña la borró antes): se
+        devuelve la fila como quedó."""
+        cfg_ent = area.ENTIDADES[slug]
+        con = conectar(area)
+        cur = con.cursor()
+        fotos = _fotos(cur, cfg_ent, id)
+        if fotos is None:
+            con.close()
+            return _no_existe()
+        borrada = next((f for f in fotos if f.get('id') == foto_id), None)
+        if borrada is not None:
+            fotos_disco.eliminar(borrada['id'], borrada['tipo'])
+            cur.execute(f"UPDATE {cfg_ent['tabla']} SET fotos = ? WHERE id = ?",
+                        (json.dumps([f for f in fotos if f.get('id') != foto_id]), id))
+        fila = _una(cur, slug, id)
+        con.commit()
+        con.close()
+        return jsonify(fila)
+
+    @bp.put('/<slug>/<int:id>/fotos/<foto_id>')
+    @accesos.requiere(rotar, como_json=True)
+    def api_rotar_foto(slug, id, foto_id):
+        """Mismo contrato que `rotar_foto`: la imagen ya girada por el navegador, cruda en
+        el body. Cambia el `tipo` en la fila, y con él la URL: la app ve la foto nueva."""
+        cfg_ent = area.ENTIDADES[slug]
+        tipo = (request.content_type or '').split(';')[0].strip()
+        crudo = request.get_data()
+        if not tipo.startswith('image/') or not crudo:
+            return jsonify({'error': 'Imagen inválida.'}), 400
+        if len(crudo) > 24 * 1024 * 1024:
+            return jsonify({'error': 'Imagen demasiado grande.'}), 400
+        con = conectar(area)
+        cur = con.cursor()
+        fotos = _fotos(cur, cfg_ent, id)
+        foto = next((f for f in fotos or [] if f.get('id') == foto_id), None)
+        if foto is None:
+            con.close()
+            return jsonify({'error': 'Esa foto ya no existe.'}), 404
+        fotos_disco.reemplazar(foto['id'], foto['tipo'], crudo, tipo)
+        foto['tipo'] = tipo
+        # La fecha marca la versión de la imagen en la URL (ver `serializar`): girarla es
+        # una imagen nueva para la caché del navegador.
+        foto['girada'] = ahora().isoformat()
+        cur.execute(f"UPDATE {cfg_ent['tabla']} SET fotos = ? WHERE id = ?",
+                    (json.dumps(fotos), id))
+        fila = _una(cur, slug, id)
+        con.commit()
+        con.close()
+        return jsonify(fila)
+
+    @bp.get('/<slug>/<int:id>/fotos/<foto_id>')
+    def api_foto(slug, id, foto_id):
+        """La imagen. Valida que la foto sea de ESTA fila, igual que `foto_archivo`. La URL
+        cambia si la foto cambia (`?v=`), así que se puede guardar para siempre."""
+        cfg_ent = area.ENTIDADES[slug]
+        con = conectar(area)
+        fotos = _fotos(con.cursor(), cfg_ent, id)
+        con.close()
+        foto = next((f for f in fotos or [] if f.get('id') == foto_id), None)
+        if foto is None:
+            abort(404)
+        archivo = fotos_disco.ruta(foto['id'], foto['tipo'])
+        if not os.path.exists(archivo):
+            abort(404)
+        resp = send_file(archivo, mimetype=foto['tipo'])
+        resp.headers['Cache-Control'] = 'private, max-age=31536000, immutable'
+        return resp

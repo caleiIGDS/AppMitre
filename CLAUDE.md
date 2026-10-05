@@ -41,7 +41,7 @@ autónomo con su propia config, su propio gate y sus propios datos. No importa `
 También se comparte lo que no es lógica de dominio: `static/global.css` (paleta, reset y escudo del header), `static/gestion.css` (estilos específicos de gestión/agente/salidas), `static/img-utils.js` (compresión de imágenes client-side, la usan el chat y la galería de fotos), `static/gestion-agente.js`, `static/mobile-nav.js` (menú lateral de celular) y el widget del chat.
 
 **Usuarios principales:** alumnos, docentes, preceptores y administración.  
-**Stack:** Flask + SQLite + Vanilla JS (sin frameworks). Sin tests, sin linter, sin build step.
+**Stack:** Flask + SQLite. Las páginas clásicas y el SPA de horarios son Vanilla JS sin build. La **app instalable** (`/app`, carpeta `frontend/`) es Vue 3 + Vite + PWA y le pide al servidor sólo datos (API JSON en `/app/api/`): hoy cubre el uso diario de Gestión y convive con las páginas clásicas, que siguen andando. Su compilado (`app_dist/`) se commitea. Sin tests, sin linter.
 
 ---
 
@@ -55,6 +55,10 @@ gunicorn app:app                   # producción
 
 python actualizar.py --dry-run     # deploy: qué le falta a las DB del server (no escribe)
 python actualizar.py               # aplicarlo, antes del Reload del web app
+
+cd frontend && npm install         # app instalable (/app): una vez
+npm run dev                        # dev en http://localhost:5173/app/ (con Flask en :5000)
+npm run build                      # compila a app_dist/ — correrlo y commitearlo antes de subir
 ```
 
 ---
@@ -92,6 +96,7 @@ Google Sheets (CSV export por año: 1ro–7mo + preceptores + personal)
 | `agente/` | Asistente conversacional (`/agente`): paquete con blueprint, tools, prompt y loop + templates en `templates/agente/`. Expone `bp` e `init_db`; el mapa de los módulos está en `agente/__init__.py` |
 | `templates/crud/` | `lista/form/detalle/login.html` genéricos; cada área deja un stub que los extiende |
 | `static/mobile-nav.js` | Menú lateral ocultable de celular para `/gestion` y `/agente` (≤900px). No toca escritorio |
+| `frontend/` | La app instalable (`/app`): Vue 3 + Vite + PWA. Fuente en `frontend/src/`; compila a `app_dist/` (commiteado), que sirve `app.py` |
 
 ---
 
@@ -248,6 +253,7 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 - **Hosting:** PythonAnywhere (WSGI) + Cloudflare DNS. Antes fue Render.com — ver `dev-log/DECISIONS.md` 2026-06-25
 - **Producción está en uso, esta máquina no.** Lo que corre en PythonAnywhere es la instalación real de la escuela: datos vivos y gente usándola. El ciclo es siempre el mismo — se codea acá, se prueba en `localhost:5000`, se pushea, y en PythonAnywhere `git pull` + Reload. **Lo único que viaja es código**: las `.db` de `database/` acá son de desarrollo (`inventarios/general.db`, `prueba.db`) y los inventarios de verdad, más cargados y más al día, están sólo allá. Nunca subir una `.db` local, y nunca sacar conclusiones sobre producción contando filas en una base de acá: lo que tenga que cambiar datos del server llega por `migrar()` o por `actualizar.py`, no por el repo
 - **Todas las bases viven en `database/`** (`gestion.db`, `accesos.db`, `salidas.db`, `agente.db`, `escuela.db`, más `inventarios/<slug>.db` y la rotación de `backups/`). Qué guarda cada una y qué pasa si se pierde: `database/LEEME.md`, que es lo único de esa carpeta que va a git. **Persisten entre deploys** y están en `.gitignore`: `git pull` nunca las pisa. Son la fuente de verdad y sólo tienen los respaldos de `respaldos.py`, con dos excepciones a propósito: `escuela.db` se regenera desde Sheets y `agente.db` es telemetría que crece sin techo (ver `dev-log/DECISIONS.md`). `salidas_pdfs/` (también en `.gitignore`, contiene DNI y datos de salud) no tiene respaldo propio: se regenera solo la próxima vez que se guarda esa salida, y se purga junto con su fila al año. `agente.md` (las notas del asistente, ver `agent_docs/agente-asistente.md`) también está en `.gitignore` y por la misma razón que los `.db`: lo escriben la app y el agente, así que un archivo versionado se pisaría en cada `git pull`
+- **App instalable:** el server no tiene Node, así que `app_dist/` viaja compilado por git: un cambio en `frontend/` sin `npm run build` antes del commit no llega a producción
 - **Deploy:** `git pull` → `pip install -r requirements.txt` → `python actualizar.py --dry-run` → `python actualizar.py` → Reload del web app. Las variables de entorno (`SECRET_KEY`, `GESTION_CLAVE`, `HORARIOS_CLAVE`, `SHEETS_PROXY_URL`, `SHEETS_PROXY_SECRET`, las API keys del agente) van en el `.env` del servidor, que tampoco viaja por git
 - **`SECRET_KEY`, `GESTION_CLAVE` y `HORARIOS_CLAVE` son obligatorias en producción**: sin ellas la app no arranca (se exigen cuando detectan `PYTHONANYWHERE_DOMAIN`). En local caen a un default de desarrollo con un aviso por consola. `HORARIOS_CLAVE` es la contraseña del sistema de horarios (`/horarios`), independiente de `GESTION_CLAVE`. Lo mismo `SHEETS_PROXY_URL` y `SHEETS_PROXY_SECRET`: el Drive de horarios es privado y sólo se lee vía el Web App de Apps Script (`apps_script/`), firmando cada request con HMAC sobre el timestamp; sin ellas no arranca en producción y en local `descargar_sheet()` lanza `RuntimeError`. Ojo: **cambiar `GESTION_CLAVE` cierra todas las sesiones de admin** (es el botón de pánico) y **rotar `SECRET_KEY` desloguea también a todos los dispositivos**, que hay que volver a invitar
 - **La primera vez, `accesos.db` nace vacía**: no hay ningún dispositivo habilitado y el único acceso es el de administración con `GESTION_CLAVE`. Desde `/accesos` se invita al resto. La crea sola `accesos.init_db()`, tanto al arrancar como desde `actualizar.py`
@@ -277,6 +283,7 @@ Tabs con `clip-path: polygon(...)` para bordes angulados.
 - Motor CRUD compartido, criterio de capas, contrato de área, hooks, templates genéricos (`crud.py`, `texto.py`, `respaldos.py`, `templates/crud/`) → leer `agent_docs/crud-motor.md`
 - Quién puede entrar a qué: los tres niveles (público/interno/admin), permisos por área, **permisos con ámbito** (el comodín que no llega), links de invitación y dispositivos (`accesos.py`, `accesos.db`, `/accesos`) → leer `agent_docs/accesos.md`
 - Gestión de recursos: varios inventarios estancos, uno por archivo (`/gestion`, `gestion.py`, `gestion.db` + `inventarios/<slug>.db`) → leer `agent_docs/gestion-conocimiento.md`
+- App instalable (`/app`, `frontend/`, `app_dist/`): API JSON, versionado por triggers, conflictos, caché, service worker, build y deploy → leer `agent_docs/app-instalable.md`
 - Salidas educativas (`/salidas`, `salidas.py`, `salidas.db`, `salidas_pdfs/`, generación de PDF por anexo, vigencia y purga) → leer `agent_docs/salidas-educativas.md`
 - Asistente conversacional (`/agente`, paquete `agente/`, tools, fichas de confirmación, fotos) → leer `agent_docs/agente-asistente.md`
 - Qué guarda cada `.db`, qué se regenera y qué no, y cómo restaurar un respaldo → leer `database/LEEME.md`
