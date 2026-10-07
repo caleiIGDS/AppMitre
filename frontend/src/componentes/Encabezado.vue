@@ -85,6 +85,7 @@ async function cerrarSesion() {
           <AccionesInventario :inv="inv" :meta="meta.data.value" />
         </div>
         <nav class="g-areas" aria-label="Áreas">
+          <RouterLink :to="{ name: 'inicio' }">⌂ MENÚ PRINCIPAL</RouterLink>
           <template v-for="a in menu" :key="a.clave">
             <RouterLink v-if="a.ruta" :to="a.ruta">{{ a.nombre.toUpperCase() }}</RouterLink>
             <a v-else :href="a.href">{{ a.nombre.toUpperCase() }}</a>

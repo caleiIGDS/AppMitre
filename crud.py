@@ -546,7 +546,7 @@ def _guardar(area, slug, cfg_ent, cur, valores, seleccion, id=None):
 #   POST   /<slug>/<id>/fotos          subir foto (multipart, campo `file`) → fila
 #   DELETE /<slug>/<id>/fotos/<fid>    → fila
 #   PUT    /<slug>/<id>/fotos/<fid>    rotar: imagen cruda en el body → fila
-#   GET    /<slug>/<id>/fotos/<fid>?v= la imagen
+#   GET    /<slug>/<id>/fotos/<fid>?v= la imagen (`&t=mini`: su miniatura)
 #
 # Toda escritura devuelve la fila COMPLETA tal como quedó: la app la usa para reemplazar
 # su copia local, así lo que calcula el servidor (derivados, desglose, vencimientos) nunca
@@ -578,6 +578,15 @@ def _validar(cfg_ent, valores, actuales=None):
     return errores
 
 
+def _foto_api(f, slug, id, bp_name):
+    """Una foto para la API: la imagen (`url`) y su miniatura (`mini`, para las grillas),
+    con el mismo `v`, así rotarla cambia las dos."""
+    v = f"{f.get('girada') or f.get('fecha', '')}-{f.get('tipo', '')}"
+    url = lambda **extra: url_for(f'{bp_name}.api_foto', slug=slug, id=id, foto_id=f['id'], v=v, **extra)
+    return {'id': f['id'], 'tipo': f.get('tipo', ''), 'fecha': f.get('fecha', ''),
+            'url': url(), 'mini': url(t='mini')}
+
+
 def serializar(area, slug, filas, cur, bp_name):
     """Filas de la DB → dicts para la API.
 
@@ -593,11 +602,7 @@ def serializar(area, slug, filas, cur, bp_name):
     for fila in filas:
         d = dict(fila)
         fotos = json.loads(d.pop('fotos', None) or '[]')
-        d['fotos'] = [{
-            'id': f['id'], 'tipo': f.get('tipo', ''), 'fecha': f.get('fecha', ''),
-            'url': url_for(f'{bp_name}.api_foto', slug=slug, id=d['id'], foto_id=f['id'],
-                           v=f"{f.get('girada') or f.get('fecha', '')}-{f.get('tipo', '')}"),
-        } for f in fotos if f.get('id')]
+        d['fotos'] = [_foto_api(f, slug, d['id'], bp_name) for f in fotos if f.get('id')]
         alias = d.pop(campo_al, '') if campo_al else ''
         d['_buscar'] = texto.norm(f"{d.get('nombre', '')} {d.get('descripcion') or ''}")
         d['_buscar_alias'] = texto.norm(alias or '')
@@ -890,6 +895,7 @@ def registrar_api(bp, area):
         archivo = fotos_disco.ruta(foto['id'], foto['tipo'])
         if not os.path.exists(archivo):
             abort(404)
-        resp = send_file(archivo, mimetype=foto['tipo'])
+        mini = fotos_disco.ruta_mini(foto['id'], foto['tipo']) if request.args.get('t') == 'mini' else None
+        resp = send_file(mini, mimetype='image/jpeg') if mini else send_file(archivo, mimetype=foto['tipo'])
         resp.headers['Cache-Control'] = 'private, max-age=31536000, immutable'
         return resp

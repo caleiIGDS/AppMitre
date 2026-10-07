@@ -51,10 +51,10 @@ export default defineConfig({
         description: 'Inventario, historia y salidas educativas de la Escuela Técnica Emilio Mitre.',
         lang: 'es-AR',
         start_url: '/gestion/',
-        // Todo el sitio y no sólo /gestion/: las áreas que todavía son páginas clásicas
-        // (/salidas, /agente, /accesos) se abren dentro de la misma ventana, sin la barra
-        // gris de "fuera de la app". El service worker sigue cubriendo sólo /gestion/.
-        scope: '/',
+        // Sólo /gestion/, nunca '/': ese scope contiene /horarios/, y el celular mezclaba
+        // las dos apps instaladas (el ícono de una abría la otra). Las páginas clásicas
+        // (/salidas, /agente, /accesos) abren con la barra de "fuera de la app".
+        scope: '/gestion/',
         display: 'standalone',
         background_color: '#F1F5F9',
         theme_color: '#1A365D',
@@ -72,11 +72,13 @@ export default defineConfig({
         runtimeCaching: [
           {
             // Las fotos tienen la fecha en la URL: misma URL, misma imagen para siempre.
+            // Cada foto son dos entradas (miniatura y entera), y gestion/precarga.js las
+            // baja todas al abrir un inventario: el tope tiene que alcanzar para todas.
             urlPattern: ({ url }) => url.pathname.startsWith('/app/api/') && url.pathname.includes('/fotos/'),
             handler: 'CacheFirst',
             options: {
               cacheName: 'mitre-fotos',
-              expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              expiration: { maxEntries: 5000, maxAgeSeconds: 60 * 60 * 24 * 365 },
               cacheableResponse: { statuses: [200] },
             },
           },

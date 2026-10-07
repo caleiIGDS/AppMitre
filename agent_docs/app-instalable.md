@@ -57,8 +57,11 @@ app_dist/                ← lo que compila `npm run build` y sirve Flask. SE CO
   al salir. Una versión nueva de la app lo descarta (`buster`).
 - **Entre pestañas:** `BroadcastChannel('mitre')`.
 - **Fotos:** siguen en `database/fotos/` (`fotos_disco.py`); la API las sirve por
-  `…/fotos/<foto_id>?v=<fecha o girada>-<tipo>` con caché de un año. Rotar marca `girada` en
-  la fila (también el asistente), y con eso cambia la URL.
+  `…/fotos/<foto_id>?v=<fecha o girada>-<tipo>` con caché de un año, y cada foto trae además
+  `mini` (`&t=mini`, JPEG de 320 px que se genera la primera vez en `fotos/mini/`) para la
+  grilla de la ficha. Rotar marca `girada` en la fila (también el asistente), y con eso
+  cambian las dos URLs. Al llegar la lista de un inventario, `gestion/precarga.js` baja en
+  segundo plano todas las que el dispositivo no tiene (primero las miniaturas).
 
 ## Conflictos
 
@@ -86,7 +89,7 @@ formulario (unidades, kit, fotos tocados desde la misma pantalla) se adopta sin 
 ## Service worker
 
 Lo genera `vite-plugin-pwa` (Workbox). Precachea la app; cualquier ruta `/gestion/...` abre desde
-el dispositivo (`navigateFallbackAllowlist`). Scope `/` para que también pueda pedir `/app/api/`. Fotos: `CacheFirst`. Una versión nueva se baja sola pero
+el dispositivo (`navigateFallbackAllowlist`). Scope `/` para que también pueda pedir `/app/api/`. Fotos: `CacheFirst` (`mitre-fotos`, hasta 5000: cada foto son dos entradas). Una versión nueva se baja sola pero
 se activa cuando la persona toca **Actualizar** (`AvisoVersion.vue`). Flask (`app.py`) sirve
 `assets/` con caché de un año (llevan hash) y el resto con `no-cache`.
 

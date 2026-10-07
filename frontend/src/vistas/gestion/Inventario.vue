@@ -1,11 +1,12 @@
 <script setup>
-// El listado de un inventario. Los filtros viven en la URL
-// (?q=…&lugar=…&estado=…&meses=…&baja=1): volver atrás, recargar o compartir el link deja
-// la lista exactamente como estaba. Todo el filtrado es local, sobre la lista que ya está
-// en el dispositivo.
+// El listado de un inventario, como tabla o como galería de fotos (?vista=galeria). Los
+// filtros y la vista viven en la URL (?q=…&lugar=…&estado=…&meses=…&baja=1): volver atrás,
+// recargar o compartir el link deja la lista exactamente como estaba. Todo el filtrado es
+// local, sobre la lista que ya está en el dispositivo.
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useRecursos, useMeta } from '@/gestion/datos'
+import { precargarFotos } from '@/gestion/precarga'
 import { norm, puntaje, coincide } from '@/texto'
 import EstadoCarga from '@/componentes/EstadoCarga.vue'
 
@@ -26,6 +27,8 @@ const lugar = filtro('lugar')
 const estado = filtro('estado')
 const baja = filtro('baja')
 const meses = filtro('meses')
+const vista = filtro('vista')
+const galeria = computed(() => vista.value === 'galeria')
 
 // La búsqueda filtra en vivo, pero a la URL llega con una pausa: si no, cada tecla sería
 // una entrada nueva para el navegador. Y el filtro corre a lo sumo una vez por cuadro
@@ -57,6 +60,8 @@ watch(meses, (v) => { mesesVivo.value = Number(v) || 0 })
 const m = computed(() => meta.data.value || {})
 const ESTADO_BAJA = computed(() => m.value.estado_baja || 'Dado de baja')
 const filas = computed(() => recursos.data.value || [])
+// Cada vez que llega la lista, bajar las fotos que el dispositivo todavía no tiene.
+watch(() => recursos.data.value, (lista) => { if (lista) precargarFotos(lista) }, { immediate: true })
 const totalActivos = computed(() => filas.value.filter((r) => r.estado !== ESTADO_BAJA.value).length)
 
 const lugares = computed(() => {
@@ -139,7 +144,8 @@ onUnmounted(() => document.removeEventListener('click', fueraDelPanel))
 function limpiar() {
   busqueda.value = ''
   textoFiltro.value = ''
-  router.replace({ query: {} })
+  // La vista no es un filtro: quitar los filtros no vuelve de la galería a la tabla.
+  router.replace({ query: vista.value ? { vista: vista.value } : {} })
 }
 
 // --- Dibujar de a tandas -----------------------------------------------------------
@@ -150,6 +156,11 @@ function limpiar() {
 const TANDA = 40
 const limite = ref(TANDA)
 const mostradas = computed(() => lista.value.slice(0, limite.value))
+// En la galería los recursos son tarjetas y los sub-recursos (sin foto propia) una lista
+// compacta abajo; las dos salen de la misma tanda, así el centinela sirve igual.
+const tarjetas = computed(() => mostradas.value.filter((f) => !f.item))
+const filasKit = computed(() => mostradas.value.filter((f) => f.item))
+const iniciales = (nombre) => nombre.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase()
 watch([qNorm, lugar, estado, mesesVivo, baja], () => { limite.value = TANDA })
 
 // El centinela cambia de `key` con cada tanda: el elemento nuevo se observa de cero, así que
@@ -201,6 +212,18 @@ function abrir(r, evento) {
           </svg>
           <span class="g-sr-only">Filtros</span>
         </button>
+        <button
+          type="button" class="a-vista-btn" :title="galeria ? 'Ver como lista' : 'Ver como galería'"
+          @click="vista = galeria ? '' : 'galeria'"
+        >
+          <svg v-if="galeria" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">
+            <path d="M3 4.5h14M3 10h14M3 15.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <svg v-else viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">
+            <path d="M2.5 2.5h6v6h-6zM11.5 2.5h6v6h-6zM2.5 11.5h6v6h-6zM11.5 11.5h6v6h-6z" fill="currentColor" />
+          </svg>
+          <span class="g-sr-only">{{ galeria ? 'Ver como lista' : 'Ver como galería' }}</span>
+        </button>
         <RouterLink v-if="m.puede_escribir" class="g-btn" :to="{ name: 'recurso-nuevo', params: { inv } }">+ CREAR RECURSO</RouterLink>
       </div>
     </div>
@@ -242,7 +265,41 @@ function abrir(r, evento) {
   <EstadoCarga :consulta="recursos" que="el inventario" />
 
   <template v-if="recursos.data.value">
-    <div v-if="lista.length" class="g-table-wrap">
+    <div v-if="lista.length && galeria" class="a-galeria-wrap">
+      <ul v-if="tarjetas.length" class="a-galeria">
+        <li v-for="f in tarjetas" :key="f.clave">
+          <a
+            class="a-tarjeta" :href="hrefRecurso(f.r)"
+            :class="{ 'a-tarjeta-baja': f.r.estado === ESTADO_BAJA, 'a-tarjeta-roto': f.r.estado === 'Roto' }"
+            @click="abrir(f.r, $event)"
+          >
+            <span class="a-tarjeta-foto">
+              <img v-if="f.r.fotos.length" :src="f.r.fotos[0].mini || f.r.fotos[0].url" alt="" loading="lazy" decoding="async">
+              <span v-else class="a-tarjeta-sin" aria-hidden="true">{{ iniciales(f.nombre) }}</span>
+              <span v-if="f.r.estado === 'Roto'" class="a-tarjeta-estado">ROTO</span>
+              <span class="a-tarjeta-cant">×{{ f.cantidad }}</span>
+            </span>
+            <span class="a-tarjeta-nombre">{{ f.nombre }}</span>
+          </a>
+        </li>
+      </ul>
+      <!-- Los sub-recursos no tienen foto propia: lista compacta, y abren la ficha del kit. -->
+      <template v-if="filasKit.length">
+        <div class="a-galeria-sep">SUB-RECURSOS DE KITS</div>
+        <ul class="a-galeria-kits">
+          <li v-for="f in filasKit" :key="f.clave">
+            <a :href="hrefRecurso(f.r)" @click="abrir(f.r, $event)">
+              <span class="a-galeria-kit-nombre">{{ f.nombre }}</span>
+              <span class="a-galeria-kit-cant">×{{ f.cantidad }}</span>
+              <span class="a-chip-kit" :title="`Es parte del kit ${f.r.nombre}`">{{ f.r.nombre }}</span>
+            </a>
+          </li>
+        </ul>
+      </template>
+      <div v-if="mostradas.length < lista.length" :key="limite" :ref="centinela" class="a-centinela" aria-hidden="true" />
+    </div>
+
+    <div v-else-if="lista.length" class="g-table-wrap">
       <table class="g-table">
         <thead>
           <tr><th>RECURSO</th><th>CANT.</th><th>LUGAR ASIGNADO</th><th>ESTADO</th></tr>

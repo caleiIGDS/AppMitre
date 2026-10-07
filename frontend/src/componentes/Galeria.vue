@@ -1,7 +1,8 @@
 <script setup>
 // Fotos de una ficha: miniaturas, visor a pantalla
 // completa (flechas, Esc), y con permiso subir, borrar y ROTAR. Las imágenes se piden por
-// URL: el dispositivo las guarda y no las vuelve a bajar.
+// URL: el dispositivo las guarda y no las vuelve a bajar. La grilla usa la miniatura
+// (`mini`) y el visor la imagen entera (`url`); las dos las precarga gestion/precarga.js.
 //
 // Subir: se achica antes de mandarla (window.ImgUtils, el mismo criterio que el chat).
 // Rotar: el giro lo hace un canvas acá y al servidor va la imagen ya girada; se muestra
@@ -132,7 +133,7 @@ async function girar() {
           v-for="(f, i) in fotos" :key="f.id" type="button" class="g-foto-thumb"
           :aria-label="`Ver foto ${i + 1} de ${fotos.length}`" @click="abrir(i, $event)"
         >
-          <img :src="src(f)" :alt="`Foto ${i + 1}`" class="g-foto" loading="lazy" decoding="async">
+          <img :src="previas[f.id] || f.mini || f.url" :alt="`Foto ${i + 1}`" class="g-foto" loading="lazy" decoding="async">
         </button>
       </div>
     </div>

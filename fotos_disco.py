@@ -12,6 +12,10 @@ de archivos por carpeta.
 Los archivos NO entran en la rotación de `respaldos.py` — ver dev-log/DECISIONS.md: son
 inmutables por diseño (rotar reemplaza el archivo, no lo versiona) y esa rotación está
 pensada para una DB que muta fila a fila.
+
+Cada foto tiene además una miniatura (`fotos/mini/<uuid>.jpg`) para las grillas, que se
+genera la primera vez que se pide y se borra junto con la foto (o al rotarla). Es
+regenerable: perder la carpeta entera no pierde nada.
 """
 import base64
 import os
@@ -20,6 +24,8 @@ import uuid
 from config import DIR_DATOS
 
 FOTOS_DIR = os.path.join(DIR_DATOS, 'fotos')
+MINI_DIR = os.path.join(FOTOS_DIR, 'mini')
+MINI_LADO = 320
 
 _EXTENSIONES = {
     'image/jpeg': '.jpg',
@@ -63,11 +69,50 @@ def reemplazar(foto_id, tipo_viejo, crudo, tipo_nuevo):
         eliminar(foto_id, tipo_viejo)
     with open(_ruta(foto_id, tipo_nuevo), 'wb') as f:
         f.write(crudo)
+    _borrar(_ruta_mini(foto_id))
 
 
 def eliminar(foto_id, tipo):
-    """Borra el archivo de una foto. No es error si ya no está."""
+    """Borra el archivo de una foto (y su miniatura). No es error si ya no está."""
+    _borrar(_ruta(foto_id, tipo))
+    _borrar(_ruta_mini(foto_id))
+
+
+def _borrar(archivo):
     try:
-        os.remove(_ruta(foto_id, tipo))
+        os.remove(archivo)
     except FileNotFoundError:
         pass
+
+
+def _ruta_mini(foto_id):
+    return os.path.join(MINI_DIR, f"{foto_id}.jpg")
+
+
+def ruta_mini(foto_id, tipo):
+    """Ruta de la miniatura JPEG de una foto, generándola si todavía no existe. `None` si
+    no se puede (no está la original, o Pillow no sabe abrirla, p. ej. HEIC): quien la
+    pide sirve la original."""
+    destino = _ruta_mini(foto_id)
+    if os.path.exists(destino):
+        return destino
+    original = _ruta(foto_id, tipo)
+    if not os.path.exists(original):
+        return None
+    try:
+        from PIL import Image, ImageOps
+        with Image.open(original) as img:
+            img = ImageOps.exif_transpose(img)
+            img.thumbnail((MINI_LADO, MINI_LADO))
+            if img.mode != 'RGB':
+                fondo = Image.new('RGB', img.size, 'white')
+                fondo.paste(img, mask=img.convert('RGBA').split()[-1])
+                img = fondo
+            os.makedirs(MINI_DIR, exist_ok=True)
+            # A un temporal y después rename: dos pedidos a la vez no dejan un JPEG a medias.
+            temporal = f"{destino}.{uuid.uuid4().hex}.tmp"
+            img.save(temporal, 'JPEG', quality=72, optimize=True)
+        os.replace(temporal, destino)
+        return destino
+    except Exception:
+        return None

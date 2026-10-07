@@ -228,3 +228,163 @@ body.g-sin-scroll { overflow: hidden; }
   .g-panel-top + .g-table-wrap .g-table tbody tr.a-fila-kit { box-shadow: inset 3px 0 0 var(--g-accent); }
   .g-panel-top + .g-table-wrap .g-table tbody tr.a-fila-kit > td:first-child { box-shadow: none; }
 }
+
+/* --- Galería del inventario (Inventario.vue, ?vista=galeria) ----------------------- */
+/* El botón LISTA/GALERÍA, al lado del de filtros. En escritorio, caja como la búsqueda;
+   en celular, la misma caja translúcida sobre el azul que el símbolo de filtros. */
+.a-vista-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--g-border);
+  background: var(--g-surface);
+  color: var(--g-primary);
+  cursor: pointer;
+}
+.a-vista-btn:hover, .a-vista-btn:focus-visible { border-color: var(--g-primary); }
+
+.a-galeria-wrap {
+  border: 2px solid var(--g-primary);
+  border-top: none;
+  background: var(--g-surface);
+  padding: 16px 20px 20px;
+}
+.a-galeria {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+}
+.a-tarjeta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--g-dark);
+  text-decoration: none;
+}
+.a-tarjeta-foto {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid var(--g-border);
+  background: var(--g-bg);
+}
+.a-tarjeta:hover .a-tarjeta-foto,
+.a-tarjeta:focus-visible .a-tarjeta-foto { border-color: var(--g-accent); box-shadow: 0 0 0 1px var(--g-accent); }
+.a-tarjeta-foto img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* Sin foto: el azul de la escuela con la grilla de plano y las iniciales. */
+.a-tarjeta-sin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background-color: var(--g-primary);
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .07) 0 1px, transparent 1px 20px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .07) 0 1px, transparent 1px 20px);
+  color: rgba(255, 255, 255, .85);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+.a-tarjeta-cant {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 1px 6px;
+  background: rgba(15, 23, 42, .78);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.a-tarjeta-estado {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 1px 6px;
+  background: var(--g-alert);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  line-height: 1.5;
+}
+.a-tarjeta-roto .a-tarjeta-foto { border: 2px solid var(--g-alert); }
+.a-tarjeta-baja { opacity: .55; }
+.a-tarjeta-baja .a-tarjeta-nombre { text-decoration: line-through; }
+/* El nombre, hasta dos renglones: más que eso ya se lee en la ficha. */
+.a-tarjeta-nombre {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+/* Sub-recursos abajo de la grilla: la franja naranja del listado y una fila por cada uno. */
+.a-galeria-sep {
+  margin: 20px -20px 0;
+  padding: 3px 20px;
+  background: var(--g-accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  line-height: 1.4;
+}
+.a-galeria-sep:first-child { margin-top: -16px; }
+.a-galeria-kits { list-style: none; margin: 0 -20px -20px; padding: 0; }
+.a-galeria-kits a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 20px;
+  border-bottom: 1px solid var(--g-border);
+  box-shadow: inset 3px 0 0 var(--g-accent);
+  color: var(--g-dark);
+  text-decoration: none;
+  font-size: 13px;
+}
+.a-galeria-kits li:last-child a { border-bottom: none; }
+.a-galeria-kits a:hover { background: var(--g-bg); }
+.a-galeria-kit-nombre { flex: 1; min-width: 0; font-weight: 600; }
+.a-galeria-kit-cant { color: var(--g-muted); font-size: 12px; }
+.a-galeria-kits .a-chip-kit { max-width: 40%; }
+
+@media (max-width: 700px) {
+  .g-panel-top .a-vista-btn {
+    width: 44px;
+    height: 44px;
+    border-color: rgba(255, 255, 255, .4);
+    background: rgba(0, 0, 0, .2);
+    color: #fff;
+  }
+  /* Con un botón más en la franja, el campo tiene que poder achicarse: el <input> trae un
+     ancho mínimo propio y se salía de su caja por encima del símbolo de filtros. */
+  .g-panel-top .g-search-mini input { min-width: 0; width: 100%; }
+  /* 3 columnas en un celular chico; 4 cuando la pantalla da. */
+  .a-galeria-wrap { padding: 10px 10px 14px; }
+  .a-galeria { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 8px; }
+  .a-tarjeta-nombre { font-size: 11px; }
+  .a-tarjeta-sin { font-size: 18px; }
+  .a-galeria-sep { margin: 14px -10px 0; padding: 3px 12px; }
+  .a-galeria-sep:first-child { margin-top: -10px; }
+  .a-galeria-kits { margin: 0 -10px -14px; }
+  .a-galeria-kits a { padding: 6px 12px; }
+}
+@media (min-width: 420px) and (max-width: 700px) {
+  .a-galeria { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
