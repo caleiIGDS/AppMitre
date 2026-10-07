@@ -131,7 +131,7 @@ async function enviarAgregar() {
         >#{{ n }}</button>
         <button type="button" class="g-uni-mas" @click="extra += 10">más…</button>
       </div>
-      <button type="submit" class="g-btn-mini" :disabled="!listaAgregar.length || agregar.isPending.value">
+      <button type="submit" class="g-btn g-btn-mini" :disabled="!listaAgregar.length || agregar.isPending.value">
         {{ agregar.isPending.value ? 'Agregando…' : rotulo('+ Agregar', listaAgregar) }}
       </button>
     </form>

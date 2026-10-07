@@ -81,7 +81,7 @@ function sinUbicar() {
       <datalist id="datalist-lugar-desglose">
         <option v-for="l in lugares" :key="l" :value="l" />
       </datalist>
-      <button type="submit" class="g-btn-mini" :disabled="ocupado">{{ mover.isPending.value ? 'Moviendo…' : 'Mover acá' }}</button>
+      <button type="submit" class="g-btn g-btn-mini" :disabled="ocupado">{{ mover.isPending.value ? 'Moviendo…' : 'Mover acá' }}</button>
       <button type="button" class="g-btn-mini g-btn-outline-dark" :disabled="ocupado" @click="sinUbicar">Marcar sin ubicar</button>
     </form>
   </template>

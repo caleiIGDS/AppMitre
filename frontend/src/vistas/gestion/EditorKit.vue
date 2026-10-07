@@ -76,7 +76,7 @@ async function sumar() {
                 <input v-model="borradores[item.id].titulo" type="text" placeholder="Título" required aria-label="Título" @input="borradores[item.id].tocado = true">
                 <input v-model="borradores[item.id].cantidad" type="text" placeholder="Cantidad" style="width:6em" aria-label="Cantidad" @input="borradores[item.id].tocado = true">
                 <input v-model="borradores[item.id].recurso_asignado" type="text" placeholder="Recurso asignado" aria-label="Recurso asignado" @input="borradores[item.id].tocado = true">
-                <button type="submit" class="g-btn-mini" title="Guardar" :disabled="!cambiado(item)">Guardar</button>
+                <button type="submit" class="g-btn g-btn-mini" title="Guardar" :disabled="!cambiado(item)">Guardar</button>
               </form>
             </td>
             <td>
@@ -91,7 +91,7 @@ async function sumar() {
       <input v-model="nuevo.titulo" type="text" placeholder="Título" required aria-label="Título del sub-recurso nuevo">
       <input v-model="nuevo.cantidad" type="text" placeholder="Cantidad" style="width:6em" aria-label="Cantidad">
       <input v-model="nuevo.recurso_asignado" type="text" placeholder="Recurso asignado" aria-label="Recurso asignado">
-      <button type="submit" class="g-btn-mini" :disabled="agregar.isPending.value">{{ agregar.isPending.value ? 'Agregando…' : 'Agregar' }}</button>
+      <button type="submit" class="g-btn g-btn-mini" :disabled="agregar.isPending.value">{{ agregar.isPending.value ? 'Agregando…' : 'Agregar' }}</button>
     </form>
   </section>
 </template>
