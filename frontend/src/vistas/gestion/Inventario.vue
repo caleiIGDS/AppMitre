@@ -8,6 +8,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useRecursos, useMeta } from '@/gestion/datos'
 import { precargarFotos } from '@/gestion/precarga'
 import { norm, puntaje, coincide } from '@/texto'
+import { portada } from '@/orden'
 import EstadoCarga from '@/componentes/EstadoCarga.vue'
 
 const props = defineProps({ inv: { type: String, required: true } })
@@ -274,7 +275,7 @@ function abrir(r, evento) {
             @click="abrir(f.r, $event)"
           >
             <span class="a-tarjeta-foto">
-              <img v-if="f.r.fotos.length" :src="f.r.fotos[0].mini || f.r.fotos[0].url" alt="" loading="lazy" decoding="async">
+              <img v-if="f.r.fotos.length" :src="portada(inv, f.r).mini || portada(inv, f.r).url" alt="" loading="lazy" decoding="async">
               <span v-else class="a-tarjeta-sin" aria-hidden="true">{{ iniciales(f.nombre) }}</span>
               <span v-if="f.r.estado === 'Roto'" class="a-tarjeta-estado">ROTO</span>
               <span class="a-tarjeta-cant">×{{ f.cantidad }}</span>

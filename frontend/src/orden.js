@@ -1,0 +1,204 @@
+// Orden a mano, como las capas de un editor: se mantiene apretado un elemento y se lo
+// arrastra a su lugar. El orden es de cada dispositivo (localStorage, una sola clave con
+// todas las listas): no cambia lo que ven los demás. Hoy lo usan la lista de inventarios y
+// las fotos de cada ficha (la primera es la portada de la tarjeta en la vista galería).
+import { reactive, ref, computed, nextTick, watch, onUnmounted } from 'vue'
+
+const CLAVE_ALMACEN = 'mitre-orden'
+
+function leer() {
+  try { return JSON.parse(window.localStorage.getItem(CLAVE_ALMACEN)) || {} } catch { return {} }
+}
+const ordenes = reactive(leer())
+
+// `items` en el orden guardado bajo `clave`. Lo que no figura (lo nuevo) va al final, en su
+// orden de siempre.
+export function ordenado(clave, items, idDe) {
+  const ids = ordenes[clave]
+  if (!ids?.length || items.length < 2) return items
+  const pos = new Map(ids.map((id, i) => [id, i]))
+  const lugar = (it, i) => pos.get(String(idDe(it))) ?? ids.length + i
+  return items.map((it, i) => [it, lugar(it, i)]).sort((a, b) => a[1] - b[1]).map(([it]) => it)
+}
+
+export function guardarOrden(clave, ids) {
+  ordenes[clave] = ids.map(String)
+  try { window.localStorage.setItem(CLAVE_ALMACEN, JSON.stringify(ordenes)) } catch { /* sin almacenamiento: dura hasta recargar */ }
+}
+
+const ESPERA_TACTIL = 350 // ms apretado antes de levantar el elemento con el dedo
+const UMBRAL = 8 // px: con el mouse, cuánto mover para que sea arrastre y no click
+const BORDE = 70 // px del borde de la pantalla donde el arrastre hace scroll
+const IGNORAR = 'input, textarea, select, option, code, [contenteditable]'
+
+// Arrastrar para ordenar dentro de `contenedor` (un ref al elemento). Cada elemento lleva
+// `data-orden="<id>"`. `lista` es un computed con los items; devuelve `items`, la lista a
+// dibujar (durante el arrastre, el orden provisorio) y `arrastrando` (el id levantado).
+export function useOrdenable(clave, contenedor, lista, idDe) {
+  const provisoria = ref(null)
+  const arrastrando = ref(null)
+  const enOrden = computed(() => ordenado(clave.value, lista.value, idDe))
+  const items = computed(() => {
+    if (!provisoria.value) return enOrden.value
+    const porId = new Map(enOrden.value.map((it) => [String(idDe(it)), it]))
+    return provisoria.value.map((id) => porId.get(id)).filter(Boolean)
+  })
+
+  let p = null // el gesto en curso
+  let rafScroll = 0
+
+  const elementos = () => [...contenedor.value.querySelectorAll(':scope [data-orden]')]
+  const elDe = (id) => elementos().find((el) => el.dataset.orden === id)
+
+  // El elemento levantado sigue al puntero desde el lugar que ocupa en la lista.
+  function seguir() {
+    const el = elDe(p.id)
+    if (!el) return
+    el.style.transform = ''
+    const r = el.getBoundingClientRect()
+    el.style.transform = `translate(${p.x - p.agarreX - r.left}px, ${p.y - p.agarreY - r.top}px)`
+  }
+
+  // Si el puntero está sobre otro elemento, el levantado pasa a ese lugar. Los demás se
+  // corren con una animación corta (FLIP). `ultimo` evita que dos de distinto tamaño se
+  // intercambien una y otra vez sin que el puntero se mueva.
+  function buscarLugar() {
+    const sobre = elementos().find((el) => {
+      if (el.dataset.orden === p.id) return false
+      const r = el.getBoundingClientRect()
+      return p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom
+    })
+    const id = sobre?.dataset.orden || null
+    if (id !== p.ultimo) p.ultimo = null
+    if (!id || id === p.ultimo) return
+    p.ultimo = id
+    const antes = new Map(elementos().map((el) => [el, el.getBoundingClientRect()]))
+    const ids = provisoria.value.filter((x) => x !== p.id)
+    ids.splice(provisoria.value.indexOf(id), 0, p.id)
+    provisoria.value = ids
+    nextTick(() => {
+      if (!p) return
+      for (const [el, r] of antes) {
+        if (el.dataset.orden === p.id || !el.isConnected) continue
+        const n = el.getBoundingClientRect()
+        const dx = r.left - n.left
+        const dy = r.top - n.top
+        if (!dx && !dy) continue
+        el.style.transition = 'none'
+        el.style.transform = `translate(${dx}px, ${dy}px)`
+        el.getBoundingClientRect() // aplicar antes de animar
+        el.style.transition = 'transform .15s ease'
+        el.style.transform = ''
+      }
+      seguir()
+    })
+  }
+
+  function autoScroll() {
+    if (!p?.activo) return
+    const paso = p.y < BORDE ? -12 : p.y > window.innerHeight - BORDE ? 12 : 0
+    if (paso) {
+      window.scrollBy(0, paso)
+      seguir()
+      buscarLugar()
+    }
+    rafScroll = requestAnimationFrame(autoScroll)
+  }
+
+  function empezar() {
+    const el = elDe(p.id)
+    if (!el) return soltar()
+    const r = el.getBoundingClientRect()
+    p.activo = true
+    p.agarreX = p.x0 - r.left
+    p.agarreY = p.y0 - r.top
+    provisoria.value = enOrden.value.map((it) => String(idDe(it)))
+    p.inicial = provisoria.value.join()
+    arrastrando.value = p.id
+    el.style.transition = 'none'
+    document.body.classList.add('a-ordenando')
+    if (p.tactil) navigator.vibrate?.(15)
+    seguir()
+    rafScroll = requestAnimationFrame(autoScroll)
+  }
+
+  function bajar(e) {
+    if (p || e.button !== 0 || e.target.closest(IGNORAR)) return
+    const el = e.target.closest('[data-orden]')
+    if (!el || !contenedor.value.contains(el) || lista.value.length < 2) return
+    p = {
+      id: el.dataset.orden, tactil: e.pointerType !== 'mouse', puntero: e.pointerId,
+      x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, activo: false, ultimo: null,
+    }
+    if (p.tactil) p.espera = setTimeout(() => p && empezar(), ESPERA_TACTIL)
+    window.addEventListener('pointermove', mover)
+    window.addEventListener('pointerup', soltar)
+    window.addEventListener('pointercancel', soltar)
+  }
+
+  function mover(e) {
+    if (!p || e.pointerId !== p.puntero) return
+    p.x = e.clientX
+    p.y = e.clientY
+    if (!p.activo) {
+      if (Math.hypot(p.x - p.x0, p.y - p.y0) < UMBRAL) return
+      if (p.tactil) return soltar() // se movió antes de tiempo: es scroll, no arrastre
+      empezar()
+    }
+    seguir()
+    buscarLugar()
+  }
+
+  function soltar() {
+    if (!p) return
+    const g = p
+    p = null
+    clearTimeout(g.espera)
+    cancelAnimationFrame(rafScroll)
+    window.removeEventListener('pointermove', mover)
+    window.removeEventListener('pointerup', soltar)
+    window.removeEventListener('pointercancel', soltar)
+    if (!g.activo) return
+    // El click que sigue al soltar no tiene que abrir lo que se arrastró.
+    const tragar = (e) => { e.preventDefault(); e.stopPropagation() }
+    window.addEventListener('click', tragar, { capture: true, once: true })
+    setTimeout(() => window.removeEventListener('click', tragar, { capture: true }), 0)
+    if (provisoria.value.join() !== g.inicial) guardarOrden(clave.value, provisoria.value)
+    document.body.classList.remove('a-ordenando')
+    const el = elDe(g.id)
+    provisoria.value = null
+    if (el) {
+      el.style.transition = 'transform .15s ease'
+      el.style.transform = ''
+    }
+    setTimeout(() => { if (arrastrando.value === g.id) arrastrando.value = null }, 150)
+  }
+
+  // Con el dedo: mientras se arrastra, que la página no scrollee ni abra el menú del
+  // navegador (el de "guardar imagen" o "abrir link", que sale con el toque largo).
+  const tocar = (e) => { if (p?.activo) e.preventDefault() }
+  const menu = (e) => { if (p) e.preventDefault() }
+  const arrastreNativo = (e) => { if (e.target.closest?.('[data-orden]')) e.preventDefault() }
+
+  // El contenedor puede aparecer después (cuando llegan los datos o la primera foto).
+  const eventos = [
+    ['pointerdown', bajar], ['touchmove', tocar, { passive: false }],
+    ['contextmenu', menu], ['dragstart', arrastreNativo],
+  ]
+  watch(contenedor, (nuevo, viejo) => {
+    for (const [tipo, fn] of eventos) viejo?.removeEventListener(tipo, fn)
+    for (const [tipo, fn, op] of eventos) nuevo?.addEventListener(tipo, fn, op)
+  }, { flush: 'post', immediate: true })
+  onUnmounted(() => {
+    soltar()
+    document.body.classList.remove('a-ordenando')
+    for (const [tipo, fn] of eventos) contenedor.value?.removeEventListener(tipo, fn)
+  })
+
+  return { items, arrastrando }
+}
+
+// Dónde se guarda el orden de las fotos de un recurso. La ficha las muestra en ese orden y
+// la tarjeta de la vista galería usa la primera de portada.
+export const claveFotos = (inv, recursoId) => `fotos:${inv}:${recursoId}`
+export const portada = (inv, r) => ordenado(claveFotos(inv, r.id), r.fotos, (f) => f.id)[0] || null

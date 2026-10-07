@@ -10,6 +10,7 @@ import { norm } from '@/texto'
 import { avisar, avisarError } from '@/avisos'
 import EstadoCarga from '@/componentes/EstadoCarga.vue'
 import Galeria from '@/componentes/Galeria.vue'
+import { claveFotos } from '@/orden'
 import UbicacionFicha from './UbicacionFicha.vue'
 
 const props = defineProps({
@@ -67,7 +68,7 @@ function rotar(foto, imagen) {
   <div v-else-if="recurso" class="g-ficha-body">
     <div class="g-ficha-col-media">
       <Galeria
-        :fotos="recurso.fotos" :puede-editar="!!m.puede_escribir" :puede-rotar="!!m.puede_rotar"
+        :fotos="recurso.fotos" :clave-orden="claveFotos(inv, recurso.id)" :puede-editar="!!m.puede_escribir" :puede-rotar="!!m.puede_rotar"
         :subiendo="subirFoto.isPending.value" :rotar="rotar"
         @subir="subir" @borrar="borrar" @error="(e) => avisarError(e, 'No se pudo rotar')"
       />

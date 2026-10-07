@@ -1,20 +1,27 @@
 <script setup>
 // La lista de inventarios: los que esta sesión abre, y para los otros, entrar con su clave.
 // Para administración (`inventarios.admin`) además es el tablero de la lista: crear,
-// renombrar, ver y cambiar la clave, y eliminar.
-import { ref, reactive } from 'vue'
+// renombrar, ver y cambiar la clave, y eliminar. El orden de las tarjetas se elige
+// arrastrándolas (orden.js, de cada dispositivo).
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   useInventarios, useCrearInventario, useCambiarInventario, useEliminarInventario,
 } from '@/gestion/datos'
 import { avisar, avisarError } from '@/avisos'
 import EstadoCarga from '@/componentes/EstadoCarga.vue'
+import { useOrdenable } from '@/orden'
 
 const router = useRouter()
 const consulta = useInventarios()
 const crear = useCrearInventario()
 const cambiar = useCambiarInventario()
 const eliminar = useEliminarInventario()
+
+const tarjetas = ref(null)
+const { items: inventarios, arrastrando } = useOrdenable(
+  computed(() => 'inventarios'), tarjetas,
+  computed(() => consulta.data.value?.inventarios || []), (i) => i.slug)
 
 // --- Nuevo inventario: un <dialog>, lo de todos los días acá es mirar la lista. ---------
 const dialogo = ref(null)
@@ -80,13 +87,18 @@ function eliminarInventario(i) {
     <template v-if="consulta.data.value">
       <p class="g-help">Cada inventario es independiente: tiene su propia gente y su propia
         clave. Tener acceso a uno no da acceso a ninguno de los otros.</p>
+      <p v-if="inventarios.length > 1" class="a-orden-ayuda">Mantené apretado un inventario y
+        arrastralo para cambiar el orden (en este dispositivo).</p>
 
       <div v-if="consulta.data.value.puede_administrar" class="g-nuevo-inv">
         <button type="button" class="g-btn" @click="abrirNuevo">+ NUEVO INVENTARIO</button>
       </div>
 
-      <div class="g-cards">
-        <div v-for="i in consulta.data.value.inventarios" :key="i.slug" class="g-card">
+      <div ref="tarjetas" class="g-cards">
+        <div
+          v-for="i in inventarios" :key="i.slug" class="g-card a-ordenable"
+          :class="{ 'a-levantado': arrastrando === i.slug }" :data-orden="i.slug"
+        >
           <div class="g-card-head">
             <h3>{{ i.nombre.toUpperCase() }}</h3>
             <span class="g-count">{{ i.total < 0 ? '—' : i.total }}</span>

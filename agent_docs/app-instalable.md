@@ -62,6 +62,10 @@ app_dist/                ← lo que compila `npm run build` y sirve Flask. SE CO
   grillas (en la ficha va por `srcset` junto a `url`: en PC elige la entera). Rotar marca `girada` en la fila (también el asistente), y con eso
   cambian las dos URLs. Al llegar la lista de un inventario, `gestion/precarga.js` baja en
   segundo plano todas las que el dispositivo no tiene (primero las miniaturas).
+- **Orden a mano** (`orden.js`): las fotos de una ficha y las tarjetas de `/gestion/inventarios`
+  se ordenan arrastrando (con el mouse, o con el dedo tras un toque largo de 350 ms). El orden
+  es **de cada dispositivo**: va a localStorage (`mitre-orden`), el servidor no lo conoce. La
+  primera foto de la ficha es la portada de la tarjeta en la vista galería (`portada()`).
 
 ## Conflictos
 

@@ -9,7 +9,10 @@
 // Subir: se achica antes de mandarla (window.ImgUtils, el mismo criterio que el chat).
 // Rotar: el giro lo hace un canvas acá y al servidor va la imagen ya girada; se muestra
 // girada apenas se codifica, y se guarda en segundo plano.
+// Ordenar: se mantiene apretada una foto y se la arrastra (orden.js, de cada dispositivo).
+// La primera es la portada de la tarjeta en la vista galería del inventario.
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
+import { useOrdenable } from '@/orden'
 
 const props = defineProps({
   fotos: { type: Array, required: true },
@@ -17,6 +20,7 @@ const props = defineProps({
   puedeRotar: { type: Boolean, default: false },
   subiendo: { type: Boolean, default: false },
   rotar: { type: Function, default: null }, // (foto, blob) => Promise
+  claveOrden: { type: String, default: '' }, // dónde guarda el orden (orden.js)
 })
 const emit = defineEmits(['subir', 'borrar', 'error'])
 
@@ -28,14 +32,18 @@ const girando = ref(false)
 const previas = ref({})
 let foco = null
 
-const actual = computed(() => props.fotos[abierta.value] || null)
+const grilla = ref(null)
+const { items: ordenadas, arrastrando } = useOrdenable(
+  computed(() => props.claveOrden), grilla, computed(() => props.fotos), (f) => f.id)
+
+const actual = computed(() => ordenadas.value[abierta.value] || null)
 const src = (f) => previas.value[f.id] || f.url
 // Anchos que el navegador usa para elegir en la grilla: la miniatura mide MINI_LADO
 // (fotos_disco.py) y la entera hasta ImgUtils.IMAGEN_LADO_MAX. Lo que ocupa cada foto
 // sale de gestion.css: una sola llena la columna (420 px, o la pantalla en celular) y
 // con dos o más van de a dos por fila.
 const srcset = (f) => (previas.value[f.id] || !f.mini ? null : `${f.mini} 320w, ${f.url} 1568w`)
-const sizes = computed(() => (props.fotos.length > 1
+const sizes = computed(() => (ordenadas.value.length > 1
   ? '(max-width: 800px) 50vw, 210px'
   : '(max-width: 800px) 100vw, 420px'))
 
@@ -51,7 +59,7 @@ function cerrar() {
   foco?.focus()
 }
 function mover(paso) {
-  const n = props.fotos.length
+  const n = ordenadas.value.length
   abierta.value = (abierta.value + paso + n) % n
 }
 function teclado(e) {
@@ -137,15 +145,17 @@ async function girar() {
 
 <template>
   <div class="g-foto-section">
-    <div v-if="fotos.length" class="g-galeria">
-      <div class="g-galeria-grid">
+    <div v-if="ordenadas.length" class="g-galeria">
+      <div ref="grilla" class="g-galeria-grid">
         <button
-          v-for="(f, i) in fotos" :key="f.id" type="button" class="g-foto-thumb"
-          :aria-label="`Ver foto ${i + 1} de ${fotos.length}`" @click="abrir(i, $event)"
+          v-for="(f, i) in ordenadas" :key="f.id" type="button" class="g-foto-thumb a-ordenable"
+          :class="{ 'a-levantado': arrastrando === String(f.id) }" :data-orden="f.id"
+          :aria-label="`Ver foto ${i + 1} de ${ordenadas.length}`" @click="abrir(i, $event)"
         >
           <img :src="previas[f.id] || f.mini || f.url" :srcset="srcset(f)" :sizes="sizes" :alt="`Foto ${i + 1}`" class="g-foto" loading="lazy" decoding="async">
         </button>
       </div>
+      <p v-if="ordenadas.length > 1" class="a-orden-ayuda">Mantené apretada una foto y arrastrala para cambiar el orden (en este dispositivo).</p>
     </div>
     <div v-if="puedeEditar" class="g-foto-toolbar">
       <input ref="entrada" type="file" accept="image/*" hidden @change="elegido">
@@ -158,7 +168,7 @@ async function girar() {
   <Teleport to="body">
     <div v-if="actual" class="g-lightbox" role="dialog" aria-modal="true" aria-label="Foto ampliada" @click.self="cerrar">
       <div class="g-lightbox-barra">
-        <span class="g-lightbox-contador">{{ abierta + 1 }} / {{ fotos.length }}</span>
+        <span class="g-lightbox-contador">{{ abierta + 1 }} / {{ ordenadas.length }}</span>
         <span class="g-lightbox-acciones">
           <button v-if="puedeRotar" type="button" class="g-lightbox-btn" title="Rotar 90°" :disabled="girando" @click="girar">
             {{ girando ? 'GUARDANDO…' : '⟳ ROTAR' }}
@@ -167,9 +177,9 @@ async function girar() {
           <button ref="botonCerrar" type="button" class="g-lightbox-btn" title="Cerrar (Esc)" @click="cerrar">✕</button>
         </span>
       </div>
-      <button v-if="fotos.length > 1" type="button" class="g-lightbox-nav g-lightbox-prev" aria-label="Foto anterior" @click="mover(-1)">‹</button>
+      <button v-if="ordenadas.length > 1" type="button" class="g-lightbox-nav g-lightbox-prev" aria-label="Foto anterior" @click="mover(-1)">‹</button>
       <img class="g-lightbox-img" :src="src(actual)" alt="Foto ampliada">
-      <button v-if="fotos.length > 1" type="button" class="g-lightbox-nav g-lightbox-next" aria-label="Foto siguiente" @click="mover(1)">›</button>
+      <button v-if="ordenadas.length > 1" type="button" class="g-lightbox-nav g-lightbox-next" aria-label="Foto siguiente" @click="mover(1)">›</button>
     </div>
   </Teleport>
 </template>
