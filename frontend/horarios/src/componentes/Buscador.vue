@@ -32,6 +32,13 @@ function elegir(o) {
   emit('elegir', o.valor)
 }
 
+// Sin v-model a propósito: v-model no actualiza mientras el teclado del celular está
+// "componiendo" la palabra (Android), y la lista recién filtraba al terminarla.
+function alEscribir(e) {
+  texto.value = e.target.value
+  abierto.value = true
+}
+
 function alTeclear(e) {
   if (e.key === 'Enter' && opciones.value.length) elegir(opciones.value[0])
   if (e.key === 'Escape') abierto.value = false
@@ -52,8 +59,8 @@ onUnmounted(() => document.removeEventListener('pointerdown', fuera))
 <template>
   <div ref="caja" class="tech-field">
     <input
-      ref="campo" v-model="texto" type="text" class="tech-input" :placeholder="placeholder"
-      autocomplete="off" @focus="abierto = !silencioso" @click="abierto = true" @input="abierto = true" @keydown="alTeclear"
+      ref="campo" :value="texto" type="text" class="tech-input" :placeholder="placeholder"
+      autocomplete="off" @focus="abierto = !silencioso" @click="abierto = true" @input="alEscribir" @keydown="alTeclear"
     >
     <div v-if="opciones.length" class="tech-dropdown" style="display: block;" role="listbox">
       <div

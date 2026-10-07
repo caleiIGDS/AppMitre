@@ -15,6 +15,7 @@ const NOMBRES_DIA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Vier
 
 const datos = useHorarios()
 const ahora = ref(new Date())
+// Va con :value + @input y no v-model: así filtra con cada letra también en el celular (ver Buscador.vue).
 const filtro = ref('')
 const manual = ref(false)
 const fechaManual = ref('')
@@ -79,8 +80,8 @@ const tablero = computed(() => {
         </div>
         <div class="sys-inputs" style="margin-left: 20px;">
           <input
-            v-model="filtro" type="text" class="tech-input-sm" placeholder="FILTRAR CURSO O PROF..."
-            aria-label="Filtrar por curso o profesor"
+            :value="filtro" type="text" class="tech-input-sm" placeholder="FILTRAR CURSO O PROF..."
+            aria-label="Filtrar por curso o profesor" @input="filtro = $event.target.value"
             style="width: 200px; text-transform: uppercase; height: 35px; border: 1px solid var(--secondary); padding: 0 10px; font-weight: bold;"
           >
         </div>

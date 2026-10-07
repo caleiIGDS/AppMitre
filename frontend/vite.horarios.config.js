@@ -46,7 +46,8 @@ export default defineConfig({
         // El id de cuando vivía en /app-horarios/: con otro, el celular la tomaría por una
         // app distinta de la que ya está instalada.
         id: '/app-horarios/',
-        name: 'Emilio Mitre — Horarios',
+        // Es el texto de la pantalla de carga: corto, para que no se corte.
+        name: 'Sistema de Horarios',
         short_name: 'Horarios',
         description: 'Horarios de cursos, profesores, aulas y preceptores de la Escuela Técnica Emilio Mitre.',
         lang: 'es-AR',
