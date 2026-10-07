@@ -89,13 +89,13 @@ def crear_tablas():
     con.commit()
     con.close()
 
-# Una fila por docente de cada cupo, tal cual las pestañas de cupos (ver `cargar_cupos`).
+# Una fila por cupo, tal cual las pestañas de cupos (ver `cargar_cupos`).
 SQL_CUPOS = '''
     CREATE TABLE IF NOT EXISTS cupos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         codigo TEXT NOT NULL, codigo_materia TEXT,
         curso TEXT, division TEXT, materia TEXT, tipo_materia TEXT,
-        profesor TEXT, situacion_revista TEXT, activo INTEGER DEFAULT 0,
+        profesor TEXT, situacion_revista TEXT, suplente TEXT,
         desde TEXT, hasta TEXT, dni TEXT, telefono TEXT, email TEXT
     )
 '''
@@ -317,13 +317,18 @@ def _codigo(valor):
 # --- Cupos -----------------------------------------------------------------------------
 # Formato nuevo de la planilla (rama horarios-cupos). Las pestañas de cada año dejan de
 # traer al docente: cada fila de horario lleva el `codigo` de su cupo (uno por materia y
-# división, o por grupo), y siete pestañas nuevas, una por año, dicen quién tiene cada cupo.
-# Un cupo puede tener varias filas: la del titular o provisional, y la del suplente que lo
-# cubre. Al cargar, cada fila de horario se completa con el docente de su cupo y la tabla
-# `clases` queda igual que con el formato viejo: el resto de la app no se entera.
+# división, o por grupo), y siete pestañas nuevas, una por año, dicen quién tiene cada cupo:
+# una fila por cupo, con el profesor y, si está de licencia, el nombre de quien lo cubre en
+# `suplente` (con nombre = suplencia activa; vacía = no hay). Al cargar, cada fila de
+# horario se completa con el docente de su cupo y la tabla `clases` queda igual que con el
+# formato viejo: el resto de la app no se entera.
 
 REVISTAS = ('TITULAR', 'PROVISIONAL', 'SUPLENTE')
 TIPOS_MATERIA = ('TECNICO-ESPECIFICA', 'CIENTIFICO-TECNOLOGICA', 'TEORICA')
+
+_COLUMNAS_CUPOS = ('codigo', 'codigo_materia', 'curso', 'division', 'materia', 'tipo_materia',
+                   'profesor', 'situacion_revista', 'suplente', 'desde', 'hasta',
+                   'dni', 'telefono', 'email')
 
 
 def _normalizar_tipo(valor):
@@ -331,32 +336,13 @@ def _normalizar_tipo(valor):
     return re.sub(r'[\s_-]+', '-', eliminar_acentos(str(valor or '')).upper().strip())
 
 
-def _resolver_cupo(codigo, filas, avisos):
-    """De las filas de un cupo, quién da la clase: devuelve un dict con las columnas de
-    docente de `clases` (profesor, contacto, suplente_activo, prof_suplente, sup_ini/fin)."""
-    titulares = [f for f in filas if f['situacion_revista'] != 'SUPLENTE']
-    suplentes = [f for f in filas if f['situacion_revista'] == 'SUPLENTE']
-    activos = [f for f in suplentes if f['activo']]
-    if len(titulares) > 1:
-        avisos.append(f"Cupo {codigo}: {len(titulares)} titulares/provisionales, se toma {titulares[0]['profesor']}.")
-    if len(activos) > 1:
-        avisos.append(f"Cupo {codigo}: {len(activos)} suplentes activos, se toma {activos[0]['profesor']}.")
-    titular = titulares[0] if titulares else None
-    # Sin suplente activo, igual se guarda el último cargado (como hoy, que la columna
-    # prof_suplente puede tener nombre con el checkbox apagado).
-    suplente = activos[0] if activos else (suplentes[-1] if suplentes else None)
-    if not titular and not activos:
-        avisos.append(f"Cupo {codigo}: no tiene titular, provisional ni suplente activo.")
-    base = titular or suplente or {}
+def _docente_de_cupo(f):
+    """Las columnas de docente de `clases` para un cupo (una fila de la pestaña de cupos)."""
     return {
-        'tipo_materia': next((f['tipo_materia'] for f in filas if f['tipo_materia']), ''),
-        # Un cupo cubierto solo por un suplente: el suplente queda como profesor.
-        'profesor': titular['profesor'] if titular else (suplente['profesor'] if activos else ''),
-        'dni': base.get('dni', ''), 'telefono': base.get('telefono', ''), 'email': base.get('email', ''),
-        'suplente_activo': 1 if (activos and titular) else 0,
-        'prof_suplente': suplente['profesor'] if (suplente and titular) else '',
-        'sup_ini': suplente['desde'] if (suplente and titular) else '',
-        'sup_fin': suplente['hasta'] if (suplente and titular) else '',
+        'tipo_materia': f['tipo_materia'], 'profesor': f['profesor'],
+        'dni': f['dni'], 'telefono': f['telefono'], 'email': f['email'],
+        'suplente_activo': 1 if f['suplente'] else 0, 'prof_suplente': f['suplente'],
+        'sup_ini': f['desde'], 'sup_fin': f['hasta'],
     }
 
 
@@ -366,10 +352,10 @@ def cargar_cupos(sheet_id, gids, con=None):
 
     Columnas de cada pestaña (fila 1, normalizada como las de clases, orden libre):
     codigo | codigo_materia | curso | division | materia | tipo_materia | profesor |
-    situacion_de_revista | activo | desde | hasta | dni | telefono | email
+    situacion_de_revista | suplente | desde | hasta | dni | telefono | email
     """
     avisos = []
-    por_codigo = {}
+    cupos = {}
     propia = con is None
     con = con or conectar()
     cur = con.cursor()
@@ -384,9 +370,13 @@ def cargar_cupos(sheet_id, gids, con=None):
         for n, row in enumerate(csv.DictReader(archivo), start=2):
             codigo = _codigo(row.get('codigo'))
             profesor = limpiar_profesor(row.get('profesor', ''))
+            suplente = limpiar_profesor(row.get('suplente', ''))
             if not codigo:
-                if profesor:
-                    avisos.append(f"Cupos {nombre}, fila {n}: {profesor} sin código, se ignora.")
+                if profesor or suplente:
+                    avisos.append(f"Cupos {nombre}, fila {n}: {profesor or suplente} sin código, se ignora.")
+                continue
+            if codigo in cupos:
+                avisos.append(f"Cupos {nombre}, fila {n}: el código {codigo} está repetido, se toma la primera fila.")
                 continue
             revista = eliminar_acentos(row.get('situacion_de_revista') or row.get('situacion_revista') or '').upper().strip()
             if revista and revista not in REVISTAS:
@@ -394,29 +384,25 @@ def cargar_cupos(sheet_id, gids, con=None):
             tipo = (row.get('tipo_materia') or '').strip()
             if tipo and _normalizar_tipo(tipo) not in TIPOS_MATERIA:
                 avisos.append(f"Cupos {nombre}, fila {n}: tipo de materia '{tipo}' desconocido.")
+            if suplente and not profesor:
+                avisos.append(f"Cupos {nombre}, fila {n}: el cupo {codigo} tiene suplente pero no profesor.")
             fila = {
                 'codigo': codigo, 'codigo_materia': _codigo(row.get('codigo_materia')),
                 'curso': (row.get('curso') or '').strip(), 'division': (row.get('division') or '').strip(),
                 'materia': eliminar_acentos(row.get('materia', '')).upper().strip(),
                 'tipo_materia': tipo, 'profesor': profesor, 'situacion_revista': revista,
-                'activo': _tildado(row.get('activo')),
+                'suplente': suplente,
                 'desde': (row.get('desde') or '').strip(), 'hasta': (row.get('hasta') or '').strip(),
                 'dni': row.get('dni', ''), 'telefono': row.get('telefono', ''), 'email': row.get('email', ''),
             }
-            if not profesor:
-                continue  # cupo todavía sin docente asignado: la fila de horario sale sin profesor
-            por_codigo.setdefault(codigo, []).append(fila)
-            cur.execute(
-                'INSERT INTO cupos (codigo, codigo_materia, curso, division, materia, tipo_materia, '
-                'profesor, situacion_revista, activo, desde, hasta, dni, telefono, email) '
-                'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                tuple(fila[k] for k in ('codigo', 'codigo_materia', 'curso', 'division', 'materia',
-                                        'tipo_materia', 'profesor', 'situacion_revista', 'activo',
-                                        'desde', 'hasta', 'dni', 'telefono', 'email')))
+            cupos[codigo] = fila
+            cur.execute(f"INSERT INTO cupos ({', '.join(_COLUMNAS_CUPOS)}) "
+                        f"VALUES ({', '.join('?' * len(_COLUMNAS_CUPOS))})",
+                        tuple(fila[k] for k in _COLUMNAS_CUPOS))
     if propia:
         con.commit()
         con.close()
-    return {c: _resolver_cupo(c, filas, avisos) for c, filas in por_codigo.items()}, avisos
+    return {c: _docente_de_cupo(f) for c, f in cupos.items()}, avisos
 
 
 def cargar_desde_sheets(sheet_id, gids, gids_cupos=None):

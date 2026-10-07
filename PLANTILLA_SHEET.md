@@ -88,25 +88,24 @@ código de horario del cupo (uno por materia y división; distinto si cada grupo
 docente). Todas las filas de un mismo cupo llevan el mismo código. Una fila sin código se
 sigue leyendo con las columnas viejas (sirve para pasar de a poco).
 
-**Pestañas de cupos (una por año, nuevas):** una fila por docente de cada cupo.
+**Pestañas de cupos (una por año, nuevas):** una fila por cupo.
 
 | Encabezado (normalizado) | Obligatoria | Valores | Notas |
 |---|---|---|---|
-| `codigo` | sí | El código de horario | Sin distinguir mayúsculas. Fila sin código → se ignora |
-| `codigo_materia` | no | Código de la materia | Igual para todas las divisiones del año |
-| `curso`, `division`, `materia` | no | | Informativas: manda lo de la pestaña de horario |
+| `codigo` | sí | El código de horario | Sin distinguir mayúsculas. Fila sin código → se ignora; código repetido → vale la primera fila |
+| `codigo_materia` | no | Código de la materia (nomenclador DGCyE, ej. `MCS`) | Igual para todas las divisiones del año |
+| `curso`, `division`, `especialidad`, `materia` | no | | Informativas: manda lo de la pestaña de horario |
 | `tipo_materia` | no | `Técnico-específica`, `Científico-tecnológica`, `Teórica` | Pasa a la columna `tipo_materia` de cada clase |
-| `profesor` | sí | `APELLIDO NOMBRE` | Fila sin profesor = cupo sin cubrir |
-| `situacion_de_revista` | sí | `Titular`, `Provisional`, `Suplente` | |
-| `activo` | no | Checkbox | Solo en filas `Suplente`: tildado = está cubriendo |
+| `profesor` | sí | `APELLIDO NOMBRE` | Vacío = cupo sin cubrir |
+| `situacion_de_revista` | sí | `Titular`, `Provisional`, `Suplente` | La del profesor |
+| `suplente` | no | `APELLIDO NOMBRE` | Con nombre = suplencia activa (se muestra el suplente); vacía = no hay |
 | `desde`, `hasta` | no | Texto | Vigencia de la suplencia (informativo, como `sup_ini`/`sup_fin`) |
-| `dni`, `telefono`, `email` | no | Texto | Contacto del docente |
+| `dni`, `telefono`, `email` | no | Texto | Contacto del profesor |
 
-Cómo se arma cada clase: profesor = el titular o provisional del cupo; si hay un suplente
-con `activo` tildado, se muestra el suplente (igual que el viejo `suplente_activo`). Un cupo
-con solo un suplente activo lo tiene a él como profesor. La carga no se corta por errores
-de datos: devuelve **avisos** (código sin cupo, dos titulares, revista o tipo desconocidos,
-cupo que ninguna clase usa). Los cupos quedan además en la tabla `cupos` de `escuela.db`.
+No hay checkbox de suplente activo: lo decide si `suplente` tiene nombre. La carga no se
+corta por errores de datos: devuelve **avisos** (código sin cupo, código repetido, revista
+o tipo desconocidos, suplente sin profesor, cupo que ninguna clase usa). Los cupos quedan
+además en la tabla `cupos` de `escuela.db`.
 
 ---
 
