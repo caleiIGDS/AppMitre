@@ -76,6 +76,40 @@ para aparecer en la Planilla General.
 
 ---
 
+## 1b. Formato con cupos (rama `horarios-cupos`, en preparación)
+
+Se activa cargando los GIDs en `GIDS_CUPOS` (`horarios/config.py`). Mientras esté vacío,
+todo funciona con el formato de arriba.
+
+**Pestañas de cada año:** siguen con una fila por bloque de clase (día, hora, aula, grupo…),
+pero sin el docente: se van `profesor`, `dni`, `telefono`, `email`, `tipo_materia`,
+`suplente_activo`, `prof_suplente`, `sup_ini` y `sup_fin`, y se agrega **`codigo`**: el
+código de horario del cupo (uno por materia y división; distinto si cada grupo tiene su
+docente). Todas las filas de un mismo cupo llevan el mismo código. Una fila sin código se
+sigue leyendo con las columnas viejas (sirve para pasar de a poco).
+
+**Pestañas de cupos (una por año, nuevas):** una fila por docente de cada cupo.
+
+| Encabezado (normalizado) | Obligatoria | Valores | Notas |
+|---|---|---|---|
+| `codigo` | sí | El código de horario | Sin distinguir mayúsculas. Fila sin código → se ignora |
+| `codigo_materia` | no | Código de la materia | Igual para todas las divisiones del año |
+| `curso`, `division`, `materia` | no | | Informativas: manda lo de la pestaña de horario |
+| `tipo_materia` | no | `Técnico-específica`, `Científico-tecnológica`, `Teórica` | Pasa a la columna `tipo_materia` de cada clase |
+| `profesor` | sí | `APELLIDO NOMBRE` | Fila sin profesor = cupo sin cubrir |
+| `situacion_de_revista` | sí | `Titular`, `Provisional`, `Suplente` | |
+| `activo` | no | Checkbox | Solo en filas `Suplente`: tildado = está cubriendo |
+| `desde`, `hasta` | no | Texto | Vigencia de la suplencia (informativo, como `sup_ini`/`sup_fin`) |
+| `dni`, `telefono`, `email` | no | Texto | Contacto del docente |
+
+Cómo se arma cada clase: profesor = el titular o provisional del cupo; si hay un suplente
+con `activo` tildado, se muestra el suplente (igual que el viejo `suplente_activo`). Un cupo
+con solo un suplente activo lo tiene a él como profesor. La carga no se corta por errores
+de datos: devuelve **avisos** (código sin cupo, dos titulares, revista o tipo desconocidos,
+cupo que ninguna clase usa). Los cupos quedan además en la tabla `cupos` de `escuela.db`.
+
+---
+
 ## 2. Pestaña de preceptores (`horarios_preceptores`)
 
 ⚠️ **Estructura posicional estricta.** Esta pestaña se lee por posición de columna,

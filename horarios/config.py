@@ -77,6 +77,14 @@ GIDS = {
 # GIDs para la carga de horarios de clases (todos menos preceptores y personal).
 GIDS_CURSOS = {k: v for k, v in GIDS.items() if k not in ["horarios_preceptores", "personal_no_docente"]}
 
+# Pestañas de cupos (una por año): quién tiene cada código de horario, con su situación de
+# revista y el tipo de materia. Ver `cargar_cupos` en datos.py. Vacío = formato viejo (el
+# docente sale de las columnas profesor/suplente de cada pestaña de año).
+# TODO: completar con los GIDs reales cuando existan las pestañas.
+GIDS_CUPOS = {
+    # "cupos_1ro": "...",
+}
+
 GID_HORARIOS_PRECEPTORES = GIDS["horarios_preceptores"]
 GID_PERSONAL_NO_DOCENTE = GIDS["personal_no_docente"]
 

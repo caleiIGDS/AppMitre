@@ -27,7 +27,7 @@ from flask import Blueprint, jsonify, request, session
 from . import acceso, datos
 from .config import (DIAS, ESCUELA_NOMBRE, ESCUELA_VERSION, ESPECIALIDAD_CURSOS,
                      FLOOR_MAPPING, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE,
-                     GIDS_CURSOS, SHEET_ID, TURNO_CURSOS, TURNO_DEFAULT)
+                     GIDS_CUPOS, GIDS_CURSOS, SHEET_ID, TURNO_CURSOS, TURNO_DEFAULT)
 from .rutas import _planilla_preceptores_con_turnos
 
 # Las columnas de `clases` que el front realmente lee. La lista es explícita y no un
@@ -152,10 +152,11 @@ def actualizar():
     """Lo mismo que `rutas.api_actualizar`: borra escuela.db y la rearma desde la planilla."""
     try:
         datos.crear_tablas()
-        datos.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
+        avisos = datos.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS, GIDS_CUPOS)
         datos.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
         datos.cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)
     except Exception as e:
         print(f"Error actualizando datos: {e}")
         return jsonify({'error': str(e)}), 500
-    return jsonify({'ok': True})
+    # `avisos`: códigos sin cupo, cupos con dos titulares, etc. La carga igual se hace.
+    return jsonify({'ok': True, 'avisos': avisos})
