@@ -58,8 +58,8 @@ app_dist/                ← lo que compila `npm run build` y sirve Flask. SE CO
 - **Entre pestañas:** `BroadcastChannel('mitre')`.
 - **Fotos:** siguen en `database/fotos/` (`fotos_disco.py`); la API las sirve por
   `…/fotos/<foto_id>?v=<fecha o girada>-<tipo>` con caché de un año, y cada foto trae además
-  `mini` (`&t=mini`, JPEG de 320 px que se genera la primera vez en `fotos/mini/`) para la
-  grilla de la ficha. Rotar marca `girada` en la fila (también el asistente), y con eso
+  `mini` (`&t=mini`, JPEG de 320 px que se genera la primera vez en `fotos/mini/`) para las
+  grillas (en la ficha va por `srcset` junto a `url`: en PC elige la entera). Rotar marca `girada` en la fila (también el asistente), y con eso
   cambian las dos URLs. Al llegar la lista de un inventario, `gestion/precarga.js` baja en
   segundo plano todas las que el dispositivo no tiene (primero las miniaturas).
 

@@ -54,7 +54,7 @@ def ahora():
 # Branding de la institución
 ESCUELA_NOMBRE = "EMILIO MITRE"
 ESCUELA_LOGO = "images/escudo.svg"
-ESCUELA_VERSION = "V1.16"
+ESCUELA_VERSION = "V1.17"
 
 # Días laborales (en orden, título case con acentos)
 DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]

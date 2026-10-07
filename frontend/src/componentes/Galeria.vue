@@ -1,8 +1,10 @@
 <script setup>
 // Fotos de una ficha: miniaturas, visor a pantalla
 // completa (flechas, Esc), y con permiso subir, borrar y ROTAR. Las imágenes se piden por
-// URL: el dispositivo las guarda y no las vuelve a bajar. La grilla usa la miniatura
-// (`mini`) y el visor la imagen entera (`url`); las dos las precarga gestion/precarga.js.
+// URL: el dispositivo las guarda y no las vuelve a bajar. La grilla ofrece las dos
+// (`mini` y `url`, por srcset) y el navegador elige según lo que mide en pantalla: en PC la
+// columna supera la miniatura y va la entera. El visor usa siempre `url`. Las dos las
+// precarga gestion/precarga.js.
 //
 // Subir: se achica antes de mandarla (window.ImgUtils, el mismo criterio que el chat).
 // Rotar: el giro lo hace un canvas acá y al servidor va la imagen ya girada; se muestra
@@ -28,6 +30,14 @@ let foco = null
 
 const actual = computed(() => props.fotos[abierta.value] || null)
 const src = (f) => previas.value[f.id] || f.url
+// Anchos que el navegador usa para elegir en la grilla: la miniatura mide MINI_LADO
+// (fotos_disco.py) y la entera hasta ImgUtils.IMAGEN_LADO_MAX. Lo que ocupa cada foto
+// sale de gestion.css: una sola llena la columna (420 px, o la pantalla en celular) y
+// con dos o más van de a dos por fila.
+const srcset = (f) => (previas.value[f.id] || !f.mini ? null : `${f.mini} 320w, ${f.url} 1568w`)
+const sizes = computed(() => (props.fotos.length > 1
+  ? '(max-width: 800px) 50vw, 210px'
+  : '(max-width: 800px) 100vw, 420px'))
 
 function abrir(i, evento) {
   foco = evento?.currentTarget || null
@@ -133,7 +143,7 @@ async function girar() {
           v-for="(f, i) in fotos" :key="f.id" type="button" class="g-foto-thumb"
           :aria-label="`Ver foto ${i + 1} de ${fotos.length}`" @click="abrir(i, $event)"
         >
-          <img :src="previas[f.id] || f.mini || f.url" :alt="`Foto ${i + 1}`" class="g-foto" loading="lazy" decoding="async">
+          <img :src="previas[f.id] || f.mini || f.url" :srcset="srcset(f)" :sizes="sizes" :alt="`Foto ${i + 1}`" class="g-foto" loading="lazy" decoding="async">
         </button>
       </div>
     </div>
