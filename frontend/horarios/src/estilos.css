@@ -51,6 +51,20 @@ a.tech-tag.active, a.tech-tag:hover { color: #fff; }
     padding: 9px 12px; font-size: .78rem; margin-bottom: 16px;
 }
 
+/* Pestaña MATERIAS: la tabla (los filtros son los botones de la planilla general). */
+.h-tabla-materias { width: 100%; border-collapse: collapse; }
+.h-tabla-materias td { padding: 8px 10px; vertical-align: middle; }
+.h-tabla-materias a { color: inherit; font-weight: 700; text-decoration: underline dotted; }
+.h-celda-centro { text-align: center; white-space: nowrap; }
+.h-grupo { display: block; font-size: 10px; color: var(--muted); }
+.h-suplencia { display: block; font-size: 11px; color: var(--muted); }
+.h-suplencia a { font-weight: 400; }
+.h-vacante { font-size: 11px; color: var(--muted); font-style: italic; }
+.h-aviso-materias {
+    margin: 0 0 12px; padding: 9px 12px; font-size: 12px;
+    background: #fff8e1; border: 1px solid #f0c36d; color: #7a5b00;
+}
+
 /* --- Celular -------------------------------------------------------------------------
    /horarios no tiene diseño para celular (sin <meta viewport>, el teléfono la muestra como
    en la PC pero achicada). La app ocupa el ancho real del teléfono: acá se acomoda lo de

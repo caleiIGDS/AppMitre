@@ -4,8 +4,9 @@ from werkzeug.security import safe_join
 import os
 from datetime import timedelta
 
-# Carga .env en desarrollo local (API keys, secretos). En el hosting las env vars se setean
-# aparte y este archivo ni existe, así que no falla si falta.
+# Carga el .env (API keys, secretos), acá y en el hosting: es el único lugar donde viven
+# las variables de entorno. No falla si falta; las que son obligatorias en producción se
+# exigen después, cada una en su módulo.
 from dotenv import load_dotenv
 load_dotenv()
 

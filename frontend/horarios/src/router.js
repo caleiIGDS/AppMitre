@@ -4,6 +4,7 @@
 //   /tiempo-real                       el tablero en vivo (la pantalla de inicio)
 //   /cursos/1° A, /profesores/NOMBRE, /aulas/12, /preceptores/NOMBRE
 //   /aulas?planilla=1&dia=Lunes&piso=Piso 1        la planilla general por piso
+//   /materias?tipo=te&anio=4,5&esp=energiasrenovables   las materias filtradas
 //   ...?comparar=curso:1° A,profesor:NOMBRE        el modo comparación, en cualquier pestaña
 import { createRouter, createWebHistory } from 'vue-router'
 import { hayAcceso } from './sesion'
@@ -25,6 +26,7 @@ const router = createRouter({
     busqueda('profesor', 'profesores'),
     busqueda('aula', 'aulas'),
     busqueda('horario_preceptor', 'preceptores'),
+    { path: '/materias', name: 'materia', component: () => import('./vistas/Materias.vue') },
     { path: '/:resto(.*)*', redirect: { name: 'envivo' } },
   ],
   scrollBehavior(to, from, guardada) {

@@ -127,6 +127,95 @@ export function opcionesBuscador(d, modo, texto) {
   return ordenar(lista.filter((o) => normalizar(o.display).includes(q)))
 }
 
+// --- Materias (pestaña MATERIAS) ------------------------------------------------------
+// El tipo de materia viene escrito a mano en la planilla: se lo lleva a una de tres claves.
+export const TIPOS_MATERIA = [
+  ['te', 'TÉCNICO-ESPECÍFICA'],
+  ['ct', 'CIENTÍFICO-TECNOLÓGICA'],
+  ['fg', 'TEÓRICA'],
+]
+export function claveTipo(tipo) {
+  const t = normalizar(tipo).replace(/[-_]/g, '')
+  if (t.startsWith('tecnic')) return 'te'
+  if (t.startsWith('cientif')) return 'ct'
+  if (t.startsWith('teoric') || t.startsWith('formaciongeneral') || t === 'normal') return 'fg'
+  return ''
+}
+
+// La especialidad de una división: fija por curso (ESPECIALIDAD_CURSOS de config.py).
+export function especialidadDe(d, curso, division) {
+  return d?.especialidades?.[`${curso} ${division}`] || ''
+}
+
+// La sigla de la especialidad, para la tabla (si no es ninguna conocida, el nombre entero).
+const SIGLAS = { electromecanica: 'ELEC', maestromayordeobra: 'MMO', maestromayordeobras: 'MMO',
+  energiasrenovables: 'EERR', ciclobasico: 'CB' }
+export const siglaEspecialidad = (e) => SIGLAS[normalizar(e)] || e
+
+// Las divisiones (sólo la división: "2", "A") de los años y especialidades dados (vacío =
+// todos), para el filtro de división: primero los números, después las letras.
+export function divisionesDe(d, anios = [], esps = []) {
+  const vistas = new Set()
+  for (const f of d?.clases || []) {
+    if (!f.curso || !f.division) continue
+    if (anios.length && !anios.includes(String(f.curso))) continue
+    if (esps.length && !esps.includes(normalizar(especialidadDe(d, f.curso, f.division)))) continue
+    vistas.add(String(f.division))
+  }
+  return [...vistas].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+}
+
+// Las especialidades de config, para los filtros: [[clave, nombre]], en el orden de config.
+export function especialidades(d) {
+  const vistas = new Map()
+  for (const e of Object.values(d?.especialidades || {})) {
+    if (e && !vistas.has(normalizar(e))) vistas.set(normalizar(e), e)
+  }
+  return [...vistas.entries()]
+}
+
+const minutos = (h) => { const [hh, mm] = String(h || '').split(':').map(Number); return hh * 60 + (mm || 0) }
+
+// Una fila por materia y división (y grupo, si cada grupo tiene su docente) con sus horas
+// semanales, filtrada por tipo, año, división y especialidad (vacío = todos) y por texto
+// (materia o docente). Dentro de cada filtro las opciones se suman; entre filtros, se cruzan:
+// años 4 y 5 con la división 2 es 4° 2 y 5° 2.
+export function materiasFiltradas(d, { tipos = [], anios = [], divs = [], esps = [], texto = '' } = {}) {
+  if (!d) return []
+  const q = normalizar(texto)
+  const grupos = new Map()
+  for (const f of d.clases) {
+    if (!f.materia || !f.curso) continue
+    const tipo = claveTipo(f.tipo_materia)
+    const esp = especialidadDe(d, f.curso, f.division)
+    if (tipos.length && !tipos.includes(tipo)) continue
+    if (anios.length && !anios.includes(String(f.curso))) continue
+    if (divs.length && !divs.includes(String(f.division))) continue
+    if (esps.length && !esps.includes(normalizar(esp))) continue
+    const docente = f.suplente_activo == 1 && f.prof_suplente ? f.prof_suplente : f.profesor
+    if (q && !normalizar(f.materia).includes(q) && !normalizar(f.profesor).includes(q)
+        && !normalizar(f.prof_suplente).includes(q)) continue
+    const clave = [f.curso, f.division, f.grupo, f.materia, f.profesor, docente].join('|')
+    if (!grupos.has(clave)) {
+      grupos.set(clave, {
+        clave, curso: String(f.curso), division: f.division, grupo: f.grupo || '', materia: f.materia,
+        tipo, especialidad: esp, profesor: f.profesor,
+        suplente: docente !== f.profesor ? docente : '', minutos: 0,
+      })
+    }
+    const fin = minutos(f.hora_fin) - minutos(f.hora_inicio)
+    if (fin > 0) grupos.get(clave).minutos += fin
+  }
+  const orden = (a, b) => a.localeCompare(b, 'es', { numeric: true })
+  return [...grupos.values()].sort((a, b) => orden(a.curso, b.curso) || orden(a.division, b.division)
+    || orden(a.materia, b.materia) || orden(a.grupo, b.grupo))
+}
+
+export function horasTexto(min) {
+  const h = Math.floor(min / 60); const m = min % 60
+  return m ? `${h} h ${m}'` : `${h} h`
+}
+
 export const useDatos = () => {
   const consulta = useHorarios()
   return { consulta, d: computed(() => consulta.data.value) }

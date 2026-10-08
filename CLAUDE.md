@@ -223,7 +223,7 @@ GIDS = { "1ro": "...", ..., "7mo": "...", "horarios_preceptores": "...", "person
 FLOOR_MAPPING = { "Piso 1": ["11","12",...], "Talleres": ["T1","T2",...], ... }
 ```
 
-Para cambiar la fuente de datos, editar `SHEET_ID` y/o los `GIDS` en `horarios/config.py`. No hay `.env`.
+Para cambiar la fuente de datos, editar `SHEET_ID` y/o los `GIDS` en `horarios/config.py`. Del `.env` horarios sólo toma los secretos (`HORARIOS_CLAVE`, `SHEETS_PROXY_URL`, `SHEETS_PROXY_SECRET`).
 
 ---
 

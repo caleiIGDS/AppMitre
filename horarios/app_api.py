@@ -25,9 +25,9 @@ import sqlite3
 from flask import Blueprint, jsonify, request, session
 
 from . import acceso, datos
-from .config import (DIAS, ESCUELA_NOMBRE, ESCUELA_VERSION, ESPECIALIDAD_CURSOS,
+from .config import (DIAS, ESCUELA_NOMBRE, ESCUELA_VERSION, ESPECIALIDAD_CURSOS, MATERIAS_PLAN,
                      FLOOR_MAPPING, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE,
-                     GIDS_CUPOS, GIDS_CURSOS, SHEET_ID, TURNO_CURSOS, TURNO_DEFAULT)
+                     GIDS_CURSOS, SHEET_ID, TURNO_CURSOS, TURNO_DEFAULT)
 from .rutas import _planilla_preceptores_con_turnos
 
 # Las columnas de `clases` que el front realmente lee. La lista es explícita y no un
@@ -35,9 +35,11 @@ from .rutas import _planilla_preceptores_con_turnos
 # —que no tienen por qué viajar al navegador de cualquiera que abra el horario— y /datos
 # devuelve las 2.299 filas de una, así que cada columna de más se paga entera.
 # Al recortarlo el JSON pasó de 804 KB a 586 KB. Si el front empieza a usar otra
-# columna (`especialidad`, `tipo_materia`, `tipo_aula`), hay que sumarla acá.
+# columna (`tipo_aula`), hay que sumarla acá. `tipo_materia` la usa la pestaña MATERIAS
+# (sale de MATERIAS_PLAN, no de la planilla);
+# la especialidad no va por clase: es fija por división (`especialidades`, de config).
 COLUMNAS_DASHBOARD = (
-    'curso', 'division', 'materia', 'profesor', 'aula', 'dia',
+    'curso', 'division', 'materia', 'tipo_materia', 'profesor', 'aula', 'dia',
     'hora_inicio', 'hora_fin', 'grupo', 'superposicion',
     'suplente_activo', 'prof_suplente', 'sup_ini', 'sup_fin',
 )
@@ -50,7 +52,8 @@ ABIERTOS = {'horarios_app.sesion', 'horarios_app.entrar', 'horarios_app.salir'}
 # si cambia con un deploy, el ETag tiene que cambiar aunque escuela.db sea la misma.
 _HUELLA_CONFIG = hashlib.sha1(json.dumps(
     [DIAS, FLOOR_MAPPING, sorted(map(list, TURNO_CURSOS.items())), TURNO_DEFAULT,
-     sorted(map(list, ESPECIALIDAD_CURSOS.items())), ESCUELA_NOMBRE, ESCUELA_VERSION],
+     sorted(map(list, ESPECIALIDAD_CURSOS.items())), sorted(map(list, MATERIAS_PLAN.items())),
+     ESCUELA_NOMBRE, ESCUELA_VERSION],
     ensure_ascii=False, default=str).encode()).hexdigest()[:12]
 
 
@@ -105,6 +108,13 @@ def _cursos(cur):
     return cursos
 
 
+def _tipo_materia(clase):
+    """El tipo de la materia según el plan de su año y especialidad (MATERIAS_PLAN)."""
+    esp = ESPECIALIDAD_CURSOS.get((clase['curso'], clase['division']))
+    _, tipo = MATERIAS_PLAN.get((clase['curso'], esp), {}).get(clase['materia'], ('', ''))
+    return tipo
+
+
 @bp_app.get('/datos')
 def todo():
     etag = _etag()
@@ -117,6 +127,8 @@ def todo():
         cur = con.cursor()
         cur.execute(f"SELECT {', '.join(COLUMNAS_DASHBOARD)} FROM clases")
         clases = [dict(r) for r in cur.fetchall()]
+        for c in clases:
+            c['tipo_materia'] = _tipo_materia(c)
         cur.execute("SELECT DISTINCT profesor FROM clases WHERE profesor != '' ORDER BY profesor")
         profesores = [r[0] for r in cur.fetchall()]
         cur.execute("SELECT DISTINCT aula FROM clases WHERE aula != '' ORDER BY aula")
@@ -139,6 +151,8 @@ def todo():
                 'horario_preceptor': nombres,
                 'personal': datos.obtener_lista_personal(),
             },
+            # La especialidad de cada división es fija (config), no viene de la planilla.
+            'especialidades': {f"{c} {d}": e for (c, d), e in ESPECIALIDAD_CURSOS.items()},
             'pisos': FLOOR_MAPPING,
             'dias': DIAS,
         })
@@ -152,11 +166,10 @@ def actualizar():
     """Lo mismo que `rutas.api_actualizar`: borra escuela.db y la rearma desde la planilla."""
     try:
         datos.crear_tablas()
-        avisos = datos.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS, GIDS_CUPOS)
+        datos.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
         datos.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
         datos.cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)
     except Exception as e:
         print(f"Error actualizando datos: {e}")
         return jsonify({'error': str(e)}), 500
-    # `avisos`: códigos sin cupo, cupos con dos titulares, etc. La carga igual se hace.
-    return jsonify({'ok': True, 'avisos': avisos})
+    return jsonify({'ok': True})

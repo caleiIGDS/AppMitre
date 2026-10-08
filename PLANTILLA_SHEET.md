@@ -76,39 +76,6 @@ para aparecer en la Planilla General.
 
 ---
 
-## 1b. Formato con cupos (rama `horarios-cupos`, en preparación)
-
-Se activa cargando los GIDs en `GIDS_CUPOS` (`horarios/config.py`). Mientras esté vacío,
-todo funciona con el formato de arriba.
-
-**Pestañas de cada año:** siguen con una fila por bloque de clase (día, hora, aula, grupo…),
-pero sin el docente: se van `profesor`, `dni`, `telefono`, `email`, `tipo_materia`,
-`suplente_activo`, `prof_suplente`, `sup_ini` y `sup_fin`, y se agrega **`codigo`**: el
-código de horario del cupo (uno por materia y división; distinto si cada grupo tiene su
-docente). Todas las filas de un mismo cupo llevan el mismo código. Una fila sin código se
-sigue leyendo con las columnas viejas (sirve para pasar de a poco).
-
-**Pestañas de cupos (una por año, nuevas):** una fila por cupo.
-
-| Encabezado (normalizado) | Obligatoria | Valores | Notas |
-|---|---|---|---|
-| `codigo` | sí | El código de horario | Sin distinguir mayúsculas. Fila sin código → se ignora; código repetido → vale la primera fila |
-| `codigo_materia` | no | Código de la materia (nomenclador DGCyE, ej. `MCS`) | Igual para todas las divisiones del año |
-| `curso`, `division`, `especialidad`, `materia` | no | | Informativas: manda lo de la pestaña de horario |
-| `tipo_materia` | no | `Técnico-específica`, `Científico-tecnológica`, `Teórica` | Pasa a la columna `tipo_materia` de cada clase |
-| `profesor` | sí | `APELLIDO NOMBRE` | Vacío = cupo sin cubrir |
-| `situacion_de_revista` | sí | `Titular`, `Provisional`, `Suplente` | La del profesor |
-| `suplente` | no | `APELLIDO NOMBRE` | Con nombre = suplencia activa (se muestra el suplente); vacía = no hay |
-| `desde`, `hasta` | no | Texto | Vigencia de la suplencia (informativo, como `sup_ini`/`sup_fin`) |
-| `dni`, `telefono`, `email` | no | Texto | Contacto del profesor |
-
-No hay checkbox de suplente activo: lo decide si `suplente` tiene nombre. La carga no se
-corta por errores de datos: devuelve **avisos** (código sin cupo, código repetido, revista
-o tipo desconocidos, suplente sin profesor, cupo que ninguna clase usa). Los cupos quedan
-además en la tabla `cupos` de `escuela.db`.
-
----
-
 ## 2. Pestaña de preceptores (`horarios_preceptores`)
 
 ⚠️ **Estructura posicional estricta.** Esta pestaña se lee por posición de columna,

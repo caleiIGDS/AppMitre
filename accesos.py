@@ -316,8 +316,7 @@ def _propios(guardados, ambito):
 # ---------------------------------------------------------------------------
 
 def _clave():
-    """La clave de admin. Se lee en cada request y no al importar, para que cambiarla en
-    el hosting no exija reiniciar.
+    """La clave de admin, del `.env` (que se carga al arrancar: cambiarla pide un Reload).
 
     Sin default público: el que había estuvo versionado en un repo público, así que valía
     exactamente cero. En producción que falte es error; en local cae a 'dev' para no
@@ -327,7 +326,7 @@ def _clave():
     if clave:
         return clave
     if PRODUCCION:
-        raise RuntimeError("Falta GESTION_CLAVE en el entorno del hosting.")
+        raise RuntimeError("Falta GESTION_CLAVE en el .env del servidor.")
     return 'dev'
 
 

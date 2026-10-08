@@ -56,7 +56,7 @@ la app lo detecta por el prefijo y lanza excepción.
    (`spreadsheets.readonly`). El script lee vía la API de Sheets — sólo lectura, sin
    Drive ni permiso de escritura/borrado.
 6. Copiar la **URL de la aplicación web** (`.../macros/s/AKfy.../exec`) y ponerla en
-   `SHEETS_PROXY_URL` (`.env` local y entorno de PythonAnywhere).
+   `SHEETS_PROXY_URL` (en el `.env`, el local y el del servidor).
 7. **Recién ahora** pasar el documento de Google Sheets a privado.
 
 > Al editar `proxy_horarios.gs` hay que crear una **implementación nueva** (o "Administrar

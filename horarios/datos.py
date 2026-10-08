@@ -10,8 +10,8 @@ import unicodedata
 import urllib.request
 import io
 from .config import (DIAS, DIR_DATOS, TURNO_CURSOS, TURNO_DEFAULT, APPSCRIPT_URL,
-                     APPSCRIPT_SECRET, SHEET_ID, GIDS_CURSOS, GIDS_CUPOS,
-                     GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE)
+                     APPSCRIPT_SECRET, SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES,
+                     GID_PERSONAL_NO_DOCENTE)
 
 # El código del sistema de horarios vive todo dentro del paquete; sus datos, no:
 # `escuela.db` está en la carpeta de bases del proyecto (`database/`, ver DIR_DATOS en
@@ -83,22 +83,8 @@ def crear_tablas():
     ''')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_personal_no_docente ON personal_no_docente(nombre)')
 
-    cur.execute('DROP TABLE IF EXISTS cupos')
-    cur.execute(SQL_CUPOS)
-
     con.commit()
     con.close()
-
-# Una fila por cupo, tal cual las pestañas de cupos (ver `cargar_cupos`).
-SQL_CUPOS = '''
-    CREATE TABLE IF NOT EXISTS cupos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        codigo TEXT NOT NULL, codigo_materia TEXT,
-        curso TEXT, division TEXT, materia TEXT, tipo_materia TEXT,
-        profesor TEXT, situacion_revista TEXT, suplente TEXT,
-        desde TEXT, hasta TEXT, dni TEXT, telefono TEXT, email TEXT
-    )
-'''
 
 def init_tablas():
     """Crea las tablas solo si no existen. No borra datos existentes."""
@@ -139,7 +125,6 @@ def init_tablas():
         )
     ''')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_personal_no_docente ON personal_no_docente(nombre)')
-    cur.execute(SQL_CUPOS)
     con.commit()
     con.close()
 
@@ -305,119 +290,10 @@ def descargar_sheet(sheet_id, gid=0, skip_rows=0, intentos=3, demora=2):
                 raise
     return None
 
-def _tildado(valor):
-    """Checkbox de Google Sheets (VERDADERO/TRUE/1) → 1; cualquier otra cosa → 0."""
-    return 1 if str(valor or '').strip().upper() in ('TRUE', '1', 'VERDADERO') else 0
-
-
-def _codigo(valor):
-    return str(valor or '').strip().upper()
-
-
-# --- Cupos -----------------------------------------------------------------------------
-# Formato nuevo de la planilla (rama horarios-cupos). Las pestañas de cada año dejan de
-# traer al docente: cada fila de horario lleva el `codigo` de su cupo (uno por materia y
-# división, o por grupo), y siete pestañas nuevas, una por año, dicen quién tiene cada cupo:
-# una fila por cupo, con el profesor y, si está de licencia, el nombre de quien lo cubre en
-# `suplente` (con nombre = suplencia activa; vacía = no hay). Al cargar, cada fila de
-# horario se completa con el docente de su cupo y la tabla `clases` queda igual que con el
-# formato viejo: el resto de la app no se entera.
-
-REVISTAS = ('TITULAR', 'PROVISIONAL', 'SUPLENTE')
-TIPOS_MATERIA = ('TECNICO-ESPECIFICA', 'CIENTIFICO-TECNOLOGICA', 'TEORICA')
-
-_COLUMNAS_CUPOS = ('codigo', 'codigo_materia', 'curso', 'division', 'materia', 'tipo_materia',
-                   'profesor', 'situacion_revista', 'suplente', 'desde', 'hasta',
-                   'dni', 'telefono', 'email')
-
-
-def _normalizar_tipo(valor):
-    """'Técnico específica' / 'tecnico-especifica' → 'TECNICO-ESPECIFICA' (para comparar)."""
-    return re.sub(r'[\s_-]+', '-', eliminar_acentos(str(valor or '')).upper().strip())
-
-
-def _docente_de_cupo(f):
-    """Las columnas de docente de `clases` para un cupo (una fila de la pestaña de cupos)."""
-    return {
-        'tipo_materia': f['tipo_materia'], 'profesor': f['profesor'],
-        'dni': f['dni'], 'telefono': f['telefono'], 'email': f['email'],
-        'suplente_activo': 1 if f['suplente'] else 0, 'prof_suplente': f['suplente'],
-        'sup_ini': f['desde'], 'sup_fin': f['hasta'],
-    }
-
-
-def cargar_cupos(sheet_id, gids, con=None):
-    """Baja las pestañas de cupos, las guarda en la tabla `cupos` y devuelve
-    ({codigo: columnas de docente}, avisos).
-
-    Columnas de cada pestaña (fila 1, normalizada como las de clases, orden libre):
-    codigo | codigo_materia | curso | division | materia | tipo_materia | profesor |
-    situacion_de_revista | suplente | desde | hasta | dni | telefono | email
-    """
-    avisos = []
-    cupos = {}
-    propia = con is None
-    con = con or conectar()
-    cur = con.cursor()
-    for nombre, gid in gids.items():
-        print(f"Cargando cupos {nombre} (GID {gid})...")
-        try:
-            archivo = descargar_sheet(sheet_id, gid)
-        except Exception as e:
-            if propia:
-                con.close()
-            raise RuntimeError(f"Falló la descarga de la hoja de cupos '{nombre}' (gid {gid}): {e}") from e
-        for n, row in enumerate(csv.DictReader(archivo), start=2):
-            codigo = _codigo(row.get('codigo'))
-            profesor = limpiar_profesor(row.get('profesor', ''))
-            suplente = limpiar_profesor(row.get('suplente', ''))
-            if not codigo:
-                if profesor or suplente:
-                    avisos.append(f"Cupos {nombre}, fila {n}: {profesor or suplente} sin código, se ignora.")
-                continue
-            if codigo in cupos:
-                avisos.append(f"Cupos {nombre}, fila {n}: el código {codigo} está repetido, se toma la primera fila.")
-                continue
-            revista = eliminar_acentos(row.get('situacion_de_revista') or row.get('situacion_revista') or '').upper().strip()
-            if revista and revista not in REVISTAS:
-                avisos.append(f"Cupos {nombre}, fila {n}: situación de revista '{revista}' desconocida.")
-            tipo = (row.get('tipo_materia') or '').strip()
-            if tipo and _normalizar_tipo(tipo) not in TIPOS_MATERIA:
-                avisos.append(f"Cupos {nombre}, fila {n}: tipo de materia '{tipo}' desconocido.")
-            if suplente and not profesor:
-                avisos.append(f"Cupos {nombre}, fila {n}: el cupo {codigo} tiene suplente pero no profesor.")
-            fila = {
-                'codigo': codigo, 'codigo_materia': _codigo(row.get('codigo_materia')),
-                'curso': (row.get('curso') or '').strip(), 'division': (row.get('division') or '').strip(),
-                'materia': eliminar_acentos(row.get('materia', '')).upper().strip(),
-                'tipo_materia': tipo, 'profesor': profesor, 'situacion_revista': revista,
-                'suplente': suplente,
-                'desde': (row.get('desde') or '').strip(), 'hasta': (row.get('hasta') or '').strip(),
-                'dni': row.get('dni', ''), 'telefono': row.get('telefono', ''), 'email': row.get('email', ''),
-            }
-            cupos[codigo] = fila
-            cur.execute(f"INSERT INTO cupos ({', '.join(_COLUMNAS_CUPOS)}) "
-                        f"VALUES ({', '.join('?' * len(_COLUMNAS_CUPOS))})",
-                        tuple(fila[k] for k in _COLUMNAS_CUPOS))
-    if propia:
-        con.commit()
-        con.close()
-    return {c: _docente_de_cupo(f) for c, f in cupos.items()}, avisos
-
-
-def cargar_desde_sheets(sheet_id, gids, gids_cupos=None):
-    """Carga las pestañas de horarios de cada año en `clases`. Devuelve la lista de avisos.
-
-    Con `gids_cupos`, el docente de cada fila sale de su cupo (columna `codigo`). Una fila
-    sin código, o una pestaña todavía en el formato viejo, se lee como antes: con las
-    columnas profesor / suplente_activo / prof_suplente / sup_ini / sup_fin.
-    """
+def cargar_desde_sheets(sheet_id, gids):
     con = conectar()
     cur = con.cursor()
-    cupos, avisos = cargar_cupos(sheet_id, gids_cupos, con) if gids_cupos else ({}, [])
-    usados = set()
-    sin_cupo = {}  # código → hojas donde aparece sin docente (un aviso por código, no por fila)
-
+    
     for nombre, gid in gids.items():
         print(f"Cargando {nombre} (GID {gid})...")
         try:
@@ -426,50 +302,48 @@ def cargar_desde_sheets(sheet_id, gids, gids_cupos=None):
             con.close()
             raise RuntimeError(f"Falló la descarga de la hoja '{nombre}' (gid {gid}): {e}") from e
         reader = csv.DictReader(archivo)
+        
+        for row in reader:
+            profesor = limpiar_profesor(row.get('profesor', ''))
+            aula = limpiar_aula(row.get('aula', ''))
+            inicio = row.get('hora_inicio', '')
+            fin = row.get('hora_fin', '')
+            
+            superposicion_raw = row.get('superposicion', '0')
+            try:
+                # Manejar valores tipo checkbox de Google Sheets (TRUE/FALSE, 1/0, VERDADERO/FALSO)
+                if str(superposicion_raw).strip().upper() in ['TRUE', '1', 'VERDADERO']:
+                    superposicion_val = 1
+                else:
+                    superposicion_val = 0
+            except (ValueError, TypeError):
+                superposicion_val = 0
 
-        for n, row in enumerate(reader, start=2):  # n: fila en la planilla (la 1 es el encabezado)
-            codigo = _codigo(row.get('codigo'))
-            if gids_cupos and codigo:
-                usados.add(codigo)
-                docente = cupos.get(codigo)
-                if docente is None:
-                    sin_cupo.setdefault(codigo, []).append(f"{nombre} fila {n}")
-                    docente = dict.fromkeys(('profesor', 'dni', 'telefono', 'email', 'prof_suplente',
-                                             'sup_ini', 'sup_fin'), '')
-                    docente.update(suplente_activo=0, tipo_materia='')
-            else:
-                docente = {
-                    'tipo_materia': row.get('tipo_materia', ''),
-                    'profesor': limpiar_profesor(row.get('profesor', '')),
-                    'dni': row.get('dni', ''), 'telefono': row.get('telefono', ''), 'email': row.get('email', ''),
-                    'suplente_activo': _tildado(row.get('suplente_activo')),
-                    'prof_suplente': limpiar_profesor(row.get('prof_suplente', '')),
-                    'sup_ini': row.get('sup_ini', ''), 'sup_fin': row.get('sup_fin', ''),
-                }
-
+            suplente_activo_raw = row.get('suplente_activo', '0')
+            try:
+                # Handle boolean-like values (TRUE/FALSE, 1/0)
+                if str(suplente_activo_raw).strip().upper() in ['TRUE', '1', 'VERDADERO']:
+                    suplente_activo_val = 1
+                else:
+                    suplente_activo_val = 0
+            except (ValueError, TypeError):
+                suplente_activo_val = 0
+                
             datos = (
                 row.get('curso', ''), row.get('division', ''), row.get('especialidad', ''),
-                eliminar_acentos(row.get('materia', '')).upper().strip(),
-                docente['tipo_materia'] or row.get('tipo_materia', ''),
-                docente['profesor'], docente['dni'], docente['telefono'], docente['email'],
-                limpiar_aula(row.get('aula', '')), row.get('tipo_aula', ''),
-                row.get('dia', ''), row.get('hora_inicio', ''), row.get('hora_fin', ''), row.get('grupo', ''),
-                _tildado(row.get('superposicion')), docente['suplente_activo'],
-                docente['prof_suplente'], docente['sup_ini'], docente['sup_fin'],
+                eliminar_acentos(row.get('materia', '')).upper().strip(), row.get('tipo_materia', ''),
+                profesor, row.get('dni', ''), row.get('telefono', ''), row.get('email', ''),
+                aula, row.get('tipo_aula', ''),
+                row.get('dia', ''), inicio, fin, row.get('grupo', ''),
+                superposicion_val, suplente_activo_val,
+                limpiar_profesor(row.get('prof_suplente', '')),
+                row.get('sup_ini', ''), row.get('sup_fin', '')
             )
             cur.execute('INSERT INTO clases VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', datos)
         print("Listo")
-    for codigo, donde in sorted(sin_cupo.items()):
-        avisos.append(f"Código {codigo}: no está en los cupos o no tiene docente ({', '.join(donde[:3])}"
-                      f"{f' y {len(donde) - 3} más' if len(donde) > 3 else ''}).")
-    for codigo in sorted(set(cupos) - usados):
-        avisos.append(f"Cupo {codigo}: tiene docente pero ninguna fila de horario lo usa.")
     con.commit()
     con.close()
-    for a in avisos:
-        print(f"  AVISO: {a}")
     print("Listo.")
-    return avisos
 
 def cargar_horarios_preceptores(sheet_id, gid):
     """
@@ -950,6 +824,6 @@ def cargar_inicial():
     if not tiene_datos():
         print("Base de horarios vacía, cargando desde Google Sheets...")
         crear_tablas()
-        cargar_desde_sheets(SHEET_ID, GIDS_CURSOS, GIDS_CUPOS)
+        cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
         cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
         cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)
