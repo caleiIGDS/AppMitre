@@ -18,8 +18,10 @@ export const claveInventario = (inv) => ['gestion', inv]
 const claveRecursos = (inv) => ['gestion', inv, 'recursos']
 const claveMeta = (inv) => ['gestion', inv, 'meta']
 
+// Para el router. Sin reintentos: sin red, un reintento queda en pausa hasta que vuelva
+// y la navegación no terminaría nunca.
 export function pedirMeta(inv) {
-  return queryClient.ensureQueryData({ queryKey: claveMeta(inv), queryFn: () => api(`${base(inv)}/meta`) })
+  return queryClient.ensureQueryData({ queryKey: claveMeta(inv), queryFn: () => api(`${base(inv)}/meta`), retry: false })
 }
 
 export function useInventarios() {

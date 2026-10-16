@@ -12,8 +12,6 @@ import App from './App.vue'
 import router from './router'
 import { queryClient, activarPersistencia } from './consultas'
 
-activarPersistencia()
-
 // El servidor dijo 401 (se cerró la sesión, cambió la clave): pedir la clave y volver.
 window.addEventListener('horarios:sin-sesion', () => {
   const actual = router.currentRoute.value
@@ -32,7 +30,12 @@ document.addEventListener('keydown', (e) => {
   else document.exitFullscreen?.()
 })
 
-createApp(App)
-  .use(router)
-  .use(VueQueryPlugin, { queryClient })
-  .mount('#app')
+// La app abre recién con lo guardado ya en memoria (unos milisegundos): si no, la primera
+// pantalla lo pediría a la red, y sin red se quedaría esperando. Si lo guardado no se pudo
+// leer, abre igual.
+activarPersistencia().catch(() => {}).then(() => {
+  createApp(App)
+    .use(router)
+    .use(VueQueryPlugin, { queryClient })
+    .mount('#app')
+})

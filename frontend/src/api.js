@@ -6,6 +6,8 @@
 //     422 = datos inválidos (trae `errores`: {campo: mensaje}).
 // Las escrituras llevan `X-Mitre: 1`, que es la defensa CSRF del servidor.
 
+import { pedir } from './red'
+
 const BASE = '/app/api'
 
 export class ErrorApi extends Error {
@@ -40,12 +42,8 @@ export async function api(ruta, { metodo = 'GET', cuerpo, archivo, crudo } = {})
     opciones.body = JSON.stringify(cuerpo)
   }
 
-  let resp
-  try {
-    resp = await fetch(BASE + ruta, opciones)
-  } catch {
-    throw new ErrorApi(0, null)
-  }
+  const resp = await pedir(BASE + ruta, opciones)
+  if (!resp) throw new ErrorApi(0, null)
   const datos = await resp.json().catch(() => null)
   if (!resp.ok) throw new ErrorApi(resp.status, datos)
   return datos

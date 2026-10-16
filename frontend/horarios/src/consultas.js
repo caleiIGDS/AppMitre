@@ -23,7 +23,11 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 10 * 60 * 1000,
-      gcTime: UN_MES,
+      // Infinity y no UN_MES: gcTime es un setTimeout, y más de 2^31 ms (~24 días) el
+      // navegador lo toma como 0. El horario restaurado se borraba de la memoria al
+      // instante si ninguna pantalla lo estaba usando todavía (abrir con la red lenta), y
+      // con él la copia del dispositivo.
+      gcTime: Infinity,
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
       refetchInterval: 10 * 60 * 1000,
@@ -41,17 +45,20 @@ const almacen = {
   removeItem: (k) => del(k),
 }
 
+// Devuelve cuándo terminó de cargar lo guardado: main.js espera eso para abrir la app.
 export function activarPersistencia() {
-  if (typeof indexedDB === 'undefined') return
-  persistQueryClient({
+  if (typeof indexedDB === 'undefined') return Promise.resolve()
+  const [, restaurado] = persistQueryClient({
     queryClient,
     persister: createAsyncStoragePersister({ storage: almacen, key: CLAVE_ALMACEN, throttleTime: 1000 }),
     maxAge: UN_MES,
     buster: __VERSION_APP__,
     dehydrateOptions: {
-      shouldDehydrateQuery: (q) => q.state.status === 'success' && q.queryKey[0] !== 'sesion',
+      // Con datos, aunque la última actualización haya fallado (ver src/consultas.js).
+      shouldDehydrateQuery: (q) => q.state.data !== undefined && q.queryKey[0] !== 'sesion',
     },
   })
+  return restaurado
 }
 
 // Al salir no queda nada del horario en el dispositivo.

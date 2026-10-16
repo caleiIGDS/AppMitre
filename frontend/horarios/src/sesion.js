@@ -2,6 +2,7 @@
 import { useQuery, useMutation } from '@tanstack/vue-query'
 import { api } from './api'
 import { queryClient, olvidarTodo, avisarOtrasPestanas } from './consultas'
+import { CLAVE_DATOS } from './datos'
 
 const CLAVE = ['sesion']
 const pedir = () => api('/sesion')
@@ -11,17 +12,17 @@ export function useSesion() {
 }
 
 // Para el router. Sin red no se sabe: se deja pasar, y la app muestra lo que tenga
-// guardado. Si después el servidor dice 401, se pide la clave.
+// guardado. Con el horario ya guardado tampoco se espera al servidor (la red puede estar
+// colgada): se abre con eso y, si resulta que la sesión se cerró, se pide la clave.
 export async function hayAcceso() {
   if (!navigator.onLine) return true
-  try {
-    // Sin reintentos: con la red caída a medias, el reintento de la consulta dejaría
-    // la pantalla esperando en vez de abrir con lo guardado.
-    const s = await queryClient.fetchQuery({ queryKey: CLAVE, queryFn: pedir, staleTime: 60 * 1000, retry: false })
-    return s.autenticado
-  } catch {
-    return true
-  }
+  // Sin reintentos: con la red caída a medias, el reintento de la consulta dejaría
+  // la pantalla esperando en vez de abrir con lo guardado.
+  const respuesta = queryClient.fetchQuery({ queryKey: CLAVE, queryFn: pedir, staleTime: 60 * 1000, retry: false })
+    .then((s) => s.autenticado, () => true)
+  if (queryClient.getQueryData(CLAVE_DATOS) === undefined) return respuesta
+  respuesta.then((ok) => { if (!ok) window.dispatchEvent(new CustomEvent('horarios:sin-sesion')) })
+  return true
 }
 
 export function useEntrar() {

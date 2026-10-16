@@ -42,13 +42,19 @@
 }
 
 /* --- Sin red / versión nueva -------------------------------------------------------- */
+/* Pegado arriba: sigue a la vista al bajar por la lista. Debajo de menús y ventanas. */
 .a-sin-red {
+    position: sticky;
+    top: 0;
+    z-index: 50;
     background: var(--g-dark);
     color: #fff;
     font-size: 12px;
     padding: 8px 16px;
     text-align: center;
+    border-bottom: 3px solid var(--g-accent);
 }
+.a-sin-red strong { margin-right: 8px; letter-spacing: 0.05em; color: var(--g-accent); }
 
 .a-version {
     position: fixed;

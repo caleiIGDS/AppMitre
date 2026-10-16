@@ -49,6 +49,8 @@ export const queryClient = new QueryClient({
   },
 })
 
+// Devuelve cuándo terminó de cargar lo guardado: main.js espera eso para abrir la app,
+// así la primera pantalla (y el router, que pregunta por el /meta) ya lo encuentran.
 export function activarPersistencia() {
   let almacen
   try {
@@ -56,9 +58,9 @@ export function activarPersistencia() {
     almacen.setItem('mitre-prueba', '1')
     almacen.removeItem('mitre-prueba')
   } catch {
-    return // ventana privada estricta o almacenamiento bloqueado: la app anda igual, sin memoria
+    return Promise.resolve() // ventana privada estricta o almacenamiento bloqueado: la app anda igual, sin memoria
   }
-  persistQueryClient({
+  const [, restaurado] = persistQueryClient({
     queryClient,
     persister: createSyncStoragePersister({ storage: almacen, key: CLAVE_ALMACEN, throttleTime: 1000 }),
     maxAge: UNA_SEMANA,
@@ -66,9 +68,12 @@ export function activarPersistencia() {
     // datos puede haber cambiado.
     buster: __VERSION_APP__,
     dehydrateOptions: {
-      shouldDehydrateQuery: (q) => q.state.status === 'success' && q.meta?.guardar !== false,
+      // Con datos, aunque la última actualización haya fallado (status 'error'): si no, un
+      // pedido sin red borraba del dispositivo justo lo que hacía falta para usarla sin red.
+      shouldDehydrateQuery: (q) => q.state.data !== undefined && q.meta?.guardar !== false,
     },
   })
+  return restaurado
 }
 
 // Al salir (o si la sesión se corta) no queda nada de los datos en el dispositivo.

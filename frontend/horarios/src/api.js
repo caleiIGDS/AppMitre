@@ -1,6 +1,8 @@
 // Cliente de la API de horarios (/app-horarios/api, ver horarios/app_api.py).
 // 401 = hace falta la clave. Las escrituras llevan `X-Mitre: 1` (defensa CSRF).
 
+import { pedir } from '@/red'
+
 const BASE = '/app-horarios/api'
 
 export class ErrorApi extends Error {
@@ -24,12 +26,8 @@ export async function api(ruta, { metodo = 'GET', cuerpo } = {}) {
     opciones.headers['Content-Type'] = 'application/json'
     opciones.body = JSON.stringify(cuerpo)
   }
-  let resp
-  try {
-    resp = await fetch(BASE + ruta, opciones)
-  } catch {
-    throw new ErrorApi(0, null)
-  }
+  const resp = await pedir(BASE + ruta, opciones)
+  if (!resp) throw new ErrorApi(0, null)
   const datos = await resp.json().catch(() => null)
   if (!resp.ok) throw new ErrorApi(resp.status, datos)
   return datos

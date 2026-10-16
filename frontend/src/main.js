@@ -13,8 +13,6 @@ import App from './App.vue'
 import router from './router'
 import { queryClient, activarPersistencia } from './consultas'
 
-activarPersistencia()
-
 // Se perdió el acceso a un inventario mientras se lo usaba: lo que quedó de él en el
 // dispositivo se descarta y se pide la clave, con vuelta a donde se estaba.
 window.addEventListener('mitre:sin-acceso', ({ detail }) => {
@@ -25,7 +23,12 @@ window.addEventListener('mitre:sin-acceso', ({ detail }) => {
   }
 })
 
-createApp(App)
-  .use(router)
-  .use(VueQueryPlugin, { queryClient })
-  .mount('#app')
+// La app abre recién con lo guardado ya en memoria (unos milisegundos): si no, la primera
+// pantalla lo pediría a la red, y sin red se quedaría esperando. Si lo guardado no se pudo
+// leer, abre igual.
+activarPersistencia().catch(() => {}).then(() => {
+  createApp(App)
+    .use(router)
+    .use(VueQueryPlugin, { queryClient })
+    .mount('#app')
+})
