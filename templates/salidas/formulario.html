@@ -1096,9 +1096,10 @@ function abrirModalPorCurso(){
 // formulario perdería todo lo que se venía cargando.
 // Línea chica bajo el botón "+ Agregar por curso", en la sección Personas.
 function estadoPadron(){
-  const info = Padron.info();
+  const info = Padron.info(), infoProf = Padron.info("profesores");
+  const prof = infoProf && infoProf.cantidad ? ` y ${infoProf.cantidad} profesores` : "";
   return el("p", {class:"nota-padron"}, info
-    ? `Padrón en este dispositivo: ${info.cantidad} estudiantes.`
+    ? `Padrón en este dispositivo: ${info.cantidad} estudiantes${prof}.`
     : "Sin padrón en este dispositivo: el autocompletado de estudiantes está apagado, se tipea a mano.");
 }
 
@@ -1236,8 +1237,10 @@ function obtenerEdad(fechaNac){
   return edad >= 0 ? edad : null;
 }
 
-// Autocompletado de estudiantes en la tabla de Personas: mismo criterio de tolerancia
-// (sin acentos, minúsculas, substring) que la búsqueda de profesores del SPA de horarios.
+// Autocompletado de nombres en la tabla de Personas: estudiantes del padrón de alumnos,
+// docentes (titular o reemplazante) del de profesores; los no docentes no tienen padrón.
+// Mismo criterio de tolerancia (sin acentos, minúsculas, substring) que la búsqueda de
+// profesores del SPA de horarios.
 // El dropdown se ancla con `position:fixed` sobre el input (no anidado en `.tabla-scroll`,
 // que tiene overflow-x:auto — un hijo absoluto ahí quedaría recortado en vez de flotar).
 let dropdownEstudiante = null;
@@ -1249,10 +1252,12 @@ function cerrarSugerenciasEstudiante(){
 function mostrarSugerenciasEstudiante(inpNombre, p, inpDoc){
   cerrarSugerenciasEstudiante();
   const q = normTexto(inpNombre.value);
-  if (p.rol !== "estudiante" || q.length < 2) return;
+  const tipo = p.rol === "estudiante" ? "alumnos"
+             : p.rol.startsWith("docente") ? "profesores" : null;
+  if (!tipo || q.length < 2) return;
   // Sin padrón en este dispositivo, listar() devuelve [] y la función sale sin sugerir
   // nada: exactamente el comportamiento que había antes de que existiera el padrón.
-  const coincidencias = Padron.listar()
+  const coincidencias = Padron.listar(tipo)
     .map(al => ({al, puntaje: puntajeBusqueda(q, al.apellido_nombre)}))
     .filter(m => m.puntaje !== null)
     .sort((a, b) => b.puntaje - a.puntaje)
@@ -1273,7 +1278,7 @@ function mostrarSugerenciasEstudiante(inpNombre, p, inpDoc){
     const item = el("div", {class:"autocomplete-item"},
       el("span", {class:"ac-nombre"}, al.apellido_nombre,
          el("span", {class:"ac-dni"}, `DNI ${al.dni}`)),
-      el("span", {class:"ac-curso"}, `${al.curso}°${al.division}`));
+      tipo === "alumnos" ? el("span", {class:"ac-curso"}, `${al.curso}°${al.division}`) : null);
     item.addEventListener("mousedown", (e) => {
       e.preventDefault(); // gana al blur del input, que si no cierra la lista antes del click
       p.apellido_nombre = al.apellido_nombre;

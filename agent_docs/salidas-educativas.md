@@ -547,12 +547,11 @@ porque nombra dominio: no es capa 0 compartida.
   detecta `;` además de `,` (el export de Excel en español daba "El CSV no tiene columna
   para: curso, dni, nombre") y relee en `windows-1252` si el UTF-8 sale con U+FFFD (antes
   era un 500: `UnicodeDecodeError` no caía en el `except ValueError` de la ruta).
-- **Autocompletado en `formulario.html`**: sigue leyendo sólo el padrón de **alumnos**, sin
-  ningún cambio — `listar()`/`info()` mantienen `'alumnos'` como default, así los tres
-  consumidores (`renderPasoChipsCurso`, `renderPasoListaCurso`,
-  `mostrarSugerenciasEstudiante`, todas llaman `Padron.listar()` sin argumento) no se
-  tocaron. El padrón de profesores todavía no está wireado a ningún autocompletado del
-  formulario (la tabla de Personas sigue pidiendo el nombre/cargo del docente a mano).
+- **Autocompletado en `formulario.html`**: `listar()`/`info()` tienen `'alumnos'` como
+  default (así lo llaman `renderPasoChipsCurso` y `renderPasoListaCurso`). El nombre en la
+  tabla de Personas (`mostrarSugerenciasEstudiante`) sugiere según el rol de la fila:
+  estudiante → alumnos, docente titular/reemplazante → profesores (completa nombre y DNI;
+  el cargo sigue a mano), no docente → nada. Cambiar el rol repinta la fila.
 - **Sin padrón en el dispositivo, todo degrada a tipeo manual** — exactamente como era antes
   de que el padrón existiera. `listar()` devuelve `[]`, el autocomplete no sugiere y no tira
   error. Se avisa en dos lugares para que nadie lo confunda con un bug: una línea fija bajo

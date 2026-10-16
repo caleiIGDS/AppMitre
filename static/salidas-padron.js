@@ -17,9 +17,9 @@
  * Lleva prefijo de área porque nombra dominio (apellido_nombre, dni, curso, la regla
  * "primer carácter = año"): no es capa 0 compartida, es de salidas, como `gestion.css`.
  *
- * Lo cargan `padron.html` (para escribirlo) y `formulario.html` (para leer alumnos, vía
- * `listar()`/`info()` sin argumento — siguen apuntando a `'alumnos'` por default, así no
- * hizo falta tocar esos tres call sites), SIN `defer`: el JS de esas páginas corre inline y
+ * Lo cargan `padron.html` (para escribirlo) y `formulario.html` (para leerlo: alumnos vía
+ * `listar()`/`info()` sin argumento, que apuntan a `'alumnos'` por default, y profesores
+ * con `'profesores'` para el autocompletado de docentes), SIN `defer`: el JS de esas páginas corre inline y
  * un `defer` correría después.
  */
 (function () {
