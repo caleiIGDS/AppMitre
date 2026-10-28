@@ -13,6 +13,8 @@ import { get, set, del } from 'idb-keyval'
 
 const UN_MES = 1000 * 60 * 60 * 24 * 30
 const CLAVE_ALMACEN = 'mitre-horarios'
+// Cambiar sólo cuando cambie el formato de /datos, no con cada compilación.
+const VERSION_DATOS = 'horarios-datos-v1'
 
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
@@ -48,11 +50,22 @@ const almacen = {
 // Devuelve cuándo terminó de cargar lo guardado: main.js espera eso para abrir la app.
 export function activarPersistencia() {
   if (typeof indexedDB === 'undefined') return Promise.resolve()
+  const persister = createAsyncStoragePersister({ storage: almacen, key: CLAVE_ALMACEN, throttleTime: 1000 })
+  const restaurar = persister.restoreClient.bind(persister)
+  persister.restoreClient = async () => {
+    const guardado = await restaurar()
+    // Las versiones anteriores usaban la fecha del build. Su formato sigue siendo
+    // compatible: conservar esa copia al actualizar, también si no hay conexión.
+    if (guardado && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(guardado.buster)) {
+      guardado.buster = VERSION_DATOS
+    }
+    return guardado
+  }
   const [, restaurado] = persistQueryClient({
     queryClient,
-    persister: createAsyncStoragePersister({ storage: almacen, key: CLAVE_ALMACEN, throttleTime: 1000 }),
+    persister,
     maxAge: UN_MES,
-    buster: __VERSION_APP__,
+    buster: VERSION_DATOS,
     dehydrateOptions: {
       // Con datos, aunque la última actualización haya fallado (ver src/consultas.js).
       shouldDehydrateQuery: (q) => q.state.data !== undefined && q.queryKey[0] !== 'sesion',

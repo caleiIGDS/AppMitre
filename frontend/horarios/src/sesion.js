@@ -6,9 +6,15 @@ import { CLAVE_DATOS } from './datos'
 
 const CLAVE = ['sesion']
 const pedir = () => api('/sesion')
+// El encabezado y el router comparten la consulta. Si uno permite reintentos, el
+// otro puede heredar su promesa pausada sin red y bloquear la primera navegación.
+const opcionesSesion = {
+  queryKey: CLAVE, queryFn: pedir, staleTime: 60 * 1000,
+  networkMode: 'always', retry: false,
+}
 
 export function useSesion() {
-  return useQuery({ queryKey: CLAVE, queryFn: pedir, staleTime: 60 * 1000 })
+  return useQuery(opcionesSesion)
 }
 
 // Para el router. Sin red no se sabe: se deja pasar, y la app muestra lo que tenga
@@ -18,7 +24,7 @@ export async function hayAcceso() {
   if (!navigator.onLine) return true
   // Sin reintentos: con la red caída a medias, el reintento de la consulta dejaría
   // la pantalla esperando en vez de abrir con lo guardado.
-  const respuesta = queryClient.fetchQuery({ queryKey: CLAVE, queryFn: pedir, staleTime: 60 * 1000, retry: false })
+  const respuesta = queryClient.fetchQuery(opcionesSesion)
     .then((s) => s.autenticado, () => true)
   if (queryClient.getQueryData(CLAVE_DATOS) === undefined) return respuesta
   respuesta.then((ok) => { if (!ok) window.dispatchEvent(new CustomEvent('horarios:sin-sesion')) })

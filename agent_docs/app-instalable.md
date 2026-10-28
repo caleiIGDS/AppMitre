@@ -123,7 +123,8 @@ planilla general, PDF, imprimir varios, ACTUALIZAR HORARIOS, tema nocturno y mod
   de una vez (~600 KB) con ETag (mtime de `escuela.db` + huella de `horarios/config.py`). La
   app lo guarda en **IndexedDB** (no localStorage: es grande y localStorage lo comparte con
   la app de Gestión) y todo se resuelve en el dispositivo: buscar, comparar, planilla,
-  TIEMPO REAL. Se vuelve a preguntar cada 10 minutos (304 si nada cambió).
+  TIEMPO REAL. Se conserva hasta un mes, incluso al actualizar la app (sólo se invalida
+  si cambia el formato de los datos). Se vuelve a preguntar cada 10 minutos (304 si nada cambió).
 - **Sesión:** `HORARIOS_CLAVE`, con el flag de sesión de `horarios/acceso.py`;
   `acceso.comprobar_clave` hace el chequeo (con límite de intentos). No usa
   `accesos`. Escrituras con `X-Mitre`, igual que `/app/api`.
