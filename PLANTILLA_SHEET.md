@@ -36,8 +36,8 @@ de un año (ej: `"1ro"`, `"2do"`, ... — el nombre de la clave es libre).
 espacios → `_`. Ej: en el sheet puede decir `"Hora Inicio"` o `"División"` — la app los
 lee como `hora_inicio` y `division`. Lo que **no** puede cambiar es el nombre resultante.
 
-El **orden de columnas es libre**. Columnas extra se ignoran. Columna faltante o
-renombrada → ese campo se carga **vacío, sin error** (revisar en la UI tras cargar).
+El **orden de columnas es libre**. Columnas extra se ignoran. Si falta o se renombra
+un encabezado obligatorio, la actualización falla y conserva el último horario completo.
 
 ### Columnas
 

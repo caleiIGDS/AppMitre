@@ -1,10 +1,96 @@
 # Sistema de Búsqueda y API — AppMitre
 
-> Complementa `CLAUDE.md`. Hoy los datos salen de `GET /app-horarios/api/datos` (`horarios/app_api.py`)
-> y la búsqueda se resuelve en la app (`frontend/horarios/src/datos.js`, `Buscador.vue`); cada
-> búsqueda es una URL (`/horarios/cursos/3° B`, `?comparar=…`). Lo de abajo describe
-> `static/js/script.js` y las rutas `/horarios/api/*`, borrados el 2026-10-05 con la página
-> clásica: sirve como historia de las reglas, que se portaron.
+La app Vue sigue descargando `GET /app-horarios/api/datos` y buscando localmente
+(`frontend/horarios/src/datos.js`, `Buscador.vue`). La API de consultas estructuradas,
+independiente del navegador, vive en `horarios/consultas/` y `horarios/api_consultas.py`.
+El agente interno conserva sus herramientas anteriores; no se implementó MCP ni una
+conexión de GPT Actions y no hace falta otro proceso o dependencia de infraestructura.
+
+## Consultas estructuradas de lectura
+
+Un único prefijo efectivo: `/app-horarios/api/v1/consultas`. Conserva el prefijo API
+existente para montarse en el mismo Flask; no existe un alias `/horarios/api/v1`.
+Los cuatro POST aceptan JSON, pero no escriben ni consultan Sheets.
+
+| Ruta bajo ese prefijo | Contrato | Filtros |
+| --- | --- | --- |
+| `POST /catalogos` | `listar_catalogos` | `incluir`: cursos/aulas/roles (por defecto cursos); `anio` solo con cursos. |
+| `POST /personas` | `buscar_personas` | `nombre` o `rol`, intersección si están ambos; devuelve todos los roles. |
+| `POST /horarios` | `consultar_horarios` | `tipo`: curso/persona/aula; selector `valores`, `anio` (curso) o `piso` (aula); `dias`, pareja `desde`/`hasta`, `ahora`, `roles` (persona). |
+| `POST /preceptores` | `consultar_preceptores` | Sin filtros: toda la planilla. `cursos` o `anio`, `nombres`, `turno`, `dias`; filtros de distinta clase se intersectan. |
+| `GET /contratos` | Registro y esquemas | Nombres, descripciones, entrada/salida y límites del mismo registro que valida las consultas. |
+| `GET /openapi.json` | OpenAPI 3.1 | Las cuatro consultas, sus esquemas compartidos y la autenticación; listo para configurar una conexión posterior. |
+
+Todas esas rutas exigen sesión de Horarios o `Authorization: Bearer <HORARIOS_CLAVE>`.
+La clave se compara en tiempo constante sobre UTF-8; login y Bearer comparten el límite
+de cinco intentos fallidos por IP en quince minutos (memoria del proceso, no distribuido).
+Bearer solo permite estas lecturas: no crea sesión ni habilita `/datos`, PDF,
+`/actualizar` u otras áreas. Las consultas POST con cookie exigen `X-Mitre`; con Bearer
+no necesitan esa defensa CSRF. Las respuestas nuevas llevan `Cache-Control: no-store`.
+Configurar la clave en el campo secreto del cliente; nunca en el contrato ni en el chat.
+OpenAPI usa el origen de la petición como servidor; descargarlo desde el dominio HTTPS
+real al configurar el cliente. Esto no configura Actions ni despliega la aplicación.
+
+Ejemplos: `POST /horarios` con `{"tipo":"curso","anio":3}` devuelve todas las divisiones
+registradas, con lunes a viernes; `{"tipo":"persona","valores":["PEREZ ANA"],"dias":["lunes"]}`
+devuelve sus actividades con `rol` en cada una. Los días pedidos siempre están presentes,
+incluidos los vacíos. Fin de semana solo al pedirlo, o con `ahora: true`; el reloj es el
+de `horarios.config.ahora()` y agrega `momento: {fecha,hora}`. Aula sin selector exige
+`ahora`, o un único día y un rango. No se aceptan fechas de calendario como si la copia
+semanal contemplara feriados, asistencia o suspensiones.
+
+La identidad usa normalización exacta y los alias explícitos de `nombre_mapeos.json`.
+No fusiona abreviaturas o nombres parecidos. `/personas` devuelve candidatos sin horarios;
+un selector personal aproximado devuelve `persona_ambigua`, incluso si hay un solo
+candidato, para que el cliente confirme el nombre. El lote se resuelve antes de producir
+actividades. Una búsqueda sin coincidencias devuelve `personas: []`; entidad desconocida
+da `no_encontrado`. No devuelve contactos ni el padrón completo como fallback.
+
+Se conservan grupos A/B y `superposicion_permitida` sin diagnosticar conflictos.
+Con suplencia activa, curso/aula muestra al suplente o `profesor: null` si falta, y
+`titular_en_licencia`; el horario del titular conserva la referencia con `en_licencia`
+y `suplente` nullable. No se infiere vigencia por fechas. Horas legacy se interpretan
+con el motor de minutos existente (`7:40`, `19:00:00`, `16:60`) y salen como `HH:MM`,
+sin modificar la fuente. Rango: `inicio < hasta` y `fin > desde`; ahora: `inicio <= hora < fin`.
+Los bloques mantienen sus extremos originales. Un intervalo ilegible da error de datos.
+
+Preceptores solo tiene asignaciones por turno/día: nunca horas supuestas. En una persona,
+agrupa cursos por turno y día y conserva esas asignaciones aun con rango/ahora, sin
+afirmar presencia exacta. `/preceptores` devuelve personas con todas sus asignaciones,
+incluidos varios principales por días y ambos contraturnos. `principal` se determina
+con `TURNO_CURSOS`; si no hay turno nominal, `funcion: null` y aviso puntual, sin default.
+`vacantes` representa FALTA/FALTAN/SIN ASIGNAR/fila explícita sin nombre; `sin_registro`
+solo se genera para cursos/año solicitados, respetando turno/días, sin filtro de nombres.
+La consulta global no genera una matriz de ausencias. Falta de registro no prueba vacante.
+
+Cada operación abre una conexión SQLite `mode=ro` con `query_only` y una transacción;
+lee las tres tablas con columnas permitidas. La revisión se calcula sobre ese contenido
+y la configuración/alias, sin depender del mtime fuera de la transacción. No hay caché
+de consultas ni marca inventada de sincronización. Base ausente/vacía/ilegible devuelve
+`datos_no_disponibles`, no un horario vacío; una consulta válida sin actividades sí lo hace.
+
+Resultados compactos, sin envoltorios rutinarios de estado o zona. Hasta 40.000 caracteres
+por página, 20 entidades completas para horarios y 50 personas para búsquedas. Preceptores
+admite específicamente 50 personas por página para que el listado escolar normal pueda
+caber en una llamada; sus vacantes/avisos no consumen cupos de persona, sí caracteres.
+No es una medición de la base de producción. Los catálogos pequeños salen completos.
+`siguiente` aparece solo si hay otra página: repetir exactamente los filtros y añadir
+`cursor`. Está firmado con las claves de la aplicación y Horarios, ligado a revisión,
+filtros y momento si corresponde. Cambio de copia/configuración/clave, o de minuto en
+`ahora`, da `consulta_vencida`; reiniciar para no combinar snapshots. Una entidad que
+no cabe da `consulta_demasiado_amplia`, sin partir días ni truncar datos.
+
+Entradas y salidas se validan contra el registro de JSON Schema, incluidas combinaciones
+de selectores. Error: `{"error":{"codigo":"…",…}}`; parámetros 400, desconocido 404,
+ambigüedad/continuación vencida 409, datos inconsistentes/consulta amplia 422, base o
+servicio no disponibles 503; autenticación 401/403 e intentos 429. No se exponen SQL,
+trazas ni secretos. Regresiones: `python -m unittest discover -s tests -p 'test_horarios*.py'`
+(SQLite temporal y cliente Flask; sin importar `app.py`, cargar `.env` o abrir bases reales).
+
+## Antecedentes de la página clásica
+
+Lo que sigue describe `static/js/script.js` y `/horarios/api/*`, retirados el
+2026-10-05. Es historia de reglas portadas; esas rutas y sus fallbacks no existen hoy.
 
 ---
 

@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 import csv
 import json
 import os
@@ -39,8 +40,9 @@ TURNOS = ("MAÑANA", "TARDE", "VESPERTINO")
 def conectar():
     return sqlite3.connect(DB_PATH)
 
-def crear_tablas():
-    con = conectar()
+def crear_tablas(con=None):
+    propia = con is None
+    con = con if con is not None else conectar()
     cur = con.cursor()
     cur.execute('DROP TABLE IF EXISTS clases')
     cur.execute('''
@@ -83,8 +85,9 @@ def crear_tablas():
     ''')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_personal_no_docente ON personal_no_docente(nombre)')
 
-    con.commit()
-    con.close()
+    if propia:
+        con.commit()
+        con.close()
 
 def init_tablas():
     """Crea las tablas solo si no existen. No borra datos existentes."""
@@ -290,69 +293,139 @@ def descargar_sheet(sheet_id, gid=0, skip_rows=0, intentos=3, demora=2):
                 raise
     return None
 
-def cargar_desde_sheets(sheet_id, gids):
-    con = conectar()
-    cur = con.cursor()
-    
-    for nombre, gid in gids.items():
-        print(f"Cargando {nombre} (GID {gid})...")
+def _validar_encabezados(reader, requeridos, hoja):
+    campos = [c for c in (reader.fieldnames or []) if c]
+    faltantes = requeridos - set(campos)
+    if faltantes or len(campos) != len(set(campos)):
+        raise ValueError(f"Encabezados inválidos en {hoja}: faltan {', '.join(sorted(faltantes)) or 'campos únicos'}")
+
+
+def _validar_intervalo(inicio, fin, contexto):
+    def minutos(valor):
+        # El motor existente interpreta H:MM, segundos y el legacy 16:60 como minutos
+        # acumulados. Validar sin reescribirlos ni endurecer ese formato aceptado.
+        m = re.fullmatch(r'(\d{1,2}):(\d{2})(?::\d{2})?', str(valor or '').strip())
+        total = _a_minutos(valor)
+        if not m or int(m[1]) > 23 or int(m[2]) > 60 or total is None or not 0 <= total <= 1440:
+            raise ValueError(f"Horario inválido en {contexto}: {valor!r}")
+        return total
+    if minutos(fin) <= minutos(inicio):
+        raise ValueError(f"El fin debe ser posterior al inicio en {contexto}")
+
+
+def _validar_fila_clase(row, contexto):
+    if None in row or any(not str(row.get(k) or '').strip()
+                          for k in ('curso', 'division', 'materia', 'dia', 'hora_inicio', 'hora_fin')):
+        raise ValueError(f"Fila incompleta en {contexto}")
+    if not _dia_canonico(row['dia']) and eliminar_acentos(row['dia']).lower().strip() not in ('sabado', 'domingo'):
+        raise ValueError(f"Día inválido en {contexto}: {row['dia']!r}")
+    _validar_intervalo(row['hora_inicio'], row['hora_fin'], contexto)
+
+
+def actualizar_desde_sheets(sheet_id, gids, gid_preceptores, gid_personal):
+    """Prepara las tres tablas en memoria; sólo publica una carga completa y válida.
+
+    La transacción de SQLite conserva el snapshot anterior para los lectores hasta el
+    commit y revierte las tres tablas juntas si falla cualquier escritura.
+    """
+    with closing(sqlite3.connect(':memory:')) as nueva:
+        crear_tablas(nueva)
+        cargar_desde_sheets(sheet_id, gids, nueva)
+        cargar_horarios_preceptores(sheet_id, gid_preceptores, nueva)
+        cargar_personal_no_docente(sheet_id, gid_personal, nueva)
+        if not nueva.execute('SELECT COUNT(*) FROM clases').fetchone()[0]:
+            raise ValueError('La carga no contiene clases; se conserva el horario anterior.')
+        nueva.commit()
+        con = conectar()
         try:
-            archivo = descargar_sheet(sheet_id, gid)
-        except Exception as e:
+            con.execute('BEGIN IMMEDIATE')
+            for tabla in ('clases', 'horarios_preceptores', 'personal_no_docente'):
+                filas = nueva.execute(f'SELECT * FROM {tabla}').fetchall()
+                columnas = len(nueva.execute(f'PRAGMA table_info({tabla})').fetchall())
+                con.execute(f'DELETE FROM {tabla}')
+                con.executemany(f"INSERT INTO {tabla} VALUES ({','.join('?' * columnas)})", filas)
+            con.commit()
+        except Exception:
+            con.rollback()
+            raise
+        finally:
             con.close()
-            raise RuntimeError(f"Falló la descarga de la hoja '{nombre}' (gid {gid}): {e}") from e
-        reader = csv.DictReader(archivo)
-        
-        for row in reader:
-            profesor = limpiar_profesor(row.get('profesor', ''))
-            aula = limpiar_aula(row.get('aula', ''))
-            inicio = row.get('hora_inicio', '')
-            fin = row.get('hora_fin', '')
-            
-            superposicion_raw = row.get('superposicion', '0')
+
+
+def cargar_desde_sheets(sheet_id, gids, con=None):
+    propia = con is None
+    con = con if con is not None else conectar()
+    cur = con.cursor()
+
+    try:
+        for nombre, gid in gids.items():
+            print(f"Cargando {nombre} (GID {gid})...")
             try:
-                # Manejar valores tipo checkbox de Google Sheets (TRUE/FALSE, 1/0, VERDADERO/FALSO)
-                if str(superposicion_raw).strip().upper() in ['TRUE', '1', 'VERDADERO']:
-                    superposicion_val = 1
-                else:
+                archivo = descargar_sheet(sheet_id, gid)
+            except Exception as e:
+                raise RuntimeError(f"Falló la descarga de la hoja '{nombre}' (gid {gid}): {e}") from e
+            reader = csv.DictReader(archivo)
+            _validar_encabezados(reader, {'curso', 'division', 'materia', 'profesor', 'aula',
+                                         'dia', 'hora_inicio', 'hora_fin'}, nombre)
+
+            for numero, row in enumerate(reader, 2):
+                if not any(str(v or '').strip() for v in row.values()):
+                    continue
+                _validar_fila_clase(row, f"{nombre}, fila {numero}")
+                profesor = limpiar_profesor(row.get('profesor', ''))
+                aula = limpiar_aula(row.get('aula', ''))
+                inicio = row.get('hora_inicio', '')
+                fin = row.get('hora_fin', '')
+
+                superposicion_raw = row.get('superposicion', '0')
+                try:
+                    # Manejar valores tipo checkbox de Google Sheets (TRUE/FALSE, 1/0, VERDADERO/FALSO)
+                    if str(superposicion_raw).strip().upper() in ['TRUE', '1', 'VERDADERO']:
+                        superposicion_val = 1
+                    else:
+                        superposicion_val = 0
+                except (ValueError, TypeError):
                     superposicion_val = 0
-            except (ValueError, TypeError):
-                superposicion_val = 0
 
-            suplente_activo_raw = row.get('suplente_activo', '0')
-            try:
-                # Handle boolean-like values (TRUE/FALSE, 1/0)
-                if str(suplente_activo_raw).strip().upper() in ['TRUE', '1', 'VERDADERO']:
-                    suplente_activo_val = 1
-                else:
+                suplente_activo_raw = row.get('suplente_activo', '0')
+                try:
+                    # Handle boolean-like values (TRUE/FALSE, 1/0)
+                    if str(suplente_activo_raw).strip().upper() in ['TRUE', '1', 'VERDADERO']:
+                        suplente_activo_val = 1
+                    else:
+                        suplente_activo_val = 0
+                except (ValueError, TypeError):
                     suplente_activo_val = 0
-            except (ValueError, TypeError):
-                suplente_activo_val = 0
-                
-            datos = (
-                row.get('curso', ''), row.get('division', ''), row.get('especialidad', ''),
-                eliminar_acentos(row.get('materia', '')).upper().strip(), row.get('tipo_materia', ''),
-                profesor, row.get('dni', ''), row.get('telefono', ''), row.get('email', ''),
-                aula, row.get('tipo_aula', ''),
-                row.get('dia', ''), inicio, fin, row.get('grupo', ''),
-                superposicion_val, suplente_activo_val,
-                limpiar_profesor(row.get('prof_suplente', '')),
-                row.get('sup_ini', ''), row.get('sup_fin', '')
-            )
-            cur.execute('INSERT INTO clases VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', datos)
-        print("Listo")
-    con.commit()
-    con.close()
-    print("Listo.")
 
-def cargar_horarios_preceptores(sheet_id, gid):
+                datos = (
+                    row.get('curso', ''), row.get('division', ''), row.get('especialidad', ''),
+                    eliminar_acentos(row.get('materia', '')).upper().strip(), row.get('tipo_materia', ''),
+                    profesor, row.get('dni', ''), row.get('telefono', ''), row.get('email', ''),
+                    aula, row.get('tipo_aula', ''),
+                    row.get('dia', ''), inicio, fin, row.get('grupo', ''),
+                    superposicion_val, suplente_activo_val,
+                    limpiar_profesor(row.get('prof_suplente', '')),
+                    row.get('sup_ini', ''), row.get('sup_fin', '')
+                )
+                cur.execute('INSERT INTO clases VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', datos)
+            print("Listo")
+        if propia:
+            con.commit()
+        print("Listo.")
+    finally:
+        if propia:
+            con.close()
+
+
+def cargar_horarios_preceptores(sheet_id, gid, con=None):
     """
     Descarga e importa los horarios individuales de los preceptores desde Google Sheets.
     La hoja tiene 3 bloques (MAÑANA, TARDE, VESPERTINO) en columnas separadas por una col vacía.
     Columnas por bloque: Preceptor | Curso | Division | LUNES | MARTES | MIERCOLES | JUEVES | VIERNES
     Cualquier valor que no sea vacío ni "FALSO" en una celda de día cuenta como presente.
     """
-    con = conectar()
+    propia = con is None
+    con = con if con is not None else conectar()
     cur = con.cursor()
     print(f"Cargando horarios detallados de preceptores (GID {gid})...")
     try:
@@ -362,6 +435,11 @@ def cargar_horarios_preceptores(sheet_id, gid):
 
         # Saltamos la fila de encabezados (Preceptor, Curso, Division, LUNES, ...)
         next(reader, None)
+        cabecera = next(reader, [])
+        for off in (0, 9, 18):
+            # El contrato es posicional: sólo el rótulo Preceptor identifica el bloque.
+            if len(cabecera) < off + 8 or cabecera[off].lower().strip() != 'preceptor':
+                raise ValueError("Encabezados inválidos en la hoja de preceptores")
 
         to_insert = []
         dias_nombres = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES']
@@ -379,6 +457,8 @@ def cargar_horarios_preceptores(sheet_id, gid):
                     division  = row[off+2].strip().upper()
 
                     if preceptor and preceptor.upper() != "PRECEPTOR":
+                        if len(row) < off + 8:
+                            raise ValueError("Fila incompleta en la hoja de preceptores")
                         for i, dia_nombre in enumerate(dias_nombres):
                             dia_idx = off + 3 + i
                             if len(row) > dia_idx:
@@ -398,19 +478,23 @@ def cargar_horarios_preceptores(sheet_id, gid):
                 "INSERT INTO horarios_preceptores (turno, preceptor, tipo, curso, division, dia) VALUES (?, ?, ?, ?, ?, ?)",
                 to_insert
             )
-        con.commit()
+        if propia:
+            con.commit()
         print("Listo horarios preceptores")
     except Exception as e:
         if 'con' in locals():
-            con.rollback()
+            if propia:
+                con.rollback()
         print(f"Error cargando horarios de preceptores desde Sheets: {e}")
         raise RuntimeError(f"Falló la carga de horarios de preceptores: {e}") from e
     finally:
         if 'con' in locals():
-            con.close()
+            if propia:
+                con.close()
 
-def obtener_horario_preceptor(nombre_buscado):
-    con = conectar()
+def obtener_horario_preceptor(nombre_buscado, con=None):
+    propia = con is None
+    con = con if con is not None else conectar()
     con.row_factory = sqlite3.Row
     cur = con.cursor()
     query = """
@@ -429,7 +513,8 @@ def obtener_horario_preceptor(nombre_buscado):
     """
     cur.execute(query, (f"%{nombre_buscado}%",))
     rows = [dict(row) for row in cur.fetchall()]
-    con.close()
+    if propia:
+        con.close()
 
     for row in rows:
         turno_curso = TURNO_CURSOS.get((row['curso'], row['division']), TURNO_DEFAULT)
@@ -437,15 +522,17 @@ def obtener_horario_preceptor(nombre_buscado):
 
     return rows
 
-def obtener_lista_preceptores_horario():
+def obtener_lista_preceptores_horario(con=None):
     """
     Retorna una lista única de nombres de preceptores que tienen horarios cargados.
     """
-    con = conectar()
+    propia = con is None
+    con = con if con is not None else conectar()
     cur = con.cursor()
     cur.execute("SELECT DISTINCT preceptor FROM horarios_preceptores WHERE preceptor != '' ORDER BY preceptor")
     preceptores = [r[0] for r in cur.fetchall()]
-    con.close()
+    if propia:
+        con.close()
     return preceptores
 
 def _extraer_num_curso(s):
@@ -489,14 +576,18 @@ def obtener_preceptores_por_curso(curso_raw, division_raw):
         "preceptores_vespertino": vespertino,
     }
 
-def cargar_personal_no_docente(sheet_id, gid):
-    con = conectar()
+def cargar_personal_no_docente(sheet_id, gid, con=None):
+    propia = con is None
+    con = con if con is not None else conectar()
     cur = con.cursor()
     print(f"Cargando personal no docente (GID {gid})...")
     try:
         cur.execute("DELETE FROM personal_no_docente")
         archivo = descargar_sheet(sheet_id, gid)
         reader = csv.DictReader(archivo)
+        _validar_encabezados(reader, {'nombre', 'rol'} | {
+            f'{dia}_{extremo}' for dia in ('lunes', 'martes', 'miercoles', 'jueves', 'viernes')
+            for extremo in ('inicio', 'fin')}, 'personal no docente')
         dias = [
             ("LUNES",     "lunes_inicio",     "lunes_fin"),
             ("MARTES",    "martes_inicio",    "martes_fin"),
@@ -508,11 +599,17 @@ def cargar_personal_no_docente(sheet_id, gid):
         for row in reader:
             nombre = limpiar_profesor(row.get('nombre', ''))
             rol = eliminar_acentos(row.get('rol', '')).upper().strip()
+            if not any(str(v or '').strip() for v in row.values()):
+                continue
             if not nombre or not rol:
                 continue
+            if None in row:
+                raise ValueError("Fila incompleta en la hoja de personal no docente")
             for dia_nombre, col_ini, col_fin in dias:
-                inicio = row.get(col_ini, '').strip()
-                fin = row.get(col_fin, '').strip()
+                inicio = (row.get(col_ini) or '').strip()
+                fin = (row.get(col_fin) or '').strip()
+                if inicio or fin:
+                    _validar_intervalo(inicio, fin, f'personal no docente: {nombre}, {dia_nombre}')
                 if inicio and fin:
                     to_insert.append((nombre, rol, dia_nombre, inicio, fin))
         if to_insert:
@@ -520,14 +617,17 @@ def cargar_personal_no_docente(sheet_id, gid):
                 "INSERT INTO personal_no_docente (nombre, rol, dia, hora_inicio, hora_fin) VALUES (?,?,?,?,?)",
                 to_insert
             )
-        con.commit()
+        if propia:
+            con.commit()
         print("Listo personal no docente")
     except Exception as e:
-        con.rollback()
+        if propia:
+            con.rollback()
         print(f"Error cargando personal no docente: {e}")
         raise RuntimeError(f"Falló la carga de personal no docente: {e}") from e
     finally:
-        con.close()
+        if propia:
+            con.close()
 
 def obtener_personal_por_nombre(nombre):
     con = conectar()
@@ -540,28 +640,35 @@ def obtener_personal_por_nombre(nombre):
     con.close()
     return rows
 
-def obtener_lista_personal():
-    con = conectar()
+def obtener_lista_personal(con=None):
+    propia = con is None
+    con = con if con is not None else conectar()
     cur = con.cursor()
     cur.execute("SELECT DISTINCT nombre, rol FROM personal_no_docente WHERE nombre != '' ORDER BY nombre")
     personal = [{'nombre': r[0], 'rol': r[1]} for r in cur.fetchall()]
-    con.close()
+    if propia:
+        con.close()
     return personal
 
 
-def obtener_personal_todos():
-    con = conectar()
+def obtener_personal_todos(con=None):
+    propia = con is None
+    con = con if con is not None else conectar()
     cur = con.cursor()
     cur.execute(
         "SELECT nombre, rol, dia, hora_inicio, hora_fin FROM personal_no_docente ORDER BY nombre, dia"
     )
     rows = [{'nombre': r[0], 'rol': r[1], 'dia': r[2], 'hora_inicio': r[3], 'hora_fin': r[4]} for r in cur.fetchall()]
-    con.close()
+    if propia:
+        con.close()
     return rows
 
 
-def obtener_planilla_preceptores_todos():
-    con = conectar()
+def obtener_planilla_preceptores_todos(con=None):
+    propia = con is None
+    con = con if con is not None else conectar()
+    if propia:
+        con.execute('BEGIN')
     cur = con.cursor()
 
     cur.execute("""
@@ -589,7 +696,8 @@ def obtener_planilla_preceptores_todos():
             'vespertino': turnos.get('VESPERTINO', '')
         })
 
-    con.close()
+    if propia:
+        con.close()
     return resultado
 
 
@@ -823,7 +931,5 @@ def cargar_inicial():
     init_tablas()
     if not tiene_datos():
         print("Base de horarios vacía, cargando desde Google Sheets...")
-        crear_tablas()
-        cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
-        cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
-        cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)
+        actualizar_desde_sheets(SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES,
+                               GID_PERSONAL_NO_DOCENTE)

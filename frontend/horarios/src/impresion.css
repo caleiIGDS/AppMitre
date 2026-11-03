@@ -1,0 +1,35 @@
+/* Hoja autónoma e incluida en el bundle: la ventana no descarga estilos ni fuentes. */
+@page { size: A4 landscape; margin: 8mm; }
+* { box-sizing: border-box; }
+:root { --primary: #1a365d; --secondary: #b35916; }
+body { margin: 0; background: white; color: #111; font: 14px Arial, sans-serif; }
+.controles { display: flex; align-items: center; gap: 16px; padding: 16px; background: #edf2f7; }
+button { padding: 12px; cursor: pointer; white-space: nowrap; }
+.pagina { width: 281mm; height: 193mm; margin: 0 auto; break-after: page; overflow: hidden; }
+.pagina:last-child { break-after: auto; }
+.contenido { transform-origin: top left; padding: 1px; }
+h1 { font-size: 20px; margin: 8px 0 12px; }
+p { font-size: 13px; margin: 0 0 12px; }
+.calendario-grid { display: grid; grid-template-columns: 60px repeat(5, minmax(0, 1fr)); border: 1px solid #526171; }
+.cabecera-dia, .cabecera-vacia { height: 32px; border-bottom: 1px solid #526171; border-right: 1px solid #526171; display: flex; align-items: center; justify-content: center; font-weight: bold; background: #f1f4f7; }
+.columna-horas, .columna-dia { position: relative; border-right: 1px solid #95a0ad; min-width: 0; }
+.hora-label { position: absolute; right: 6px; font-size: 13px; transform: translateY(-50%); }
+.grid-line-horizontal { position: absolute; left: 0; right: 0; height: 1px; background: #d2d9e0; }
+.materia-bloque, .bloque-superposicion { position: absolute; border: 1px solid #526171; background: #f3f6fa; color: #111; overflow: hidden; padding: 4px; }
+.materia-bloque { display: flex; align-items: center; justify-content: space-between; gap: 3px; }
+.materia-contenido { min-width: 0; }
+.materia-nombre { font-size: 15px; font-weight: bold; overflow-wrap: anywhere; line-height: 1.1; }
+.materia-detalles { margin-top: 3px; font-size: 13px; overflow-wrap: anywhere; line-height: 1.1; }
+.aula-indicador { flex-shrink: 0; font-size: 13px; font-weight: bold; }
+.bloque-superposicion { left: 4px; right: 4px; background: #eee; border: 2px solid #8b2525; color: #8b2525; }
+.personal-cargo-bloque { background: #fff3e4; border-color: #a96918; }
+.materia-bloque[style*="opacity"] { opacity: 1 !important; border-style: dashed; color: #8b2525; }
+.materia-bloque[style*="opacity"] .materia-nombre::before { content: 'LICENCIA: '; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { border: 1px solid #95a0ad; padding: 7px; text-align: center; overflow-wrap: anywhere; }
+th { background: #edf2f7; }
+@media print {
+  .controles { display: none; }
+  .pagina { margin: 0; }
+  * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}

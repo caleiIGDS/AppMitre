@@ -32,9 +32,3 @@ export async function api(ruta, { metodo = 'GET', cuerpo } = {}) {
   if (!resp.ok) throw new ErrorApi(resp.status, datos)
   return datos
 }
-
-// Los PDF los hace el servidor (/horarios/export/..., horarios/rutas.py), que reconoce la
-// misma sesión. Se abren en otra pestaña.
-export function abrirPdf(ruta) {
-  window.open('/horarios/export/pdf/' + ruta, '_blank', 'noopener')
-}

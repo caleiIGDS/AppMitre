@@ -17,8 +17,8 @@ Google Sheets (privado) → Web App de Apps Script (proxy firmado con HMAC)
 ```
 
 Todo el pipeline vive en `horarios/datos.py` (ex-`database.py`). Se dispara en dos situaciones:
-1. **Arranque directo** (`python app.py`): el bloque `__main__` llama `horarios.cargar_inicial()` — `init_tablas()` + `tiene_datos()` + carga si está vacío.
-2. **Petición manual**: `POST /app-horarios/api/actualizar` (detrás del login de horarios, sin permiso extra) llama `crear_tablas()` (borra todo) + carga completa.
+1. **Arranque directo** (`python app.py`): el bloque `__main__` llama `horarios.cargar_inicial()` — `init_tablas()` + `tiene_datos()` + carga atómica si está vacío.
+2. **Petición manual**: `POST /app-horarios/api/actualizar` (detrás del login de horarios, sin permiso extra) llama `actualizar_desde_sheets()`: carga y valida las tres tablas en memoria y las publica juntas en una transacción; si falla, conserva el último horario completo.
 
 **Importante — producción (PythonAnywhere/WSGI):** el bloque `__main__` no se ejecuta cuando el servidor WSGI importa el módulo. En PythonAnywhere el `escuela.db` persiste entre reinicios, pero en un deploy nuevo la DB está vacía y todas las rutas fallan. En ese caso hay que disparar `/app-horarios/api/actualizar` desde el botón. Solución estructural pendiente: ver `dev-log/tasks/TODO.md` #1.
 
@@ -41,7 +41,7 @@ Todo el pipeline vive en `horarios/datos.py` (ex-`database.py`). Se dispara en d
 Itera sobre `GIDS_CURSOS` (las hojas de 1ro a 7mo) y por cada hoja:
 1. Descarga el CSV.
 2. Lee con `csv.DictReader` (acceso por nombre de columna, no por índice).
-3. Por cada fila aplica normalización y hace `INSERT INTO clases`.
+3. Verifica encabezados y filas, aplica la normalización existente y hace `INSERT INTO clases` en la copia privada. Los loaders aceptan una conexión opcional; quien la proporciona controla commit y cierre.
 
 ### Columnas esperadas en el CSV de clases
 
@@ -181,7 +181,7 @@ No hay nada más que cambiar en el código para un año adicional.
 
 ## Comportamiento ante errores
 
-- **Sheets caído / proxy sin permisos / firma inválida**: `descargar_sheet()` lanza (`ProxyError` es inmediato; un fallo de red reintenta 3 veces). Los tres loaders envuelven el error nombrando la hoja y lo propagan → `/app-horarios/api/actualizar` devuelve HTTP 500 con el motivo concreto en `message`. Los datos existentes NO se borran solo si el fallo es en la primera hoja: `crear_tablas()` ya corrió, así que si falla a mitad de camino la DB queda parcial hasta el próximo `/app-horarios/api/actualizar` exitoso.
-- **CSV malformado**: `csv.DictReader` accede por nombre; columnas faltantes devuelven `None` → `limpiar_profesor(None)` devuelve `""` sin error. Filas parciales se insertan con campos vacíos.
-- **Campos `hora_inicio`/`hora_fin` vacíos**: se insertan tal cual. El frontend ignora clases sin horario válido (`timeToMin` devuelve 0 para strings inválidos). Esto puede causar bloques en posición 0 del calendario.
+- **Sheets caído / proxy sin permisos / firma inválida**: `descargar_sheet()` lanza (`ProxyError` es inmediato; un fallo de red reintenta 3 veces). Los tres loaders envuelven el error nombrando la hoja y lo propagan → `/app-horarios/api/actualizar` devuelve HTTP 500 con el motivo concreto en `message`. La carga temporal se descarta y las tres tablas del servidor conservan el snapshot anterior. La publicación usa una sola transacción, y `/datos` lee todas las tablas en una sola transacción para no mezclar versiones.
+- **CSV malformado**: se rechazan encabezados requeridos faltantes/repetidos, layout de preceptores incorrecto, clases incompletas e intervalos no interpretables o no crecientes. Las filas vacías se ignoran; se conservan las formas legacy ya interpretadas (`H:MM`, segundos, `16:60`) y los días de fin de semana que la grilla semanal no muestra, sin reescribirlos.
+- **Campos `hora_inicio`/`hora_fin` vacíos en clases**: la carga falla antes de publicar; no se infieren horas de fin. Una carga sin ninguna clase también se rechaza para conservar el último horario.
 - **Producción (PythonAnywhere/WSGI)**: el bloque `__main__` no corre al importar el módulo. En un deploy nuevo la DB está vacía → primera petición falla. Disparar `/app-horarios/api/actualizar` para inicializar. Solución estructural pendiente: ver `dev-log/tasks/TODO.md` #1.

@@ -453,8 +453,8 @@ def export_pdf_cursos(seleccion):
     output.seek(0)
     return send_file(output, mimetype='application/pdf', as_attachment=False, download_name="horarios_cursos.pdf")
 
-def _planilla_preceptores_con_turnos():
-    filas = datos.obtener_planilla_preceptores_todos()
+def _planilla_preceptores_con_turnos(con=None):
+    filas = datos.obtener_planilla_preceptores_todos(con)
     for f in filas:
         f['turno'] = TURNO_CURSOS.get((str(f['curso']), str(f['division'])), TURNO_DEFAULT)
     return filas

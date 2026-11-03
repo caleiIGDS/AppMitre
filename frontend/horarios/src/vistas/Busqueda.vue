@@ -10,7 +10,7 @@ import {
 import { COLORES_COMPARACION } from '../calendario'
 import { leerComparacion, escribirComparacion } from '../router'
 import { useIrA } from '../navegar'
-import { abrirPdf } from '../api'
+import { imprimirHorarios } from '../impresion'
 import { verImprimirCursos } from '../ventanas'
 import { avisar } from '@/avisos'
 import Buscador from '../componentes/Buscador.vue'
@@ -97,11 +97,16 @@ const titulo = computed(() => {
   return `Horario de ${props.modo.replace('_', ' ')}: ${props.valor}`
 })
 
-function pdf(cerrar) {
+function pdf(cerrar, todosPreceptores = false) {
   cerrar()
-  if (enPlanilla.value) abrirPdf(`planilla/${encodeURIComponent(`${dia.value}|${piso.value}`)}`)
-  else if (props.valor) abrirPdf(`${props.modo}/${encodeURIComponent(props.valor)}`)
-  else avisar('Primero buscá un horario.', { tipo: 'alerta' })
+  if (!todosPreceptores && !enPlanilla.value && !props.valor) {
+    avisar('Primero buscá un horario.', { tipo: 'alerta' })
+    return
+  }
+  const seleccion = todosPreceptores ? { modo: 'planilla_preceptores' }
+    : enPlanilla.value ? { modo: 'planilla', dia: dia.value, piso: piso.value }
+      : { modo: props.modo, valor: props.valor }
+  imprimirHorarios(d.value, seleccion).catch((e) => avisar(e.message, { tipo: 'alerta' }))
 }
 </script>
 
@@ -123,12 +128,12 @@ function pdf(cerrar) {
         </div>
         <MenuOpciones v-slot="{ cerrar }">
           <template v-if="modo === 'horario_preceptor'">
-            <button type="button" class="slide-opcion" @click="cerrar(); abrirPdf('planilla_preceptores')">IMPRIMIR TODOS</button>
+            <button type="button" class="slide-opcion" @click="pdf(cerrar, true)">IMPRIMIR TODOS</button>
           </template>
           <template v-else>
             <button v-if="!comparando" type="button" class="slide-opcion" @click="compararDesdeAca(cerrar)">COMPARAR</button>
             <button v-if="modo === 'aula' && !enPlanilla && !comparando" type="button" class="slide-opcion" @click="abrirPlanilla(cerrar)">PLANILLA GENERAL</button>
-            <button v-if="!comparando" type="button" class="slide-opcion" @click="pdf(cerrar)">GENERAR PDF</button>
+            <button v-if="!comparando" type="button" class="slide-opcion" @click="pdf(cerrar)">IMPRIMIR / GUARDAR PDF</button>
             <button v-if="modo === 'curso'" type="button" class="slide-opcion" @click="cerrar(); verImprimirCursos()">IMPRIMIR VARIOS</button>
           </template>
         </MenuOpciones>

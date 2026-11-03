@@ -11,8 +11,8 @@ resuelven ahí, sin red. Al servidor sólo le pide:
   GET  /datos       todo el horario, con ETag: si nada cambió contesta 304 sin cuerpo
   POST /actualizar  rearma escuela.db desde la planilla
 
-Los PDF no pasan por acá: la app abre los /horarios/export/... (rutas.py), que reconocen
-la misma sesión.
+La app imprime sus calendarios localmente con los datos descargados. Los endpoints
+/horarios/export/... (rutas.py) siguen disponibles por compatibilidad.
 
 Mismo aislamiento que el resto del paquete: no importa `accesos` ni nada de afuera. Los
 pedidos que escriben exigen la cabecera `X-Mitre` (defensa CSRF, igual que /app/api).
@@ -59,6 +59,9 @@ _HUELLA_CONFIG = hashlib.sha1(json.dumps(
 
 @bp_app.before_request
 def _gate():
+    # El adaptador nuevo tiene su propio gate: Bearer solo de lectura o sesión + CSRF.
+    if request.blueprint == 'horarios_app.consultas':
+        return None
     if request.method not in ('GET', 'HEAD') and not request.headers.get('X-Mitre'):
         return jsonify({'error': 'Pedido no permitido.'}), 403
     if request.endpoint not in ABIERTOS and not acceso.autenticado():
@@ -123,39 +126,41 @@ def todo():
         resp.status_code = 304
     else:
         con = datos.conectar()
-        con.row_factory = sqlite3.Row
-        cur = con.cursor()
-        cur.execute(f"SELECT {', '.join(COLUMNAS_DASHBOARD)} FROM clases")
-        clases = [dict(r) for r in cur.fetchall()]
-        for c in clases:
-            c['tipo_materia'] = _tipo_materia(c)
-        cur.execute("SELECT DISTINCT profesor FROM clases WHERE profesor != '' ORDER BY profesor")
-        profesores = [r[0] for r in cur.fetchall()]
-        cur.execute("SELECT DISTINCT aula FROM clases WHERE aula != '' ORDER BY aula")
-        aulas = [r[0] for r in cur.fetchall()]
-        cursos = _cursos(cur)
-        con.close()
-
-        nombres = datos.obtener_lista_preceptores_horario()
-        resp = jsonify({
-            'clases': clases,
-            'personal': datos.obtener_personal_todos(),
-            'preceptores': {
-                'horarios': {n: datos.obtener_horario_preceptor(n) for n in nombres},
-                'planilla': _planilla_preceptores_con_turnos(),
-            },
-            'listas': {
-                'profesor': profesores,
-                'aula': aulas,
-                'curso': cursos,
-                'horario_preceptor': nombres,
-                'personal': datos.obtener_lista_personal(),
-            },
-            # La especialidad de cada división es fija (config), no viene de la planilla.
-            'especialidades': {f"{c} {d}": e for (c, d), e in ESPECIALIDAD_CURSOS.items()},
-            'pisos': FLOOR_MAPPING,
-            'dias': DIAS,
-        })
+        try:
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
+            cur.execute('BEGIN')
+            cur.execute(f"SELECT {', '.join(COLUMNAS_DASHBOARD)} FROM clases")
+            clases = [dict(r) for r in cur.fetchall()]
+            for c in clases:
+                c['tipo_materia'] = _tipo_materia(c)
+            cur.execute("SELECT DISTINCT profesor FROM clases WHERE profesor != '' ORDER BY profesor")
+            profesores = [r[0] for r in cur.fetchall()]
+            cur.execute("SELECT DISTINCT aula FROM clases WHERE aula != '' ORDER BY aula")
+            aulas = [r[0] for r in cur.fetchall()]
+            cursos = _cursos(cur)
+            nombres = datos.obtener_lista_preceptores_horario(con)
+            resp = jsonify({
+                'clases': clases,
+                'personal': datos.obtener_personal_todos(con),
+                'preceptores': {
+                    'horarios': {n: datos.obtener_horario_preceptor(n, con) for n in nombres},
+                    'planilla': _planilla_preceptores_con_turnos(con),
+                },
+                'listas': {
+                    'profesor': profesores,
+                    'aula': aulas,
+                    'curso': cursos,
+                    'horario_preceptor': nombres,
+                    'personal': datos.obtener_lista_personal(con),
+                },
+                # La especialidad de cada división es fija (config), no viene de la planilla.
+                'especialidades': {f"{c} {d}": e for (c, d), e in ESPECIALIDAD_CURSOS.items()},
+                'pisos': FLOOR_MAPPING,
+                'dias': DIAS,
+            })
+        finally:
+            con.close()
     resp.headers['ETag'] = etag
     resp.headers['Cache-Control'] = 'no-cache'
     return resp
@@ -163,13 +168,16 @@ def todo():
 
 @bp_app.post('/actualizar')
 def actualizar():
-    """Lo mismo que `rutas.api_actualizar`: borra escuela.db y la rearma desde la planilla."""
+    """Publica la carga completa de Sheets o conserva el último horario válido."""
     try:
-        datos.crear_tablas()
-        datos.cargar_desde_sheets(SHEET_ID, GIDS_CURSOS)
-        datos.cargar_horarios_preceptores(SHEET_ID, GID_HORARIOS_PRECEPTORES)
-        datos.cargar_personal_no_docente(SHEET_ID, GID_PERSONAL_NO_DOCENTE)
+        datos.actualizar_desde_sheets(SHEET_ID, GIDS_CURSOS, GID_HORARIOS_PRECEPTORES,
+                                     GID_PERSONAL_NO_DOCENTE)
     except Exception as e:
         print(f"Error actualizando datos: {e}")
         return jsonify({'error': str(e)}), 500
     return jsonify({'ok': True})
+
+
+# Se monta una sola URL efectiva, dentro del prefijo API que ya sirve la aplicación.
+from .api_consultas import bp_consultas  # noqa: E402
+bp_app.register_blueprint(bp_consultas)

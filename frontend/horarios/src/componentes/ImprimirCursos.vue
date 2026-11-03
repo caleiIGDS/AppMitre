@@ -2,7 +2,8 @@
 // IMPRIMIR VARIOS: elegir cursos sueltos, un año entero o todos, y pedir un solo PDF.
 import { computed, ref } from 'vue'
 import { useHorarios } from '../datos'
-import { abrirPdf } from '../api'
+import { imprimirHorarios } from '../impresion'
+import { avisar } from '@/avisos'
 import { cerrarVentana } from '../ventanas'
 
 const datos = useHorarios()
@@ -31,7 +32,8 @@ const alternarTodos = () => cambiar((s) => (todos.value ? s.clear() : cursos.val
 
 function generar() {
   if (!elegidos.value.size) return
-  abrirPdf('cursos/' + (todos.value ? 'todos' : encodeURIComponent([...elegidos.value].join(','))))
+  imprimirHorarios(datos.data.value, { cursos: [...elegidos.value] })
+    .catch((e) => avisar(e.message, { tipo: 'alerta' }))
   cerrarVentana()
 }
 </script>
@@ -52,7 +54,7 @@ function generar() {
     </div>
     <div class="print-cursos-footer">
       <span class="print-contador">Seleccionados: {{ elegidos.size }}</span>
-      <button type="button" class="print-generar-btn" :disabled="!elegidos.size" @click="generar">GENERAR PDF</button>
+      <button type="button" class="print-generar-btn" :disabled="!elegidos.size" @click="generar">IMPRIMIR / GUARDAR PDF</button>
     </div>
   </div>
 </template>
