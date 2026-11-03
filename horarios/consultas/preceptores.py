@@ -7,6 +7,12 @@ def ejecutar(s, p, clave):
         raise ErrorConsulta('parametros_invalidos', 'cursos y anio son alternativas.')
     explicitos = 'cursos' in p or 'anio' in p
     cursos = s.seleccionar_cursos(p, 'cursos') if explicitos else s.cursos
+    # Una fila sin division sigue siendo una asignacion parcial, nunca otra division.
+    parciales = {curso(r['curso'], '') for r in s.preceptores
+                 if str(r['curso'] or '').strip() and not str(r['division'] or '').strip()}
+    if 'cursos' not in p:
+        cursos = set(cursos) | {c for c in parciales
+                               if 'anio' not in p or int(c.split('°')[0]) == p['anio']}
     ds = dias_pedidos(p)
     ts = list(TURNOS)
     if 'turno' in p:
@@ -44,7 +50,7 @@ def ejecutar(s, p, clave):
             personas.setdefault(n, []).append(a)
     ausentes = {}
     if explicitos and nombres is None:
-        for c in cursos:
+        for c in sorted(set(cursos) - parciales):
             for t in ts:
                 faltantes = [d for d in ds if (c, t, d) not in registrados]
                 if faltantes:
@@ -63,6 +69,7 @@ def ejecutar(s, p, clave):
         if c in ausentes:
             unidad['sin_registro'] = ausentes[c]
         if c in avisos:
-            unidad['avisos'] = [{'curso': c, 'codigo': 'turno_nominal_no_configurado'}]
+            unidad['avisos'] = [{'curso': c, 'codigo': ('division_no_informada' if c in parciales
+                                                      else 'turno_nominal_no_configurado')}]
         unidades.append(unidad)
     return paginar(unidades, ['preceptores'], p, s.revision, clave, 'preceptores', MAX_PRECEPTORES)

@@ -41,17 +41,17 @@ ERROR = objeto({'error': objeto({'codigo': {'type': 'string', 'enum': [
 ASIGNACION = objeto({'curso': TEXTO, 'turno': TURNO, 'funcion': FUNCION,
                      'dias': {**lista(DIA), 'minItems': 1, 'uniqueItems': True}},
                     ('curso', 'turno', 'funcion', 'dias'))
-AVISO = objeto({'curso': TEXTO, 'codigo': {'const': 'turno_nominal_no_configurado'}},
+AVISO = objeto({'curso': TEXTO, 'codigo': {'enum': ['turno_nominal_no_configurado', 'division_no_informada']}},
                ('curso', 'codigo'))
 TIEMPO = {'inicio': HORA, 'fin': HORA}
 CLASE = {'materia': NULO_TEXTO, 'profesor': NULO_TEXTO, 'grupo': TEXTO,
          'titular_en_licencia': NULO_TEXTO, 'superposicion_permitida': {'const': True}}
 ACTIVIDAD_CURSO = objeto({**TIEMPO, **CLASE, 'aula': NULO_TEXTO},
                          ('inicio', 'fin', 'materia', 'profesor', 'aula'))
-ACTIVIDAD_AULA = objeto({**TIEMPO, **CLASE, 'curso': TEXTO},
+ACTIVIDAD_AULA = objeto({**TIEMPO, **CLASE, 'curso': NULO_TEXTO},
                         ('inicio', 'fin', 'materia', 'profesor', 'curso'))
 ACTIVIDAD_PERSONA = {'anyOf': [
-    objeto({**TIEMPO, 'rol': TEXTO, 'curso': TEXTO, 'materia': NULO_TEXTO,
+    objeto({**TIEMPO, 'rol': TEXTO, 'curso': NULO_TEXTO, 'materia': NULO_TEXTO,
             'aula': NULO_TEXTO, 'grupo': TEXTO, 'superposicion_permitida': {'const': True},
             'en_licencia': {'const': True}, 'suplente': NULO_TEXTO}, ('rol', 'inicio', 'fin')),
     objeto({'rol': {'const': 'preceptor'}, 'turno': TURNO, 'cursos': lista(TEXTO)},
@@ -67,6 +67,8 @@ def horario(identidad, actividad):
 COMUN = ('Datos de la última semana cargada en Horarios; no prueban asistencia ni excepciones '
          'por fecha. Una persona puede tener varios cargos. Preceptores: turno/día, sin horas '
          'exactas. Grupos A/B son partes de una división. Un hueco no prueba disponibilidad. '
+         'Una asignación de preceptor sin división conserva solo el año; no abarca todas sus divisiones. '
+         'Las horas con fin menor o igual al inicio se entregan como estan, incluso con rango/ahora; interpretar el error de la fuente. '
          'Consumir siguiente antes de afirmar que un listado está completo.')
 
 

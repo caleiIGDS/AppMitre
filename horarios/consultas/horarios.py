@@ -67,10 +67,13 @@ def ejecutar(s, p, clave):
         if d not in dias:
             return
         ini, fin = intervalo(r)
-        if rango and not (ini < rango[1] and fin > rango[0]):
-            return
-        if instante is not None and not ini <= instante < fin:
-            return
+        # Un rango invertido o vacio se entrega tal como esta. Con filtro horario
+        # tampoco se descarta: el cliente debe interpretar el dato incompleto.
+        if ini < fin:
+            if rango and not (ini < rango[1] and fin > rango[0]):
+                return
+            if instante is not None and not ini <= instante < fin:
+                return
         actividad.update(inicio=datos.a_hhmm(ini), fin=datos.a_hhmm(fin))
         resultados[valor]['dias'][d].append(actividad)
     for r in s.clases:

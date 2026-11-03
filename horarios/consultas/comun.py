@@ -93,8 +93,6 @@ def intervalo(fila):
                 or n is None or not 0 <= n <= 1440):
             raise ErrorConsulta('datos_inconsistentes', 'Intervalo no interpretable en la fuente.')
         limites.append(n)
-    if limites[0] >= limites[1]:
-        raise ErrorConsulta('datos_inconsistentes', 'Intervalo no interpretable en la fuente.')
     return limites
 
 
@@ -153,7 +151,8 @@ class Snapshot:
                       for p, aulas in config.FLOOR_MAPPING.items()}
         self.nominales = {curso(c, d): turno(t) for (c, d), t in config.TURNO_CURSOS.items()}
         self.cursos = sorted({curso(r['curso'], r['division'])
-                              for r in self.clases + self.preceptores if str(r['curso'] or '').strip()},
+                              for r in self.clases + self.preceptores
+                              if str(r['curso'] or '').strip() and str(r['division'] or '').strip()},
                              key=lambda c: (int(c.split('°')[0]), c))
         self.aulas = sorted({datos.limpiar_aula(r['aula']) for r in self.clases if r['aula']}
                             | {a for aulas in self.pisos.values() for a in aulas})

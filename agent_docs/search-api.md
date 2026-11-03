@@ -52,7 +52,7 @@ Con suplencia activa, curso/aula muestra al suplente o `profesor: null` si falta
 y `suplente` nullable. No se infiere vigencia por fechas. Horas legacy se interpretan
 con el motor de minutos existente (`7:40`, `19:00:00`, `16:60`) y salen como `HH:MM`,
 sin modificar la fuente. Rango: `inicio < hasta` y `fin > desde`; ahora: `inicio <= hora < fin`.
-Los bloques mantienen sus extremos originales. Un intervalo ilegible da error de datos.
+Los bloques mantienen sus extremos originales. Fin anterior o igual al inicio se entrega como figura en la fuente, sin rechazar la consulta ni agregar un juicio calculado; el agente lo interpreta. Con rango/ahora esos bloques se conservan en los días solicitados, porque no se puede determinar su intersección. Un valor horario que no se puede leer sigue dando error de datos. En horarios de persona/aula, una clase sin curso informado conserva `curso: null`.
 
 Preceptores solo tiene asignaciones por turno/día: nunca horas supuestas. En una persona,
 agrupa cursos por turno y día y conserva esas asignaciones aun con rango/ahora, sin
@@ -61,7 +61,7 @@ incluidos varios principales por días y ambos contraturnos. `principal` se dete
 con `TURNO_CURSOS`; si no hay turno nominal, `funcion: null` y aviso puntual, sin default.
 `vacantes` representa FALTA/FALTAN/SIN ASIGNAR/fila explícita sin nombre; `sin_registro`
 solo se genera para cursos/año solicitados, respetando turno/días, sin filtro de nombres.
-La consulta global no genera una matriz de ausencias. Falta de registro no prueba vacante.
+La consulta global no genera una matriz de ausencias. Falta de registro no prueba vacante. Una asignación de preceptor sin división se conserva como `3°` con aviso `division_no_informada`, sin asignarla a todas las divisiones del año ni generar ausencias supuestas. Solo las divisiones identificadas forman el catálogo y los horarios de cursos por año.
 
 Cada operación abre una conexión SQLite `mode=ro` con `query_only` y una transacción;
 lee las tres tablas con columnas permitidas. La revisión se calcula sobre ese contenido

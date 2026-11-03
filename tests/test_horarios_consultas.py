@@ -197,6 +197,52 @@ class ConsultasHorarios(unittest.TestCase):
         self.assertEqual(len(h['horarios']), 3)
         self.consultar('horarios', {'tipo': 'aula', 'valores': ['9999']}, 404)
 
+    def test_preceptor_sin_division_no_inventa_curso_y_conserva_asignacion(self):
+        self.preceptor('3', '', 'MAÑANA', 'SIN DIVISION', 'LUNES')
+        self.assertEqual(self.consultar('catalogos', {})['cursos'], {'3': ['A', 'B'], '4': ['3']})
+        self.assertEqual([h['curso'] for h in self.consultar('horarios',
+                         {'tipo': 'curso', 'anio': 3})['horarios']], ['3° A', '3° B'])
+        for filtros in ({}, {'anio': 3}):
+            with self.subTest(filtros=filtros):
+                r = self.consultar('preceptores', filtros)
+                parcial = next(p for p in r['preceptores'] if p['nombre'] == 'SIN DIVISION')
+                self.assertEqual(parcial['asignaciones'], [{'curso': '3°', 'turno': 'mañana',
+                                  'funcion': None, 'dias': ['lunes']}])
+                self.assertIn({'curso': '3°', 'codigo': 'division_no_informada'}, r['avisos'])
+                self.assertFalse(any(a['curso'] == '3°' for a in r.get('sin_registro', [])))
+        r = self.consultar('preceptores', {'cursos': ['3 A']})
+        self.assertNotIn('SIN DIVISION', [p['nombre'] for p in r['preceptores']])
+        r = self.consultar('horarios', {'tipo': 'persona', 'valores': ['SIN DIVISION']})
+        self.assertEqual(r['horarios'][0]['dias']['lunes'][0]['cursos'], ['3°'])
+        self.consultar('horarios', {'tipo': 'curso', 'valores': ['3']}, 404)
+
+    def test_rango_invertido_o_vacio_se_envia_original_sin_bloquear_consulta(self):
+        self.clase('3', 'A', 'INVERTIDO', 'PEREZ ANA', '13', 'Martes', '12:30', '12:00')
+        self.clase('3', 'A', 'VACIO', 'PEREZ ANA', '13', 'Martes', '12:30', '12:30')
+        for tipo, valor in (('curso', '3 A'), ('persona', 'PEREZ ANA'), ('aula', '13')):
+            for extra in ({}, {'desde': '07:00', 'hasta': '08:00'}):
+                with self.subTest(tipo=tipo, extra=extra):
+                    h = self.consultar('horarios', {'tipo': tipo, 'valores': [valor],
+                                                  'dias': ['martes'], **extra})['horarios'][0]
+                    bloques = [b for b in h['dias']['martes'] if b.get('materia') in ('INVERTIDO', 'VACIO')]
+                    self.assertEqual([(b['inicio'], b['fin']) for b in bloques],
+                                     [('12:30', '12:00'), ('12:30', '12:30')])
+                    self.assertTrue(all('horario_inconsistente' not in b for b in bloques))
+        with patch.object(config, 'ahora', return_value=datetime(2026, 11, 3, 9, 0)):
+            r = self.consultar('horarios', {'tipo': 'aula', 'valores': ['13'], 'ahora': True})
+            self.assertEqual(len(r['horarios'][0]['dias']['martes']), 2)
+        self.personal('PERSONAL', 'EMATP', 'MARTES', '12:30', '12:00')
+        h = self.consultar('horarios', {'tipo': 'persona', 'valores': ['PERSONAL']})['horarios'][0]
+        self.assertEqual(h['dias']['martes'][0], {'rol': 'EMATP', 'inicio': '12:30', 'fin': '12:00'})
+
+    def test_clase_sin_curso_conserva_horario_personal_y_aula_con_null(self):
+        self.clase('', '', 'MATERIA', 'SIN CURSO', '13', 'Lunes', '10:00', '12:00')
+        for tipo, valor in (('persona', 'SIN CURSO'), ('aula', '13')):
+            with self.subTest(tipo=tipo):
+                h = self.consultar('horarios', {'tipo': tipo, 'valores': [valor]})['horarios'][0]
+                self.assertIsNone(h['dias']['lunes'][0]['curso'])
+                self.assertEqual(h['dias']['lunes'][0]['inicio'], '10:00')
+
     def test_limites_rango_estricto_y_ahora_reloj_escolar_fin_semana(self):
         r = self.consultar('horarios', {'tipo': 'curso', 'valores': ['3 A'], 'dias': ['lunes'],
                                        'desde': '09:20', 'hasta': '10:00'})
