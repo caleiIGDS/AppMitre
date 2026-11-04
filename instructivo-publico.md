@@ -1,6 +1,6 @@
 # AppMitre: consultar horarios
 
-Leé esta guía cuando el usuario pida horarios de la E.E.S.T. N.º 4 Emilio Mitre. Pedile la contraseña de Horarios si aún no la tenés. Con ella podés abrir enlaces HTTPS y leer las respuestas JSON; no necesitás instalar un MCP ni enviar cabeceras o cuerpos POST. Necesitás que tu herramienta permita abrir estas URL: si lo impide, explicá esa limitación sin afirmar que el servidor está caído.
+Leé esta guía cuando el usuario pida horarios de la E.E.S.T. N.º 4 Emilio Mitre. **Pedile al usuario la misma contraseña que usa para entrar a la aplicación de Horarios**, si aún no te la dio en esta conversación. Esa contraseña es el valor de `token`: no hay una clave diferente ni tenés que generar un token. La contraseña no está en este documento público. Con ella podés abrir enlaces HTTPS y leer las respuestas JSON; no necesitás instalar un MCP ni enviar cabeceras o cuerpos POST. Necesitás que tu herramienta permita abrir estas URL: si lo impide, explicá esa limitación sin afirmar que el servidor está caído.
 
 ## Enlaces de consulta
 

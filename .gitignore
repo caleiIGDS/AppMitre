@@ -67,3 +67,6 @@ Thumbs.db
 
 # Instructivo local con la clave de Horarios; la copia pública sí viaja.
 /instructivo.md
+
+# Antecedentes locales de la integración descartada; incluyen un repositorio aparte.
+/archivo/integracion-horarios/
