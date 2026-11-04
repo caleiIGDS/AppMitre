@@ -25,6 +25,7 @@
 
 import base64
 import contextlib
+import functools
 import hashlib
 import hmac
 import os
@@ -32,12 +33,13 @@ import re
 import secrets
 import sqlite3
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from config import DIR_DATOS, ahora
 from flask import (Blueprint, current_app, g, has_app_context, has_request_context, jsonify,
                    request, session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
+from itsdangerous import BadData, URLSafeSerializer
 
 import accesos
 import crud
@@ -134,6 +136,11 @@ CREATE TABLE IF NOT EXISTS inventarios (
     clave_hash TEXT,
     clave_ver  TEXT,
     creado     TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS pin_movimientos_intentos (
+    origen   TEXT PRIMARY KEY,
+    desde    TEXT NOT NULL,
+    intentos INTEGER NOT NULL
 );
 """
 
@@ -797,6 +804,54 @@ def _salir_inventario():
         claves.pop(str(inv['id']), None)
         session[CLAVES_SESION] = claves
     session.pop('inv_activo', None)
+    session.pop('pin_movimientos_sid', None)
+
+
+# El PIN nunca se convierte en gestion.editar: sólo estas dos rutas de ubicación
+# aceptan la autorización firmada, ligada a sesión e inventario y con vencimiento fijo.
+PIN_MOVIMIENTOS_SEGUNDOS = 20
+PIN_MOVIMIENTOS_INTENTOS = 5
+PIN_MOVIMIENTOS_ESPERA = 60
+
+
+def _pin_movimientos():
+    pin = os.environ.get('GESTION_PIN_MOVER', '')
+    return pin if re.fullmatch(r'[0-9]{4}', pin) else ''
+
+
+def _firma_movimientos(pin):
+    secreto = current_app.secret_key
+    if isinstance(secreto, str):
+        secreto = secreto.encode()
+    return hmac.new(secreto, b'gestion-pin-mover:' + pin.encode(), 'sha256').hexdigest()
+
+
+def _serializador_movimientos():
+    return URLSafeSerializer(current_app.secret_key, salt='gestion-movimientos')
+
+
+def _movimiento_temporal_valido():
+    pin = _pin_movimientos()
+    sid = session.get('pin_movimientos_sid')
+    if not pin or not sid:
+        return False
+    try:
+        datos = _serializador_movimientos().loads(request.headers.get('X-Mitre-Movimientos', ''))
+        return (isinstance(datos, dict) and datos.get('sesion') == sid
+                and datos.get('inventario') == inventario_activo()['id']
+                and hmac.compare_digest(str(datos.get('firma', '')), _firma_movimientos(pin))
+                and ahora() < datetime.fromisoformat(datos['vence']))
+    except (BadData, ValueError, TypeError, KeyError):
+        return False
+
+
+def _requiere_movimiento(f):
+    @functools.wraps(f)
+    def wrap(*args, **kwargs):
+        if not accesos.puede(PERMISO_ESCRITURA) and not _movimiento_temporal_valido():
+            return jsonify({'error': 'Para mover ubicaciones, ingresá el PIN con Shift+A.'}), 403
+        return f(*args, **kwargs)
+    return wrap
 
 
 accesos.registrar_ambito(ambito)
@@ -1317,6 +1372,7 @@ def api_meta():
         'puede_alias': accesos.puede(PERMISO_ALIAS),
         'puede_auditoria': accesos.puede(PERMISO_AUDITORIA),
         'puede_accesos': accesos.puede(PERMISO_ACCESOS),
+        'pin_movimientos': bool(_pin_movimientos()),
     }
 
 
@@ -1444,6 +1500,48 @@ def api_salir():
     return jsonify({'ok': True})
 
 
+@bp_api.post('/movimientos/autorizar')
+def api_autorizar_movimientos():
+    pin = _pin_movimientos()
+    if not pin:
+        return jsonify({'error': 'El PIN de movimientos no está configurado.'}), 503
+    pedido = _api_cuerpo().get('pin')
+    momento = ahora()
+    # Persistido y serializado en SQLite: cerrar/abrir el diálogo, borrar la cookie
+    # o cambiar de inventario no reinicia los intentos de esta dirección de red.
+    with contextlib.closing(conectar_registro()) as con:
+        con.execute('BEGIN IMMEDIATE')
+        con.execute('DELETE FROM pin_movimientos_intentos WHERE desde <= ?',
+                    ((momento - timedelta(seconds=PIN_MOVIMIENTOS_ESPERA)).isoformat(),))
+        origen = request.remote_addr or 'desconocido'
+        fila = con.execute('SELECT intentos FROM pin_movimientos_intentos WHERE origen = ?',
+                           (origen,)).fetchone()
+        if fila and fila['intentos'] >= PIN_MOVIMIENTOS_INTENTOS:
+            con.commit()
+            respuesta = jsonify({'error': 'Demasiados intentos. Esperá un minuto y volvé a intentar.'})
+            respuesta.headers['Retry-After'] = str(PIN_MOVIMIENTOS_ESPERA)
+            return respuesta, 429
+        if not isinstance(pedido, str) or not re.fullmatch(r'[0-9]{4}', pedido) or not hmac.compare_digest(pedido, pin):
+            con.execute('INSERT INTO pin_movimientos_intentos (origen, desde, intentos) VALUES (?, ?, 1) '
+                        'ON CONFLICT(origen) DO UPDATE SET intentos = intentos + 1',
+                        (origen, momento.isoformat()))
+            con.commit()
+            return jsonify({'error': 'PIN incorrecto.'}), 403
+        con.execute('DELETE FROM pin_movimientos_intentos WHERE origen = ?', (origen,))
+        con.commit()
+    if not session.get('pin_movimientos_sid'):
+        session['pin_movimientos_sid'] = secrets.token_urlsafe(24)
+    token = _serializador_movimientos().dumps({
+        'sesion': session['pin_movimientos_sid'],
+        'inventario': inventario_activo()['id'],
+        'firma': _firma_movimientos(pin),
+        'vence': (ahora() + timedelta(seconds=PIN_MOVIMIENTOS_SEGUNDOS)).isoformat(),
+    })
+    respuesta = jsonify({'token': token, 'segundos': PIN_MOVIMIENTOS_SEGUNDOS})
+    respuesta.headers['Cache-Control'] = 'no-store'
+    return respuesta
+
+
 @bp_api.post('/recursos/<int:id>/baja')
 @accesos.requiere(PERMISO_ESCRITURA, como_json=True)
 def api_baja(id):
@@ -1499,7 +1597,7 @@ def api_unidades_eliminar(id):
 
 
 @bp_api.post('/recursos/<int:id>/unidades/mover')
-@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
+@_requiere_movimiento
 def api_unidades_mover(id):
     datos = _api_cuerpo()
     nums = _api_numeros(datos)
@@ -1516,7 +1614,7 @@ def api_unidades_mover(id):
 
 
 @bp_api.post('/recursos/<int:id>/unidades/quitar')
-@accesos.requiere(PERMISO_ESCRITURA, como_json=True)
+@_requiere_movimiento
 def api_unidades_quitar(id):
     nums = _api_numeros(_api_cuerpo())
     con = _api_con_recurso(id)

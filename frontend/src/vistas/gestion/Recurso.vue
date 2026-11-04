@@ -12,6 +12,7 @@ import EstadoCarga from '@/componentes/EstadoCarga.vue'
 import Galeria from '@/componentes/Galeria.vue'
 import { claveFotos } from '@/orden'
 import UbicacionFicha from './UbicacionFicha.vue'
+import { segundosMovimientos } from '@/gestion/movimientos'
 
 const props = defineProps({
   inv: { type: String, required: true },
@@ -94,7 +95,7 @@ function rotar(foto, imagen) {
     </header>
 
     <div class="g-ficha-col-main">
-      <UbicacionFicha :inv="inv" :recurso="recurso" :puede-editar="!!m.puede_escribir" :lugares="lugares" />
+      <UbicacionFicha :inv="inv" :recurso="recurso" :puede-editar="!!m.puede_escribir || segundosMovimientos(inv) > 0" :lugares="lugares" />
 
       <template v-if="recurso.kit.length">
         <div class="g-ficha-bar"><span>SUB-RECURSOS (KIT)</span></div>

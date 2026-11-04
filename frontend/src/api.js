@@ -23,11 +23,11 @@ export class ErrorApi extends Error {
 
 // `cuerpo`: JSON. `archivo`: multipart con el campo `file`. `crudo`: un Blob tal cual, con
 // su propio tipo (la foto girada).
-export async function api(ruta, { metodo = 'GET', cuerpo, archivo, crudo } = {}) {
+export async function api(ruta, { metodo = 'GET', cuerpo, archivo, crudo, cabeceras = {} } = {}) {
   const opciones = {
     method: metodo,
     credentials: 'same-origin',
-    headers: { Accept: 'application/json' },
+    headers: { ...cabeceras, Accept: 'application/json' },
   }
   if (metodo !== 'GET') opciones.headers['X-Mitre'] = '1'
   if (archivo) {

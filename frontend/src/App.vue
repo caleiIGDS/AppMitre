@@ -5,6 +5,7 @@ import Avisos from './componentes/Avisos.vue'
 import AvisoVersion from './componentes/AvisoVersion.vue'
 import EstadoRed from './componentes/EstadoRed.vue'
 import { useDesplazamiento } from './desplazamiento'
+import PinMovimientos from './componentes/PinMovimientos.vue'
 
 useDesplazamiento()
 </script>
@@ -27,4 +28,5 @@ useDesplazamiento()
   </div>
   <Avisos />
   <AvisoVersion />
+  <PinMovimientos />
 </template>

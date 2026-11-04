@@ -4,6 +4,8 @@
 
 ## Baja prioridad / ideas
 
+- [x] #26 — PIN temporal para mover ubicaciones — Shift+A, PIN de 4 dígitos en `GESTION_PIN_MOVER` y autorización de 20 segundos, sólo para movimientos. Implementado, verificado y compilado en local.
+
 - [ ] #8 — Refactorizar `script.js` en módulos separados — `static/js/`  
   ~1600 líneas en un solo archivo. Candidatos naturales: `calendar.js`, `dashboard.js`, `planilla.js`, `comparison.js`, `ui.js`, `api.js`. Sin build step, usar `<script type="module">`.
 
@@ -64,6 +66,6 @@
 
 ---
 
-_Último número usado: #24. Próxima tarea nueva: #25_
+_Último número usado: #26. Próxima tarea nueva: #27_
 
 _#4 (parser de preceptores por nombre de columna) descartada el 2026-07-13 — ver `dev-log/DECISIONS.md`: estructura del sheet fija por contrato._

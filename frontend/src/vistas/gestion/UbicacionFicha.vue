@@ -21,6 +21,9 @@ const campoLugar = ref(null)
 
 // Si la misma pantalla pasa a mostrar otro recurso, lo elegido era del anterior.
 watch(() => props.recurso.id, () => { elegidas.value = new Set(); lugar.value = '' })
+watch(() => props.puedeEditar, (puede) => {
+  if (!puede) { elegidas.value = new Set(); lugar.value = '' }
+})
 
 const lista = computed(() => [...elegidas.value].sort((a, b) => a - b))
 const ocupado = computed(() => mover.isPending.value || quitar.isPending.value)

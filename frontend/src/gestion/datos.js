@@ -12,6 +12,7 @@ import { computed, toValue } from 'vue'
 import { useQuery, useMutation } from '@tanstack/vue-query'
 import { api } from '@/api'
 import { queryClient, avisarCambio } from '@/consultas'
+import { cabecerasMovimientos } from './movimientos'
 
 const base = (inv) => `/gestion/${encodeURIComponent(inv)}`
 export const claveInventario = (inv) => ['gestion', inv]
@@ -141,11 +142,11 @@ export const useEliminarUnidades = (inv) => mutacionRecurso(inv, (b, { id, numer
   api(`${b}/recursos/${id}/unidades/eliminar`, json({ numeros, motivo, detalle })))
 
 export const useMoverUnidades = (inv) => mutacionRecurso(inv, (b, { id, numeros, ubicacion }) =>
-  api(`${b}/recursos/${id}/unidades/mover`, json({ numeros, ubicacion })))
+  api(`${b}/recursos/${id}/unidades/mover`, { ...json({ numeros, ubicacion }), cabeceras: cabecerasMovimientos(toValue(inv)) }))
 
 export const useQuitarUbicacion = (inv) => mutacionRecurso(
   inv,
-  (b, { id, numeros }) => api(`${b}/recursos/${id}/unidades/quitar`, json({ numeros })),
+  (b, { id, numeros }) => api(`${b}/recursos/${id}/unidades/quitar`, { ...json({ numeros }), cabeceras: cabecerasMovimientos(toValue(inv)) }),
   {
     optimista: (r, { numeros }) => {
       const sacadas = new Set(numeros)

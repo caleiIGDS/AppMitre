@@ -68,7 +68,7 @@ ninguna — ver `agent_docs/crud-motor.md`.
   `eliminar_unidades`, `revertir_baja_unidad`, `guardar_alias`, …). Las páginas clásicas
   (Jinja) se sacaron el 2026-10-05: ver `dev-log/DECISIONS.md`.
 - **`gestion.db`** — el **registro**: la tabla `inventarios` (id, slug, nombre,
-  `clave_hash`, creado) y nada de dominio. Alberga además las tablas del asistente
+  `clave_hash`, creado) y `pin_movimientos_intentos` (límite de intentos del PIN por IP), sin datos de recursos. Alberga además las tablas del asistente
   (`agente_log`, `agente_conversaciones`, `agente_fotos_pendientes`), que son auditoría/
   sesión y nunca fueron de un inventario en particular.
 - **`database/inventarios/<slug>.db`** — un archivo por inventario, con `recursos`,
@@ -150,7 +150,13 @@ agrupación para TODOS los recursos de una, para el listado), `mover_unidades()`
 puntual o por cantidad genérica, avisando si algo no coincidía con lo registrado), `_stock()`
 (cantidad total del recurso, la usa además `agente/tools/ubicaciones.py` para chequear que el id
 exista). Se edita desde la ficha de la app (`…/recursos/<id>/unidades/mover` y `/quitar` de la API,
-sección "Ubicación" del detalle, siempre visible) y desde el chat (tool `mover_ubicacion` para un
+sección "Ubicación" del detalle, siempre visible). Un dispositivo con lectura puede usar **Shift+A**
+(fuera de campos de escritura) e ingresar el PIN de cuatro dígitos de `GESTION_PIN_MOVER` en el `.env`.
+`POST …/movimientos/autorizar` entrega una autorización de **20 segundos fijos**, sólo para esas dos rutas,
+ligada a sesión e inventario; viaja en `X-Mitre-Movimientos`, queda sólo en memoria de la pestaña y el servidor
+verifica el vencimiento. No concede `gestion.editar`; recargar, cambiar de inventario o pulsar BLOQUEAR la
+descarta. Sin PIN válido configurado, el atajo está deshabilitado. Cinco errores por IP bloquean nuevos
+intentos hasta completar un minuto desde el primero. También se edita desde el chat (tool `mover_ubicacion` para un
 recurso que ya existe; en el alta, el parámetro `ubicacion` de `crear_entidad` la deja fijada al
 confirmar la ficha — ver `agent_docs/agente-asistente.md`). No hay `ubicacion` en `editar_entidad`. Hasta el 2026-08-22 existió un campo `ubicacion` simple en
 `recursos`, con este desglose como algo opcional aparte; se unificó porque un valor y su desglose
