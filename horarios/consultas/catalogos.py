@@ -20,4 +20,6 @@ def ejecutar(s, p):
             salida['aulas']['sin_piso'] = otras
     if 'roles' in incluir:
         salida['roles'] = sorted({r for roles in s.padron.values() for r in roles})
+    if 'nombres' in incluir:
+        salida['nombres'] = sorted(s.padron)
     return salida

@@ -21,6 +21,7 @@ Agregá a la base uno de estos caminos:
 | Solo martes de un curso | `/horarios?token=TU_CLAVE&tipo=curso&valor=3%20K&dias=martes` |
 | Buscar persona y sus cargos | `/personas?token=TU_CLAVE&nombre=calei` |
 | Personas con un cargo | `/personas?token=TU_CLAVE&rol=preceptor` |
+| Personas con más de un cargo | `/personas?token=TU_CLAVE&multiples_roles=true` |
 | Semana de una persona, todos sus cargos | `/horarios?token=TU_CLAVE&tipo=persona&valor=CALEI` |
 | Semana de un aula | `/horarios?token=TU_CLAVE&tipo=aula&valor=33` |
 | Actividades en aulas el lunes de 08 a 10 | `/horarios?token=TU_CLAVE&tipo=aula&dias=lunes&desde=08:00&hasta=10:00` |
@@ -29,20 +30,27 @@ Agregá a la base uno de estos caminos:
 | Todos los preceptores con sus asignaciones | `/preceptores?token=TU_CLAVE` |
 | Preceptores del turno mañana | `/preceptores?token=TU_CLAVE&turno=ma%C3%B1ana` |
 | Cursos disponibles | `/catalogos?token=TU_CLAVE&incluir=cursos` |
+| Todos los nombres, como respaldo de una búsqueda fallida | `/catalogos?token=TU_CLAVE&incluir=nombres` |
 | Aulas por piso y cargos | `/catalogos?token=TU_CLAVE&incluir=aulas&incluir=roles` |
 
-Las divisiones, nombres y aulas deben corresponder a los datos reales. Consultá directamente una entidad conocida; buscá por nombre si necesitás resolver una persona, sin descargar todos los catálogos antes de cada pregunta. Para varias personas o aulas repetí `valores`, hasta 20 entidades por consulta. `valor` es alias de `valores`; no combines ambos. Para varios días repetí `dias`. No separes nombres por comas. Usá un solo selector: `valor`/`valores`, `anio` (cursos) o `piso` (aulas). `desde` y `hasta` van juntos; `ahora=true` no se combina con días/rango. Los filtros se intersectan.
+Las divisiones, nombres y aulas deben corresponder a los datos reales. Consultá directamente una entidad conocida; buscá por nombre si necesitás resolver una persona, sin descargar todos los catálogos antes de cada pregunta. Para encontrar cargos múltiples usá `multiples_roles=true`, solo o junto con `nombre`/`rol`; no recorras todo el padrón para filtrarlo localmente. Para varias personas o aulas repetí `valores`, hasta 20 entidades por consulta. `valor` es alias de `valores`; no combines ambos. Para varios días repetí `dias`. No separes nombres por comas. Usá un solo selector: `valor`/`valores`, `anio` (cursos) o `piso` (aulas). `desde` y `hasta` van juntos; `ahora=true` no se combina con días/rango. Los filtros se intersectan.
 
 ## Respuestas JSON
 
 - Horarios: `horarios` contiene entidades con `curso`, `persona` o `aula`, y `dias` con listas de actividades. La semana por defecto es lunes a viernes. Las actividades incluyen horas y los campos pertinentes (materia, profesor, curso, aula, grupo); en personas cada actividad indica su `rol`. Una persona puede tener varios cargos.
 - Personas: `personas` contiene `nombre` y `roles` (lista completa de cargos).
 - Preceptores: `preceptores` contiene `nombre` y `asignaciones` por curso, turno, función principal/contraturno y días. Se pueden pedir todos juntos. `vacantes`, `sin_registro` y `avisos` son cosas distintas.
-- Catálogos: cursos, aulas agrupadas por piso y/o roles, según lo solicitado.
-- Si aparece `siguiente`, repetí exactamente la consulta agregando `&cursor=VALOR_CODIFICADO`. Continuá hasta que no aparezca antes de afirmar que un listado está completo. Con `consulta_vencida`, reiniciá; no mezcles páginas de copias distintas.
+- Catálogos: cursos, aulas agrupadas por piso, roles y/o `nombres`, según lo solicitado. `nombres` es una lista compacta de nombres completos, sin horarios ni fichas.
+- Si aparece `siguiente`, repetí exactamente la consulta agregando `&cursor=VALOR_CODIFICADO`. Continuá hasta que no aparezca antes de afirmar que un listado está completo. Si solo se piden algunos ejemplos y ya los encontraste, detenete y no presentes esa selección como listado completo. Con `consulta_vencida`, reiniciá; no mezcles páginas de copias distintas.
 - Error: `{"error":{"codigo":"...","mensaje":"..."}}`. Con `persona_ambigua`, revisá los candidatos, sin fusionarlos ni elegir arbitrariamente. Con `consulta_demasiado_amplia`, dividí por entidades/días. Con 401 revisá la clave; con 429 detené los reintentos. No inventes un horario si una consulta falla.
 
 Los esquemas completos están en `/contratos?token=TU_CLAVE` y `/openapi.json?token=TU_CLAVE`, bajo la misma base; son referencias técnicas opcionales, no un paso obligatorio.
+
+Si no encontrás una persona o los candidatos no son convincentes, pedí una vez `/catalogos?token=TU_CLAVE&incluir=nombres` y revisá los nombres completos buscando errores de escritura, abreviaturas u orden de nombre/apellido. Este respaldo incluye docentes, preceptores y otros cargos, sin descargar sus horarios. Con una coincidencia clara, consultá el nombre exacto e indicá a quién interpretaste; si hay varias posibilidades razonables, pedí al usuario que precise. Si ninguna encaja, informá que no pudiste identificarla. Conservá los filtros de cargo que haya pedido el usuario. No listes todos los nombres en la respuesta ni los descargues antes de cada consulta; reutilizá la lista en esa conversación. Este respaldo sirve para identificar personas, no para resolver errores de autenticación o de conexión.
+
+## Si una herramienta no puede abrir la URL
+
+Un error del lector web o de DNS de su entorno no prueba que el servidor esté caído. Si disponés de un cliente HTTP con acceso a Internet (por ejemplo, Python o una terminal), usalo directamente; seguí los permisos de ese entorno. No repitas el mismo intento fallido sin que cambien las condiciones. Si solo disponés del lector web y no permite estas URL, explicá que no pudiste consultar y pedí que el usuario te acerque el JSON o PDF; no inventes datos. Este instructivo no le agrega herramientas ni acceso de red a un chat.
 
 ## Descargar un PDF
 
@@ -64,7 +72,7 @@ El resultado es `application/pdf`, no JSON; necesitás una herramienta que permi
 - Es una secundaria técnica. El usuario trabaja como EMATP de Energías Renovables y coordina olimpíadas de matemática. Los turnos son mañana, tarde y vespertino (noche).
 - Grupos A/B son partes de una división, no otras divisiones. Conservá esa distinción.
 - **PROGRESO es una cancha a dos cuadras de la escuela, fuera del edificio.** Coincidir allí en horario no significa coincidir en la escuela. No inventes tiempos de traslado.
-- La información es la semana de la última copia cargada desde la planilla, no una confirmación de asistencia, feriados, suspensiones o excepciones por fecha.
+- La información es la semana de la última copia cargada desde la planilla, no una confirmación de asistencia, feriados, suspensiones o excepciones por fecha. Describí «empieza/termina su actividad registrada», no «entra/sale del edificio»: la hora de una clase no informa cuándo llega o se va una persona.
 - Preceptores: asignaciones por turno/día, sin horas exactas de presencia. Puede haber distintos principales según el día y varios contraturnos. Una asignación sin división no corresponde automáticamente a todas las divisiones del año.
 - Respetá las suplencias: `titular_en_licencia`, `en_licencia` y `suplente`. No cuentes al titular en licencia como quien da esa clase ni deduzcas vigencia por fechas.
 - Un recreo o hueco no demuestra disponibilidad ni presencia. Para comparar curso, persona y aula, consultá cada tipo y cruzá los bloques: `max(inicios) < min(finales)`. Terminar justo cuando otro empieza no es solaparse.

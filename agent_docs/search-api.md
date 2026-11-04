@@ -14,8 +14,8 @@ Las cuatro operaciones aceptan POST con JSON o GET con filtros en la URL; no esc
 
 | Ruta bajo ese prefijo | Contrato | Filtros |
 | --- | --- | --- |
-| `POST /catalogos` | `listar_catalogos` | `incluir`: cursos/aulas/roles (por defecto cursos); `anio` solo con cursos. |
-| `POST /personas` | `buscar_personas` | `nombre` o `rol`, intersección si están ambos; devuelve todos los roles. |
+| `POST /catalogos` | `listar_catalogos` | `incluir`: cursos/aulas/roles/nombres (por defecto cursos); `nombres` devuelve solo nombres canónicos únicos, sin fichas ni horarios, para revisar identificaciones sin coincidencia convincente; `anio` solo con cursos. |
+| `POST /personas` | `buscar_personas` | `nombre`, `rol` o `multiples_roles=true` (más de un cargo); los filtros se intersectan antes de paginar y devuelve todos los roles. `multiples_roles=false` no restringe cargos y requiere nombre o rol. |
 | `POST /horarios` | `consultar_horarios` | `tipo`: curso/persona/aula; selector `valores`, `anio` (curso) o `piso` (aula); `dias`, pareja `desde`/`hasta`, `ahora`, `roles` (persona). |
 | `POST /preceptores` | `consultar_preceptores` | Sin filtros: toda la planilla. `cursos` o `anio`, `nombres`, `turno`, `dias`; filtros de distinta clase se intersectan. |
 | `GET /contratos` | Registro y esquemas | Nombres, descripciones, entrada/salida y límites del mismo registro que valida las consultas. |

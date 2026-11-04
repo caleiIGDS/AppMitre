@@ -115,6 +115,39 @@ class ConsultasHorarios(unittest.TestCase):
         self.assertEqual(len(lista), 4)
         self.assertEqual(self.consultar('personas', {'nombre': 'ZZZZZZZZZZ'})['personas'], [])
 
+    def test_multiples_roles_filtra_antes_de_paginar_y_conserva_roles(self):
+        self.personal('PEREZ JUAN', 'EMATP', 'LUNES', '10:00', '12:00')
+        self.personal('A MONOROL', 'OTRO', 'LUNES', '08:00', '09:00')
+        self.parche(sys.modules[f'{PAQUETE}.consultas.personas'], 'MAX_PERSONAS', 1)
+        filtros = {'multiples_roles': True}
+        primera = self.consultar('personas', filtros)
+        self.assertEqual(primera['personas'][0]['nombre'], 'PEREZ ANA')
+        self.assertEqual(len(primera['personas'][0]['roles']), 4)
+        segunda = self.consultar('personas', {**filtros, 'cursor': primera['siguiente']})
+        self.assertEqual(segunda['personas'], [{'nombre': 'PEREZ JUAN', 'roles': ['EMATP', 'docente']}])
+        self.assertNotIn('siguiente', segunda)
+        cruzada = self.consultar('personas', {**filtros, 'rol': 'preceptor'})
+        self.assertEqual([p['nombre'] for p in cruzada['personas']], ['PEREZ ANA'])
+        self.assertNotIn('siguiente', cruzada)
+        self.assertEqual(self.consultar('personas', {**filtros, 'nombre': 'ROMERO'})['personas'], [])
+        self.assertEqual(self.consultar('personas', {'nombre': 'ROMERO', 'multiples_roles': False})['personas'][0]['nombre'], 'ROMERO')
+        self.consultar('personas', {'multiples_roles': False}, 400)
+        self.consultar('personas', {'multiples_roles': 'true'}, 400)
+        error = self.consultar('personas', {'rol': 'docente', 'cursor': primera['siguiente']}, 409)
+        self.assertEqual(error['error']['codigo'], 'consulta_vencida')
+
+    def test_get_multiples_roles_y_esquemas_comparten_filtro(self):
+        url = PREFIJO + '/personas'
+        for filtros in ({'multiples_roles': 'true'}, {'multiples_roles': 'true', 'rol': 'preceptor'}):
+            r = self.client.get(url, query_string={'token': 'clave-sintética-ñ', **filtros})
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual([p['nombre'] for p in r.get_json()['personas']], ['PEREZ ANA'])
+        r = self.client.get(url, query_string={'token': 'clave-sintética-ñ', 'multiples_roles': 'false'})
+        self.assertEqual(r.status_code, 400)
+        schema = self.client.get(PREFIJO + '/openapi.json', headers=self.bearer).get_json()
+        parametros = schema['paths'][url]['get']['parameters']
+        self.assertEqual(next(p for p in parametros if p['name'] == 'multiples_roles')['schema']['type'], 'boolean')
+
     def test_nombres_aproximados_son_candidatos_y_no_horarios(self):
         candidatos = self.consultar('personas', {'nombre': 'PEREZ'})['personas']
         self.assertEqual({p['nombre'] for p in candidatos}, {'PEREZ ANA', 'PEREZ JUAN'})
@@ -197,6 +230,28 @@ class ConsultasHorarios(unittest.TestCase):
         h = self.consultar('horarios', {'tipo': 'aula', 'piso': 'piso 1', 'dias': ['lunes']})
         self.assertEqual(len(h['horarios']), 3)
         self.consultar('horarios', {'tipo': 'aula', 'valores': ['9999']}, 404)
+
+    def test_catalogo_nombres_completo_y_compacto_solo_cuando_se_pide(self):
+        self.assertEqual(self.consultar('personas', {'nombre': 'ZZZZZZZZZZ'})['personas'], [])
+        self.assertNotIn('nombres', self.consultar('catalogos', {}))
+        esperados = {'PEREZ ANA', 'PEREZ JUAN', 'TITULAR UNO', 'TITULAR DOS',
+                     'REEMPLAZO DOS', 'OTRA', 'ROMERO', 'LOPEZ'}
+        for i in range(60):
+            n = f'PERSONA {i:02}'
+            self.personal(n, 'OTRO', 'LUNES', '08:00', '09:00')
+            esperados.add(n)
+        salida = self.consultar('catalogos', {'incluir': ['nombres']})
+        self.assertEqual(salida, {'nombres': sorted(esperados)})
+        # Los nombres salen completos en una llamada, sin fichas ni paginación de personas.
+        self.assertNotIn('FALTA', salida['nombres'])
+        self.assertEqual(salida['nombres'].count('PEREZ ANA'), 1)
+        url = PREFIJO + '/catalogos'
+        respuesta = self.client.get(url, query_string={'token': 'clave-sintética-ñ', 'incluir': 'nombres'})
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.get_json(), salida)
+        self.assertEqual(self.client.get(url, query_string={'incluir': 'nombres'}).status_code, 401)
+        juntos = self.consultar('catalogos', {'incluir': ['cursos', 'aulas', 'roles', 'nombres']})
+        self.assertEqual(set(juntos), {'cursos', 'aulas', 'roles', 'nombres'})
 
     def test_preceptor_sin_division_no_inventa_curso_y_conserva_asignacion(self):
         self.preceptor('3', '', 'MAÑANA', 'SIN DIVISION', 'LUNES')

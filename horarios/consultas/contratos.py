@@ -79,18 +79,21 @@ def resultado(propiedades, requeridos):
 CONTRATOS = {
     'catalogos': {
         'nombre': 'listar_catalogos',
-        'descripcion': 'Lista cursos, aulas por piso o cargos disponibles. No es requisito previo para consultar una entidad conocida. ' + COMUN,
-        'entrada': objeto({'incluir': {**lista({'enum': ['cursos', 'aulas', 'roles']}, 3),
+        'descripcion': 'Lista cursos, aulas por piso, cargos o nombres. nombres devuelve solo los nombres completos para revisar una identificación que no se pudo resolver; no descarga horarios ni fichas. No es requisito previo para consultar una entidad conocida. ' + COMUN,
+        'entrada': objeto({'incluir': {**lista({'enum': ['cursos', 'aulas', 'roles', 'nombres']}, 4),
                                        'minItems': 1, 'uniqueItems': True, 'default': ['cursos']},
                            'anio': ANIO}),
         'salida': resultado({'cursos': {'type': 'object', 'additionalProperties': lista(TEXTO)},
                              'aulas': {'type': 'object', 'additionalProperties': lista(TEXTO)},
-                             'roles': lista(TEXTO)}, ())},
+                             'roles': lista(TEXTO), 'nombres': lista(TEXTO)}, ())},
     'personas': {
         'nombre': 'buscar_personas',
-        'descripcion': 'Busca nombre o cargo y devuelve todos los roles de cada persona. Coincidencias aproximadas son candidatos; nunca fusiona personas por parecido. Sin coincidencias: personas vacía. ' + COMUN,
-        'entrada': {**objeto({'nombre': TEXTO, 'rol': TEXTO, 'cursor': CURSOR}),
-                    'anyOf': [{'required': ['nombre']}, {'required': ['rol']}]},
+        'descripcion': 'Busca nombre o cargo y devuelve todos los roles de cada persona. multiples_roles=true selecciona personas con más de un cargo, sin recorrer todo el padrón. Los filtros se intersectan. Coincidencias aproximadas son candidatos; nunca fusiona personas por parecido. Sin coincidencias: personas vacía. ' + COMUN,
+        'entrada': {**objeto({'nombre': TEXTO, 'rol': TEXTO,
+                              'multiples_roles': {'type': 'boolean'}, 'cursor': CURSOR}),
+                    'anyOf': [{'required': ['nombre']}, {'required': ['rol']},
+                              {'required': ['multiples_roles'],
+                               'properties': {'multiples_roles': {'const': True}}}]},
         'salida': resultado({'personas': lista(PERSONA)}, ('personas',))},
     'horarios': {
         'nombre': 'consultar_horarios',

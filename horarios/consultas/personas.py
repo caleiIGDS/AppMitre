@@ -3,6 +3,8 @@ from .comun import MAX_PERSONAS, candidatos, ficha, nombre, norm, paginar
 
 def ejecutar(s, p, clave):
     conocidos = s.padron
+    if p.get('multiples_roles'):
+        conocidos = {n: r for n, r in conocidos.items() if len(r) > 1}
     if 'rol' in p:
         conocidos = {n: r for n, r in conocidos.items() if any(norm(p['rol']) in norm(rol) for rol in r)}
     if 'nombre' in p:
