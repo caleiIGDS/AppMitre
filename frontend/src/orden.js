@@ -1,9 +1,8 @@
-// Orden a mano, como las capas de un editor: se mantiene apretado un elemento y se lo
-// arrastra a su lugar. El orden es de cada dispositivo (localStorage, una sola clave con
+// Orden a mano: se arrastra la agarradera del elemento a su lugar. El orden es de cada
+// dispositivo (localStorage, una sola clave con
 // todas las listas): no cambia lo que ven los demás. Hoy lo usan la lista de inventarios y
 // las fotos de cada ficha (la primera es la portada de la tarjeta en la vista galería).
 import { reactive, ref, computed, nextTick, watch, onUnmounted } from 'vue'
-import { desplazarArrastrando } from './desplazamiento'
 
 const CLAVE_ALMACEN = 'mitre-orden'
 
@@ -27,8 +26,7 @@ export function guardarOrden(clave, ids) {
   try { window.localStorage.setItem(CLAVE_ALMACEN, JSON.stringify(ordenes)) } catch { /* sin almacenamiento: dura hasta recargar */ }
 }
 
-const ESPERA_TACTIL = 350 // ms apretado antes de levantar el elemento con el dedo
-const UMBRAL = 8 // px: con el mouse, cuánto mover para que sea arrastre y no click
+const UMBRAL = 3 // px de tolerancia al tocar la agarradera
 const BORDE = 70 // px del borde de la pantalla donde el arrastre hace scroll
 const IGNORAR = 'input, textarea, select, option, code, [contenteditable]'
 
@@ -124,15 +122,17 @@ export function useOrdenable(clave, contenedor, lista, idDe) {
   }
 
   function bajar(e) {
-    if (p || e.button !== 0 || e.target.closest(IGNORAR)) return
+    if (p || e.button !== 0 || !e.isPrimary || e.target.closest(IGNORAR)) return
+    const agarre = e.target.closest('.a-orden-agarre')
+    if (!agarre) return
     const el = e.target.closest('[data-orden]')
     if (!el || !contenedor.value.contains(el) || lista.value.length < 2) return
     p = {
       id: el.dataset.orden, tactil: e.pointerType !== 'mouse', puntero: e.pointerId,
-      demora: e.pointerType !== 'mouse' || desplazarArrastrando.value,
+      agarre,
       x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, activo: false, ultimo: null,
     }
-    if (p.demora) p.espera = setTimeout(() => p && empezar(), ESPERA_TACTIL)
+    agarre.setPointerCapture(e.pointerId)
     window.addEventListener('pointermove', mover)
     window.addEventListener('pointerup', soltar)
     window.addEventListener('pointercancel', soltar)
@@ -144,18 +144,17 @@ export function useOrdenable(clave, contenedor, lista, idDe) {
     p.y = e.clientY
     if (!p.activo) {
       if (Math.hypot(p.x - p.x0, p.y - p.y0) < UMBRAL) return
-      if (p.demora) return soltar() // se movió antes de tiempo: es scroll, no arrastre
       empezar()
     }
     seguir()
     buscarLugar()
   }
 
-  function soltar() {
-    if (!p) return
+  function soltar(e) {
+    if (!p || (e?.pointerId != null && e.pointerId !== p.puntero)) return
     const g = p
     p = null
-    clearTimeout(g.espera)
+    if (g.agarre.hasPointerCapture(g.puntero)) g.agarre.releasePointerCapture(g.puntero)
     cancelAnimationFrame(rafScroll)
     window.removeEventListener('pointermove', mover)
     window.removeEventListener('pointerup', soltar)

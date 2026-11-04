@@ -87,8 +87,8 @@ function eliminarInventario(i) {
     <template v-if="consulta.data.value">
       <p class="g-help">Cada inventario es independiente: tiene su propia gente y su propia
         clave. Tener acceso a uno no da acceso a ninguno de los otros.</p>
-      <p v-if="inventarios.length > 1" class="a-orden-ayuda">Mantené apretado un inventario y
-        arrastralo para cambiar el orden (en este dispositivo).</p>
+      <p v-if="inventarios.length > 1" class="a-orden-ayuda">Arrastrá desde ↕ para cambiar
+        el orden de los inventarios (en este dispositivo).</p>
 
       <div v-if="consulta.data.value.puede_administrar" class="g-nuevo-inv">
         <button type="button" class="g-btn" @click="abrirNuevo">+ NUEVO INVENTARIO</button>
@@ -100,6 +100,8 @@ function eliminarInventario(i) {
           :class="{ 'a-levantado': arrastrando === i.slug }" :data-orden="i.slug"
         >
           <div class="g-card-head">
+            <button v-if="inventarios.length > 1" type="button" class="a-orden-agarre"
+              data-sin-arrastre :aria-label="`Cambiar orden de ${i.nombre}`" title="Arrastrar para ordenar">↕</button>
             <h3>{{ i.nombre.toUpperCase() }}</h3>
             <span class="g-count">{{ i.total < 0 ? '—' : i.total }}</span>
           </div>

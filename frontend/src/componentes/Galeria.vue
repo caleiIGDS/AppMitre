@@ -9,7 +9,7 @@
 // Subir: se achica antes de mandarla (window.ImgUtils, el mismo criterio que el chat).
 // Rotar: el giro lo hace un canvas acá y al servidor va la imagen ya girada; se muestra
 // girada apenas se codifica, y se guarda en segundo plano.
-// Ordenar: se mantiene apretada una foto y se la arrastra (orden.js, de cada dispositivo).
+// Ordenar: se arrastra desde ↕ (orden.js, de cada dispositivo).
 // La primera es la portada de la tarjeta en la vista galería del inventario.
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { useOrdenable } from '@/orden'
@@ -147,15 +147,19 @@ async function girar() {
   <div class="g-foto-section">
     <div v-if="ordenadas.length" class="g-galeria">
       <div ref="grilla" class="g-galeria-grid">
-        <button
-          v-for="(f, i) in ordenadas" :key="f.id" type="button" class="g-foto-thumb a-ordenable"
+        <div
+          v-for="(f, i) in ordenadas" :key="f.id" class="a-foto-ordenable a-ordenable"
           :class="{ 'a-levantado': arrastrando === String(f.id) }" :data-orden="f.id"
-          :aria-label="`Ver foto ${i + 1} de ${ordenadas.length}`" @click="abrir(i, $event)"
         >
-          <img :src="previas[f.id] || f.mini || f.url" :srcset="srcset(f)" :sizes="sizes" :alt="`Foto ${i + 1}`" class="g-foto" loading="lazy" decoding="async">
-        </button>
+          <button type="button" class="g-foto-thumb"
+            :aria-label="`Ver foto ${i + 1} de ${ordenadas.length}`" @click="abrir(i, $event)">
+            <img :src="previas[f.id] || f.mini || f.url" :srcset="srcset(f)" :sizes="sizes" :alt="`Foto ${i + 1}`" class="g-foto" loading="lazy" decoding="async">
+          </button>
+          <button v-if="ordenadas.length > 1" type="button" class="a-orden-agarre"
+            data-sin-arrastre :aria-label="`Cambiar orden de foto ${i + 1}`" title="Arrastrar para ordenar">↕</button>
+        </div>
       </div>
-      <p v-if="ordenadas.length > 1" class="a-orden-ayuda">Mantené apretada una foto y arrastrala para cambiar el orden (en este dispositivo).</p>
+      <p v-if="ordenadas.length > 1" class="a-orden-ayuda">Arrastrá desde ↕ para cambiar el orden de las fotos (en este dispositivo).</p>
     </div>
     <div v-if="puedeEditar" class="g-foto-toolbar">
       <input ref="entrada" type="file" accept="image/*" hidden @change="elegido">

@@ -395,8 +395,7 @@ body.g-sin-scroll { overflow: hidden; }
   .a-galeria { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
-/* Ordenar arrastrando (orden.js): la lista de inventarios y las fotos de la ficha. Con el
-   dedo se levanta con un toque largo: sin selección de texto ni el menú del navegador. */
+/* Ordenar desde la agarradera; el resto de la tarjeta/foto permite desplazar la página. */
 .a-ordenable { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .a-ordenable code, .a-ordenable input, .a-ordenable textarea { -webkit-user-select: text; user-select: text; }
 .a-ordenable img { -webkit-user-drag: none; }
@@ -417,7 +416,18 @@ body.a-desplazando, body.a-desplazando * {
   user-select: none !important;
   scroll-behavior: auto !important;
 }
-.a-ajuste-pantalla { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--g-border); }
-.a-ajuste-pantalla label { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font-size: 13px; }
-.a-ajuste-pantalla input { width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--g-accent); }
-.a-ajuste-pantalla p { margin: 6px 0 0; font-size: 11px; line-height: 1.6; color: var(--g-muted); }
+.a-orden-agarre {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px;
+  border: 1px solid var(--g-border);
+  background: var(--g-surface);
+  color: var(--g-primary);
+  font: inherit;
+  font-size: 24px;
+  cursor: grab;
+  touch-action: none;
+}
+.a-foto-ordenable { position: relative; min-width: 0; }
+.a-foto-ordenable .g-foto-thumb { width: 100%; }
+.a-foto-ordenable .a-orden-agarre { position: absolute; right: 4px; bottom: 4px; }

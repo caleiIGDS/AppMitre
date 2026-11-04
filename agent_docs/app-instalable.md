@@ -63,10 +63,9 @@ app_dist/                ← lo que compila `npm run build` y sirve Flask. SE CO
   cambian las dos URLs. Al llegar la lista de un inventario, `gestion/precarga.js` baja en
   segundo plano todas las que el dispositivo no tiene (primero las miniaturas).
 - **Orden a mano** (`orden.js`): las fotos de una ficha y las tarjetas de `/gestion/inventarios`
-  se ordenan arrastrando (con el mouse, o con el dedo tras un toque largo de 350 ms;
-  con «Desplazar arrastrando» activo, el mouse también espera ese toque largo). El menú
-  permite activar ese desplazamiento para pantallas que simulan mouse; queda sólo en este
-  navegador (`mitre-desplazar-arrastrando`), apagado por defecto y sin cambiar el touch nativo. El orden
+  se ordenan arrastrando desde la agarradera ↕, con mouse o dedo y sin espera por tiempo.
+  El resto del contenido desplaza la página al arrastrar con mouse, siempre activo, sin
+  cambiar el touch nativo. El clic se acepta al soltar sin deslizamiento. El orden
   es **de cada dispositivo**: va a localStorage (`mitre-orden`), el servidor no lo conoce. La
   primera foto de la ficha es la portada de la tarjeta en la vista galería (`portada()`).
 
