@@ -11,8 +11,7 @@ resuelven ahí, sin red. Al servidor sólo le pide:
   GET  /datos       todo el horario, con ETag: si nada cambió contesta 304 sin cuerpo
   POST /actualizar  rearma escuela.db desde la planilla
 
-La app imprime sus calendarios localmente con los datos descargados. Los endpoints
-/horarios/export/... (rutas.py) siguen disponibles por compatibilidad.
+La app imprime localmente. Los exports PDF del servidor siguen disponibles para agentes externos con sesión o token en URL.
 
 Mismo aislamiento que el resto del paquete: no importa `accesos` ni nada de afuera. Los
 pedidos que escriben exigen la cabecera `X-Mitre` (defensa CSRF, igual que /app/api).
@@ -25,10 +24,10 @@ import sqlite3
 from flask import Blueprint, jsonify, request, session
 
 from . import acceso, datos
+from .rutas import _planilla_preceptores_con_turnos
 from .config import (DIAS, ESCUELA_NOMBRE, ESCUELA_VERSION, ESPECIALIDAD_CURSOS, MATERIAS_PLAN,
                      FLOOR_MAPPING, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE,
                      GIDS_CURSOS, SHEET_ID, TURNO_CURSOS, TURNO_DEFAULT)
-from .rutas import _planilla_preceptores_con_turnos
 
 # Las columnas de `clases` que el front realmente lee. La lista es explícita y no un
 # `SELECT *` por dos motivos: la tabla guarda `dni`, `telefono` y `email` de cada docente

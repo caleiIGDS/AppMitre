@@ -73,6 +73,7 @@ class ConsultasHorarios(unittest.TestCase):
         self.app.secret_key = 'firma-sintetica'
         self.app.testing = True
         self.app.register_blueprint(api.bp_app)
+        self.app.register_blueprint(paquete.bp)
         self.client = self.app.test_client()
         self.bearer = {'Authorization': 'Bearer clave-sintética-ñ'}
 
@@ -403,6 +404,125 @@ class ConsultasHorarios(unittest.TestCase):
         self.consultar('horarios', {'tipo': 'curso', 'valores': ['3 B']})
         with closing(sqlite3.connect(self.db)) as con:
             self.assertEqual(con.execute("SELECT hora_inicio FROM clases WHERE materia='FISICA'").fetchone()[0], '16:60')
+
+
+    def test_get_token_mismos_json_que_post_para_las_cuatro_operaciones(self):
+        casos = [('catalogos', {'incluir': ['cursos', 'aulas', 'roles']}),
+                 ('personas', {'nombre': 'pérez a'}),
+                 ('horarios', {'tipo': 'curso', 'valores': ['3 A', '3 B'], 'dias': ['lunes', 'miercoles']}),
+                 ('horarios', {'tipo': 'curso', 'anio': 3}),
+                 ('horarios', {'tipo': 'persona', 'valores': ['PEREZ ANA'], 'roles': ['preceptor']}),
+                 ('horarios', {'tipo': 'aula', 'dias': ['lunes'], 'desde': '08:00', 'hasta': '09:00'}),
+                 ('preceptores', {}), ('preceptores', {'turno': 'mañana'})]
+        for op, parametros in casos:
+            with self.subTest(op=op, parametros=parametros):
+                esperado = self.consultar(op, parametros)
+                pares = [('token', 'clave-sintética-ñ')]
+                for campo, valor in parametros.items():
+                    pares.extend((campo, v) for v in valor) if isinstance(valor, list) else pares.append((campo, valor))
+                r = self.client.get(PREFIJO + '/' + op, query_string=pares)
+                self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+                self.assertEqual(r.get_json(), esperado)
+                self.assertEqual(r.headers['Cache-Control'], 'no-store')
+                self.assertEqual(r.headers['Referrer-Policy'], 'no-referrer')
+                self.assertEqual(r.headers['X-Robots-Tag'], 'noindex, nofollow')
+
+    def test_get_alias_valor_ahora_y_caracteres_reservados_en_clave(self):
+        clave = 'espacio + & # ? / ñ'
+        with patch.object(acceso, '_clave', return_value=clave):
+            with patch.object(config, 'ahora', return_value=datetime(2026, 11, 2, 8, 0)):
+                r = self.client.get(PREFIJO + '/horarios', query_string={
+                    'token': clave, 'tipo': 'curso', 'valor': '3 A', 'ahora': 'true'})
+                self.assertEqual(r.status_code, 200)
+                self.assertEqual(r.get_json()['momento'], {'fecha': '2026-11-02', 'hora': '08:00'})
+                self.assertEqual(len(r.get_json()['horarios'][0]['dias']['lunes']), 2)
+        r = self.client.get(PREFIJO + '/horarios', query_string={
+            'token': 'clave-sintética-ñ', 'tipo': 'curso', 'valor': '3 A', 'ahora': 'false'})
+        self.assertEqual(r.status_code, 200)
+        self.assertNotIn('momento', r.get_json())
+
+    def test_get_rechaza_filtros_invalidos_repetidos_y_token_en_post(self):
+        casos = [[('tipo', 'curso'), ('anio', 'tres')],
+                 [('tipo', 'curso'), ('anio', '3.0')],
+                 [('tipo', 'curso'), ('anio', '3'), ('anio', '4')],
+                 [('tipo', 'curso'), ('valor', '3 A'), ('valores', '3 B')],
+                 [('tipo', 'curso'), ('valor', '3 A'), ('ahora', '1')],
+                 [('tipo', 'curso'), ('anio', '3'), ('sql', 'SELECT *')],
+                 [('tipo', 'curso'), ('anio', '3'), ('desde', '08:00')]]
+        for pares in casos:
+            with self.subTest(pares=pares):
+                r = self.client.get(PREFIJO + '/horarios', query_string=[('token', 'clave-sintética-ñ')] + pares)
+                self.assertEqual(r.status_code, 400)
+                self.assertEqual(r.get_json()['error']['codigo'], 'parametros_invalidos')
+        self.assertEqual(self.client.get(PREFIJO + '/catalogos', query_string=[
+            ('token', 'clave-sintética-ñ'), ('token', 'otra')]).status_code, 400)
+        self.assertEqual(self.client.post(PREFIJO + '/catalogos', json={}, query_string={
+            'token': 'clave-sintética-ñ'}).status_code, 400)
+
+    def test_get_token_no_abre_sesion_ni_da_acceso_a_datos_y_actualizar(self):
+        q = {'token': 'clave-sintética-ñ'}
+        self.assertEqual(self.client.get(PREFIJO + '/catalogos', query_string=q).status_code, 200)
+        with self.client.session_transaction() as sesion:
+            self.assertNotIn(acceso.SESSION_FLAG, sesion)
+        self.assertEqual(self.client.get('/app-horarios/api/datos', query_string=q).status_code, 401)
+        with patch.object(datos, 'actualizar_desde_sheets') as actualizar:
+            self.assertEqual(self.client.post('/app-horarios/api/actualizar', query_string=q,
+                                             headers={'X-Mitre': '1'}).status_code, 401)
+            actualizar.assert_not_called()
+        self.assertEqual(self.client.get(PREFIJO + '/catalogos').status_code, 401)
+        self.assertEqual(self.client.get(PREFIJO + '/catalogos', query_string={'token': 'mala'}).status_code, 401)
+        with self.client.session_transaction() as sesion:
+            sesion[acceso.SESSION_FLAG] = True
+        self.assertEqual(self.client.get(PREFIJO + '/catalogos', query_string={'token': 'mala'}).status_code, 401)
+        for _ in range(acceso.MAX_INTENTOS - 2):
+            self.client.get(PREFIJO + '/catalogos', query_string={'token': 'mala'})
+        self.assertEqual(self.client.get(PREFIJO + '/catalogos', query_string=q).status_code, 429)
+
+    def test_get_paginacion_igual_a_post_y_documentacion_del_transporte(self):
+        q = {'token': 'clave-sintética-ñ', 'tipo': 'curso', 'anio': 3}
+        limite = len(comun.compacto(self.consultar('horarios', {'tipo': 'curso', 'anio': 3}))) - 1
+        with patch.object(comun, 'MAX_CARACTERES', limite):
+            r = self.client.get(PREFIJO + '/horarios', query_string=q)
+            primera = r.get_json()
+            self.assertEqual(len(primera['horarios']), 1)
+            r = self.client.get(PREFIJO + '/horarios', query_string={**q, 'cursor': primera['siguiente']})
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(r.get_json()['horarios'][0]['curso'], '3° B')
+            self.assertNotIn('siguiente', r.get_json())
+        for ruta in ('contratos', 'openapi.json'):
+            r = self.client.get(PREFIJO + '/' + ruta, query_string={'token': 'clave-sintética-ñ'})
+            self.assertEqual(r.status_code, 200)
+        doc = r.get_json()
+        self.assertEqual(doc['components']['securitySchemes']['horariosTokenUrl']['in'], 'query')
+        for operacion in consultas.CONTRATOS:
+            self.assertIn('get', doc['paths'][PREFIJO + '/' + operacion])
+
+
+
+    def test_pdf_token_descarga_real_sin_sesion_y_no_acepta_clave_invalida(self):
+        ruta = '/horarios/export/pdf/curso/3%20A'
+        self.assertEqual(self.client.get(ruta).status_code, 401)
+        self.assertEqual(self.client.get(ruta, query_string={'token': 'mala'}).status_code, 401)
+        for camino in (ruta, '/horarios/export/pdf/cursos/3%20A,3%20B',
+                       '/horarios/export/pdf/cursos/todos',
+                       '/horarios/export/pdf/planilla_preceptores'):
+            r = self.client.get(camino, query_string={'token': 'clave-sintética-ñ'})
+            self.assertEqual(r.status_code, 200, r.get_data(as_text=True) if r.status_code != 200 else '')
+            self.assertEqual(r.mimetype, 'application/pdf')
+            self.assertTrue(r.data.startswith(b'%PDF-'))
+            self.assertEqual(r.headers['Cache-Control'], 'no-store')
+            self.assertEqual(r.headers['Referrer-Policy'], 'no-referrer')
+            self.assertNotIn('clave-sint', r.headers.get('Content-Disposition', ''))
+            r.close()
+        with self.client.session_transaction() as sesion:
+            self.assertNotIn(acceso.SESSION_FLAG, sesion)
+            sesion[acceso.SESSION_FLAG] = True
+        self.assertEqual(self.client.get(ruta, query_string={'token': 'mala'}).status_code, 401)
+        self.assertEqual(self.client.get(ruta, query_string=[('token', 'a'), ('token', 'b')]).status_code, 400)
+        acceso._INTENTOS_FALLIDOS.clear()
+        for _ in range(acceso.MAX_INTENTOS):
+            self.client.get(ruta, query_string={'token': 'mala'})
+        self.assertEqual(self.client.get(ruta, query_string={'token': 'clave-sintética-ñ'}).status_code, 429)
 
 
 if __name__ == '__main__':

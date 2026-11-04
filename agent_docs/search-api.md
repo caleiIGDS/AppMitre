@@ -10,7 +10,7 @@ conexión de GPT Actions y no hace falta otro proceso o dependencia de infraestr
 
 Un único prefijo efectivo: `/app-horarios/api/v1/consultas`. Conserva el prefijo API
 existente para montarse en el mismo Flask; no existe un alias `/horarios/api/v1`.
-Los cuatro POST aceptan JSON, pero no escriben ni consultan Sheets.
+Las cuatro operaciones aceptan POST con JSON o GET con filtros en la URL; no escriben ni consultan Sheets. GET admite `token` con la misma clave de Horarios, sin abrir sesión; listas como parámetros repetidos, `valor` como alias de `valores`, año entero y `ahora=true/false`. Mismo motor, validación, JSON y paginación. Guía pública: `/instructivo.md` (archivo `instructivo-publico.md`); la copia local `instructivo.md` contiene la clave, se excluye de Git y no se sirve por HTTP.
 
 | Ruta bajo ese prefijo | Contrato | Filtros |
 | --- | --- | --- |
@@ -21,13 +21,13 @@ Los cuatro POST aceptan JSON, pero no escriben ni consultan Sheets.
 | `GET /contratos` | Registro y esquemas | Nombres, descripciones, entrada/salida y límites del mismo registro que valida las consultas. |
 | `GET /openapi.json` | OpenAPI 3.1 | Las cuatro consultas, sus esquemas compartidos y la autenticación; listo para configurar una conexión posterior. |
 
-Todas esas rutas exigen sesión de Horarios o `Authorization: Bearer <HORARIOS_CLAVE>`.
+Todas esas rutas exigen sesión de Horarios, `Authorization: Bearer <HORARIOS_CLAVE>` o, únicamente para GET/HEAD, `?token=<HORARIOS_CLAVE>` codificado como componente de URL.
 La clave se compara en tiempo constante sobre UTF-8; login y Bearer comparten el límite
 de cinco intentos fallidos por IP en quince minutos (memoria del proceso, no distribuido).
 Bearer solo permite estas lecturas: no crea sesión ni habilita `/datos`, PDF,
 `/actualizar` u otras áreas. Las consultas POST con cookie exigen `X-Mitre`; con Bearer
 no necesitan esa defensa CSRF. Las respuestas nuevas llevan `Cache-Control: no-store`.
-Configurar la clave en el campo secreto del cliente; nunca en el contrato ni en el chat.
+El token en URL puede quedar en historiales y registros del hosting; no incluirlo en documentación pública ni resultados. Las respuestas agregan `Referrer-Policy: no-referrer` y `X-Robots-Tag: noindex, nofollow`.
 OpenAPI usa el origen de la petición como servidor; descargarlo desde el dominio HTTPS
 real al configurar el cliente. Esto no configura Actions ni despliega la aplicación.
 

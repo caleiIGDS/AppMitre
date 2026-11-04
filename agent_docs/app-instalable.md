@@ -128,7 +128,7 @@ planilla general, PDF, imprimir varios, ACTUALIZAR HORARIOS, tema nocturno y mod
 - **Sesión:** `HORARIOS_CLAVE`, con el flag de sesión de `horarios/acceso.py`;
   `acceso.comprobar_clave` hace el chequeo (con límite de intentos). No usa
   `accesos`. Escrituras con `X-Mitre`, igual que `/app/api`.
-- **PDF:** `impresion.js` abre una vista local con los mismos filtros y componentes del calendario y los datos descargados, sin red; el diálogo del navegador permite imprimir o guardar como PDF vectorial, A4 horizontal y una página por calendario, también varios cursos y planillas. La planilla de preceptores se divide en páginas legibles. `/horarios/export/pdf/...` (`horarios/rutas.py`) sigue disponible por compatibilidad y el service worker deja pasar esas rutas.
+- **PDF:** `impresion.js` abre una vista local con los mismos filtros y componentes del calendario y los datos descargados, sin red; el diálogo del navegador permite imprimir o guardar como PDF vectorial, A4 horizontal y una página por calendario, también varios cursos y planillas. La planilla de preceptores se divide en páginas legibles. Los exports PDF del servidor (`horarios/rutas.py`) se conservan para agentes externos: aceptan sesión o `?token=<HORARIOS_CLAVE>` codificado. La app no depende de ellos para imprimir.
 - **Direcciones:** cada búsqueda es una URL (`/cursos/3° B`, `/aulas?planilla=1&dia=…&piso=…`,
   `?comparar=curso:…,profesor:…` con el mismo formato que el link del asistente).
 - **Motor del calendario:** `frontend/horarios/src/calendario.js` (ver `calendar-engine.md`),

@@ -16,7 +16,7 @@ import time
 import hmac
 from threading import Lock
 
-from flask import abort, session
+from flask import abort, request, session
 
 from .config import PRODUCCION
 
@@ -94,11 +94,28 @@ def comprobar_clave(ip, clave):
 def registrar(bp):
     """Monta el gate sobre el blueprint de los PDF (`/horarios/export/...`).
 
-    Sin sesión contesta 401: a los PDF se llega desde la app, que es la que pide la clave
-    (`app_api.py`, POST /entrar). No hay página de login propia.
+    Acepta sesión o un único token GET/HEAD con la clave de Horarios.
+    El token no abre sesión y comparte el límite de intentos del login.
     """
 
     @bp.before_request
     def _gate():
+        tokens = request.args.getlist('token')
+        if tokens:
+            if len(tokens) != 1 or request.method not in ('GET', 'HEAD'):
+                abort(400)
+            resultado = verificar_clave(request.remote_addr, tokens[0])
+            if resultado == 'bloqueado':
+                abort(429)
+            if resultado != 'ok':
+                abort(401)
+            return None
         if not autenticado():
             abort(401)
+
+    @bp.after_request
+    def _privada(respuesta):
+        respuesta.headers['Cache-Control'] = 'no-store'
+        respuesta.headers['Referrer-Policy'] = 'no-referrer'
+        respuesta.headers['X-Robots-Tag'] = 'noindex, nofollow'
+        return respuesta

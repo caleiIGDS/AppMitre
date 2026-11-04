@@ -10,8 +10,7 @@ dependencia va en un solo sentido: el agente importa `horarios.datos` para leer,
 revés.
 
 La interfaz es la app instalable (`frontend/horarios/`, servida en `/horarios/` por
-`app.py`). Acá queda la API (`bp_app`, `/app-horarios/api`) y los PDF (`bp`,
-`/horarios/export`). `app.py` sólo necesita `bp`, `bp_app`, `init_db` y `cargar_inicial`.
+`app.py`). Expone la API (`bp_app`), los exports PDF (`bp`), `init_db` y `cargar_inicial`.
 """
 import os
 
@@ -30,8 +29,7 @@ if PRODUCCION and not (os.environ.get('SHEETS_PROXY_URL') and os.environ.get('SH
         "Faltan SHEETS_PROXY_URL / SHEETS_PROXY_SECRET en el entorno. Sin ellas no se "
         "puede bajar la planilla privada de horarios: no se arranca en producción.")
 
-# Importar `rutas` define los endpoints y monta el gate sobre `bp` (necesita que `bp` ya
-# exista). `datos` expone init_db/cargar_inicial que llama app.py al arrancar.
+# Los PDF del servidor complementan la impresión local de la app.
 from . import rutas  # noqa: E402,F401
 from .datos import init_db, cargar_inicial  # noqa: E402,F401
 # La API de la app instalable de horarios (/app-horarios/api). Mismo gate de sesión.

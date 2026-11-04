@@ -64,3 +64,6 @@ nombre_mapeos.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Instructivo local con la clave de Horarios; la copia pública sí viaja.
+/instructivo.md

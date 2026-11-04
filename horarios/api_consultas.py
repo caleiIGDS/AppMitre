@@ -22,9 +22,15 @@ def error(codigo, mensaje, estado):
 @bp_consultas.before_request
 def autenticar():
     autorizacion = request.headers.get('Authorization')
-    if autorizacion is not None:
-        partes = autorizacion.split()
-        credencial = partes[1] if len(partes) == 2 and partes[0].lower() == 'bearer' else ''
+    token_url = request.args.getlist('token')
+    if token_url and (request.method not in ('GET', 'HEAD') or len(token_url) != 1):
+        return error('parametros_invalidos', 'Usá un solo token y únicamente en consultas GET.', 400)
+    if autorizacion is not None or token_url:
+        if autorizacion is not None:
+            partes = autorizacion.split()
+            credencial = partes[1] if len(partes) == 2 and partes[0].lower() == 'bearer' else ''
+        else:
+            credencial = token_url[0]
         resultado = acceso.verificar_clave(request.remote_addr, credencial)
         if resultado == 'bloqueado':
             return error('demasiados_intentos', 'Demasiados intentos; esperá 15 minutos.', 429)
@@ -41,14 +47,46 @@ def autenticar():
 def privada(respuesta):
     respuesta.headers['Cache-Control'] = 'no-store'
     respuesta.headers['Vary'] = 'Authorization, Cookie'
+    respuesta.headers['Referrer-Policy'] = 'no-referrer'
+    respuesta.headers['X-Robots-Tag'] = 'noindex, nofollow'
     return respuesta
+
+
+def parametros_url(operacion):
+    """Mismos filtros del JSON: listas como parámetros repetidos, sin partir nombres."""
+    propiedades = CONTRATOS[operacion]['entrada']['properties']
+    parametros = {}
+    for original in request.args:
+        if original == 'token':
+            continue
+        campo = 'valores' if original == 'valor' and operacion == 'horarios' else original
+        if campo not in propiedades or campo in parametros:
+            raise ErrorConsulta('parametros_invalidos', 'Parámetro desconocido o repetido.', campo=original)
+        valores = request.args.getlist(original)
+        tipo = propiedades[campo].get('type')
+        if tipo == 'array':
+            parametros[campo] = valores
+            continue
+        if len(valores) != 1:
+            raise ErrorConsulta('parametros_invalidos', 'El parámetro requiere un único valor.', campo=campo)
+        valor = valores[0]
+        if tipo == 'integer':
+            if not valor.isascii() or not valor.isdecimal() or len(valor) > 9:
+                raise ErrorConsulta('parametros_invalidos', 'Se requiere un año entero.', campo=campo)
+            valor = int(valor)
+        elif tipo == 'boolean':
+            if valor not in ('true', 'false'):
+                raise ErrorConsulta('parametros_invalidos', 'Usá true o false.', campo=campo)
+            valor = valor == 'true'
+        parametros[campo] = valor
+    return parametros
 
 
 def consultar(operacion):
     if request.content_length is not None and request.content_length > 16000:
         return error('parametros_invalidos', 'El cuerpo de la consulta excede el límite.', 400)
-    parametros = request.get_json(silent=True)
     try:
+        parametros = parametros_url(operacion) if request.method in ('GET', 'HEAD') else request.get_json(silent=True)
         # Cambiar cualquiera de las claves invalida continuaciones previas.
         secreto = current_app.secret_key
         if isinstance(secreto, str):
@@ -65,7 +103,7 @@ def consultar(operacion):
 
 for _operacion in CONTRATOS:
     bp_consultas.add_url_rule('/' + _operacion, endpoint=_operacion,
-                              view_func=lambda op=_operacion: consultar(op), methods=['POST'])
+                              view_func=lambda op=_operacion: consultar(op), methods=['GET', 'POST'])
 
 
 @bp_consultas.get('/contratos')
@@ -93,10 +131,21 @@ def openapi():
                             'schema': {'type': 'string'}}],
             'requestBody': {'required': True, 'content': {'application/json': {'schema': contrato['entrada']}}},
             'responses': respuestas}}
+        paths[PREFIJO + '/' + op]['get'] = {
+            'operationId': contrato['nombre'] + '_url',
+            'description': contrato['descripcion'] + ' Listas: repetir el parámetro. Mismas combinaciones que POST.',
+            'security': [{'horariosTokenUrl': []}, {'horariosBearer': []}, {'horariosSesion': []}],
+            'parameters': [{'in': 'query', 'name': campo,
+                            'required': campo in contrato['entrada'].get('required', []),
+                            'schema': esquema, 'style': 'form', 'explode': True}
+                           for campo, esquema in contrato['entrada']['properties'].items()],
+            'responses': respuestas}
     return jsonify({'openapi': '3.1.0', 'info': {'title': 'Consultas de Horarios', 'version': '1.0.0'},
                     'servers': [{'url': request.url_root.rstrip('/')}], 'paths': paths,
                     'security': [{'horariosBearer': []}, {'horariosSesion': []}],
                     'components': {'securitySchemes': {
+                        'horariosTokenUrl': {'type': 'apiKey', 'in': 'query', 'name': 'token',
+                                             'description': 'La misma clave de Horarios, solo para GET.'},
                         'horariosBearer': {'type': 'http', 'scheme': 'bearer',
                                            'description': 'HORARIOS_CLAVE, configurada como secreto de la integración.'},
                         'horariosSesion': {'type': 'apiKey', 'in': 'cookie',

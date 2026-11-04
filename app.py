@@ -220,6 +220,15 @@ def horarios_app(ruta):
     return _servir_app(APP_HORARIOS_DIST, ruta, 'npm run build:horarios')
 
 
+@app.get('/instructivo.md')
+def instructivo_horarios():
+    """Guía pública para consultar Horarios; no contiene credenciales ni datos."""
+    respuesta = send_from_directory(app.root_path, 'instructivo-publico.md', mimetype='text/plain')
+    respuesta.headers['Cache-Control'] = 'no-cache'
+    return respuesta
+
+
+
 @app.route('/')
 def raiz():
     """La raíz manda a horarios, que tiene su propia clave."""
