@@ -36,13 +36,13 @@ class MCPHorarios(unittest.TestCase):
             self.assertEqual(r.status_code, 200)
             contenido = r.get_json()['result']
             self.assertEqual(contenido['protocolVersion'], version if version in mcp.VERSIONES else mcp.VERSIONES[-1])
-            self.assertEqual(contenido['capabilities'], {'tools': {'listChanged': False}})
+            self.assertEqual(contenido['capabilities'], {'tools': {'listChanged': False}, 'resources': {'listChanged': False}})
         r = self.rpc('tools/list')
         tools = r.get_json()['result']['tools']
         self.assertEqual({t['name'] for t in tools},
                          {c['nombre'] for c in mcp.CONTRATOS.values()} | {'obtener_pdf'})
         for tool in tools:
-            self.assertEqual(tool['inputSchema']['required'], ['clave', 'consulta'])
+            self.assertEqual(tool['inputSchema']['required'], ['consulta'])
             self.assertTrue(tool['annotations']['readOnlyHint'])
             self.assertNotIn('anyOf', tool['inputSchema'])  # Compatibilidad con clientes de varios proveedores.
         self.assertNotIn('PEREZ ANA', r.get_data(as_text=True))
@@ -107,7 +107,7 @@ class MCPHorarios(unittest.TestCase):
         self.assertFalse(self.llamar('listar_catalogos')['isError'])
         self.assertEqual(self.client.get('/app-horarios/api/datos').status_code, 401)
         self.assertEqual(self.client.post('/app-horarios/api/actualizar', headers={'X-Mitre':'1'}).status_code, 401)
-        self.assertEqual(self.rpc('tools/call', {'name':'actualizar','arguments':{}}).get_json()['result']['structuredContent']['error']['codigo'], 'parametros_invalidos')
+        self.assertEqual(self.rpc('tools/call', {'name':'actualizar','arguments':{'clave':'clave-sintética-ñ'}}).get_json()['result']['structuredContent']['error']['codigo'], 'parametros_invalidos')
 
     def test_errores_escolares_y_argumentos_no_se_ocultan(self):
         r = self.llamar('consultar_horarios', {'tipo':'persona','valores':['PEREZ']})
@@ -126,7 +126,7 @@ class MCPHorarios(unittest.TestCase):
                 resultado = self.llamar('obtener_pdf', filtros)
                 self.assertFalse(resultado['isError'], resultado)
                 contenido = resultado['structuredContent']
-                self.assertEqual(contenido['vence_en_segundos'], 600)
+                self.assertEqual(contenido['vence_en_segundos'], 3600)
                 self.assertNotIn('clave-sintética', json.dumps(resultado))
                 url = contenido['url']
                 r = self.client.get(url)

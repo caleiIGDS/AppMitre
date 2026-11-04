@@ -4,7 +4,10 @@
     "appmitre": {
       "type": "streamable-http",
       "url": "https://calei.pythonanywhere.com/mcp",
-      "extensions": {"com.openai": {"auth": {"type": "none"}}}
+      "extensions": {"com.openai": {"auth": {
+        "type": "oauth", "client": {"mode": "dcr"},
+        "baseScopes": ["horarios:leer"], "defaultScopes": ["horarios:leer", "offline_access"]
+      }}}
     }
   }
 }

@@ -8,14 +8,8 @@ con Streamable HTTP en modo JSON sin sesiones/SSE, compatible con WSGI y sin otr
 El cliente oficial se verifica en `tests/test_horarios_mcp_cliente.py` (SDK opcional).
 La conexión en ChatGPT sigue siendo un paso de cuenta posterior al despliegue.
 
-El MCP anuncia las herramientas del registro y `obtener_pdf`. Su descubrimiento es público;
-cada llamada exige `{clave, consulta}` y comprueba `HORARIOS_CLAVE`, sin aceptar la cookie
-ni abrir sesión. Los resultados escolares son los mismos JSON de la API, con errores
-en `isError` y `structuredContent`. Los argumentos/filtros no se registran. El cliente
-se conecta sin autenticación de transporte: la contraseña se valida por herramienta.
-`horarios/pdf_agentes.py` reutiliza los exports y entrega enlaces de 10 minutos en
-`/horarios/mcp-pdf/<referencia>`, firmados con las claves de la aplicación y Horarios;
-no incluyen la contraseña y una rotación los invalida. El PDF de persona solo tiene clases.
+El MCP anuncia las herramientas del registro y `obtener_pdf`; reciben `{consulta}`. Su descubrimiento es público y los datos exigen OAuth Bearer. `horarios/oauth.py` publica los metadatos `/.well-known/oauth-protected-resource[/mcp]` y `/.well-known/oauth-authorization-server`; `/horarios/oauth/{register,authorize,token,revoke}` implementa DCR, código con PKCE S256, pantalla con `HORARIOS_CLAVE` y CSRF, canje único, renovación rotativa y revocación. Access dura una hora; refresh, 180 días desde cada renovación. Los hashes y clientes persisten en `database/horarios_oauth.db`, fuera de la DB regenerable; cambiar la contraseña o `SECRET_KEY` invalida los accesos. Sin Bearer hay 401 con `WWW-Authenticate`, no una clave dentro del JSON. Se acepta `{clave,consulta}` de clientes antiguos, aunque ya no se anuncia. La cookie de la app no autoriza MCP y sus tokens no autorizan la API de la app. Los resultados escolares siguen siendo los mismos JSON, con errores de dominio en `isError` y `structuredContent`; no se registran argumentos.
+`horarios/pdf_agentes.py` reutiliza los exports. `obtener_pdf` devuelve `resource_link` y enlace con nombre `.pdf` en `/horarios/mcp-pdf/<referencia>/<nombre>`, firmado por una hora y descargable sin cookies ni cabeceras, con `Content-Disposition: attachment`. `resources/read` acepta solo esas URL propias firmadas y devuelve el PDF como recurso binario base64, sin llamadas HTTP. Se conserva la ruta antigua sin nombre para enlaces ya emitidos. Rotar las claves invalida los enlaces. El PDF de persona solo tiene clases; devolver un archivo MCP no garantiza que el cliente cree un adjunto nativo.
 
 ## Consultas estructuradas de lectura
 

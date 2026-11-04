@@ -71,3 +71,60 @@ class ClienteOficialMCP(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(archivo.status_code, 200)
                     self.assertTrue(archivo.content.startswith(b'%PDF-'))
                     self.assertEqual((await cliente.get(self.url+'/app-horarios/api/datos')).status_code, 401)
+
+    async def test_oauth_oficial_registra_conecta_renueva_y_reutiliza_acceso(self):
+        import html
+        import re
+        from urllib.parse import urlsplit, parse_qs
+        import httpx
+        from mcp import ClientSession
+        from mcp.client.auth import OAuthClientProvider
+        from mcp.shared.auth import OAuthClientMetadata
+        from mcp.client.streamable_http import streamable_http_client
+        from test_horarios_mcp import mcp
+
+        class Almacen:
+            tokens = None
+            cliente = None
+            async def get_tokens(self): return self.tokens
+            async def set_tokens(self, v): self.tokens = v
+            async def get_client_info(self): return self.cliente
+            async def set_client_info(self, v): self.cliente = v
+
+        almacen, callbacks = Almacen(), []
+        async def abrir(url):
+            async with httpx.AsyncClient() as browser:
+                pagina = await browser.get(url)
+                csrf = html.unescape(re.search(r'name="csrf" value="([^"]+)"', pagina.text)[1])
+                respuesta = await browser.post(url, data={'csrf': csrf, 'clave': 'clave-sintética-ñ', 'decision': 'autorizar'})
+                self.assertEqual(respuesta.status_code, 302, respuesta.text)
+                q = parse_qs(urlsplit(respuesta.headers['location']).query)
+                callbacks.append((q['code'][0], q['state'][0]))
+        async def callback(): return callbacks[-1]
+        def proveedor():
+            return OAuthClientProvider(self.url+'/mcp', OAuthClientMetadata(
+                redirect_uris=['http://127.0.0.1:8765/callback'], token_endpoint_auth_method='none',
+                client_name='SDK oficial', scope='horarios:leer offline_access'), almacen, abrir, callback)
+
+        for intento in range(2):
+            auth = proveedor()
+            async with httpx.AsyncClient(auth=auth) as cliente:
+                async with streamable_http_client(self.url+'/mcp', http_client=cliente) as (read, write, _):
+                    async with ClientSession(read, write) as sesion:
+                        await sesion.initialize()
+                        r = await sesion.call_tool('consultar_horarios', {'consulta': {'tipo': 'curso', 'valores': ['3 A']}})
+                        self.assertFalse(r.isError, r)
+                        pdf = await sesion.call_tool('obtener_pdf', {'consulta': {'tipo': 'curso', 'valor': '3 A'}})
+                        recurso = await sesion.read_resource(pdf.structuredContent['url'])
+                        self.assertEqual(recurso.contents[0].mimeType, 'application/pdf')
+                        if intento == 0:
+                            refresh_original = almacen.tokens.refresh_token
+                            # Simula el vencimiento conocido por el cliente y por el servidor.
+                            auth.context.token_expiry_time = 1
+                            with self.fixture.app.test_request_context(self.url):
+                                with mcp.oauth.base() as con:
+                                    con.execute("DELETE FROM credenciales WHERE tipo='access'")
+                            r = await sesion.call_tool('listar_catalogos', {'consulta': {}})
+                            self.assertFalse(r.isError, r)
+                            self.assertNotEqual(almacen.tokens.refresh_token, refresh_original)
+            self.assertEqual(len(callbacks), 1)
