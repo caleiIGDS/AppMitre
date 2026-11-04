@@ -9,6 +9,7 @@ import { useSesion, useSalir } from '@/sesion'
 import { areasVisibles } from '@/areas'
 import { useMeta } from '@/gestion/datos'
 import AccionesInventario from './AccionesInventario.vue'
+import { desplazarArrastrando } from '@/desplazamiento'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,9 +21,7 @@ const meta = useMeta(inv)
 const inventario = computed(() => (inv.value ? meta.data.value?.inventario : null))
 const enInventario = computed(() => !!(inv.value && meta.data.value && route.name !== 'inventario-entrar'))
 const menu = computed(() => areasVisibles(areas.value, puede))
-// Sin sesión pero adentro de un inventario (el encargado que entró sólo con la clave): el
-// ☰ igual tiene que existir, para las acciones y para salir.
-const hayMenu = computed(() => !!acceso.value || enInventario.value)
+// El menú también permite configurar esta pantalla antes de iniciar sesión.
 
 const abierto = ref(false)
 const botonMenu = ref(null)
@@ -64,7 +63,7 @@ async function cerrarSesion() {
         <AccionesInventario :inv="inv" :meta="meta.data.value" />
       </div>
       <button
-        v-if="hayMenu" ref="botonMenu" type="button" class="g-menu-btn g-visible"
+        ref="botonMenu" type="button" class="g-menu-btn g-visible"
         aria-label="Abrir menú" aria-controls="a-menu" :aria-expanded="abierto"
         @click="abierto ? cerrar(true) : abrir()"
       >
@@ -73,7 +72,6 @@ async function cerrarSesion() {
     </div>
   </header>
 
-  <template v-if="hayMenu">
     <div class="g-sidebar-overlay" @click="cerrar(true)" />
     <aside id="a-menu" class="g-sidebar" aria-label="Menú" :inert="!abierto || undefined">
       <div class="g-sidebar-head">
@@ -92,7 +90,14 @@ async function cerrarSesion() {
           </template>
           <a v-if="acceso" href="/salir" class="g-areas-salir" @click.prevent="cerrarSesion">SALIR</a>
         </nav>
+        <div class="a-ajuste-pantalla">
+          <label>
+            <input v-model="desplazarArrastrando" type="checkbox" aria-describedby="a-arrastre-ayuda">
+            <span>Desplazar arrastrando</span>
+          </label>
+          <p id="a-arrastre-ayuda">Sólo en este dispositivo. Para pantallas que simulan un mouse:
+            deslizá para mover la página; mantené apretado antes de arrastrar para ordenar inventarios o fotos.</p>
+        </div>
       </div>
     </aside>
-  </template>
 </template>

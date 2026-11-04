@@ -4,6 +4,9 @@ import NavArea from './componentes/NavArea.vue'
 import Avisos from './componentes/Avisos.vue'
 import AvisoVersion from './componentes/AvisoVersion.vue'
 import EstadoRed from './componentes/EstadoRed.vue'
+import { useDesplazamiento } from './desplazamiento'
+
+useDesplazamiento()
 </script>
 
 <template>

@@ -3,6 +3,7 @@
 // todas las listas): no cambia lo que ven los demás. Hoy lo usan la lista de inventarios y
 // las fotos de cada ficha (la primera es la portada de la tarjeta en la vista galería).
 import { reactive, ref, computed, nextTick, watch, onUnmounted } from 'vue'
+import { desplazarArrastrando } from './desplazamiento'
 
 const CLAVE_ALMACEN = 'mitre-orden'
 
@@ -128,9 +129,10 @@ export function useOrdenable(clave, contenedor, lista, idDe) {
     if (!el || !contenedor.value.contains(el) || lista.value.length < 2) return
     p = {
       id: el.dataset.orden, tactil: e.pointerType !== 'mouse', puntero: e.pointerId,
+      demora: e.pointerType !== 'mouse' || desplazarArrastrando.value,
       x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, activo: false, ultimo: null,
     }
-    if (p.tactil) p.espera = setTimeout(() => p && empezar(), ESPERA_TACTIL)
+    if (p.demora) p.espera = setTimeout(() => p && empezar(), ESPERA_TACTIL)
     window.addEventListener('pointermove', mover)
     window.addEventListener('pointerup', soltar)
     window.addEventListener('pointercancel', soltar)
@@ -142,7 +144,7 @@ export function useOrdenable(clave, contenedor, lista, idDe) {
     p.y = e.clientY
     if (!p.activo) {
       if (Math.hypot(p.x - p.x0, p.y - p.y0) < UMBRAL) return
-      if (p.tactil) return soltar() // se movió antes de tiempo: es scroll, no arrastre
+      if (p.demora) return soltar() // se movió antes de tiempo: es scroll, no arrastre
       empezar()
     }
     seguir()
