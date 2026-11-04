@@ -148,6 +148,7 @@ salidas.init_db()
 # al importarse; acá sólo se registran los blueprints y se crea el schema.
 app.register_blueprint(horarios.bp)
 app.register_blueprint(horarios.bp_app)
+app.register_blueprint(horarios.bp_mcp)
 horarios.init_db()
 
 # Accesos y permisos (accesos.db) — junta el catálogo que declaró cada área, engancha los

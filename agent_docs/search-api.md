@@ -3,8 +3,19 @@
 La app Vue sigue descargando `GET /app-horarios/api/datos` y buscando localmente
 (`frontend/horarios/src/datos.js`, `Buscador.vue`). La API de consultas estructuradas,
 independiente del navegador, vive en `horarios/consultas/` y `horarios/api_consultas.py`.
-El agente interno conserva sus herramientas anteriores; no se implementó MCP ni una
-conexión de GPT Actions y no hace falta otro proceso o dependencia de infraestructura.
+El agente interno conserva sus herramientas anteriores. `horarios/mcp.py` expone `/mcp`
+con Streamable HTTP en modo JSON sin sesiones/SSE, compatible con WSGI y sin otro proceso.
+El cliente oficial se verifica en `tests/test_horarios_mcp_cliente.py` (SDK opcional).
+La conexión en ChatGPT sigue siendo un paso de cuenta posterior al despliegue.
+
+El MCP anuncia las herramientas del registro y `obtener_pdf`. Su descubrimiento es público;
+cada llamada exige `{clave, consulta}` y comprueba `HORARIOS_CLAVE`, sin aceptar la cookie
+ni abrir sesión. Los resultados escolares son los mismos JSON de la API, con errores
+en `isError` y `structuredContent`. Los argumentos/filtros no se registran. El cliente
+se conecta sin autenticación de transporte: la contraseña se valida por herramienta.
+`horarios/pdf_agentes.py` reutiliza los exports y entrega enlaces de 10 minutos en
+`/horarios/mcp-pdf/<referencia>`, firmados con las claves de la aplicación y Horarios;
+no incluyen la contraseña y una rotación los invalida. El PDF de persona solo tiene clases.
 
 ## Consultas estructuradas de lectura
 

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "appmitre-horarios",
+  "version": "1.0.0",
+  "description": "Consulta los horarios de la Escuela Técnica Emilio Mitre mediante su servidor MCP.",
+  "author": {"name": "CALEI"},
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "AppMitre",
+        "shortDescription": "Horarios de la Técnica Mitre",
+        "longDescription": "Consulta cursos, personas y sus cargos, aulas y preceptores; compara los datos registrados y obtiene calendarios PDF. Requiere la contraseña de Horarios.",
+        "developerName": "CALEI",
+        "category": "Productivity",
+        "capabilities": [],
+        "defaultPrompt": "Consultá el horario de un curso de la Técnica Emilio Mitre."
+      }
+    }
+  }
+}

@@ -1,6 +1,4 @@
 """Adaptador Flask de las cuatro consultas de lectura. Bearer nunca abre una sesión."""
-import hashlib
-import hmac
 from flask import Blueprint, current_app, jsonify, request
 
 from . import acceso, datos
@@ -88,10 +86,7 @@ def consultar(operacion):
     try:
         parametros = parametros_url(operacion) if request.method in ('GET', 'HEAD') else request.get_json(silent=True)
         # Cambiar cualquiera de las claves invalida continuaciones previas.
-        secreto = current_app.secret_key
-        if isinstance(secreto, str):
-            secreto = secreto.encode('utf-8')
-        clave_cursor = hmac.new(secreto, acceso._clave().encode('utf-8'), hashlib.sha256).digest()
+        clave_cursor = acceso.clave_derivada(current_app.secret_key)
         salida = ejecutar(operacion, parametros, datos.DB_PATH, clave_cursor)
         return current_app.response_class(compacto(salida), mimetype='application/json')
     except ErrorConsulta as e:

@@ -34,3 +34,4 @@ from . import rutas  # noqa: E402,F401
 from .datos import init_db, cargar_inicial  # noqa: E402,F401
 # La API de la app instalable de horarios (/app-horarios/api). Mismo gate de sesión.
 from .app_api import bp_app  # noqa: E402,F401
+from .mcp import bp_mcp  # noqa: E402,F401

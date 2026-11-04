@@ -375,11 +375,12 @@ class ConsultasHorarios(unittest.TestCase):
         self.assertEqual(self.client.get(PREFIJO + '/contratos').status_code, 401)
         r = self.client.get(PREFIJO + '/contratos', headers=self.bearer)
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(len(r.get_json()['herramientas']), 4)
+        self.assertEqual({h['nombre'] for h in r.get_json()['herramientas']},
+                         {c['nombre'] for c in consultas.CONTRATOS.values()})
         r = self.client.get(PREFIJO + '/openapi.json', headers=self.bearer)
         self.assertEqual(r.status_code, 200)
         documento = r.get_json()
-        self.assertEqual(len(documento['paths']), 4)
+        self.assertEqual(set(documento['paths']), {PREFIJO + '/' + op for op in consultas.CONTRATOS})
         for op, c in consultas.CONTRATOS.items():
             schema = documento['paths'][PREFIJO + '/' + op]['post']['requestBody']['content']['application/json']['schema']
             self.assertEqual(schema, c['entrada'])

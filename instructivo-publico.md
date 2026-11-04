@@ -2,6 +2,12 @@
 
 Leé esta guía cuando el usuario pida horarios de la E.E.S.T. N.º 4 Emilio Mitre. **Pedile al usuario la misma contraseña que usa para entrar a la aplicación de Horarios**, si aún no te la dio en esta conversación. Esa contraseña es el valor de `token`: no hay una clave diferente ni tenés que generar un token. La contraseña no está en este documento público. Con ella podés abrir enlaces HTTPS y leer las respuestas JSON; no necesitás instalar un MCP ni enviar cabeceras o cuerpos POST. Necesitás que tu herramienta permita abrir estas URL: si lo impide, explicá esa limitación sin afirmar que el servidor está caído.
 
+## Si el agente tiene conexión MCP
+
+El servidor MCP está en `https://calei.pythonanywhere.com/mcp` (Streamable HTTP). Se conecta sin autenticación de transporte; **cada herramienta exige la contraseña de Horarios en `clave`** y los filtros en `consulta`. Ejemplo de argumentos: `{"clave":"TU_CLAVE","consulta":{"tipo":"curso","valores":["3 K"]}}` para `consultar_horarios`. La contraseña en este JSON va tal como la escribe el usuario, sin codificarla como URL.
+
+Usá las herramientas MCP ya conectadas en vez del lector web. Se anuncian las consultas del registro de la API y `obtener_pdf`; sus resultados escolares son los mismos JSON. `obtener_pdf` devuelve un enlace descargable válido por 10 minutos, sin la contraseña en la URL. Para conectarlo en ChatGPT: Plugins → + → Add custom MCP server, indicar esa dirección, elegir No authentication e instalar la conexión personal. También puede configurarse en otros clientes MCP compatibles. Agregar la dirección al texto de un chat no instala la conexión.
+
 ## Enlaces de consulta
 
 Base: `https://calei.pythonanywhere.com/app-horarios/api/v1/consultas`.
@@ -21,6 +27,7 @@ Agregá a la base uno de estos caminos:
 | Solo martes de un curso | `/horarios?token=TU_CLAVE&tipo=curso&valor=3%20K&dias=martes` |
 | Buscar persona y sus cargos | `/personas?token=TU_CLAVE&nombre=calei` |
 | Personas con un cargo | `/personas?token=TU_CLAVE&rol=preceptor` |
+| Todos los cargos, como respaldo de un rol que no coincide | `/catalogos?token=TU_CLAVE&incluir=roles` |
 | Personas con más de un cargo | `/personas?token=TU_CLAVE&multiples_roles=true` |
 | Semana de una persona, todos sus cargos | `/horarios?token=TU_CLAVE&tipo=persona&valor=CALEI` |
 | Semana de un aula | `/horarios?token=TU_CLAVE&tipo=aula&valor=33` |
@@ -45,6 +52,8 @@ Las divisiones, nombres y aulas deben corresponder a los datos reales. Consultá
 - Error: `{"error":{"codigo":"...","mensaje":"..."}}`. Con `persona_ambigua`, revisá los candidatos, sin fusionarlos ni elegir arbitrariamente. Con `consulta_demasiado_amplia`, dividí por entidades/días. Con 401 revisá la clave; con 429 detené los reintentos. No inventes un horario si una consulta falla.
 
 Los esquemas completos están en `/contratos?token=TU_CLAVE` y `/openapi.json?token=TU_CLAVE`, bajo la misma base; son referencias técnicas opcionales, no un paso obligatorio.
+
+Si un cargo no coincide, la búsqueda queda vacía o el usuario usa un sinónimo/abreviatura que no reconocés, pedí una vez `/catalogos?token=TU_CLAVE&incluir=roles`. Revisá los cargos reales y repetí la consulta con el rol correspondiente, conservando los demás filtros. `rol=?` busca literalmente ese texto; no lista cargos ni funciona como comodín. Una equivalencia clara permite continuar e indicar cómo interpretaste el pedido; si el término es ambiguo, preguntá. Si el pedido engloba varios cargos, consultá los pertinentes y reuní las personas sin duplicarlas. Una persona puede tener varios roles: no los equipares ni descartes los otros. Si se enviaron nombre y rol juntos, un resultado vacío también puede deberse al cargo; revisá primero este catálogo pequeño antes de descargar todos los nombres. Reutilizá el catálogo en la conversación y no lo pidas antes de cada consulta.
 
 Si no encontrás una persona o los candidatos no son convincentes, pedí una vez `/catalogos?token=TU_CLAVE&incluir=nombres` y revisá los nombres completos buscando errores de escritura, abreviaturas u orden de nombre/apellido. Este respaldo incluye docentes, preceptores y otros cargos, sin descargar sus horarios. Con una coincidencia clara, consultá el nombre exacto e indicá a quién interpretaste; si hay varias posibilidades razonables, pedí al usuario que precise. Si ninguna encaja, informá que no pudiste identificarla. Conservá los filtros de cargo que haya pedido el usuario. No listes todos los nombres en la respuesta ni los descargues antes de cada consulta; reutilizá la lista en esa conversación. Este respaldo sirve para identificar personas, no para resolver errores de autenticación o de conexión.
 

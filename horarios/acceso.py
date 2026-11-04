@@ -14,6 +14,7 @@ propia app Flask.
 import os
 import time
 import hmac
+import hashlib
 from threading import Lock
 
 from flask import abort, request, session
@@ -66,6 +67,15 @@ def _clave():
 
 def autenticado():
     return bool(session.get(SESSION_FLAG))
+
+
+def clave_derivada(secreto):
+    """Firma cursores/enlaces privados; rotar cualquiera de las claves los invalida."""
+    if not secreto:
+        raise RuntimeError('Falta la clave de firma de la aplicación.')
+    if isinstance(secreto, str):
+        secreto = secreto.encode('utf-8')
+    return hmac.new(secreto, _clave().encode('utf-8'), hashlib.sha256).digest()
 
 
 def verificar_clave(ip, clave):
