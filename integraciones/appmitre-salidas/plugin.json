@@ -1,0 +1,20 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "appmitre-salidas",
+  "version": "1.0.0",
+  "description": "Consulta los anexos de Salidas Educativas y rellena campos de una salida existente de la Técnica Emilio Mitre.",
+  "author": {"name": "Calei IGDS"},
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "AppMitre Salidas",
+        "shortDescription": "Anexos de Salidas Educativas",
+        "longDescription": "Consulta el instructivo, los plazos y los formularios de Salidas Educativas. Completa campos de una salida existente para que los revises en AppMitre.",
+        "developerName": "Calei IGDS",
+        "category": "Productivity",
+        "capabilities": [],
+        "defaultPrompt": "Ayudame a rellenar los anexos de una salida educativa que ya tengo abierta en AppMitre."
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "appmitre-salidas": {
+      "type": "streamable-http",
+      "url": "https://calei.pythonanywhere.com/mcp/salidas",
+      "extensions": {"com.openai": {"auth": {"type": "none"}}}
+    }
+  }
+}

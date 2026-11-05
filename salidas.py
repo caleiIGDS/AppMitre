@@ -1390,7 +1390,7 @@ def nueva_tabs():
 def editar(id):
     con = conectar()
     cur = con.cursor()
-    fila = cur.execute("SELECT datos_json, archivado FROM salidas WHERE id = ?", (id,)).fetchone()
+    fila = cur.execute("SELECT datos_json, archivado, vigencia_hasta FROM salidas WHERE id = ?", (id,)).fetchone()
     con.close()
     if fila is None:
         abort(404)
@@ -1398,7 +1398,8 @@ def editar(id):
     _replicar_comunes(datos_precargar.get('anexos') or {}, datos_precargar.get('datos_comunes') or {})
     normativa = _cargar_normativa()
     return render_template('salidas/formulario.html', activo='nueva', id_editar=id, datos_precargar=datos_precargar,
-                           normativa=normativa, archivado=bool(fila['archivado']))
+                           normativa=normativa, archivado=bool(fila['archivado']),
+                           agente_habilitado=not fila['archivado'] and fila['vigencia_hasta'] > ahora().isoformat())
 
 
 @bp.route('/api/guardar', methods=['POST'])

@@ -14,6 +14,7 @@ import accesos
 import gestion
 import agente
 import salidas
+import salidas_mcp
 import horarios
 from config import DIR_DATOS, PRODUCCION, RAIZ, SESION_DIAS
 
@@ -140,6 +141,7 @@ app.register_blueprint(salidas.bp)
 # Blueprint aparte y SIN gate: el link público /salidas/completar/<token> para que
 # familias y estudiantes completen su Anexo VI/VII solos (ver salidas.py).
 app.register_blueprint(salidas.bp_publico)
+app.register_blueprint(salidas_mcp.bp)
 salidas.init_db()
 
 # Sistema de horarios — sitio aparte: clave propia (HORARIOS_CLAVE), config y datos

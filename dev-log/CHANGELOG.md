@@ -6,6 +6,10 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ---
 
+## [2026-11-05] — MCP de Salidas Educativas
+
+`/mcp/salidas` entrega los Anexos I–IX y propone campos para una pestaña de edición habilitada por código. El navegador aplica la propuesta a campos vacíos y conserva el guardado manual.
+
 ## [2026-10-05] — Gestión y Horarios: sólo las apps, en `/gestion/` y `/horarios/`
 
 **Archivos**: `app.py`, `gestion.py`, `crud.py` (sin `registrar_rutas`/`contexto_base`), `horarios/{rutas,acceso,app_api}.py`, `frontend/`, `agente/enlaces.py`; borrados `templates/{gestion,inventarios,horarios,index.html}`, `templates/crud/{lista,form,detalle,_detalle_fotos}.html`, `static/{gestion.js,js/script.js}`
