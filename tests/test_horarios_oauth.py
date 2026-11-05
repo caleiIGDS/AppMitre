@@ -4,6 +4,7 @@ import hashlib
 import html
 import re
 import sqlite3
+import time
 import unittest
 from urllib.parse import urlencode, urlsplit, parse_qs
 from unittest.mock import patch
@@ -101,7 +102,7 @@ class OAuthHorarios(unittest.TestCase):
         self.assertEqual(renovado.status_code, 200, renovado.data)
         self.assertNotEqual(renovado.json['refresh_token'], tokens['refresh_token'])
         self.assertEqual(self.client.post('/horarios/oauth/token', data=p).status_code, 400)
-        with patch.object(oauth.time, 'time', return_value=__import__('time').time()+3700):
+        with patch.object(time, 'time', return_value=time.time()+3700):
             self.assertEqual(llamada(tokens['access_token']).status_code, 401)
         with patch.object(fixtures.acceso, '_clave', return_value='rotada'):
             self.assertEqual(llamada(renovado.json['access_token']).status_code, 401)

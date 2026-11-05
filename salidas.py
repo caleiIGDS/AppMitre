@@ -26,7 +26,10 @@ import re
 import secrets
 import shutil
 import sys
+from contextlib import closing
 from datetime import timedelta
+from functools import lru_cache
+from tempfile import TemporaryDirectory
 
 from contextlib import contextmanager
 from io import BytesIO
@@ -123,6 +126,11 @@ CREATE TABLE IF NOT EXISTS salidas (
     token TEXT DEFAULT '',
     archivado INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS salidas_mcp_creaciones (
+    operacion TEXT PRIMARY KEY,
+    pedido TEXT NOT NULL,
+    salida INTEGER NOT NULL
+);
 """
 
 
@@ -161,11 +169,13 @@ def init_db():
 def _purgar_vencidas():
     con = conectar()
     cur = con.cursor()
+    cur.execute('BEGIN IMMEDIATE')
     ahora_iso = ahora().isoformat()
     vencidas = cur.execute("SELECT id FROM salidas WHERE vigencia_hasta < ?", (ahora_iso,)).fetchall()
     for fila in vencidas:
         _borrar_pdfs(fila['id'])
     cur.execute("DELETE FROM salidas WHERE vigencia_hasta < ?", (ahora_iso,))
+    cur.execute("DELETE FROM salidas_mcp_creaciones WHERE salida NOT IN (SELECT id FROM salidas)")
     con.commit()
     con.close()
 
@@ -266,6 +276,12 @@ def _cargar_schema(anexo):
 
 
 _normativa_cache = None
+@lru_cache(maxsize=1)
+def esquema_formulario():
+    with open(os.path.join(ANEXOS_JSON_DIR, 'formulario.json'), encoding='utf-8') as f:
+        return json.load(f)
+
+
 def _cargar_normativa():
     global _normativa_cache
     if _normativa_cache is None:
@@ -1163,19 +1179,24 @@ def _generar_pdfs(id, anexos):
     una copia completa aparte (`AnexoIX_2.pdf`, ...); se siguen borrando las que hayan
     quedado en disco de salidas guardadas antes de ese cambio.
     """
-    for n in ANEXOS_NUMEROS:
-        valores = anexos.get(n) or {}
-        ruta = _ruta_pdf(id, n)
-        if n in ANEXOS_OPCIONALES_SI_VACIOS and _anexo_vacio(valores):
-            # Sin datos cargados (III: no aplica autorización general; VIII: no hubo
-            # transporte contratado) — no generar, y borrar un PDF viejo si quedó de una
-            # edición anterior donde sí había datos.
-            if os.path.exists(ruta):
+    os.makedirs(PDF_DIR, exist_ok=True)
+    with TemporaryDirectory(dir=PDF_DIR) as temporal:
+        preparados = {}
+        for n in ANEXOS_NUMEROS:
+            valores = anexos.get(n) or {}
+            if n in ANEXOS_OPCIONALES_SI_VACIOS and _anexo_vacio(valores):
+                continue
+            destino = os.path.join(temporal, f'Anexo{n}.pdf')
+            _generar_pdf_anexo(n, valores, destino)
+            preparados[n] = destino
+        os.makedirs(_carpeta_pdfs(id), exist_ok=True)
+        for n in ANEXOS_NUMEROS:
+            ruta = _ruta_pdf(id, n)
+            if n in preparados:
+                os.replace(preparados[n], ruta)
+            elif os.path.exists(ruta):
                 os.remove(ruta)
-            continue
-        _generar_pdf_anexo(n, valores, ruta)
-        if n == 'IX':
-            _limpiar_pdfs_ix_extra(id)
+        _limpiar_pdfs_ix_extra(id)
 
 
 # --- Link público: familias/estudiantes completan el VI/VII solos -------------
@@ -1352,7 +1373,7 @@ def lista():
 def nueva():
     normativa = _cargar_normativa()
     return render_template('salidas/formulario.html', activo='nueva', datos_precargar=None, id_editar=None,
-                           normativa=normativa)
+                           normativa=normativa, esquema_formulario=esquema_formulario())
 
 
 @bp.route('/padron')
@@ -1382,7 +1403,7 @@ def nueva_tabs():
         variante = '1'
     normativa = _cargar_normativa()
     return render_template('salidas/formulario_tabs.html', activo='nueva', datos_precargar=None,
-                           id_editar=None, normativa=normativa, variante=variante)
+                           id_editar=None, normativa=normativa, variante=variante, esquema_formulario=esquema_formulario())
 
 
 @bp.route('/<int:id>/editar')
@@ -1399,6 +1420,8 @@ def editar(id):
     normativa = _cargar_normativa()
     return render_template('salidas/formulario.html', activo='nueva', id_editar=id, datos_precargar=datos_precargar,
                            normativa=normativa, archivado=bool(fila['archivado']),
+                           esquema_formulario=esquema_formulario(),
+                           revision_editar=revision_legajo(fila['datos_json']),
                            agente_habilitado=not fila['archivado'] and fila['vigencia_hasta'] > ahora().isoformat())
 
 
@@ -1409,10 +1432,30 @@ def api_guardar():
     if not isinstance(datos, dict):
         return jsonify({'error': 'JSON inválido.'}), 400
 
+    id = datos.get('_id_editar') or None
+    revision = datos.pop('_revision_editar', None)
+    with closing(conectar()) as con, con:
+        con.execute('BEGIN IMMEDIATE')
+        if id is not None and revision is not None:
+            fila = con.execute('SELECT datos_json FROM salidas WHERE id=?', (id,)).fetchone()
+            if fila is None:
+                return jsonify({'error': 'Salida no encontrada.'}), 404
+            if revision != revision_legajo(fila['datos_json']):
+                return jsonify({'error': 'La salida cambió desde que la abriste. Revisá la versión actual antes de guardar.'}), 409
+        id = guardar_legajo(con, datos, id)
+    if id is None:
+        return jsonify({'error': 'Salida no encontrada.'}), 404
+    return jsonify({'id': id})
+
+
+def revision_legajo(datos_json):
+    return hashlib.sha256(datos_json.encode('utf-8')).hexdigest()
+
+
+def guardar_legajo(con, datos, id=None):
+    """Persiste datos y PDF con el bloqueo de escritura tomado por el llamador."""
     comunes = datos.get('datos_comunes') or {}
     anexos = datos.get('anexos') or {}
-    id_editar = datos.get('_id_editar')
-
     # Replicar datos_comunes en cada anexo ANTES de guardar y de generar el PDF — si no,
     # los campos que sólo se cargan una vez en "Datos Comunes" (tipo_salida, distrito,
     # establecimiento_educativo, localidad_salida...) quedan en blanco en el PDF hasta que
@@ -1420,38 +1463,25 @@ def api_guardar():
     # datos_json ya guardado — acá hace falta antes de guardar por primera vez).
     _replicar_comunes(anexos, comunes)
 
-    con = conectar()
-    cur = con.cursor()
-
-    if id_editar:
-        # Actualización de salida existente
-        cur.execute("SELECT vigencia_hasta FROM salidas WHERE id = ?", (id_editar,))
-        fila = cur.fetchone()
-        if fila is None:
-            con.close()
-            return jsonify({'error': 'Salida no encontrada.'}), 404
-        vigencia_hasta = fila['vigencia_hasta']
-        cur.execute(
+    if id is not None:
+        actualizado = con.execute(
             "UPDATE salidas SET nombre_proyecto = ?, fecha_salida = ?, datos_json = ? WHERE id = ?",
             (comunes.get('denominacion_proyecto', '') or '', comunes.get('fecha_salida', '') or '',
-             json.dumps(datos), id_editar))
-        id = id_editar
+             json.dumps(datos), id)).rowcount
+        if not actualizado:
+            return None
     else:
         # Inserción de nueva salida
         creado = ahora()
         vigencia = creado + timedelta(days=VIGENCIA_DIAS)
-        cur.execute(
+        id = con.execute(
             "INSERT INTO salidas (nombre_proyecto, fecha_salida, fecha_creacion, vigencia_hasta, "
             "datos_json, token) VALUES (?,?,?,?,?,?)",
             (comunes.get('denominacion_proyecto', '') or '', comunes.get('fecha_salida', '') or '',
-             creado.isoformat(), vigencia.isoformat(), json.dumps(datos), _generar_token()))
-        id = cur.lastrowid
-
-    con.commit()
-    con.close()
+             creado.isoformat(), vigencia.isoformat(), json.dumps(datos), _generar_token())).lastrowid
 
     _generar_pdfs(id, anexos)
-    return jsonify({'id': id})
+    return id
 
 
 @bp.route('/<int:id>')
@@ -1484,18 +1514,15 @@ def regenerar_pdfs(id):
     la fila — no hay otra forma de traerlos al día: se generan una sola vez al guardar
     (`api_guardar`) y quedan cacheados en disco, así que un cambio en el renderer (esta
     función, `_generar_pdf_anexo`) no toca los PDF de las salidas guardadas antes."""
-    con = conectar()
-    cur = con.cursor()
-    fila = cur.execute("SELECT datos_json FROM salidas WHERE id = ?", (id,)).fetchone()
-    con.close()
-    if fila is None:
-        abort(404)
-    datos = json.loads(fila['datos_json'])
-    anexos = datos.get('anexos') or {}
-    datos_comunes = datos.get('datos_comunes') or {}
-    # Replicar datos_comunes en cada anexo, igual que en api_guardar
-    _replicar_comunes(anexos, datos_comunes)
-    _generar_pdfs(id, anexos)
+    with closing(conectar()) as con, con:
+        con.execute('BEGIN IMMEDIATE')
+        fila = con.execute("SELECT datos_json FROM salidas WHERE id = ?", (id,)).fetchone()
+        if fila is None:
+            abort(404)
+        datos = json.loads(fila['datos_json'])
+        anexos = datos.get('anexos') or {}
+        _replicar_comunes(anexos, datos.get('datos_comunes') or {})
+        _generar_pdfs(id, anexos)
     return redirect(url_for('salidas.detalle', id=id))
 
 

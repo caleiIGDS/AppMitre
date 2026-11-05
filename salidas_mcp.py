@@ -1,4 +1,4 @@
-"""Entrega campos a una pestaña autorizada. El legajo se guarda desde el formulario."""
+"""Herramientas MCP de Salidas y entrega opcional a una pestaña."""
 from contextlib import closing, contextmanager
 from datetime import date
 import hashlib
@@ -15,6 +15,8 @@ from flask import Blueprint, abort, jsonify, request, url_for
 import accesos
 from config import ahora
 import salidas
+from salidas_mcp_acceso import RUTA_OAUTH, SCOPE, oauth
+from texto import norm
 
 
 bp = Blueprint('salidas_mcp', __name__)
@@ -25,13 +27,12 @@ ANEXOS = ('I', 'II', *salidas.ANEXOS_NUMEROS)
 TIPOS = {'text', 'textarea', 'date', 'time', 'select', 'bool', 'number', 'personas', 'telefonos'}
 ROLES = ('estudiante', 'docente_titular', 'docente_reemplazante', 'no_docente')
 INSTRUCCIONES = (
-    'Salidas Educativas de la Técnica Emilio Mitre. Consultá los anexos I y II para los requisitos '
-    'y plazos, y los anexos III a IX para cada formulario. Para rellenar, la persona abre Editar '
-    'en una salida existente y genera un código en Rellenar con agente. Consultá los campos de esa '
-    'pestaña y enviá solo datos aportados o confirmados por la persona. No inventes datos, firmas, '
-    'autorizaciones, declaraciones ni constancias. El envío deja campos listos para revisar en la '
-    'pestaña. Solo la persona puede aplicarlos y guardar desde AppMitre.'
+    'Consultá los anexos de Salidas Educativas. Conectá AppMitre para consultar, crear o editar '
+    'legajos. Usá solo datos aportados o confirmados. Para editar buscá y consultá primero la salida '
+    'para obtener su revisión. Crear y editar guardan directamente en AppMitre. Las firmas, '
+    'autorizaciones y declaraciones quedan a cargo de sus responsables.'
 )
+oauth.registrar(bp)
 
 
 def _huella(valor):
@@ -183,18 +184,26 @@ def _operacion_pestana(id, datos):
         return jsonify(estado='recibido', valores=json.loads(entrega['valores']))
 
 
-def _objeto(propiedades):
-    return {'type': 'object', 'properties': propiedades, 'required': list(propiedades),
+def _objeto(propiedades, opcionales=()):
+    return {'type': 'object', 'properties': propiedades, 'required': [k for k in propiedades if k not in opcionales],
             'additionalProperties': False}
 
 
-def _tool(nombre, descripcion, propiedades, lectura=True):
-    return {'name': nombre, 'description': descripcion, 'inputSchema': _objeto(propiedades),
-            'annotations': {'readOnlyHint': lectura, 'destructiveHint': False,
+def _tool(nombre, descripcion, propiedades, lectura=True, opcionales=(), protegido=False):
+    esquema = {'type': 'oauth2', 'scopes': [SCOPE]} if protegido else {'type': 'noauth'}
+    return {'name': nombre, 'description': descripcion, 'inputSchema': _objeto(propiedades, opcionales),
+            'securitySchemes': [esquema],
+            '_meta': {'securitySchemes': [esquema]},
+            'annotations': {'readOnlyHint': lectura, 'destructiveHint': nombre == 'editar_salida',
                             'idempotentHint': lectura, 'openWorldHint': False}}
 
 
 CODIGO = {'type': 'string', 'description': 'Código temporal que muestra la pestaña de edición.'}
+ID = {'type': 'integer', 'minimum': 1}
+CAMPOS = {'type': 'object', 'additionalProperties': True,
+          'description': 'Mapa de campos. Ejemplo: {"comunes.denominacion_proyecto":"Visita","IV.actividades":"Recorrido"}. '
+                         'Usá esquema_legajo para conocer las claves y los tipos.'}
+PROTEGIDAS = {'buscar_salidas', 'consultar_salida', 'esquema_legajo', 'crear_salida', 'editar_salida'}
 TOOLS = [
     _tool('listar_anexos', 'Lista los Anexos I a IX y las referencias de Salidas Educativas.', {}),
     _tool('leer_anexo', 'Lee el instructivo (I), los plazos (II) o un formulario oficial (III a IX).',
@@ -206,7 +215,235 @@ TOOLS = [
           'Para personas, enviá una lista con rol, apellido_nombre y los datos opcionales confirmados '
           'documento, cargo y fecha_nacimiento. Para teléfonos de acompañantes, usá un objeto nombre a teléfono.',
           {'codigo': CODIGO, 'campos': {'type': 'object', 'additionalProperties': True}}, lectura=False),
+    _tool('buscar_salidas', 'Busca legajos vigentes por nombre del proyecto y devuelve sus IDs.',
+          {'consulta': {'type': 'string'}}, opcionales=('consulta',), protegido=True),
+    _tool('consultar_salida', 'Lee los campos editables de un legajo y la revisión para editarlo.',
+          {'id': ID}, protegido=True),
+    _tool('esquema_legajo', 'Devuelve los campos digitales que se pueden escribir y sus tipos.',
+          {}, protegido=True),
+    _tool('crear_salida', 'Crea y guarda un legajo con los datos confirmados. Reutilizá la misma '
+          'operación al reintentar. El nombre del proyecto es obligatorio.',
+          {'operacion': {'type': 'string', 'description': 'Identificador único de esta creación, por ejemplo un UUID.'},
+           'campos': CAMPOS}, lectura=False, protegido=True),
+    _tool('editar_salida', 'Guarda cambios en los campos indicados de un legajo vigente. Conserva el resto. '
+          'Para borrar un valor usá null. Si enviás personas, incluí la nómina completa.',
+          {'id': ID, 'revision': {'type': 'string'}, 'campos': CAMPOS}, lectura=False, protegido=True),
 ]
+
+
+def _campos_legajo():
+    esquema = salidas.esquema_formulario()
+    campos = {f'comunes.{c["id"]}': c for grupo in esquema['comunes'] for c in grupo['campos'] if not c.get('fijo')}
+    for anexo in esquema['anexos']:
+        for campo in anexo['campos']:
+            if not (campo.get('auto') or campo.get('calc')):
+                clave = f'{anexo["n"]}.{campo["id"]}'
+                campos[clave] = campo
+                if campo['tipo'] == 'acompañantes_telefonos':
+                    campos[clave] = {**campo, 'tipo': 'telefonos'}
+    campos['personas'] = {'tipo': 'personas', 'label': 'Nómina completa de estudiantes y acompañantes'}
+    return campos
+
+
+def _leer_campo(datos, clave):
+    grupo, _, campo = clave.partition('.')
+    if grupo == 'personas':
+        return datos.get('personas') or []
+    if grupo == 'comunes':
+        return (datos.get('datos_comunes') or {}).get(campo)
+    return ((datos.get('anexos') or {}).get(grupo) or {}).get(campo)
+
+
+def _personas_directas(valores):
+    if not isinstance(valores, list) or len(valores) > 300:
+        return False
+    for p in valores:
+        if not isinstance(p, dict) or p.get('grupo_edad') not in (None, '+16', '+18'):
+            return False
+        normalizada = {k: v for k, v in p.items()
+                       if k != 'grupo_edad' and not (k in ('documento', 'cargo', 'fecha_nacimiento') and v == '')}
+        if not _persona(normalizada):
+            return False
+    return True
+
+
+def _aplicar_campos(datos, campos):
+    for clave, valor in campos.items():
+        grupo, _, campo = clave.partition('.')
+        if grupo == 'personas':
+            datos['personas'] = []
+            hoy = ahora().date()
+            for p in valor or []:
+                persona = {'documento': '', 'cargo': '', 'fecha_nacimiento': '', **p}
+                if 'grupo_edad' not in persona:
+                    fecha = persona['fecha_nacimiento']
+                    grupo_edad = None
+                    if persona['rol'] == 'estudiante' and fecha:
+                        nac = date.fromisoformat(fecha)
+                        edad = hoy.year - nac.year - ((hoy.month, hoy.day) < (nac.month, nac.day))
+                        grupo_edad = '+18' if edad >= 18 else '+16' if edad >= 16 else None
+                    persona['grupo_edad'] = grupo_edad
+                datos['personas'].append(persona)
+            continue
+        destino = datos['datos_comunes'] if grupo == 'comunes' else datos['anexos'].setdefault(grupo, {})
+        if valor is None:
+            destino.pop(campo, None)
+        else:
+            destino[campo] = valor
+        if clave == 'VI.lugares_estadia':
+            destino['_lugares_estadia_manual'] = valor is not None
+
+
+def _fecha_larga(valor):
+    if not _fecha(valor):
+        return ''
+    f = date.fromisoformat(valor)
+    mes = ('enero febrero marzo abril mayo junio julio agosto septiembre octubre noviembre diciembre'
+           .split())[f.month - 1]
+    return f'{f.day} de {mes} de {f.year}'
+
+
+def _derivados(datos):
+    comunes, anexos = datos['datos_comunes'], datos['anexos']
+    for n in salidas.ANEXOS_NUMEROS:
+        anexos.setdefault(n, {})
+    for grupo in salidas.esquema_formulario()['comunes']:
+        for campo in grupo['campos']:
+            for destino in campo.get('destino', ()):
+                n, clave = destino.split('.')
+                anexos[n][clave] = comunes.get(campo['id'], '')
+    roles = ('estudiante', 'no_docente', 'docente_titular', 'docente_reemplazante')
+    personas = sorted(datos.get('personas') or [], key=lambda p: (
+        roles.index(p['rol']) if p['rol'] in roles else len(roles), norm(p.get('apellido_nombre', ''))))
+    iv, v, vi, vii, ix = (anexos[n] for n in ('IV', 'V', 'VI', 'VII', 'IX'))
+    iv.update(cantidad_alumnos=sum(p['rol'] == 'estudiante' for p in personas),
+              cantidad_docentes_acompanantes=sum(p['rol'].startswith('docente') for p in personas),
+              cantidad_no_docentes_acompanantes=sum(p['rol'] == 'no_docente' for p in personas),
+              total_personas=len(personas))
+    for rol, tabla in [('docente_titular', 'docentes_responsables_titulares'),
+                       ('docente_reemplazante', 'docentes_reemplazantes')]:
+        iv[tabla] = [{'apellido_nombre': p['apellido_nombre'], 'cargo': p.get('cargo', '')}
+                     for p in personas if p['rol'] == rol and p.get('apellido_nombre')]
+    v['listado_personas'] = [
+        {'numero': i, 'apellido_nombre': p.get('apellido_nombre', ''), 'documento': p.get('documento', ''),
+         'estudiante': p['rol'] == 'estudiante', 'docente': p['rol'].startswith('docente'),
+         'no_docente': p['rol'] == 'no_docente', 'asistencia': ''}
+        for i, p in enumerate(personas, 1)
+    ]
+    for tramo in ('salida', 'regreso'):
+        hora = comunes.get(f'hora_{tramo}')
+        vi[f'lugar_dia_hora_{tramo}'] = ' — '.join(filter(None, (
+            comunes.get(f'lugar_{tramo}'), _fecha_larga(comunes.get(f'fecha_{tramo}')), f'{hora} hs' if hora else '')))
+    inicio = _fecha_larga(comunes.get('fecha_salida'))
+    fin = _fecha_larga(comunes.get('fecha_regreso')) or inicio
+    periodo = f'del {inicio} al {fin}' if inicio and fin != inicio else inicio
+    fin_partes = fin.split(' de ') if fin else ['', '', '']
+    inicio_dia = inicio.rsplit(' de ', 1)[0]
+    fin_dia = fin.rsplit(' de ', 1)[0]
+    dias = f'{inicio_dia} al {fin_dia}' if inicio and fin != inicio else inicio_dia
+    for anexo in (vi, vii):
+        anexo.update(dias_salida=dias, mes_salida=fin_partes[1])
+    vii['anio_salida'] = fin_partes[2]
+    ix.update(tipo_gestion='estatal', fecha_lugar_realizacion=' — '.join(
+        filter(None, (periodo, comunes.get('lugar_a_visitar')))))
+    if not vi.get('_lugares_estadia_manual'):
+        vi['lugares_estadia'] = ', '.join(iv[k] for k in ('hospedaje_nombre', 'hospedaje_domicilio', 'hospedaje_localidad')
+                                        if iv.get(k))
+        if iv.get('hospedaje_telefono'):
+            vi['lugares_estadia'] = ' — '.join(filter(None, (vi['lugares_estadia'], 'Tel: ' + iv['hospedaje_telefono'])))
+    telefonos = vi.get('nombres_telefonos_acompanantes') or {}
+    vi['nombres_telefonos_acompanantes_texto'] = '\n'.join(
+        ' - '.join(filter(None, (p['apellido_nombre'], telefonos.get(p['apellido_nombre']))))
+        for p in personas if p['rol'] != 'estudiante' and p.get('apellido_nombre'))
+
+
+def _resumen(fila):
+    return {'id': fila['id'], 'proyecto': fila['nombre_proyecto'], 'fecha_salida': fila['fecha_salida'],
+            'url': url_for('salidas.detalle', id=fila['id'], _external=True)}
+
+
+def _legajo(nombre, args):
+    campos = _campos_legajo()
+    if nombre == 'esquema_legajo' and not args:
+        return {'campos': {k: {a: c[a] for a in ('tipo', 'label', 'opciones') if a in c} for k, c in campos.items()},
+                'roles_personas': ROLES,
+                'forma_persona': ['rol', 'apellido_nombre', 'documento', 'cargo', 'fecha_nacimiento', 'grupo_edad']}
+    if nombre == 'buscar_salidas' and set(args) <= {'consulta'} and isinstance(args.get('consulta', ''), str):
+        consulta = norm(args.get('consulta', ''))
+        with closing(salidas.conectar()) as con:
+            filas = con.execute('SELECT id,nombre_proyecto,fecha_salida FROM salidas WHERE archivado=0 '
+                                'AND vigencia_hasta>? ORDER BY id DESC', (ahora().isoformat(),))
+            resultados = [_resumen(f) for f in filas if consulta in norm(f['nombre_proyecto'])]
+        return {'salidas': resultados[:40], 'total': len(resultados)}
+    id = args.get('id')
+    if nombre == 'consultar_salida' and set(args) == {'id'} and type(id) is int and 0 < id < 2**63:
+        with closing(salidas.conectar()) as con:
+            fila = con.execute('SELECT * FROM salidas WHERE id=? AND archivado=0 AND vigencia_hasta>?',
+                               (id, ahora().isoformat())).fetchone()
+        if fila is None:
+            return {'error': 'Salida activa no encontrada.'}
+        datos = json.loads(fila['datos_json'])
+        valores = {k: _leer_campo(datos, k) for k in campos}
+        return {**_resumen(fila), 'revision': salidas.revision_legajo(fila['datos_json']),
+                'campos': {k: v for k, v in valores.items() if v is not None}}
+    crear = nombre == 'crear_salida'
+    if (not crear and nombre != 'editar_salida') or set(args) != (
+            {'operacion', 'campos'} if crear else {'id', 'revision', 'campos'}):
+        raise ValueError('Herramienta o argumentos inválidos.')
+    valores = args['campos']
+    if not isinstance(valores, dict) or not valores or any(
+            k not in campos or (v is not None and not (
+                _personas_directas(v) if k == 'personas' else _valor_valido(campos[k], v)))
+            for k, v in valores.items()):
+        raise ValueError('Los cambios deben usar campos editables y valores del tipo indicado en esquema_legajo.')
+    return _guardar_directo(crear, args, valores)
+
+
+def _guardar_directo(crear, args, valores):
+    id = args.get('id')
+    if crear:
+        operacion = args['operacion']
+        if not isinstance(operacion, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,80}', operacion):
+            raise ValueError('La operación debe ser un identificador único de 16 a 80 caracteres.')
+        if not _texto(valores.get('comunes.denominacion_proyecto'), 250):
+            raise ValueError('La salida nueva necesita un nombre de proyecto.')
+        pedido = _huella(json.dumps(valores, sort_keys=True))
+    elif type(id) is not int or not 0 < id < 2**63 or not isinstance(args['revision'], str):
+        raise ValueError('Se requiere el ID y la revisión del legajo consultado.')
+    with closing(salidas.conectar()) as con, con:
+        con.execute('BEGIN IMMEDIATE')
+        if crear:
+            anterior = con.execute('SELECT * FROM salidas_mcp_creaciones WHERE operacion=?', (operacion,)).fetchone()
+            if anterior:
+                if anterior['pedido'] != pedido:
+                    raise ValueError('La operación ya se usó para otro contenido.')
+                fila = con.execute('SELECT * FROM salidas WHERE id=?', (anterior['salida'],)).fetchone()
+                return {**_resumen(fila), 'estado': 'ya_creada'} if fila else {'error': 'La salida ya no está disponible.'}
+            datos = {'formato': 'appmitre.salidas.v1', 'resolucion': 'RESOC-2024-3871-GDEBA-DGCYE',
+                     'datos_comunes': dict(salidas.esquema_formulario()['fijos']), 'personas': [], 'anexos': {}}
+        else:
+            fila = con.execute('SELECT * FROM salidas WHERE id=? AND archivado=0 AND vigencia_hasta>?',
+                               (id, ahora().isoformat())).fetchone()
+            if fila is None:
+                raise ValueError('Salida activa no encontrada.')
+            if salidas.revision_legajo(fila['datos_json']) != args['revision']:
+                raise ValueError('La salida cambió. Volvé a consultarla antes de editar.')
+            datos = json.loads(fila['datos_json'])
+            datos['datos_comunes'] = datos.get('datos_comunes') or {}
+            datos['anexos'] = datos.get('anexos') or {}
+            vi = datos['anexos'].get('VI') or {}
+            if vi.get('lugares_estadia'):
+                vi.setdefault('_lugares_estadia_manual', True)
+        _aplicar_campos(datos, valores)
+        comunes = datos['datos_comunes']
+        if comunes.get('fecha_salida') and comunes.get('fecha_regreso') and comunes['fecha_regreso'] < comunes['fecha_salida']:
+            raise ValueError('La fecha de regreso debe ser igual o posterior a la salida.')
+        _derivados(datos)
+        id = salidas.guardar_legajo(con, datos, id)
+        if crear:
+            con.execute('INSERT INTO salidas_mcp_creaciones VALUES (?,?,?)', (operacion, pedido, id))
+        fila = con.execute('SELECT * FROM salidas WHERE id=?', (id,)).fetchone()
+        return {**_resumen(fila), 'estado': 'creada' if crear else 'editada'}
 
 
 def _referencias():
@@ -218,6 +455,8 @@ def _referencias():
 
 
 def _llamar(nombre, args):
+    if nombre in PROTEGIDAS:
+        return _legajo(nombre, args)
     if nombre == 'listar_anexos' and not args:
         titulos = {'I': 'Requisitos e instructivo', 'II': 'Plazos y responsables'}
         titulos.update({anexo: salidas._cargar_schema(anexo)['titulo'] for anexo in ANEXOS[2:]})
@@ -265,6 +504,8 @@ def _proteger():
 def _privada(r):
     r.headers['Cache-Control'] = 'no-store'
     r.headers['Referrer-Policy'] = 'no-referrer'
+    if request.path == RUTA_OAUTH + '/authorize':
+        r.headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
     return r
 
 
@@ -299,7 +540,7 @@ def endpoint():
         solicitada = params.get('protocolVersion')
         return responder({'protocolVersion': solicitada if solicitada in VERSIONES else VERSIONES[-1],
                           'capabilities': {'tools': {'listChanged': False}},
-                          'serverInfo': {'name': 'appmitre-salidas', 'version': '1.0.0'},
+                          'serverInfo': {'name': 'appmitre-salidas', 'version': '1.1.0'},
                           'instructions': INSTRUCCIONES})
     if metodo == 'ping':
         return responder({})
@@ -310,6 +551,13 @@ def endpoint():
     args = params.get('arguments', {})
     if not isinstance(args, dict) or not isinstance(params.get('name'), str):
         return responder(error=(-32602, 'Argumentos no válidos.'))
+    if params['name'] in PROTEGIDAS and not oauth.autorizado():
+        desafio = oauth.desafio()
+        r = responder({'isError': True, 'content': [{'type': 'text', 'text': 'Autorizá AppMitre Salidas.'}],
+                       '_meta': {'mcp/www_authenticate': [desafio]}})
+        r.headers['WWW-Authenticate'] = desafio
+        r.status_code = 401
+        return r
     try:
         salida = _llamar(params['name'], args)
     except ValueError as error:

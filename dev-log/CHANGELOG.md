@@ -8,7 +8,7 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ## [2026-11-05] — MCP de Salidas Educativas
 
-`/mcp/salidas` entrega los Anexos I–IX y propone campos para una pestaña de edición habilitada por código. El navegador aplica la propuesta a campos vacíos y conserva el guardado manual.
+`/mcp/salidas` entrega los Anexos I–IX. OAuth con permiso de edición habilita buscar, crear y editar legajos directamente, con revisión para las ediciones e identificador de operación para las altas. El código de pestaña sigue disponible para propuestas.
 
 ## [2026-10-05] — Gestión y Horarios: sólo las apps, en `/gestion/` y `/horarios/`
 

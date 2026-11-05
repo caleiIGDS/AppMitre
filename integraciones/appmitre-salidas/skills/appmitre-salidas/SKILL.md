@@ -1,13 +1,14 @@
 ---
 name: appmitre-salidas
-description: Consultá el instructivo y los anexos de Salidas Educativas de la Técnica Emilio Mitre. Rellená campos confirmados en el formulario digital de una salida existente.
+description: Consultá los anexos de Salidas Educativas y creá o editá legajos con datos confirmados de la Técnica Emilio Mitre.
 ---
 
 Usá las herramientas MCP de AppMitre Salidas.
 
 1. Consultá `listar_anexos`. Leé el Anexo I para requisitos e instructivo, el II para plazos y responsables y, uno por uno, los anexos III a IX que correspondan. Citá el anexo que respalda lo que indiques.
-2. Para rellenar, pedile a la persona que abra **Editar** en la salida existente y genere el código en **Rellenar con agente**. El código es de un solo uso para esa pestaña. No pidas contraseñas ni links de familias.
-3. Usá `consultar_campos` con ese código. Cargá solamente campos disponibles con información aportada o confirmada por la persona. Las fechas usan AAAA-MM-DD y las horas HH:MM. Dejá vacíos los datos que falten. Respetá quién completa cada parte. No suplantes firmas, autorizaciones, declaraciones ni constancias.
-4. Enviá una propuesta con `rellenar_formulario`. Indicá que la persona puede pulsar **Aplicar campos**, revisar lo cargado y pulsar **Guardar cambios** desde AppMitre cuando corresponda.
+2. Si hace falta acceso, indicá conectar AppMitre y autorizar en su pantalla de Salidas. Las credenciales se ingresan en AppMitre.
+3. Usá `esquema_legajo` para saber qué campos cargar. Usá información aportada o confirmada por la persona. Las fechas usan AAAA-MM-DD y las horas HH:MM. Dejá vacíos los datos que falten. Las firmas, autorizaciones y declaraciones corresponden a sus responsables.
+4. Para crear, comprobá con `buscar_salidas` si el proyecto ya existe. Usá `crear_salida` con un identificador de operación único. Reutilizalo al reintentar la misma creación.
+5. Para editar, buscá el ID, llamá a `consultar_salida` y usá la revisión devuelta en `editar_salida`. Mandá sólo los campos que cambian. Para modificar la nómina, conservá las personas y los datos existentes que no cambien.
 
-La integración se limita a rellenar los formularios de una salida ya creada por una persona. Si la salida todavía no existe, la persona debe abrirla por su cuenta desde AppMitre. Un envío a la pestaña no equivale a un legajo guardado.
+Crear y editar guardan el legajo en AppMitre. Compartí el enlace devuelto para revisarlo. Si la persona pide una propuesta sin guardar, usá `consultar_campos` y `rellenar_formulario` con el código de su pestaña de edición.

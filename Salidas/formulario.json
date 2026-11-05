@@ -1,0 +1,1123 @@
+{
+  "fijos": {
+    "institucion_educativa": "E.E.S.T. 'Ing. Emilio Mitre'",
+    "numero_institucion": "4",
+    "cue": "061155400",
+    "region": "7",
+    "distrito": "General San Martín",
+    "domicilio": "San Martín 1714",
+    "telefono": "011 4755-2116",
+    "director": "Moschet Javier"
+  },
+  "comunes": [
+    {
+      "grupo": "Institución",
+      "campos": [
+        {
+          "id": "institucion_educativa",
+          "label": "Institución educativa",
+          "tipo": "text",
+          "fijo": true,
+          "destino": [
+            "IV.institucion_educativa",
+            "V.institucion_educativa",
+            "VI.establecimiento_educativo",
+            "VII.institucion",
+            "IX.nombre_establecimiento"
+          ],
+          "a": "Nombre del establecimiento tal como figura en la documentación oficial. Se replica en los Anexos IV, V, VI, VII y IX."
+        },
+        {
+          "id": "numero_institucion",
+          "label": "N° de establecimiento",
+          "tipo": "text",
+          "fijo": true,
+          "destino": [
+            "IV.numero_institucion",
+            "V.numero_institucion",
+            "VI.numero_establecimiento",
+            "IX.numero_establecimiento"
+          ],
+          "a": "Número con el que se identifica la escuela ante la DGCyE. Va en los Anexos IV, V, VI y IX."
+        },
+        {
+          "id": "cue",
+          "label": "CUE",
+          "tipo": "text",
+          "fijo": true,
+          "destino": [
+            "IX.cue"
+          ],
+          "a": "Código Único de Establecimiento. Sólo lo pide el Anexo IX (Declaración Jurada de directivos)."
+        },
+        {
+          "id": "region",
+          "label": "Región",
+          "tipo": "text",
+          "fijo": true,
+          "destino": [
+            "IV.region"
+          ],
+          "a": "Región educativa a la que pertenece el distrito. Sólo la pide el Anexo IV."
+        },
+        {
+          "id": "distrito",
+          "label": "Distrito",
+          "tipo": "text",
+          "fijo": true,
+          "destino": [
+            "IV.distrito",
+            "V.distrito",
+            "VI.distrito",
+            "IX.distrito"
+          ],
+          "a": "Distrito escolar del establecimiento. Se replica en los Anexos IV, V, VI y IX."
+        },
+        {
+          "id": "domicilio",
+          "label": "Domicilio de la escuela",
+          "tipo": "text",
+          "fijo": true,
+          "destino": [
+            "IV.domicilio",
+            "IX.domicilio"
+          ],
+          "a": "Dirección del establecimiento (no la del lugar a visitar). Va en los Anexos IV y IX."
+        },
+        {
+          "id": "telefono",
+          "label": "Teléfono de la escuela",
+          "tipo": "text",
+          "fijo": true,
+          "destino": [
+            "IV.telefono"
+          ],
+          "a": "Teléfono de contacto del establecimiento. Sólo lo pide el Anexo IV."
+        },
+        {
+          "id": "director",
+          "label": "Director/a del establecimiento",
+          "tipo": "text",
+          "fijo": true,
+          "destino": [
+            "IX.director"
+          ],
+          "a": "Apellido y nombre de quien firma la Declaración Jurada del Anexo IX. Es el/la responsable de que todo el legajo esté completo antes de la partida."
+        }
+      ]
+    },
+    {
+      "grupo": "Proyecto y salida",
+      "campos": [
+        {
+          "id": "denominacion_proyecto",
+          "label": "Denominación del proyecto",
+          "tipo": "text",
+          "destino": [
+            "IV.denominacion_proyecto",
+            "VI.nombre_proyecto"
+          ],
+          "a": "Nombre con el que se identifica la propuesta pedagógica. La salida tiene que desprenderse de un proyecto enmarcado en el Proyecto Institucional (Anexo I). Se replica en los Anexos IV y VI."
+        },
+        {
+          "id": "lugar_a_visitar",
+          "label": "Lugar a visitar",
+          "tipo": "text",
+          "destino": [
+            "IV.lugar_a_visitar",
+            "V.lugar_a_visitar"
+          ],
+          "a": "Consignar dirección, localidad y distrito del destino. Se replica en los Anexos IV y V."
+        },
+        {
+          "id": "localidad_salida",
+          "label": "Localidad del destino",
+          "tipo": "text",
+          "destino": [
+            "VI.localidad_salida",
+            "VII.localidad_salida"
+          ],
+          "a": "Sólo la localidad del destino (sin dirección). Es lo que se lee en las autorizaciones que firman las familias (Anexo VI) y los/las estudiantes mayores de edad (Anexo VII)."
+        },
+        {
+          "id": "fecha_salida",
+          "label": "Fecha de salida",
+          "tipo": "date",
+          "destino": [
+            "IV.fecha_salida",
+            "V.fecha"
+          ],
+          "a": "Día de partida. De acá se calculan solos el día, mes y año que piden los Anexos VI y VII, y la fecha de la planilla de asistencia del Anexo V. Ojo con los plazos del Anexo II: 5 días hábiles de anticipación si es dentro del distrito con regreso en el día, 10 si supera las 24 horas, 20 si es fuera de la provincia o del país."
+        },
+        {
+          "id": "hora_salida",
+          "label": "Hora de salida",
+          "tipo": "time",
+          "destino": [
+            "IV.hora_salida"
+          ],
+          "a": "Horario de partida. Si el traslado de estudiantes mayores de edad es por sus propios medios, la salida se computa desde el horario y lugar donde arranca la experiencia pedagógica (Anexo I, punto 8.11)."
+        },
+        {
+          "id": "lugar_salida",
+          "label": "Lugar de partida",
+          "tipo": "text",
+          "destino": [
+            "IV.lugar_salida"
+          ],
+          "a": "Punto de encuentro desde donde parte el grupo (normalmente la puerta de la escuela)."
+        },
+        {
+          "id": "fecha_regreso",
+          "label": "Fecha de regreso",
+          "tipo": "date",
+          "destino": [
+            "IV.fecha_regreso"
+          ],
+          "a": "Día de vuelta. Si es distinta de la fecha de salida, la salida supera las 24 horas: cambian los plazos de presentación y se habilitan los campos de hospedaje del Anexo IV."
+        },
+        {
+          "id": "hora_regreso",
+          "label": "Hora de regreso",
+          "tipo": "time",
+          "destino": [
+            "IV.hora_regreso"
+          ],
+          "a": "Horario estimado de llegada."
+        },
+        {
+          "id": "lugar_regreso",
+          "label": "Lugar de regreso",
+          "tipo": "text",
+          "destino": [
+            "IV.lugar_regreso"
+          ],
+          "a": "Dónde se entrega el grupo al finalizar la salida."
+        },
+        {
+          "id": "tipo_salida",
+          "label": "Tipo de salida",
+          "tipo": "select",
+          "opciones": [
+            "educativa",
+            "representacion_institucional"
+          ],
+          "destino": [
+            "VI.tipo_salida",
+            "VII.tipo_salida"
+          ],
+          "a": "Educativa (propuesta didáctica de la escuela) o de representación institucional (la escuela participa en un acto, torneo, feria o convocatoria de otro organismo). En el papel original de los Anexos VI y VII se tacha la que no corresponde; acá se resuelve solo."
+        }
+      ]
+    }
+  ],
+  "anexos": [
+    {
+      "n": "III",
+      "numero": 3,
+      "firma_papel": true,
+      "titulo": "Autorización general del ciclo lectivo",
+      "quien": "La completa la familia",
+      "nota": "Se firma una sola vez por año y vale para todas las salidas dentro del barrio o área geográfica inmediata que no usen transporte. Se archiva en el Legajo del estudiante. Debe imprimirse y llevar firma original aunque se complete acá.",
+      "campos": [
+        {
+          "id": "nombre_estudiante",
+          "label": "Nombre y apellido del estudiante",
+          "tipo": "text",
+          "req": true,
+          "a": "Estudiante autorizado/a. Esta autorización general sólo cubre salidas a pie por el barrio: cualquier salida con transporte necesita el Anexo VI, específico para esa fecha."
+        },
+        {
+          "id": "dni_estudiante",
+          "label": "DNI del estudiante",
+          "tipo": "text",
+          "req": true,
+          "a": "Documento del estudiante, sin puntos."
+        },
+        {
+          "id": "anio_curso",
+          "label": "Año",
+          "tipo": "text",
+          "req": true,
+          "a": "Año que cursa, por ejemplo 3°."
+        },
+        {
+          "id": "seccion_curso",
+          "label": "Sección",
+          "tipo": "text",
+          "req": true,
+          "a": "División o sección del curso."
+        }
+      ]
+    },
+    {
+      "n": "IV",
+      "numero": 4,
+      "firma_papel": true,
+      "titulo": "Presentación de la salida — itinerario, actividades y cronograma",
+      "quien": "La completa el Equipo Directivo",
+      "nota": "Se completa de forma digital y se envía al/la Inspector/a en ese mismo formato. Además se imprime para que firme la Autoridad del establecimiento. Es el anexo que describe la propuesta: sin él no hay salida autorizada.",
+      "campos": [
+        {
+          "id": "region",
+          "label": "Región",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "distrito",
+          "label": "Distrito",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "institucion_educativa",
+          "label": "Institución educativa",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "numero_institucion",
+          "label": "N°",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "domicilio",
+          "label": "Domicilio",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "telefono",
+          "label": "Teléfono",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "denominacion_proyecto",
+          "label": "Denominación del Proyecto",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "lugar_a_visitar",
+          "label": "Lugar a visitar",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "fecha_salida",
+          "label": "Fecha de salida",
+          "tipo": "date",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "hora_salida",
+          "label": "Hora de salida",
+          "tipo": "time",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "lugar_salida",
+          "label": "Lugar de salida",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "fecha_regreso",
+          "label": "Fecha de regreso",
+          "tipo": "date",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "hora_regreso",
+          "label": "Hora de regreso",
+          "tipo": "time",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "lugar_regreso",
+          "label": "Lugar de regreso",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "observaciones_fechas",
+          "label": "Observaciones respecto a las fechas",
+          "tipo": "textarea",
+          "req": false,
+          "ancho": true,
+          "a": "Sólo en caso de corresponder: fechas alternativas por clima, reprogramaciones previstas, etc."
+        },
+        {
+          "id": "itinerario",
+          "label": "Itinerario",
+          "tipo": "textarea",
+          "req": true,
+          "ancho": true,
+          "a": "Detalle pormenorizado del recorrido: por dónde se va, paradas intermedias con lugar y hora, y qué recorridos se hacen en el destino. Si se viaja en un vehículo de la escuela o de la cooperadora, el Anexo I (punto 8.5.1) exige este detalle sí o sí."
+        },
+        {
+          "id": "actividades",
+          "label": "Actividades",
+          "tipo": "textarea",
+          "req": true,
+          "ancho": true,
+          "a": "Qué van a hacer concretamente los/las estudiantes durante la salida. Si hay alguna actividad de riesgo considerable o inusual, hay que fundamentarla y pedir autorización especial y explícita a las familias (Anexo I, punto 4)."
+        },
+        {
+          "id": "objetivos_salida",
+          "label": "Objetivos de la salida",
+          "tipo": "textarea",
+          "req": true,
+          "ancho": true,
+          "a": "Para qué se hace, en términos pedagógicos. Debe poder enmarcarse en el Diseño Curricular y en el Proyecto Institucional: es lo que distingue una salida educativa de un paseo."
+        },
+        {
+          "id": "cronograma_diario",
+          "label": "Cronograma diario",
+          "tipo": "textarea",
+          "req": true,
+          "ancho": true,
+          "a": "Distribución de la jornada hora por hora. En salidas de más de un día, un cronograma por cada día."
+        },
+        {
+          "id": "cantidad_alumnos",
+          "label": "Cantidad de alumnos",
+          "tipo": "number",
+          "req": true,
+          "calc": true,
+          "a": "Se calcula solo desde la tabla de Personas."
+        },
+        {
+          "id": "cantidad_docentes_acompanantes",
+          "label": "Cantidad de docentes acompañantes",
+          "tipo": "number",
+          "req": true,
+          "calc": true,
+          "a": "Se calcula solo desde la tabla de Personas (titulares + reemplazantes)."
+        },
+        {
+          "id": "cantidad_no_docentes_acompanantes",
+          "label": "Cantidad de no docentes acompañantes",
+          "tipo": "number",
+          "req": false,
+          "calc": true,
+          "a": "Se calcula solo desde la tabla de Personas. Puede ser cero: los acompañantes no docentes nunca son responsables de la vigilancia del grupo (Anexo I, punto 3.4)."
+        },
+        {
+          "id": "total_personas",
+          "label": "Total de personas",
+          "tipo": "number",
+          "req": true,
+          "calc": true,
+          "a": "Se calcula solo. No puede superar la cantidad de asientos declarada del transporte (Anexo I, punto 8.5.2)."
+        },
+        {
+          "id": "hospedaje_nombre",
+          "label": "Hospedaje",
+          "tipo": "text",
+          "req": false,
+          "seccion": "Sólo salidas de más de 24 horas",
+          "a": "Nombre del alojamiento. Sólo se completa si la salida supera las 24 horas."
+        },
+        {
+          "id": "hospedaje_telefono",
+          "label": "Teléfono del hospedaje",
+          "tipo": "text",
+          "req": false,
+          "seccion": "Sólo salidas de más de 24 horas",
+          "a": "Teléfono directo del alojamiento, para que la escuela y las familias puedan ubicar al grupo."
+        },
+        {
+          "id": "hospedaje_domicilio",
+          "label": "Domicilio del hospedaje",
+          "tipo": "text",
+          "req": false,
+          "seccion": "Sólo salidas de más de 24 horas",
+          "a": "Dirección del alojamiento."
+        },
+        {
+          "id": "hospedaje_localidad",
+          "label": "Localidad del hospedaje",
+          "tipo": "text",
+          "req": false,
+          "seccion": "Sólo salidas de más de 24 horas",
+          "a": "Localidad donde está el alojamiento."
+        },
+        {
+          "id": "gastos_estimativos",
+          "label": "Gastos estimativos y modo de solventarlos",
+          "tipo": "textarea",
+          "req": true,
+          "ancho": true,
+          "seccion": "Cierre",
+          "a": "Cuánto sale la actividad y de dónde sale la plata (cooperadora, familias, financiamiento del organismo convocante, etc.)."
+        },
+        {
+          "id": "autoridad_que_completo",
+          "label": "Autoridad del establecimiento que completó el formulario",
+          "tipo": "text",
+          "req": true,
+          "seccion": "Cierre",
+          "a": "Apellido y nombre del integrante del Equipo Directivo que lo llenó."
+        }
+      ]
+    },
+    {
+      "n": "V",
+      "numero": 5,
+      "firma_papel": false,
+      "titulo": "Planilla de estudiantes y acompañantes — asistencia",
+      "quien": "La completa el Equipo Directivo",
+      "nota": "El listado se arma solo desde la sección Personas de más arriba. Se envía digital al/la Inspector/a, pero además hay que imprimirla y llevarla en el viaje: la asistencia se registra ese mismo día, a mano, junto con cualquier cambio de último momento.",
+      "campos": [
+        {
+          "id": "institucion_educativa",
+          "label": "Institución educativa",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "numero_institucion",
+          "label": "N°",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "distrito",
+          "label": "Distrito",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "lugar_a_visitar",
+          "label": "Lugar a visitar",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "fecha",
+          "label": "Fecha",
+          "tipo": "date",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "observaciones",
+          "label": "Observaciones",
+          "tipo": "textarea",
+          "req": false,
+          "ancho": true,
+          "a": "Para completar ante cualquier eventualidad: un estudiante que no viajó, un docente que se reemplazó a último momento, un accidente. Si hubo un accidente, esta planilla se presenta ante la aseguradora junto con los Anexos IV y IX."
+        }
+      ]
+    },
+    {
+      "n": "VI",
+      "numero": 6,
+      "firma_papel": true,
+      "titulo": "Planilla informativa y autorización de la familia",
+      "quien": "Punto 1 la escuela · el resto la familia",
+      "nota": "La escuela completa la parte informativa y se lo envía a las familias. Vuelve en papel, con firma original, y el/la docente responsable debe llevarlo consigo el día de la salida.",
+      "campos": [
+        {
+          "id": "nombre_proyecto",
+          "label": "Nombre del Proyecto de la Salida",
+          "tipo": "text",
+          "req": true,
+          "auto": true,
+          "seccion": "1 · Informativa (completa la escuela)"
+        },
+        {
+          "id": "lugar_dia_hora_salida",
+          "label": "Lugar, día y hora de salida",
+          "tipo": "text",
+          "req": true,
+          "calc": true,
+          "seccion": "1 · Informativa (completa la escuela)",
+          "a": "Se arma solo con los datos comunes de la salida."
+        },
+        {
+          "id": "lugar_dia_hora_regreso",
+          "label": "Lugar, día y hora de regreso",
+          "tipo": "text",
+          "req": true,
+          "calc": true,
+          "seccion": "1 · Informativa (completa la escuela)",
+          "a": "Se arma solo con los datos comunes de la salida."
+        },
+        {
+          "id": "lugares_estadia",
+          "label": "Lugares de estadía (domicilios y teléfonos)",
+          "tipo": "textarea",
+          "req": false,
+          "ancho": true,
+          "seccion": "1 · Informativa (completa la escuela)",
+          "prellenar": true,
+          "a": "Sólo si hay pernocte. Se arma solo con el hospedaje cargado en el Anexo IV, pero se puede editar acá mismo: en cuanto lo tocás, deja de actualizarse solo."
+        },
+        {
+          "id": "nombres_telefonos_acompanantes",
+          "label": "Nombres y teléfonos de los acompañantes",
+          "tipo": "acompañantes_telefonos",
+          "req": true,
+          "ancho": true,
+          "seccion": "1 · Informativa (completa la escuela)",
+          "a": "Quiénes van a cargo del grupo y cómo ubicarlos durante la salida. Seleccioná los teléfonos de cada acompañante."
+        },
+        {
+          "id": "empresas_contratadas",
+          "label": "Empresa/s contratada/s (nombre, dirección, teléfonos)",
+          "tipo": "textarea",
+          "req": false,
+          "ancho": true,
+          "seccion": "1 · Informativa (completa la escuela)",
+          "a": "Sólo si se contrata transporte u otro servicio. Los datos completos de la empresa van en el Anexo VIII."
+        },
+        {
+          "id": "infraestructura_disponible",
+          "label": "Otros datos de la infraestructura disponible",
+          "tipo": "textarea",
+          "req": false,
+          "ancho": true,
+          "seccion": "1 · Informativa (completa la escuela)"
+        },
+        {
+          "id": "hospitales_cercanos",
+          "label": "Hospitales y centros asistenciales cercanos",
+          "tipo": "textarea",
+          "req": true,
+          "ancho": true,
+          "seccion": "1 · Informativa (completa la escuela)",
+          "a": "Direcciones y teléfonos de los centros de salud más próximos al destino. Es información obligatoria: hay que averiguarla antes de viajar, no en el momento de la urgencia."
+        },
+        {
+          "id": "otros_datos_interes",
+          "label": "Otros datos de interés",
+          "tipo": "textarea",
+          "req": false,
+          "ancho": true,
+          "seccion": "1 · Informativa (completa la escuela)",
+          "a": "Cualquier cosa que las familias deban saber: qué llevar, vianda, ropa, costo."
+        },
+        {
+          "id": "nombre_estudiante",
+          "label": "Nombre del hijo/a",
+          "tipo": "text",
+          "req": true,
+          "seccion": "2 · Autorización (completa la familia)",
+          "a": "Estudiante que se autoriza a participar de esta salida en particular."
+        },
+        {
+          "id": "dni_estudiante",
+          "label": "DNI del hijo/a",
+          "tipo": "text",
+          "req": true,
+          "seccion": "2 · Autorización (completa la familia)",
+          "a": "Documento del estudiante."
+        },
+        {
+          "id": "tipo_salida",
+          "label": "Tipo de salida",
+          "tipo": "select",
+          "opciones": [
+            "educativa",
+            "representacion_institucional"
+          ],
+          "req": true,
+          "auto": true,
+          "seccion": "2 · Autorización (completa la familia)"
+        },
+        {
+          "id": "establecimiento_educativo",
+          "label": "Establecimiento educativo",
+          "tipo": "text",
+          "req": true,
+          "auto": true,
+          "seccion": "2 · Autorización (completa la familia)"
+        },
+        {
+          "id": "numero_establecimiento",
+          "label": "N° del establecimiento",
+          "tipo": "text",
+          "req": true,
+          "auto": true,
+          "seccion": "2 · Autorización (completa la familia)"
+        },
+        {
+          "id": "distrito",
+          "label": "Distrito",
+          "tipo": "text",
+          "req": true,
+          "auto": true,
+          "seccion": "2 · Autorización (completa la familia)"
+        },
+        {
+          "id": "localidad_salida",
+          "label": "Localidad donde se realiza la salida",
+          "tipo": "text",
+          "req": true,
+          "auto": true,
+          "seccion": "2 · Autorización (completa la familia)"
+        },
+        {
+          "id": "dias_salida",
+          "label": "Día/días de la salida",
+          "tipo": "text",
+          "req": true,
+          "calc": true,
+          "seccion": "2 · Autorización (completa la familia)",
+          "a": "Se calcula solo desde las fechas de salida y regreso."
+        },
+        {
+          "id": "mes_salida",
+          "label": "Mes de la salida",
+          "tipo": "text",
+          "req": true,
+          "calc": true,
+          "seccion": "2 · Autorización (completa la familia)",
+          "a": "Se calcula solo desde las fechas de salida y regreso."
+        },
+        {
+          "id": "indicaciones_salud",
+          "label": "Indicaciones para el personal docente y médico",
+          "tipo": "textarea",
+          "req": false,
+          "ancho": true,
+          "seccion": "3 · Salud (completa la familia)",
+          "a": "Alergias, medicación, tratamientos, condiciones que el/la docente a cargo tenga que conocer ante una urgencia. Si no hay nada para informar, se deja en blanco."
+        },
+        {
+          "id": "tiene_obra_social",
+          "label": "¿Tiene obra social o prepaga?",
+          "tipo": "bool",
+          "req": true,
+          "seccion": "3 · Salud (completa la familia)",
+          "a": "Si se marca, se habilitan los datos de la cobertura. Este dato convive con el seguro escolar y con la póliza de responsabilidad civil de la escuela: no la reemplaza."
+        },
+        {
+          "id": "nombre_obra_social",
+          "label": "Nombre de la obra social/prepaga",
+          "tipo": "text",
+          "req": false,
+          "cond": {
+            "campo": "tiene_obra_social",
+            "valor": true
+          },
+          "seccion": "3 · Salud (completa la familia)",
+          "a": "Se completa sólo si el/la estudiante tiene cobertura."
+        },
+        {
+          "id": "numero_socio",
+          "label": "N° de socio",
+          "tipo": "text",
+          "req": false,
+          "cond": {
+            "campo": "tiene_obra_social",
+            "valor": true
+          },
+          "seccion": "3 · Salud (completa la familia)",
+          "a": "Número de afiliado/a, el que figura en la credencial."
+        },
+        {
+          "id": "telefonos_urgencia",
+          "label": "Teléfonos de contacto en caso de urgencia",
+          "tipo": "textarea",
+          "req": true,
+          "ancho": true,
+          "seccion": "3 · Salud (completa la familia)",
+          "a": "Consignar varios, de personas distintas ya que un solo teléfono que no atiende deja al docente sin nadie a quien avisar."
+        }
+      ]
+    },
+    {
+      "n": "VII",
+      "numero": 7,
+      "firma_papel": true,
+      "titulo": "Declaración jurada — estudiante mayor de 18 o emancipada/o",
+      "quien": "La completa cada estudiante",
+      "nota": "Reemplaza la autorización familiar para estudiantes mayores de edad o emancipados/as. No hace falta para salidas dentro del barrio (ahí alcanza con la declaración general del inicio del ciclo). El/la docente responsable debe llevarla el día de la salida.",
+      "campos": [
+        {
+          "id": "nombre_estudiante",
+          "label": "Nombre y apellido",
+          "tipo": "text",
+          "req": true,
+          "a": "Estudiante que firma la declaración. Al ser mayor de edad, se autoriza a sí mismo/a: no interviene la familia."
+        },
+        {
+          "id": "dni_estudiante",
+          "label": "DNI",
+          "tipo": "text",
+          "req": true,
+          "a": "Documento del/la estudiante."
+        },
+        {
+          "id": "domicilio",
+          "label": "Domicilio",
+          "tipo": "text",
+          "req": true,
+          "a": "Domicilio particular del/la estudiante, no el de la escuela."
+        },
+        {
+          "id": "localidad",
+          "label": "Localidad de domicilio",
+          "tipo": "text",
+          "req": true,
+          "a": "Localidad donde vive el/la estudiante."
+        },
+        {
+          "id": "institucion",
+          "label": "Institución a la que concurre",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "tipo_salida",
+          "label": "Tipo de salida",
+          "tipo": "select",
+          "opciones": [
+            "educativa",
+            "representacion_institucional"
+          ],
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "localidad_salida",
+          "label": "Localidad donde se realiza la salida",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "dias_salida",
+          "label": "Día/días de la salida",
+          "tipo": "text",
+          "req": true,
+          "calc": true,
+          "a": "Se calcula solo desde las fechas de salida y regreso."
+        },
+        {
+          "id": "mes_salida",
+          "label": "Mes de la salida",
+          "tipo": "text",
+          "req": true,
+          "calc": true,
+          "a": "Se calcula solo desde las fechas de salida y regreso."
+        },
+        {
+          "id": "anio_salida",
+          "label": "Año de la salida",
+          "tipo": "text",
+          "req": true,
+          "calc": true,
+          "a": "Se calcula solo desde las fechas de salida y regreso."
+        },
+        {
+          "id": "indicaciones_salud",
+          "label": "Indicaciones para el personal docente y médico",
+          "tipo": "textarea",
+          "req": false,
+          "ancho": true,
+          "a": "Alergias, medicación o condiciones que el/la docente a cargo deba conocer ante una urgencia."
+        },
+        {
+          "id": "tiene_obra_social",
+          "label": "¿Tiene obra social o prepaga?",
+          "tipo": "bool",
+          "req": true,
+          "a": "Si se marca, se habilitan los datos de la cobertura."
+        },
+        {
+          "id": "nombre_obra_social",
+          "label": "Nombre de la obra social/prepaga",
+          "tipo": "text",
+          "req": false,
+          "cond": {
+            "campo": "tiene_obra_social",
+            "valor": true
+          },
+          "a": "Se completa sólo si tiene cobertura."
+        },
+        {
+          "id": "numero_socio",
+          "label": "N° de socio",
+          "tipo": "text",
+          "req": false,
+          "cond": {
+            "campo": "tiene_obra_social",
+            "valor": true
+          },
+          "a": "Número de afiliado/a."
+        },
+        {
+          "id": "telefonos_urgencia",
+          "label": "Teléfonos de contacto en caso de urgencia",
+          "tipo": "textarea",
+          "req": true,
+          "ancho": true,
+          "a": "Consignar varios, de personas distintas que puedan responder durante la salida."
+        }
+      ]
+    },
+    {
+      "n": "VIII",
+      "numero": 8,
+      "firma_papel": false,
+      "titulo": "Informe del transporte a contratar",
+      "quien": "La completa la empresa de transporte o la escuela",
+      "nota": "Se completa una vez visada toda la documentación del transporte, cosa que después el/la directora/a declara bajo juramento en el Anexo IX. Si se viaja en transporte público de línea, en lugar de estos datos se consignan los del pasaje o boleto. Ojo: el seguro que se carga acá es el de la empresa, distinto del seguro escolar del Anexo IX.",
+      "campos": [
+        {
+          "id": "nombre_empresa",
+          "label": "Nombre de la empresa o razón social",
+          "tipo": "text",
+          "req": true,
+          "a": "Razón social del prestador del servicio. Si se contrata una agencia de viajes, además hay que cumplir la Ley 25599 (Art. 12 de la Resolución)."
+        },
+        {
+          "id": "nombre_gerente_responsable",
+          "label": "Nombre del gerente o responsable",
+          "tipo": "text",
+          "req": true,
+          "a": "Persona responsable de la empresa ante la escuela."
+        },
+        {
+          "id": "domicilio_propietario_empresa",
+          "label": "Domicilio del propietario o la empresa",
+          "tipo": "text",
+          "req": true,
+          "a": "Dirección legal de la empresa."
+        },
+        {
+          "id": "telefono_propietario_empresa",
+          "label": "Teléfono del propietario o la empresa",
+          "tipo": "text",
+          "req": true,
+          "a": "Teléfono de la empresa."
+        },
+        {
+          "id": "domicilio_gerente_responsable",
+          "label": "Domicilio del gerente o responsable",
+          "tipo": "text",
+          "req": true,
+          "a": "Domicilio de la persona responsable."
+        },
+        {
+          "id": "telefono",
+          "label": "Teléfono",
+          "tipo": "text",
+          "req": false,
+          "a": "Teléfono fijo de contacto."
+        },
+        {
+          "id": "telefono_movil",
+          "label": "Teléfono móvil",
+          "tipo": "text",
+          "req": false,
+          "a": "Celular de contacto. Conviene tenerlo a mano el día de la salida por si hay que reubicar al conductor."
+        },
+        {
+          "id": "titularidad_vehiculo",
+          "label": "Titularidad y tipo de vehículo",
+          "tipo": "text",
+          "req": true,
+          "a": "Micro, ómnibus, combi, automóvil, camioneta, barco, lancha o avión, y a nombre de quién está."
+        },
+        {
+          "id": "habilitacion_vehiculo",
+          "label": "Habilitación del/los vehículos",
+          "tipo": "textarea",
+          "req": true,
+          "ancho": true,
+          "a": "Número de registro, fecha, tipo de habilitación, cantidad de asientos y vigencia de la VTV hasta el regreso. Qué organismo habilita depende del destino: dentro de la provincia rige la Res. 122/18; a otra provincia es obligatoria la habilitación de la CNRT; a CABA sirve el transporte escolar habilitado si la salida no supera las 48 horas."
+        },
+        {
+          "id": "compania_aseguradora",
+          "label": "Compañía aseguradora (del transporte)",
+          "tipo": "text",
+          "req": true,
+          "a": "Aseguradora de la empresa de transporte. No confundir con el seguro escolar de la escuela, que va en el Anexo IX."
+        },
+        {
+          "id": "numero_poliza",
+          "label": "N° de póliza",
+          "tipo": "text",
+          "req": true,
+          "a": "Número de póliza del transporte."
+        },
+        {
+          "id": "tipo_seguro",
+          "label": "Tipo de seguro",
+          "tipo": "text",
+          "req": true,
+          "a": "Cobertura contratada por la empresa de transporte."
+        },
+        {
+          "id": "nombre_conductor",
+          "label": "Nombre del/los conductor/es",
+          "tipo": "text",
+          "req": true,
+          "a": "Puede haber más de uno. Si el día de la partida cambia el conductor por una indisposición, hay que comunicarlo a la autoridad educativa (Anexo I, punto 9.4)."
+        },
+        {
+          "id": "dni_conductor",
+          "label": "DNI del/los conductor/es",
+          "tipo": "text",
+          "req": true,
+          "a": "Documento de cada conductor/a."
+        },
+        {
+          "id": "numero_carnet_conducir",
+          "label": "N° de carnet de conducir y vigencia",
+          "tipo": "text",
+          "req": true,
+          "a": "Registro con la categoría que habilite ese tipo de vehículo, y su fecha de vencimiento: tiene que estar vigente al momento del viaje."
+        },
+        {
+          "id": "adjunto_constancia_habilitaciones",
+          "label": "Adjunta constancia de habilitaciones",
+          "tipo": "bool",
+          "req": true,
+          "seccion": "Adjuntos (fotocopias)",
+          "a": "Marcar cuando la fotocopia ya esté adjuntada al legajo en papel."
+        },
+        {
+          "id": "adjunto_carnet_conductor",
+          "label": "Adjunta carnet de conductor",
+          "tipo": "bool",
+          "req": true,
+          "seccion": "Adjuntos (fotocopias)",
+          "a": "Marcar cuando la fotocopia ya esté adjuntada."
+        },
+        {
+          "id": "adjunto_dni_conductor",
+          "label": "Adjunta DNI del/los conductor/es",
+          "tipo": "bool",
+          "req": true,
+          "seccion": "Adjuntos (fotocopias)",
+          "a": "Marcar cuando la fotocopia ya esté adjuntada."
+        }
+      ]
+    },
+    {
+      "n": "IX",
+      "numero": 9,
+      "firma_papel": false,
+      "titulo": "Declaración jurada de directivos y/o representantes legales",
+      "quien": "La completa el/la director/a",
+      "nota": "Además de completarlo, hay que transcribirlo de puño y letra en el Libro de Actas Institucionales de Salidas Educativas, con fecha anterior a la partida. Para enviarlo al/la Inspector/a y al Seguro Escolar sirve el formato digital o una foto de la transcripción en PDF.",
+      "campos": [
+        {
+          "id": "nombre_establecimiento",
+          "label": "Nombre del establecimiento",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "numero_establecimiento",
+          "label": "N°",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "cue",
+          "label": "CUE",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "domicilio",
+          "label": "Domicilio",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "distrito",
+          "label": "Distrito",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "director",
+          "label": "Director/a del establecimiento",
+          "tipo": "text",
+          "req": true,
+          "auto": true
+        },
+        {
+          "id": "fecha_lugar_realizacion",
+          "label": "Fecha y lugar de realización de la salida",
+          "tipo": "text",
+          "req": true,
+          "calc": true,
+          "a": "Se arma solo con los datos comunes de la salida."
+        },
+        {
+          "id": "compania_aseguradora",
+          "label": "Compañía aseguradora (seguro escolar)",
+          "tipo": "text",
+          "req": true,
+          "seccion": "Seguro escolar"
+        },
+        {
+          "id": "tipo_seguro",
+          "label": "Tipo de seguro",
+          "tipo": "text",
+          "req": true,
+          "seccion": "Seguro escolar"
+        },
+        {
+          "id": "numero_poliza",
+          "label": "Póliza N°",
+          "tipo": "text",
+          "req": true,
+          "seccion": "Seguro escolar"
+        },
+        {
+          "id": "vigencia_poliza",
+          "label": "Vigencia",
+          "tipo": "text",
+          "req": true,
+          "seccion": "Seguro escolar"
+        },
+        {
+          "id": "observaciones",
+          "label": "Observaciones",
+          "tipo": "textarea",
+          "req": false,
+          "ancho": true,
+          "seccion": "Seguro escolar",
+          "a": "Todo lo que pueda surgir y no esté previsto en el formulario. Si la salida es fuera de la provincia o del país, acá se deja constancia de la ampliación de la póliza."
+        }
+      ]
+    }
+  ]
+}

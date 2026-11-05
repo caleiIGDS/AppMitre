@@ -2,11 +2,15 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import timedelta
+import base64
+import hashlib
 from pathlib import Path
+import re
 import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 from flask import Flask
 
@@ -70,6 +74,36 @@ class SalidasMCP(unittest.TestCase):
     def tool(self, nombre, **args):
         return self.mcp('tools/call', {'name': nombre, 'arguments': args}).json['result']['structuredContent']
 
+    def oauth(self, cliente=None):
+        raiz = '/salidas/oauth'
+        app = self.anonimo
+        callback = 'https://cliente.example/callback'
+        registro = app.post(raiz + '/register', json={'redirect_uris': [callback],
+                            'token_endpoint_auth_method': 'none'})
+        self.assertEqual(registro.status_code, 201)
+        cliente_id = registro.json['client_id']
+        verificador = 'v' * 43
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verificador.encode()).digest()).decode().rstrip('=')
+        navegador = cliente or self.editor
+        args = {'client_id': cliente_id, 'redirect_uri': callback, 'response_type': 'code',
+                'resource': 'http://localhost/mcp/salidas', 'scope': 'salidas:editar offline_access',
+                'code_challenge': challenge, 'code_challenge_method': 'S256'}
+        consentimiento = navegador.get(raiz + '/authorize', query_string=args)
+        csrf = re.search(r'name="csrf" value="([^"]+)"', consentimiento.text)[1]
+        autorizado = navegador.post(raiz + '/authorize', query_string=args,
+                                     data={'csrf': csrf, 'decision': 'autorizar'})
+        if autorizado.status_code != 302:
+            return autorizado, cliente_id
+        codigo = parse_qs(urlsplit(autorizado.location).query)['code'][0]
+        tokens = app.post(raiz + '/token', data={'client_id': cliente_id, 'grant_type': 'authorization_code',
+                          'redirect_uri': callback, 'code_verifier': verificador, 'code': codigo,
+                          'resource': args['resource']})
+        return tokens, cliente_id
+
+    def tool_con_token(self, token, nombre, **args):
+        return self.mcp('tools/call', {'name': nombre, 'arguments': args},
+                        headers={'Authorization': 'Bearer ' + token})
+
     def pestana(self, datos, id=1, cliente=None, cabeceras=None):
         return (cliente or self.editor).post(f'{self.ruta}/{id}/agente-formulario', json=datos,
                                             headers={'X-Mitre': '1'} if cabeceras is None else cabeceras)
@@ -86,7 +120,8 @@ class SalidasMCP(unittest.TestCase):
     def test_descubrimiento_y_nueve_anexos(self):
         tools = self.mcp('tools/list').json['result']['tools']
         self.assertEqual({t['name'] for t in tools},
-                         {'listar_anexos', 'leer_anexo', 'consultar_campos', 'rellenar_formulario'})
+                         {'listar_anexos', 'leer_anexo', 'consultar_campos', 'rellenar_formulario',
+                          'buscar_salidas', 'consultar_salida', 'esquema_legajo', 'crear_salida', 'editar_salida'})
         listado = self.tool('listar_anexos')['anexos']
         self.assertEqual([a['anexo'] for a in listado], list(salidas_mcp.ANEXOS))
         for anexo in salidas_mcp.ANEXOS:
@@ -103,7 +138,59 @@ class SalidasMCP(unittest.TestCase):
         self.assertEqual(self.pestana({'campos': self.campos}, id=3).status_code, 404)
         self.assertEqual(self.pestana({'campos': self.campos}, id=999).status_code, 404)
         self.assertEqual(self.anonimo.post(self.ruta + '/api/guardar', json={}).status_code, 302)
-        self.assertIn('error', self.tool('crear_salida'))
+        r = self.mcp('tools/call', {'name': 'crear_salida'})
+        self.assertEqual(r.status_code, 401)
+        self.assertIn('/.well-known/oauth-protected-resource/mcp/salidas', r.headers['WWW-Authenticate'])
+
+    def test_oauth_revoca_permiso_del_dispositivo_y_limita_lectura(self):
+        tokens, _ = self.oauth(self.cliente(2))
+        self.assertEqual(tokens.status_code, 403)
+        tokens, cliente = self.oauth()
+        self.assertEqual(tokens.status_code, 200, tokens.json)
+        token = tokens.json['access_token']
+        self.assertEqual(self.tool_con_token(token, 'buscar_salidas').status_code, 200)
+        with closing(accesos.conectar()) as con, con:
+            con.execute("UPDATE dispositivos SET permisos='[\"salidas.leer\"]' WHERE id=1")
+        self.assertEqual(self.tool_con_token(token, 'buscar_salidas').status_code, 401)
+        refresh = self.anonimo.post('/salidas/oauth/token', data={'client_id': cliente,
+            'grant_type': 'refresh_token', 'refresh_token': tokens.json['refresh_token']})
+        self.assertEqual(refresh.json['error'], 'invalid_grant')
+
+    def test_crear_reintentar_editar_y_rechazar_revision_anterior(self):
+        tokens, cliente = self.oauth()
+        token = tokens.json['access_token']
+
+        def llamar(nombre, **args):
+            r = self.tool_con_token(token, nombre, **args)
+            self.assertEqual(r.status_code, 200, r.text)
+            return r.json['result']['structuredContent']
+
+        campos = {'comunes.denominacion_proyecto': 'Olimpíada de prueba',
+                  'comunes.fecha_salida': '2026-11-15', 'IV.actividades': 'Acreditación',
+                  'personas': [{'rol': 'estudiante', 'apellido_nombre': 'Persona sintética'}]}
+        operacion = 'un-id-estable-de-prueba'
+        alta = llamar('crear_salida', operacion=operacion, campos=campos)
+        self.assertEqual(alta['estado'], 'creada', alta)
+        id = alta['id']
+        self.assertEqual(llamar('crear_salida', operacion=operacion, campos=campos)['id'], id)
+        self.assertEqual(llamar('buscar_salidas', consulta='olimpiada')['total'], 1)
+        original = llamar('consultar_salida', id=id)
+        self.assertTrue(Path(salidas._ruta_pdf(id, 'V')).read_bytes().startswith(b'%PDF-'))
+        cambios = {'IV.actividades': 'Prueba escrita', 'personas': original['campos']['personas']}
+        self.assertEqual(llamar('editar_salida', id=id, revision=original['revision'], campos=cambios)['estado'], 'editada')
+        self.assertIn('error', llamar('editar_salida', id=id, revision=original['revision'], campos=cambios))
+        web = self.editor.post(self.ruta + '/api/guardar', json={
+            '_id_editar': id, '_revision_editar': original['revision']})
+        self.assertEqual(web.status_code, 409)
+        actual = llamar('consultar_salida', id=id)
+        self.assertEqual(actual['campos']['comunes.fecha_salida'], '2026-11-15')
+        self.assertEqual(actual['campos']['IV.actividades'], 'Prueba escrita')
+        self.assertIn('error', llamar('editar_salida', id=id, revision=actual['revision'],
+                                      campos={'IX.firma_sello_director': 'No corresponde'}))
+        r = self.anonimo.post('/salidas/oauth/revoke', data={'client_id': cliente,
+                               'token': tokens.json['refresh_token']})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self.tool_con_token(token, 'consultar_salida', id=id).status_code, 401)
 
     def test_entrega_vinculada_al_receptor_sin_guardado(self):
         antes = self.legajos()
