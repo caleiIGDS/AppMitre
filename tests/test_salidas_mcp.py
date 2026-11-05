@@ -142,6 +142,17 @@ class SalidasMCP(unittest.TestCase):
         self.assertEqual(r.status_code, 401)
         self.assertIn('/.well-known/oauth-protected-resource/mcp/salidas', r.headers['WWW-Authenticate'])
 
+    def test_clave_exclusiva_solo_por_encabezado_y_si_esta_configurada(self):
+        clave = 'mitre_salidas_' + 'a' * 43
+        with patch.dict('os.environ', {'SALIDAS_MCP_TOKEN_SHA256': ''}):
+            self.assertEqual(self.tool_con_token(clave, 'esquema_legajo').status_code, 401)
+        huella = hashlib.sha256(clave.encode('ascii')).hexdigest()
+        with patch.dict('os.environ', {'SALIDAS_MCP_TOKEN_SHA256': huella}):
+            self.assertEqual(self.tool_con_token(clave, 'esquema_legajo').status_code, 200)
+            self.assertEqual(self.tool_con_token(clave[:-1] + 'b', 'esquema_legajo').status_code, 401)
+            r = self.mcp('tools/call', {'name': 'esquema_legajo'}, query_string={'token': clave})
+            self.assertEqual(r.status_code, 401)
+
     def test_oauth_revoca_permiso_del_dispositivo_y_limita_lectura(self):
         tokens, _ = self.oauth(self.cliente(2))
         self.assertEqual(tokens.status_code, 403)

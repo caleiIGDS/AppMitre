@@ -15,7 +15,7 @@ from flask import Blueprint, abort, jsonify, request, url_for
 import accesos
 from config import ahora
 import salidas
-from salidas_mcp_acceso import RUTA_OAUTH, SCOPE, oauth
+from salidas_mcp_acceso import RUTA_OAUTH, SCOPE, autorizado, oauth
 from texto import norm
 
 
@@ -551,7 +551,7 @@ def endpoint():
     args = params.get('arguments', {})
     if not isinstance(args, dict) or not isinstance(params.get('name'), str):
         return responder(error=(-32602, 'Argumentos no válidos.'))
-    if params['name'] in PROTEGIDAS and not oauth.autorizado():
+    if params['name'] in PROTEGIDAS and not autorizado():
         desafio = oauth.desafio()
         r = responder({'isError': True, 'content': [{'type': 'text', 'text': 'Autorizá AppMitre Salidas.'}],
                        '_meta': {'mcp/www_authenticate': [desafio]}})

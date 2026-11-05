@@ -8,7 +8,7 @@ Registra cambios que afectan contratos entre módulos (API, schema de DB, nombre
 
 ## [2026-11-05] — MCP de Salidas Educativas
 
-`/mcp/salidas` entrega los Anexos I–IX. OAuth con permiso de edición habilita buscar, crear y editar legajos directamente, con revisión para las ediciones e identificador de operación para las altas. El código de pestaña sigue disponible para propuestas.
+`/mcp/salidas` entrega los Anexos I–IX. Para gestionar legajos acepta OAuth con permiso de edición o una clave exclusiva por `Authorization: Bearer` validada contra `SALIDAS_MCP_TOKEN_SHA256` del servidor. Las ediciones usan revisión y las altas un identificador de operación.
 
 ## [2026-10-05] — Gestión y Horarios: sólo las apps, en `/gestion/` y `/horarios/`
 

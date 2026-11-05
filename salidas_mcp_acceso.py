@@ -2,7 +2,9 @@
 import hashlib
 import hmac
 import json
+import os
 from pathlib import Path
+import re
 
 from flask import abort, current_app, redirect, render_template_string, request, session, url_for
 from itsdangerous import BadData, URLSafeTimedSerializer
@@ -13,6 +15,17 @@ import salidas
 
 SCOPE = 'salidas:editar'
 RUTA_OAUTH = '/salidas/oauth'
+
+
+def autorizado():
+    """Codex puede usar una clave propia de Salidas; los clientes OAuth conservan su flujo."""
+    esquema, _, token = request.headers.get('Authorization', '').partition(' ')
+    if esquema.lower() == 'bearer' and token.startswith('mitre_salidas_'):
+        huella = os.environ.get('SALIDAS_MCP_TOKEN_SHA256', '').strip().lower()
+        if not re.fullmatch(r'[0-9a-f]{64}', huella) or not re.fullmatch(r'mitre_salidas_[A-Za-z0-9_-]{43}', token):
+            return False
+        return hmac.compare_digest(hashlib.sha256(token.encode('ascii')).hexdigest(), huella)
+    return oauth.autorizado()
 
 
 def _generacion():
