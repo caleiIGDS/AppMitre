@@ -243,7 +243,6 @@ def tiene(permisos, permiso):
 _AMBITO = []
 _EXTRA = []
 _EXTRA_SESION = []
-_ENTRADAS = []
 
 
 def registrar_ambito(fn):
@@ -260,12 +259,6 @@ def registrar_acceso_extra(fn, en_sesion=False):
     _EXTRA.append(fn)
     if en_sesion:
         _EXTRA_SESION.append(fn)
-
-
-def registrar_entrada(fn):
-    """`fn(clave) -> bool`: otra clave que acepta el login de la app (`/app/api/sesion`)
-    además de la de admin. Si es la suya, deja lo que haga falta en la sesión y da True."""
-    _ENTRADAS.append(fn)
 
 
 def ambito_actual():
@@ -1066,9 +1059,7 @@ def registrar_app(app, modulos):
             return corte
         datos = request.get_json(silent=True) or {}
         clave = datos.get('clave', '')
-        # Primero la de admin (igual que el login de siempre: arranca limpio); si no, la
-        # de algún área entera (SALIDAS_CLAVE), que se suma a lo que ya hubiera.
-        if not (entrar_admin(clave) or any(fn(clave) for fn in _ENTRADAS)):
+        if not entrar_admin(clave):
             return jsonify({'error': 'Contraseña incorrecta.'}), 401
         g.pop('_acceso_sesion', None)
         g.pop('acceso_mitre', None)

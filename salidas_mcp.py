@@ -1,31 +1,27 @@
-"""Herramientas MCP de Salidas y entrega opcional a una pestaña."""
-from contextlib import closing, contextmanager
+"""Herramientas MCP de Salidas y Recursos con tokens de consulta y administración."""
+from contextlib import closing
 from datetime import date
 import hashlib
 import json
 from pathlib import Path
 import re
-import secrets
 import sqlite3
-import time
 from urllib.parse import urlsplit
 
 from flask import Blueprint, abort, jsonify, request, url_for
 
-import accesos
 from config import ahora
 import salidas
 import gestion_mcp
-from salidas_mcp_acceso import RUTA_OAUTH, SCOPE, autorizado, oauth
+from salidas_mcp_acceso import es_admin, nivel
+from tokens_mcp import rechazar
 from texto import norm
 
 
 bp = Blueprint('salidas_mcp', __name__)
 VERSIONES = ('2025-03-26', '2025-06-18', '2025-11-25')
-VIGENCIA = 600
 MAX_BYTES = 96 * 1024
 ANEXOS = ('I', 'II', *salidas.ANEXOS_NUMEROS)
-TIPOS = {'text', 'textarea', 'date', 'time', 'select', 'bool', 'number', 'personas', 'telefonos'}
 ROLES = ('estudiante', 'docente_titular', 'docente_reemplazante', 'no_docente')
 INSTRUCCIONES = (
     'Consultá los anexos de Salidas Educativas. Conectá AppMitre para consultar, crear o editar '
@@ -33,37 +29,10 @@ INSTRUCCIONES = (
     'para obtener su revisión. Crear y editar guardan directamente en AppMitre. Las firmas, '
     'autorizaciones y declaraciones quedan a cargo de sus responsables.'
 )
-oauth.registrar(bp)
 
 
 def _huella(valor):
     return hashlib.sha256(valor.encode('utf-8')).hexdigest()
-
-
-def _secreto(valor):
-    return isinstance(valor, str) and re.fullmatch(r'[A-Za-z0-9_-]{32}', valor)
-
-
-def _activa(id):
-    with closing(salidas.conectar()) as con:
-        return con.execute(
-            'SELECT 1 FROM salidas WHERE id = ? AND archivado = 0 AND vigencia_hasta > ?',
-            (id, ahora().isoformat())).fetchone() is not None
-
-
-@contextmanager
-def _entregas():
-    # Fuera de salidas.db para que las propuestas nunca entren en sus respaldos.
-    ruta = Path(salidas.DB_PATH).with_name('salidas_entregas_mcp.db')
-    with closing(sqlite3.connect(ruta, timeout=10)) as con, con:
-        con.row_factory = sqlite3.Row
-        con.execute('PRAGMA secure_delete = ON')
-        con.execute('''CREATE TABLE IF NOT EXISTS entregas (
-            codigo TEXT PRIMARY KEY, receptor TEXT UNIQUE NOT NULL, salida INTEGER NOT NULL,
-            vence REAL NOT NULL, campos TEXT NOT NULL, valores TEXT)''')
-        con.execute('BEGIN IMMEDIATE')
-        con.execute('DELETE FROM entregas WHERE vence <= ?', (time.time(),))
-        yield con
 
 
 def _json_limitado():
@@ -76,29 +45,6 @@ def _json_limitado():
         return json.loads(cuerpo)
     except (ValueError, RecursionError):
         abort(400)
-
-
-def _campos_validos(campos):
-    if not isinstance(campos, dict) or not 1 <= len(campos) <= 160:
-        return False
-    for clave, campo in campos.items():
-        if not (clave == 'personas' or re.fullmatch(r'(?:comunes|III|IV|V|VI|VII|VIII|IX)\.[a-z0-9_]{1,80}', clave)):
-            return False
-        if not isinstance(campo, dict) or set(campo) - {'tipo', 'label', 'opciones'}:
-            return False
-        tipo, label = campo.get('tipo'), campo.get('label')
-        if not isinstance(tipo, str) or tipo not in TIPOS or not isinstance(label, str) or len(label) > 250:
-            return False
-        if (clave == 'personas') != (tipo == 'personas'):
-            return False
-        if tipo == 'select':
-            opciones = campo.get('opciones')
-            if not isinstance(opciones, list) or not 1 <= len(opciones) <= 20 or not all(
-                    isinstance(v, str) and 0 < len(v) <= 100 for v in opciones):
-                return False
-        elif 'opciones' in campo:
-            return False
-    return True
 
 
 def _texto(v, limite=12000):
@@ -143,63 +89,17 @@ def _valor_valido(campo, valor):
     return _texto(valor)
 
 
-@salidas.bp.post('/<int:id>/agente-formulario')
-@accesos.requiere(salidas.PERMISO_ESCRITURA, como_json=True)
-def agente_formulario(id):
-    if request.headers.get('X-Mitre') != '1':
-        abort(400)
-    if not _activa(id):
-        abort(404)
-    datos = _json_limitado()
-    if not isinstance(datos, dict):
-        abort(400)
-    r = _operacion_pestana(id, datos)
-    r.headers['Cache-Control'] = 'no-store'
-    return r
-
-
-def _operacion_pestana(id, datos):
-    if set(datos) == {'campos'} and _campos_validos(datos['campos']):
-        codigo, receptor = secrets.token_urlsafe(24), secrets.token_urlsafe(24)
-        with _entregas() as con:
-            con.execute('INSERT INTO entregas VALUES (?,?,?,?,?,NULL)',
-                        (_huella(codigo), _huella(receptor), id, time.time() + VIGENCIA,
-                         json.dumps(datos['campos'])))
-        return jsonify(codigo=codigo, receptor=receptor, vence_en=VIGENCIA)
-    if set(datos) != {'receptor', 'accion'} or not _secreto(datos['receptor']):
-        abort(400)
-    receptor = _huella(datos['receptor'])
-    accion = datos['accion']
-    if accion not in ('recibir', 'cancelar'):
-        abort(400)
-    with _entregas() as con:
-        entrega = con.execute('SELECT valores FROM entregas WHERE receptor=? AND salida=?',
-                              (receptor, id)).fetchone()
-        if entrega is None:
-            return jsonify(estado='vencido')
-        if accion == 'recibir' and entrega['valores'] is None:
-            return jsonify(estado='esperando')
-        con.execute('DELETE FROM entregas WHERE receptor=?', (receptor,))
-        if accion == 'cancelar':
-            return jsonify(estado='cancelado')
-        return jsonify(estado='recibido', valores=json.loads(entrega['valores']))
-
-
 def _objeto(propiedades, opcionales=()):
     return {'type': 'object', 'properties': propiedades, 'required': [k for k in propiedades if k not in opcionales],
             'additionalProperties': False}
 
 
 def _tool(nombre, descripcion, propiedades, lectura=True, opcionales=(), protegido=False):
-    esquema = {'type': 'oauth2', 'scopes': [SCOPE]} if protegido else {'type': 'noauth'}
     return {'name': nombre, 'description': descripcion, 'inputSchema': _objeto(propiedades, opcionales),
-            'securitySchemes': [esquema],
-            '_meta': {'securitySchemes': [esquema]},
             'annotations': {'readOnlyHint': lectura, 'destructiveHint': nombre == 'editar_salida',
                             'idempotentHint': lectura, 'openWorldHint': False}}
 
 
-CODIGO = {'type': 'string', 'description': 'Código temporal que muestra la pestaña de edición.'}
 ID = {'type': 'integer', 'minimum': 1}
 CAMPOS = {'type': 'object', 'additionalProperties': True,
           'description': 'Mapa de campos. Ejemplo: {"comunes.denominacion_proyecto":"Visita","IV.actividades":"Recorrido"}. '
@@ -209,13 +109,6 @@ TOOLS = [
     _tool('listar_anexos', 'Lista los Anexos I a IX y las referencias de Salidas Educativas.', {}),
     _tool('leer_anexo', 'Lee el instructivo (I), los plazos (II) o un formulario oficial (III a IX).',
           {'anexo': {'type': 'string', 'enum': ANEXOS}}),
-    _tool('consultar_campos', 'Consulta los campos disponibles en la pestaña autorizada por el código. '
-          'Devuelve tipos y opciones, sin valores guardados.', {'codigo': CODIGO}),
-    _tool('rellenar_formulario', 'Envía una única propuesta de campos a la pestaña autorizada. '
-          'Usá consultar_campos primero. Las fechas van AAAA-MM-DD y las horas HH:MM. '
-          'Para personas, enviá una lista con rol, apellido_nombre y los datos opcionales confirmados '
-          'documento, cargo y fecha_nacimiento. Para teléfonos de acompañantes, usá un objeto nombre a teléfono.',
-          {'codigo': CODIGO, 'campos': {'type': 'object', 'additionalProperties': True}}, lectura=False),
     _tool('buscar_salidas', 'Busca legajos vigentes por nombre del proyecto y devuelve sus IDs.',
           {'consulta': {'type': 'string'}}, opcionales=('consulta',), protegido=True),
     _tool('consultar_salida', 'Lee los campos editables de un legajo y la revisión para editarlo.',
@@ -470,27 +363,7 @@ def _llamar(nombre, args):
         if anexo in salidas.ANEXOS_NUMEROS:
             r['esquema_papel'] = salidas._cargar_schema(anexo)
         return r
-    if nombre not in ('consultar_campos', 'rellenar_formulario'):
-        raise ValueError('Herramienta o argumentos inválidos.')
-    escritura = nombre == 'rellenar_formulario'
-    if set(args) != ({'codigo', 'campos'} if escritura else {'codigo'}) or not _secreto(args.get('codigo')):
-        raise ValueError('Se requiere el código temporal y los argumentos de la herramienta.')
-    codigo = _huella(args['codigo'])
-    with _entregas() as con:
-        entrega = con.execute('SELECT * FROM entregas WHERE codigo=?', (codigo,)).fetchone()
-        if entrega is None or entrega['valores'] is not None or not _activa(entrega['salida']):
-            return {'error': 'Código inválido, vencido o ya utilizado. Pedí otro en la salida abierta.'}
-        campos = json.loads(entrega['campos'])
-        if not escritura:
-            return {'campos': campos, 'roles_personas': ROLES}
-        valores = args['campos']
-        if not isinstance(valores, dict) or not valores:
-            return {'error': 'Enviá al menos un campo.'}
-        invalidos = [k for k, v in valores.items() if k not in campos or not _valor_valido(campos[k], v)]
-        if invalidos:
-            return {'error': 'Hay campos no disponibles o con valores inválidos.', 'campos_invalidos': invalidos}
-        con.execute('UPDATE entregas SET valores=? WHERE codigo=?', (json.dumps(valores), codigo))
-        return {'estado': 'enviado_para_revision', 'campos_enviados': len(valores)}
+    raise ValueError('Herramienta o argumentos inválidos.')
 
 
 @bp.before_request
@@ -505,11 +378,6 @@ def _proteger():
 def _privada(r):
     r.headers['Cache-Control'] = 'no-store'
     r.headers['Referrer-Policy'] = 'no-referrer'
-    if request.path == RUTA_OAUTH + '/authorize':
-        # no-referrer vuelve opaco el Origin del POST nativo del formulario.
-        # Conservarlo dentro del sitio, sin enviar la URL OAuth a otros sitios.
-        r.headers['Referrer-Policy'] = 'same-origin'
-        r.headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
     return r
 
 
@@ -518,6 +386,8 @@ def _privada(r):
 def endpoint():
     if request.method != 'POST':
         return '', 405, {'Allow': 'POST'}
+    if not nivel():
+        return rechazar()
     if request.headers.get('Accept') and not request.accept_mimetypes['application/json']:
         abort(406)
     p = _json_limitado()
@@ -545,32 +415,20 @@ def endpoint():
         solicitada = params.get('protocolVersion')
         return responder({'protocolVersion': solicitada if solicitada in VERSIONES else VERSIONES[-1],
                           'capabilities': {'tools': {'listChanged': False}},
-                          'serverInfo': {'name': 'appmitre-gestion', 'version': '1.2.0'},
+                          'serverInfo': {'name': 'appmitre-gestion', 'version': '2.0.0'},
                           'instructions': INSTRUCCIONES + ' ' + gestion_mcp.INSTRUCCIONES})
     if metodo == 'ping':
         return responder({})
     if metodo == 'tools/list':
-        return responder({'tools': TOOLS + gestion_mcp.herramientas(SCOPE)})
+        return responder({'tools': [t for t in TOOLS if es_admin() or t['name'] not in PROTEGIDAS] + gestion_mcp.herramientas()})
     if metodo != 'tools/call':
         return responder(error=(-32601, 'Método no disponible.'))
     args = params.get('arguments', {})
     if not isinstance(args, dict) or not isinstance(params.get('name'), str):
         return responder(error=(-32602, 'Argumentos no válidos.'))
-    if params['name'] in PROTEGIDAS and not autorizado():
-        desafio = oauth.desafio()
-        r = responder({'isError': True, 'content': [{'type': 'text', 'text': 'Autorizá AppMitre Salidas.'}],
-                       '_meta': {'mcp/www_authenticate': [desafio]}})
-        r.headers['WWW-Authenticate'] = desafio
-        r.status_code = 401
-        return r
+    if (params['name'] in PROTEGIDAS or params['name'] == 'pedir_fotos_recursos') and not es_admin():
+        return rechazar(admin=True)
     if params['name'] in gestion_mcp.NOMBRES:
-        if not oauth.autorizado():
-            desafio = oauth.desafio()
-            r = responder({'isError': True, 'content': [{'type': 'text', 'text': 'Autorizá AppMitre Gestión y sus inventarios.'}],
-                           '_meta': {'mcp/www_authenticate': [desafio]}})
-            r.headers['WWW-Authenticate'] = desafio
-            r.status_code = 401
-            return r
         try:
             datos, imagenes = gestion_mcp.llamar(params['name'], args)
             return responder({'content': [{'type': 'text', 'text': json.dumps(datos, ensure_ascii=False)}, *imagenes],

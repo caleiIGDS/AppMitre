@@ -5,7 +5,7 @@ description: Consulta horarios, cursos, aulas, docentes, otros cargos y precepto
 
 Usá las herramientas MCP de AppMitre para las preguntas de horarios de esta escuela. Consultá directamente la entidad conocida. El usuario trabaja allí como EMATP de Energías Renovables y coordina olimpíadas de matemática.
 
-Cada herramienta recibe `consulta` (los filtros; `{}` cuando no hagan falta). La conexión OAuth guarda y renueva el acceso: si falta o venció, indicá conectar/reconectar AppMitre desde el cliente. La contraseña de Horarios se escribe en la pantalla de AppMitre, no en el chat ni en los argumentos de las herramientas.
+Cada herramienta recibe `consulta` (los filtros; `{}` cuando no hagan falta). La conexión usa un token Bearer configurado en el cliente MCP. Ante 401, indicá revisar el token de la conexión; no pidas claves en el chat ni en los argumentos.
 
 `listar_catalogos`, `buscar_personas`, `consultar_horarios` y `consultar_preceptores` describen sus filtros en el esquema. Usá las otras consultas que anuncie el servidor cuando correspondan. No necesitás buscar en la web ni abrir el instructivo para usar estas herramientas. Si no encontrás un cargo o persona, revisá una vez el catálogo de `roles` o `nombres`; preguntá si la identidad sigue siendo ambigua. `multiples_roles=true` evita recorrer todo el padrón para encontrar personas con varios cargos.
 

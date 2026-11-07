@@ -1,5 +1,3 @@
-{# Salidas acepta dos claves: la de admin (GESTION_CLAVE) y la propia del área
-   (SALIDAS_CLAVE, ver salidas._entrar). Por eso no usa tal cual crud/login.html. #}
 {% extends 'salidas/base.html' %}
 {% block titulo %}Acceso{% endblock %}
 {% block contenido %}
@@ -12,9 +10,9 @@
 <form method="post" class="g-form" action="{{ url_for('salidas.login') }}">
     <input type="hidden" name="next" value="{{ next }}">
     <div class="g-field">
-        <label for="campo-clave">CONTRASEÑA DE SALIDAS EDUCATIVAS</label>
+        <label for="campo-clave">CONTRASEÑA DE ADMINISTRACIÓN</label>
         <input id="campo-clave" type="password" name="clave" required autofocus>
-        <span class="g-help">También sirve la contraseña de administración. Si te habilitaron
+        <span class="g-help">Usá tu acceso de Gestión con permiso de Salidas. Si te habilitaron
             el acceso por link, no necesitás contraseña: entrá con el link que te mandaron.</span>
     </div>
     <div class="g-form-actions">

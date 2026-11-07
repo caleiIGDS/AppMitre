@@ -16,7 +16,6 @@ Este archivo contesta una sola pregunta, que es la que importa parado en esta ca
 | `salidas.db` | Los legajos de salidas educativas (Anexos III–IX), con vigencia de un año | Se pierden los legajos cargados. Los PDF de `salidas_pdfs/` quedan sin su fila y no se regeneran solos | `salidas-*` |
 | `agente.db` | Telemetría del asistente: una fila por turno (`/agente/uso`) | Se pierde el historial de uso y nada más | **ninguno, a propósito** — crece sin techo y 20 copias rotativas se comerían el disco |
 | `escuela.db` | Los horarios: clases, preceptores y personal no docente | Nada permanente: se regenera desde Google Sheets, sola al arrancar o con `POST /horarios/api/actualizar` | **ninguno, a propósito** — la fuente de verdad es la planilla |
-| `horarios_oauth.db` | Clientes OAuth y hashes de autorizaciones del MCP | Hay que volver a conectar los clientes de IA; los horarios siguen intactos. Se crea sola, separada de la regeneración desde Sheets | Ninguno: se recupera reconectando |
 
 ## `backups/`
 

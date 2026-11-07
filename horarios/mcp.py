@@ -2,16 +2,16 @@
 
 Subconjunto de lectura de la especificación 2025-11-25: initialize, ping y tools.
 No ofrece SSE, tareas ni notificaciones del servidor. No precisa otro proceso.
-Los contratos escolares son los mismos de la API; OAuth conserva el acceso en el
-cliente. La clave por llamada se acepta solo para clientes anteriores.
+Los contratos escolares son los mismos de la API; el token se configura en el cliente.
 """
 from copy import deepcopy
 from urllib.parse import urlsplit
 
-from flask import Blueprint, abort, current_app, jsonify, request
+from flask import Blueprint, abort, current_app, request
 from itsdangerous import BadData
 
-from . import acceso, datos, oauth, pdf_agentes
+from . import acceso, datos, pdf_agentes
+from tokens_mcp import coincide, rechazar
 from .consultas import CONTRATOS, ErrorConsulta, ejecutar
 from .consultas.comun import compacto
 from .consultas.contratos import TEXTO, objeto, validar
@@ -20,7 +20,7 @@ bp_mcp = Blueprint('horarios_mcp', __name__)
 VERSIONES = ('2025-03-26', '2025-06-18', '2025-11-25')
 INSTRUCCIONES = (
     'Horarios de la EEST N.º 4 Emilio Mitre, secundaria técnica. Consultas de solo lectura. '
-    'Usá la conexión OAuth; si necesita acceso, indicá conectar AppMitre. No pidas la contraseña en el chat. '
+    'El token se configura en la conexión MCP. No pidas claves en el chat. '
     'consulta lleva los filtros; {} pide los valores por defecto. JSON de la última copia semanal, '
     'sin confirmar asistencia ni feriados. Conservá grupos A/B, cargos múltiples, suplencias y anomalías. '
     'No deduzcas disponibilidad o presencia en huecos ni unas recreos. PROGRESO es una cancha a dos cuadras, '
@@ -33,7 +33,6 @@ INSTRUCCIONES = (
     'leer el PDF desde el MCP si el cliente no puede descargarlo por HTTP.'
 )
 OPERACIONES = {c['nombre']: op for op, c in CONTRATOS.items()}
-CLAVE = {**TEXTO, 'maxLength': 4096, 'description': 'La contraseña de Horarios proporcionada por el usuario. No mostrarla.'}
 PARAMETROS_LLAMADA = objeto({'name': TEXTO, 'arguments': {'type': 'object'}, '_meta': {'type': 'object'}}, ('name',))
 
 
@@ -41,7 +40,6 @@ def herramienta(n, descripcion, entrada, salida):
     return {'name': n, 'description': descripcion,
             'inputSchema': objeto({'consulta': deepcopy(entrada)}, ('consulta',)),
             'outputSchema': {'type': 'object', **deepcopy(salida)},
-            'securitySchemes': [{'type': 'oauth2', 'scopes': [oauth.SCOPE]}],
             'annotations': {'readOnlyHint': True, 'destructiveHint': False,
                             'idempotentHint': True, 'openWorldHint': False}}
 
@@ -76,16 +74,7 @@ def llamar(p):
     if op is None and n != 'obtener_pdf':
         raise ErrorConsulta('parametros_invalidos', 'Herramienta desconocida.')
     argumentos = p.get('arguments', {})
-    clave = argumentos.get('clave')
-    # OAuth se comprueba antes de entrar. Compatibilidad con llamadas antiguas.
-    resultado = 'ok' if oauth.autorizado() else acceso.verificar_clave(request.remote_addr, clave)
-    if resultado != 'ok':
-        codigo = 'demasiados_intentos' if resultado == 'bloqueado' else 'no_autenticado'
-        mensaje = 'Esperá 15 minutos antes de reintentar.' if resultado == 'bloqueado' else 'Hace falta la contraseña de Horarios correcta.'
-        raise ErrorConsulta(codigo, mensaje)
-    entrada = pdf_agentes.ENTRADA if n == 'obtener_pdf' else CONTRATOS[op]['entrada']
-    # Nombre del campo, nunca su contenido, es lo único que aparece en errores de validación.
-    validar(argumentos, objeto({'clave': CLAVE, 'consulta': entrada}, ('consulta',)))
+    validar(argumentos, objeto({'consulta': pdf_agentes.ENTRADA if n == 'obtener_pdf' else CONTRATOS[op]['entrada']}, ('consulta',)))
     consulta = argumentos['consulta']
     if n == 'obtener_pdf':
         return pdf_agentes.obtener(consulta)
@@ -111,11 +100,6 @@ def privada(r):
     r.headers['Cache-Control'] = 'no-store'
     r.headers['Referrer-Policy'] = 'no-referrer'
     r.headers['X-Robots-Tag'] = 'noindex, nofollow'
-    if request.path.startswith('/horarios/oauth/authorize'):
-        # El formulario nativo necesita conservar Origin al enviar el POST.
-        r.headers['Referrer-Policy'] = 'same-origin'
-        r.headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
-        r.headers['X-Frame-Options'] = 'DENY'
     return r
 
 
@@ -128,9 +112,8 @@ def endpoint():
         return respuesta(None, codigo=-32600, mensaje='Se requiere application/json.', estado=415)
     if not request.accept_mimetypes['application/json']:
         return respuesta(None, codigo=-32600, mensaje='El cliente debe aceptar application/json.', estado=406)
-    # Un Bearer vencido siempre provoca reautorización; no cae a otra credencial.
-    if request.headers.get('Authorization') and not oauth.autorizado():
-        return oauth.desafio()
+    if not coincide('HORARIOS_MCP_TOKEN'):
+        return rechazar()
     # Leer con límite aunque no haya Content-Length (por ejemplo, transferencia chunked).
     cuerpo = request.stream.read(65537)
     if len(cuerpo) > 65536:
@@ -146,10 +129,6 @@ def endpoint():
             or not isinstance(p.get('params', {}), dict)):
         return respuesta(None, codigo=-32600, mensaje='Mensaje JSON-RPC no válido.', estado=400)
     i, metodo, params = p.get('id'), p['method'], p.get('params', {})
-    argumentos = params.get('arguments', {})
-    legado = (metodo == 'tools/call' and isinstance(argumentos, dict) and 'clave' in argumentos)
-    if metodo in ('tools/call', 'resources/read') and not legado and not oauth.autorizado():
-        return oauth.desafio()
     if 'id' not in p:
         if metodo.startswith('notifications/'):
             return '', 202
@@ -162,7 +141,7 @@ def endpoint():
         version = params['protocolVersion']
         return respuesta(i, {'protocolVersion': version if version in VERSIONES else VERSIONES[-1],
                              'capabilities': {'tools': {'listChanged': False}, 'resources': {'listChanged': False}},
-                             'serverInfo': {'name': 'appmitre-horarios', 'version': '1.1.0'},
+                             'serverInfo': {'name': 'appmitre-horarios', 'version': '2.0.0'},
                              'instructions': INSTRUCCIONES})
     if metodo == 'ping':
         return respuesta(i, {})
@@ -202,6 +181,3 @@ def descargar_pdf(referencia, nombre=None):
     r = pdf_agentes.descargar(parametros)
     r.headers.set('Content-Disposition', 'attachment', filename=pdf_agentes.nombre_archivo(parametros))
     return r
-
-
-oauth.registrar(bp_mcp)

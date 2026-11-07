@@ -218,8 +218,6 @@ tbody tr:nth-child(even){background:#fafbfc}
 }
 .bloque-archivo .g-help{display:block; margin-top:4px; color:var(--tinta-suave)}
 .bloque-archivo form{margin:0}
-#agente-formulario [hidden]{display:none}
-#agente-formulario-codigo{width:34ch; max-width:100%; margin-top:6px; font:inherit}
 @media(max-width:640px){
   .grilla{grid-template-columns:1fr}
   main{padding:16px 10px}
@@ -240,22 +238,7 @@ tbody tr:nth-child(even){background:#fafbfc}
 {% endblock %}
 
 {% block contenido %}
-{% if agente_habilitado %}
-<div class="bloque-archivo" id="agente-formulario"
-     data-url="{{ url_for('salidas.agente_formulario', id=id_editar) }}">
-  <div>
-    <strong>RELLENAR CON AGENTE</strong>
-    <span class="g-help">Generá un código temporal y pegalo en el chat de AppMitre Salidas. La propuesta sólo completa campos vacíos de esta pestaña.</span>
-    <input id="agente-formulario-codigo" aria-label="Código temporal" readonly hidden>
-    <span id="agente-formulario-estado" class="g-help" role="status"></span>
-  </div>
-  <div>
-    <button type="button" class="g-btn-outline-dark" id="agente-formulario-iniciar" disabled>Generar código</button>
-    <button type="button" class="g-btn-outline-dark" id="agente-formulario-aplicar" hidden>Aplicar campos</button>
-    <button type="button" class="g-btn-outline-dark" id="agente-formulario-cancelar" hidden>Cancelar</button>
-  </div>
-</div>
-{% endif %}
+
 <div id="contenedor"></div>
 
 {% if id_editar %}
@@ -1696,7 +1679,5 @@ window.addEventListener("beforeunload", e => {
 
 dibujarTodo();
 </script>
-{% if agente_habilitado %}
-<script src="{{ static_v('salidas-formulario-agente.js') }}" defer></script>
-{% endif %}
+
 {% endblock %}

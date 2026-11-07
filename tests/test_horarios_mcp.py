@@ -20,14 +20,17 @@ class MCPHorarios(unittest.TestCase):
     def setUp(self):
         fixtures.ConsultasHorarios.setUp(self)
         self.app.register_blueprint(mcp.bp_mcp)
+        env = patch.dict('os.environ', {'HORARIOS_MCP_TOKEN':'token-horarios-sintetico'})
+        env.start()
+        self.addCleanup(env.stop)
 
     def rpc(self, metodo, params=None, **otros):
         return self.client.post('/mcp', json={'jsonrpc': '2.0', 'id': 1, 'method': metodo,
                                              'params': params or {}},
-                                headers={'Accept': 'application/json, text/event-stream', **otros})
+                                headers={'Accept': 'application/json, text/event-stream', 'Authorization':'Bearer token-horarios-sintetico', **otros})
 
-    def llamar(self, nombre, filtros=None, clave='clave-sintética-ñ'):
-        return self.rpc('tools/call', {'name': nombre, 'arguments': {'clave': clave, 'consulta': filtros or {}}}).get_json()['result']
+    def llamar(self, nombre, filtros=None):
+        return self.rpc('tools/call', {'name': nombre, 'arguments': {'consulta': filtros or {}}}).get_json()['result']
 
     def test_descubrimiento_publico_y_negociacion_no_exponen_datos_ni_clave(self):
         for version in (*mcp.VERSIONES, '2099-01-01'):
@@ -58,18 +61,18 @@ class MCPHorarios(unittest.TestCase):
         self.assertEqual(self.rpc('tools/list', Origin='https://otro.example').status_code, 403)
         self.assertEqual(self.rpc('tools/list', Origin='https://chatgpt.com').status_code, 200)
         self.assertEqual(self.rpc('tools/list', Origin='https://claude.ai').status_code, 200)
-        self.assertEqual(self.client.post('/mcp', data='{}').status_code, 415)
-        self.assertEqual(self.client.post('/mcp', json={}, headers={'Accept': 'text/plain'}).status_code, 406)
-        r = self.client.post('/mcp', data='{', content_type='application/json', headers={'Accept': 'application/json'})
+        self.assertEqual(self.client.post('/mcp', data='{}', headers={'Authorization':'Bearer token-horarios-sintetico'}).status_code, 415)
+        self.assertEqual(self.client.post('/mcp', json={}, headers={'Accept': 'text/plain','Authorization':'Bearer token-horarios-sintetico'}).status_code, 406)
+        r = self.client.post('/mcp', data='{', content_type='application/json', headers={'Accept': 'application/json','Authorization':'Bearer token-horarios-sintetico'})
         self.assertEqual(r.status_code, 400)
         self.assertEqual(r.get_json()['error']['code'], -32700)
         for mensaje in ([], {'jsonrpc': '2.0', 'id': True, 'method': 'ping'},
                         {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': []}):
-            self.assertEqual(self.client.post('/mcp', json=mensaje, headers={'Accept': 'application/json'}).status_code, 400)
+            self.assertEqual(self.client.post('/mcp', json=mensaje, headers={'Accept': 'application/json','Authorization':'Bearer token-horarios-sintetico'}).status_code, 400)
         self.assertEqual(self.client.post('/mcp', json={'jsonrpc':'2.0', 'method':'notifications/initialized'},
-                                        headers={'Accept':'application/json'}).status_code, 202)
+                                        headers={'Accept':'application/json','Authorization':'Bearer token-horarios-sintetico'}).status_code, 202)
         self.assertEqual(self.client.post('/mcp', data=' '*65537, content_type='application/json',
-                                        headers={'Accept':'application/json'}).status_code, 413)
+                                        headers={'Accept':'application/json','Authorization':'Bearer token-horarios-sintetico'}).status_code, 413)
         self.assertEqual(self.rpc('initialize').get_json()['error']['code'], -32602)
 
     def test_mismos_json_que_api_y_paginacion(self):
@@ -91,23 +94,25 @@ class MCPHorarios(unittest.TestCase):
         self.assertEqual(segunda['personas'][0]['nombre'], 'PEREZ JUAN')
         self.assertNotIn('siguiente', segunda)
 
-    def test_clave_en_cada_llamada_sin_sesion_y_limite_compartido(self):
+    def test_token_obligatorio_independiente_de_sesion_web(self):
         with self.client.session_transaction() as s:
             s[acceso.SESSION_FLAG] = True
-        self.assertEqual(self.llamar('listar_catalogos', clave=None)['structuredContent']['error']['codigo'], 'no_autenticado')
+        for metodo in ('initialize','tools/list','tools/call','resources/read'):
+            for token in ('', 'incorrecto', 'clave-sintética-ñ'):
+                self.assertEqual(self.rpc(metodo, Authorization='Bearer '+token).status_code, 401)
+        with patch.dict('os.environ', {'HORARIOS_MCP_TOKEN':''}):
+            self.assertEqual(self.rpc('tools/list').status_code, 401)
+        with patch.dict('os.environ', {'HORARIOS_MCP_TOKEN':'rotado'}):
+            self.assertEqual(self.rpc('tools/list').status_code, 401)
+            self.assertEqual(self.rpc('tools/list', Authorization='Bearer rotado').status_code, 200)
+        for ruta in ('/horarios/oauth/authorize', '/horarios/oauth/register',
+                     '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource/mcp'):
+            self.assertEqual(self.client.get(ruta).status_code, 404)
+        self.assertEqual(self.client.get('/app-horarios/api/datos').status_code, 200)
         with self.client.session_transaction() as s:
             s.clear()
-        acceso._INTENTOS_FALLIDOS.clear()
-        for _ in range(acceso.MAX_INTENTOS):
-            r = self.llamar('listar_catalogos', clave='mala')
-            self.assertTrue(r['isError'])
-            self.assertEqual(r['structuredContent']['error']['codigo'], 'no_autenticado')
-        self.assertEqual(self.llamar('listar_catalogos')['structuredContent']['error']['codigo'], 'demasiados_intentos')
-        acceso._INTENTOS_FALLIDOS.clear()
-        self.assertFalse(self.llamar('listar_catalogos')['isError'])
-        self.assertEqual(self.client.get('/app-horarios/api/datos').status_code, 401)
+        self.assertEqual(self.client.get('/app-horarios/api/datos', headers={'Authorization':'Bearer token-horarios-sintetico'}).status_code, 401)
         self.assertEqual(self.client.post('/app-horarios/api/actualizar', headers={'X-Mitre':'1'}).status_code, 401)
-        self.assertEqual(self.rpc('tools/call', {'name':'actualizar','arguments':{'clave':'clave-sintética-ñ'}}).get_json()['result']['structuredContent']['error']['codigo'], 'parametros_invalidos')
 
     def test_errores_escolares_y_argumentos_no_se_ocultan(self):
         r = self.llamar('consultar_horarios', {'tipo':'persona','valores':['PEREZ']})

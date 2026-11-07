@@ -85,17 +85,15 @@ ninguna — ver `agent_docs/crud-motor.md`.
   del shell.
 - Integración: `app.py` registra `gestion.bp_api_registro` y `gestion.bp_api` y sirve la app
   compilada en `/gestion/`; `gestion.init_db()` corre en import (funciona bajo gunicorn/WSGI).
-- MCP: `gestion_mcp.py` aporta `listar_inventarios`, `consultar_inventario`, `consultar_recurso`
-  y `pedir_fotos_recursos` al endpoint `/mcp/gestion` de `salidas_mcp.py` (AppMitre Gestión);
-  `/mcp/salidas` conserva compatibilidad con las conexiones y autorizaciones existentes.
-  Consulta completa de recursos activos, descripción original, unidades, lugares y kits; alias solo
-  con su permiso. Las fotos se piden por IDs y se entregan todas las disponibles como imágenes,
-  identificadas por recurso; archivos ausentes o formatos incompatibles se informan individualmente.
-  El consentimiento OAuth permite sumar explícitamente los inventarios que la sesión abre en ese
-  momento, solo lectura. Las concesiones se revalidan por inventario y por identidad en cada consulta;
-  conexiones anteriores y el token exclusivo de Salidas no adquieren acceso a recursos. Se conservan
-  URL, scope técnico `salidas:editar` e identidad del paquete para compatibilidad; el consentimiento
-  y la identidad guardada delimitan los permisos efectivos de ambas ramas.
+- MCP: `gestion_mcp.py` aporta las consultas de inventarios y fotos a `/mcp/gestion`
+  de `salidas_mcp.py`; `/mcp/salidas` es un alias. Todas las llamadas requieren Bearer:
+  `GESTION_MCP_TOKEN_LECTURA` consulta todos los inventarios, devolviendo solo id, nombre,
+  tipo, estado y cantidad; no entrega ubicaciones, textos libres, kits, alias, unidades ni fotos.
+  `GESTION_MCP_TOKEN_ADMIN` permite el detalle completo, todas las fotos y las funciones actuales
+  de lectura y escritura de legajos de Salidas. No agrega escrituras de recursos al MCP.
+  Los tokens viven en `.env`, no crean sesiones web y se revocan rotándolos. No hay OAuth,
+  concesiones por dispositivo ni token exclusivo de Salidas. Sin configurar tokens, el MCP queda cerrado.
+  Las herramientas se filtran por nivel y el servidor también verifica las llamadas directas.
 
 ## Celular
 

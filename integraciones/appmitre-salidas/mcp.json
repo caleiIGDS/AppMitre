@@ -4,10 +4,14 @@
     "appmitre-salidas": {
       "type": "streamable-http",
       "url": "https://calei.pythonanywhere.com/mcp/gestion",
-      "extensions": {"com.openai": {"auth": {
-        "type": "oauth", "client": {"mode": "dcr"},
-        "baseScopes": ["salidas:editar"], "defaultScopes": ["salidas:editar", "offline_access"]
-      }}}
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "api_key",
+            "headerScheme": "bearer"
+          }
+        }
+      }
     }
   }
 }

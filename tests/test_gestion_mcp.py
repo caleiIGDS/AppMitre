@@ -43,17 +43,41 @@ class GestionMCP(SalidasMCP):
                         (json.dumps(['salidas.leer', 'salidas.editar', 'inv:1/gestion.leer']),))
 
     def conectar_recursos(self):
-        tokens, _ = self.oauth(inventarios=True)
-        self.assertEqual(tokens.status_code, 200, tokens.text)
-        return {'Authorization': 'Bearer ' + tokens.json['access_token']}
+        return {'Authorization':'Bearer ' + self.ADMIN}
 
     def recurso(self, nombre, cabecera, **args):
         return self.mcp('tools/call', {'name': nombre, 'arguments': args}, headers=cabecera).json['result']
 
+    def test_token_consulta_oculta_ubicaciones_textos_fotos_y_personas(self):
+        headers = {'Authorization':'Bearer ' + self.LECTURA}
+        lista = self.recurso('listar_inventarios', headers)['structuredContent']['inventarios']
+        self.assertEqual({i['slug'] for i in lista}, {'taller','otro'})
+        for tool,args in [('consultar_inventario', {}), ('consultar_recurso', {'id':1})]:
+            r = self.recurso(tool, headers, inventario='taller', **args)['structuredContent']
+            self.assertEqual(set(r['recursos'][0]), {'id','nombre','tipo','estado','cantidad'})
+            self.assertNotIn('Armario', json.dumps(r))
+            self.assertNotIn('secreto', json.dumps(r))
+        self.assertEqual(self.tool_con_token(self.LECTURA, 'pedir_fotos_recursos', inventario='taller', ids=[1]).status_code, 403)
+
+    def test_rotar_token_corta_acceso_sin_depender_de_claves_de_inventario(self):
+        headers = self.conectar_recursos()
+        with closing(gestion.conectar_registro()) as con, con:
+            con.execute("UPDATE inventarios SET clave_hash='rotada' WHERE id=1")
+        self.assertFalse(self.recurso('consultar_inventario', headers, inventario='taller')['isError'])
+        with patch.dict('os.environ', {'GESTION_MCP_TOKEN_ADMIN':'rotado'}):
+            self.assertEqual(self.tool_con_token(self.ADMIN, 'listar_inventarios').status_code, 401)
+
+    def test_slug_y_ids_invalidos_no_escapan_del_inventario(self):
+        headers = self.conectar_recursos()
+        for inv in ('inexistente', '../otro'):
+            self.assertTrue(self.recurso('consultar_inventario', headers, inventario=inv)['isError'])
+        for ids in ([True], [0], [], [1,1], [999]):
+            self.assertTrue(self.recurso('pedir_fotos_recursos', headers, inventario='taller', ids=ids)['isError'])
+
     def test_inventario_completo_y_fotos(self):
         headers = self.conectar_recursos()
         lista = self.recurso('listar_inventarios', headers)['structuredContent']
-        self.assertEqual(lista['inventarios'], [{'slug': 'taller', 'nombre': 'Taller'}])
+        self.assertEqual({i['slug'] for i in lista['inventarios']}, {'taller','otro'})
         inventario = self.recurso('consultar_inventario', headers, inventario='taller')['structuredContent']
         self.assertEqual(len(inventario['recursos']), 1)
         recurso = inventario['recursos'][0]
@@ -61,7 +85,7 @@ class GestionMCP(SalidasMCP):
         self.assertEqual(recurso['descripcion'], 'Descripción original')
         self.assertEqual(recurso['ubicaciones'], {'Armario': 2, 'Sin ubicación registrada': 1})
         self.assertEqual(recurso['kit'][0]['titulo'], 'Cable')
-        self.assertNotIn('alias', recurso)
+        self.assertEqual(recurso['alias'], 'secreto')
         self.assertNotIn('fotos', recurso)
         detalle = self.recurso('consultar_recurso', headers, inventario='taller', id=1)['structuredContent']
         self.assertEqual([u['numero'] for u in detalle['recursos'][0]['unidades']], [1, 3, 4])
@@ -69,62 +93,6 @@ class GestionMCP(SalidasMCP):
         imagenes = [c for c in fotos['content'] if c['type'] == 'image']
         self.assertEqual(len(imagenes), 2)
         self.assertTrue(all(base64.b64decode(i['data']) == self.foto for i in imagenes))
-
-    def test_aislamiento_y_revocacion(self):
-        headers = self.conectar_recursos()
-        for inv in ('otro', '../otro'):
-            self.assertTrue(self.recurso('pedir_fotos_recursos', headers, inventario=inv, ids=[1])['isError'])
-        for ids in ([True], [0], [], [1, 1], [999]):
-            self.assertTrue(self.recurso('pedir_fotos_recursos', headers, inventario='taller', ids=ids)['isError'])
-        import accesos
-        with closing(accesos.conectar()) as con, con:
-            con.execute("UPDATE dispositivos SET permisos='[\"salidas.editar\"]' WHERE id=1")
-        self.assertTrue(self.recurso('consultar_inventario', headers, inventario='taller')['isError'])
-
-    def test_conexion_anterior_no_gana_inventarios(self):
-        tokens, _ = self.oauth()
-        headers = {'Authorization': 'Bearer ' + tokens.json['access_token']}
-        self.assertEqual(self.recurso('listar_inventarios', headers)['structuredContent']['inventarios'], [])
-        self.assertTrue(self.recurso('consultar_inventario', headers, inventario='taller')['isError'])
-
-    def test_solo_recursos_no_da_salidas_y_sin_fotos_responde(self):
-        import accesos
-        with closing(accesos.conectar()) as con, con:
-            con.execute('UPDATE dispositivos SET permisos=? WHERE id=1', ('["inv:1/gestion.leer"]',))
-        headers = self.conectar_recursos()
-        self.assertEqual(self.mcp('tools/call', {'name': 'buscar_salidas', 'arguments': {}}, headers=headers).status_code, 401)
-        with closing(sqlite3.connect(Path(gestion.DIR_INVENTARIOS) / 'taller.db')) as con, con:
-            con.execute("UPDATE recursos SET fotos='[]' WHERE id=1")
-        respuesta = self.recurso('pedir_fotos_recursos', headers, inventario='taller', ids=[1])
-        self.assertFalse(respuesta['isError'])
-        self.assertEqual(respuesta['structuredContent']['recursos'][0]['fotos'], [])
-
-    def test_solo_recursos_exige_consentimiento_y_explica_como_conectar(self):
-        import accesos
-        with closing(accesos.conectar()) as con, con:
-            con.execute('UPDATE dispositivos SET permisos=? WHERE id=1', ('["inv:1/gestion.leer"]',))
-        respuesta, _ = self.oauth()
-        self.assertEqual(respuesta.status_code, 403)
-        self.assertIn('marcá «Autorizar consulta de recursos»', respuesta.text)
-        self.assertRegex(respuesta.text, r'name="inventarios"[^>]+required')
-        self.assertIn('formnovalidate', respuesta.text)
-        self.conectar_recursos()
-
-    def test_consentimiento_recursos_sin_inventarios_no_concede_salidas(self):
-        respuesta, _ = self.oauth(self.cliente(2), inventarios=True)
-        self.assertEqual(respuesta.status_code, 403)
-        self.assertIn('No hay inventarios accesibles', respuesta.text)
-
-    def test_visitante_sin_sesion_recibe_pasos_de_acceso_sin_nombres_privados(self):
-        respuesta, _ = self.oauth(self.anonimo)
-        self.assertEqual(respuesta.status_code, 403)
-        self.assertIn('Primero necesitás entrar a AppMitre', respuesta.text)
-        self.assertIn('/gestion/entrar?volver=/inventarios', respuesta.text)
-        self.assertIn('enlace de invitación', respuesta.text)
-        self.assertIn('comprobá tu acceso', respuesta.text)
-        self.assertNotIn('name="inventarios"', respuesta.text)
-        self.assertNotIn('value="autorizar">Autorizar', respuesta.text)
-        self.assertNotIn('Taller', respuesta.text)
 
     def test_500_recursos_sin_recorte_y_revision_actualizada(self):
         headers = self.conectar_recursos()
@@ -148,23 +116,3 @@ class GestionMCP(SalidasMCP):
         resultado = self.recurso('pedir_fotos_recursos', headers, inventario='taller', ids=[1])
         self.assertEqual(len([c for c in resultado['content'] if c['type'] == 'image']), 1)
         self.assertEqual(resultado['structuredContent']['recursos'][0]['fotos'][0]['estado'], 'archivo no disponible')
-
-    def test_clave_de_inventario_y_rotacion(self):
-        import accesos
-        with closing(accesos.conectar()) as con, con:
-            con.execute("UPDATE dispositivos SET permisos='[]' WHERE id=1")
-        with self.editor.session_transaction() as ses:
-            ses[gestion.CLAVES_SESION] = {'1': gestion._huella('hash-1')}
-        headers = self.conectar_recursos()
-        self.assertFalse(self.recurso('consultar_inventario', headers, inventario='taller')['isError'])
-        with closing(gestion.conectar_registro()) as con, con:
-            con.execute("UPDATE inventarios SET clave_hash='rotada' WHERE id=1")
-        respuesta = self.mcp('tools/call', {'name': 'consultar_inventario', 'arguments': {'inventario': 'taller'}}, headers=headers)
-        self.assertEqual(respuesta.status_code, 401)
-
-    def test_comodin_dispositivo_no_abre_inventarios(self):
-        import accesos
-        with closing(accesos.conectar()) as con, con:
-            con.execute('UPDATE dispositivos SET permisos=? WHERE id=1', ('["*"]',))
-        headers = self.conectar_recursos()
-        self.assertEqual(self.recurso('listar_inventarios', headers)['structuredContent']['inventarios'], [])
