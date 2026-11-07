@@ -15,6 +15,7 @@ from flask import Blueprint, abort, jsonify, request, url_for
 import accesos
 from config import ahora
 import salidas
+import gestion_mcp
 from salidas_mcp_acceso import RUTA_OAUTH, SCOPE, autorizado, oauth
 from texto import norm
 
@@ -540,12 +541,12 @@ def endpoint():
         solicitada = params.get('protocolVersion')
         return responder({'protocolVersion': solicitada if solicitada in VERSIONES else VERSIONES[-1],
                           'capabilities': {'tools': {'listChanged': False}},
-                          'serverInfo': {'name': 'appmitre-salidas', 'version': '1.1.0'},
-                          'instructions': INSTRUCCIONES})
+                          'serverInfo': {'name': 'appmitre-gestion', 'version': '1.2.0'},
+                          'instructions': INSTRUCCIONES + ' ' + gestion_mcp.INSTRUCCIONES})
     if metodo == 'ping':
         return responder({})
     if metodo == 'tools/list':
-        return responder({'tools': TOOLS})
+        return responder({'tools': TOOLS + gestion_mcp.herramientas(SCOPE)})
     if metodo != 'tools/call':
         return responder(error=(-32601, 'Método no disponible.'))
     args = params.get('arguments', {})
@@ -558,6 +559,20 @@ def endpoint():
         r.headers['WWW-Authenticate'] = desafio
         r.status_code = 401
         return r
+    if params['name'] in gestion_mcp.NOMBRES:
+        if not oauth.autorizado():
+            desafio = oauth.desafio()
+            r = responder({'isError': True, 'content': [{'type': 'text', 'text': 'Autorizá AppMitre Gestión y sus inventarios.'}],
+                           '_meta': {'mcp/www_authenticate': [desafio]}})
+            r.headers['WWW-Authenticate'] = desafio
+            r.status_code = 401
+            return r
+        try:
+            datos, imagenes = gestion_mcp.llamar(params['name'], args)
+            return responder({'content': [{'type': 'text', 'text': json.dumps(datos, ensure_ascii=False)}, *imagenes],
+                              'structuredContent': datos, 'isError': False})
+        except ValueError as error:
+            return responder({'content': [{'type': 'text', 'text': str(error)}], 'isError': True})
     try:
         salida = _llamar(params['name'], args)
     except ValueError as error:

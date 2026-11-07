@@ -25,7 +25,10 @@ def autorizado():
         if not re.fullmatch(r'[0-9a-f]{64}', huella) or not re.fullmatch(r'mitre_salidas_[A-Za-z0-9_-]{43}', token):
             return False
         return hmac.compare_digest(hashlib.sha256(token.encode('ascii')).hexdigest(), huella)
-    return oauth.autorizado()
+    identidad = oauth.identidad_autorizada()
+    if identidad and identidad[0] == 'gestion':
+        return _vigente(identidad[1].get('salidas'))
+    return identidad is not None
 
 
 def _generacion():
@@ -36,6 +39,9 @@ def _vigente(identidad):
     if not identidad:
         return False
     tipo, valor = identidad
+    if tipo == 'gestion':
+        import gestion_mcp
+        return bool(_vigente(valor.get('salidas')) or any(gestion_mcp.vigente(c) for c in valor['inventarios']))
     if tipo == 'admin':
         return hmac.compare_digest(valor, accesos.huella_clave())
     if tipo == 'salidas':
@@ -67,6 +73,11 @@ def _identidad():
 
 def _consentir():
     identidad = _identidad()
+    if request.form.get('inventarios') == 'autorizar':
+        import gestion_mcp
+        inventarios = gestion_mcp.concesiones()
+        if inventarios:
+            return ['gestion', {'salidas': identidad, 'inventarios': inventarios}], None, 200
     if identidad is None:
         return None, 'Necesitás una sesión con permiso de edición de Salidas.', 403
     return identidad, None, 200
@@ -87,28 +98,33 @@ def mcp_continuar():
 
 
 def _pantalla(cliente, csrf, error):
-    autorizado = _identidad() is not None
+    import gestion_mcp
+    inventarios = gestion_mcp.concesiones()
+    autorizado = _identidad() is not None or bool(inventarios)
     volver = url_for('salidas.mcp_continuar', solicitud=_firma_continuar().dumps(
         request.query_string.decode('ascii')))
     return render_template_string('''<!doctype html><html lang="es"><meta charset="utf-8">
         <meta name="viewport" content="width=device-width,initial-scale=1">
-        <title>Conectar AppMitre Salidas</title>
+        <title>Conectar AppMitre Gestión</title>
         <style>body{font:18px system-ui;max-width:480px;margin:10vh auto;padding:24px;color:#1a365d}
         button{font:inherit;padding:10px;margin:8px 8px 0 0}</style>
-        <h1>Conectar AppMitre Salidas</h1>
-        <p><strong>{{ cliente }}</strong> podrá consultar, crear y editar las salidas guardadas.
-        La conexión conserva el acceso mientras siga vigente tu permiso de edición.</p>
+        <h1>Conectar AppMitre Gestión</h1>
+        <p><strong>{{ cliente }}</strong> podrá usar tus permisos autorizados de Salidas y consultar los inventarios que autorices.
+        La conexión conserva cada acceso mientras siga vigente el permiso correspondiente.</p>
         {% if error %}<p role="alert">{{ error }}</p>{% endif %}
         {% if not autorizado %}<p><a href="{{ login }}">Iniciar sesión en Salidas</a></p>{% endif %}
+        <p>Para Recursos, <a href="/gestion/inventarios" target="_blank" rel="noopener">iniciá sesión en Gestión y abrí tu inventario</a>; después recargá esta pantalla.</p>
         <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}">
+        {% if inventarios %}<label><input type="checkbox" name="inventarios" value="autorizar"> Autorizar consulta de recursos y todas sus fotos en: {{ nombres_inventarios }}</label>{% endif %}
         {% if autorizado %}<button name="decision" value="autorizar">Autorizar</button>{% endif %}
         <button name="decision" value="cancelar">Cancelar</button></form></html>''',
-        cliente=cliente, csrf=csrf, error=error, autorizado=autorizado,
+        cliente=cliente, csrf=csrf, error=error, autorizado=autorizado, inventarios=inventarios,
+        nombres_inventarios=', '.join(gestion_mcp.gestion.inventario_por_id(c['id'])['nombre'] for c in inventarios),
         login=url_for('salidas.login', next=volver))
 
 
 oauth = OAuthMCP(
     resource_path='/mcp/salidas', issuer_path=RUTA_OAUTH, oauth_path=RUTA_OAUTH, scope=SCOPE,
-    nombre='AppMitre Salidas', db_path=lambda: Path(salidas.DB_PATH).with_name('salidas_oauth.db'),
+    nombre='AppMitre Gestión', db_path=lambda: Path(salidas.DB_PATH).with_name('salidas_oauth.db'),
     generacion=_generacion, pantalla=_pantalla, consentir=_consentir, vigente=_vigente,
 )

@@ -129,17 +129,22 @@ class OAuthMCP:
 
 
     def autorizado(self):
+        return self.identidad_autorizada() is not None
+
+    def identidad_autorizada(self):
         cabecera = request.headers.get('Authorization', '')
         esquema, _, valor = cabecera.partition(' ')
         if esquema.lower() != 'bearer' or not valor:
-            return False
+            return None
         with self.base() as con:
             fila = self.leer(con, valor, 'access')
         if not fila:
-            return False
+            return None
         p = json.loads(fila['payload'])
-        return (p.get('resource') == self.recurso() and self.scope in p.get('scope', '').split()
-                and self.vigente(p.get('identidad')))
+        if (p.get('resource') == self.recurso() and self.scope in p.get('scope', '').split()
+                and self.vigente(p.get('identidad'))):
+            return p.get('identidad')
+        return None
 
 
     def emitir(self, con, id_cliente, payload):

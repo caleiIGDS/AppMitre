@@ -85,6 +85,16 @@ ninguna — ver `agent_docs/crud-motor.md`.
   del shell.
 - Integración: `app.py` registra `gestion.bp_api_registro` y `gestion.bp_api` y sirve la app
   compilada en `/gestion/`; `gestion.init_db()` corre en import (funciona bajo gunicorn/WSGI).
+- MCP: `gestion_mcp.py` aporta `listar_inventarios`, `consultar_inventario`, `consultar_recurso`
+  y `pedir_fotos_recursos` al endpoint existente `/mcp/salidas` de `salidas_mcp.py` (AppMitre Gestión).
+  Consulta completa de recursos activos, descripción original, unidades, lugares y kits; alias solo
+  con su permiso. Las fotos se piden por IDs y se entregan todas las disponibles como imágenes,
+  identificadas por recurso; archivos ausentes o formatos incompatibles se informan individualmente.
+  El consentimiento OAuth permite sumar explícitamente los inventarios que la sesión abre en ese
+  momento, solo lectura. Las concesiones se revalidan por inventario y por identidad en cada consulta;
+  conexiones anteriores y el token exclusivo de Salidas no adquieren acceso a recursos. Se conservan
+  URL, scope técnico `salidas:editar` e identidad del paquete para compatibilidad; el consentimiento
+  y la identidad guardada delimitan los permisos efectivos de ambas ramas.
 
 ## Celular
 

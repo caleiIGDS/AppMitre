@@ -1,19 +1,22 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "appmitre-salidas",
-  "version": "1.1.0",
-  "description": "Consulta los anexos de Salidas Educativas y crea o edita legajos de la Técnica Emilio Mitre con autorización.",
-  "author": {"name": "Calei IGDS", "email": "caleigds@gmail.com"},
+  "version": "1.2.0",
+  "description": "Consulta recursos, ubicaciones y fotos de inventarios autorizados y gestiona Salidas Educativas.",
+  "author": {
+    "name": "Calei IGDS",
+    "email": "caleigds@gmail.com"
+  },
   "extensions": {
     "com.openai": {
       "interface": {
-        "displayName": "AppMitre Salidas",
-        "shortDescription": "Anexos de Salidas Educativas",
-        "longDescription": "Consulta el instructivo y los anexos de Salidas Educativas. Conectá AppMitre para buscar, crear y editar salidas desde el chat.",
+        "displayName": "AppMitre Gestión",
+        "shortDescription": "Recursos y Salidas Educativas",
+        "longDescription": "Consulta recursos, ubicaciones y fotos de inventarios autorizados y gestiona Salidas Educativas.",
         "developerName": "Calei IGDS",
         "category": "Productivity",
         "capabilities": [],
-        "defaultPrompt": "Ayudame a rellenar los anexos de una salida educativa que ya tengo abierta en AppMitre."
+        "defaultPrompt": "¿Qué recursos tenemos y dónde están? Mostrame también sus fotos."
       }
     }
   }

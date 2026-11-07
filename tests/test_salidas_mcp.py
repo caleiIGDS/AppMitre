@@ -74,7 +74,7 @@ class SalidasMCP(unittest.TestCase):
     def tool(self, nombre, **args):
         return self.mcp('tools/call', {'name': nombre, 'arguments': args}).json['result']['structuredContent']
 
-    def oauth(self, cliente=None):
+    def oauth(self, cliente=None, inventarios=False):
         raiz = '/salidas/oauth'
         app = self.anonimo
         callback = 'https://cliente.example/callback'
@@ -91,7 +91,7 @@ class SalidasMCP(unittest.TestCase):
         consentimiento = navegador.get(raiz + '/authorize', query_string=args)
         csrf = re.search(r'name="csrf" value="([^"]+)"', consentimiento.text)[1]
         autorizado = navegador.post(raiz + '/authorize', query_string=args,
-                                     data={'csrf': csrf, 'decision': 'autorizar'})
+                                     data={'csrf': csrf, 'decision': 'autorizar', **({'inventarios': 'autorizar'} if inventarios else {})})
         if autorizado.status_code != 302:
             return autorizado, cliente_id
         codigo = parse_qs(urlsplit(autorizado.location).query)['code'][0]
@@ -121,7 +121,8 @@ class SalidasMCP(unittest.TestCase):
         tools = self.mcp('tools/list').json['result']['tools']
         self.assertEqual({t['name'] for t in tools},
                          {'listar_anexos', 'leer_anexo', 'consultar_campos', 'rellenar_formulario',
-                          'buscar_salidas', 'consultar_salida', 'esquema_legajo', 'crear_salida', 'editar_salida'})
+                          'buscar_salidas', 'consultar_salida', 'esquema_legajo', 'crear_salida', 'editar_salida',
+                          'listar_inventarios', 'consultar_inventario', 'consultar_recurso', 'pedir_fotos_recursos'})
         listado = self.tool('listar_anexos')['anexos']
         self.assertEqual([a['anexo'] for a in listado], list(salidas_mcp.ANEXOS))
         for anexo in salidas_mcp.ANEXOS:
