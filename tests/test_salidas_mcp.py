@@ -74,7 +74,7 @@ class SalidasMCP(unittest.TestCase):
     def tool(self, nombre, **args):
         return self.mcp('tools/call', {'name': nombre, 'arguments': args}).json['result']['structuredContent']
 
-    def oauth(self, cliente=None, inventarios=False):
+    def oauth(self, cliente=None, inventarios=False, recurso='/mcp/gestion'):
         raiz = '/salidas/oauth'
         app = self.anonimo
         callback = 'https://cliente.example/callback'
@@ -86,7 +86,7 @@ class SalidasMCP(unittest.TestCase):
         challenge = base64.urlsafe_b64encode(hashlib.sha256(verificador.encode()).digest()).decode().rstrip('=')
         navegador = cliente or self.editor
         args = {'client_id': cliente_id, 'redirect_uri': callback, 'response_type': 'code',
-                'resource': 'http://localhost/mcp/salidas', 'scope': 'salidas:editar offline_access',
+                'resource': 'http://localhost' + recurso, 'scope': 'salidas:editar offline_access',
                 'code_challenge': challenge, 'code_challenge_method': 'S256'}
         consentimiento = navegador.get(raiz + '/authorize', query_string=args)
         csrf = re.search(r'name="csrf" value="([^"]+)"', consentimiento.text)[1]
@@ -141,7 +141,21 @@ class SalidasMCP(unittest.TestCase):
         self.assertEqual(self.anonimo.post(self.ruta + '/api/guardar', json={}).status_code, 302)
         r = self.mcp('tools/call', {'name': 'crear_salida'})
         self.assertEqual(r.status_code, 401)
-        self.assertIn('/.well-known/oauth-protected-resource/mcp/salidas', r.headers['WWW-Authenticate'])
+        self.assertIn('/.well-known/oauth-protected-resource/mcp/gestion', r.headers['WWW-Authenticate'])
+
+    def test_ruta_gestion_y_compatibilidad_salidas(self):
+        for ruta in ('/mcp/gestion', '/mcp/salidas'):
+            metadata = self.anonimo.get('/.well-known/oauth-protected-resource' + ruta)
+            self.assertEqual(metadata.json['resource'], 'http://localhost' + ruta)
+            tokens, _ = self.oauth(recurso=ruta)
+            self.assertEqual(tokens.status_code, 200, tokens.json)
+            for destino in ('/mcp/gestion', '/mcp/salidas'):
+                respuesta = self.anonimo.post(destino, json={
+                    'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
+                    'params': {'name': 'buscar_salidas', 'arguments': {}}},
+                    headers={'Authorization': 'Bearer ' + tokens.json['access_token']})
+                self.assertEqual(respuesta.status_code, 200)
+                self.assertFalse(respuesta.json['result'].get('isError', False))
 
     def test_clave_exclusiva_solo_por_encabezado_y_si_esta_configurada(self):
         clave = 'mitre_salidas_' + 'a' * 43

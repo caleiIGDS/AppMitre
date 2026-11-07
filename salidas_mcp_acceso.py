@@ -124,7 +124,8 @@ def _pantalla(cliente, csrf, error):
 
 
 oauth = OAuthMCP(
-    resource_path='/mcp/salidas', issuer_path=RUTA_OAUTH, oauth_path=RUTA_OAUTH, scope=SCOPE,
+    resource_path='/mcp/gestion', resource_aliases=('/mcp/salidas',),
+    issuer_path=RUTA_OAUTH, oauth_path=RUTA_OAUTH, scope=SCOPE,
     nombre='AppMitre Gestión', db_path=lambda: Path(salidas.DB_PATH).with_name('salidas_oauth.db'),
     generacion=_generacion, pantalla=_pantalla, consentir=_consentir, vigente=_vigente,
 )

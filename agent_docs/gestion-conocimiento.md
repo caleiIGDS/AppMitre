@@ -86,7 +86,8 @@ ninguna — ver `agent_docs/crud-motor.md`.
 - Integración: `app.py` registra `gestion.bp_api_registro` y `gestion.bp_api` y sirve la app
   compilada en `/gestion/`; `gestion.init_db()` corre en import (funciona bajo gunicorn/WSGI).
 - MCP: `gestion_mcp.py` aporta `listar_inventarios`, `consultar_inventario`, `consultar_recurso`
-  y `pedir_fotos_recursos` al endpoint existente `/mcp/salidas` de `salidas_mcp.py` (AppMitre Gestión).
+  y `pedir_fotos_recursos` al endpoint `/mcp/gestion` de `salidas_mcp.py` (AppMitre Gestión);
+  `/mcp/salidas` conserva compatibilidad con las conexiones y autorizaciones existentes.
   Consulta completa de recursos activos, descripción original, unidades, lugares y kits; alias solo
   con su permiso. Las fotos se piden por IDs y se entregan todas las disponibles como imágenes,
   identificadas por recurso; archivos ausentes o formatos incompatibles se informan individualmente.

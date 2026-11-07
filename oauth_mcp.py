@@ -65,8 +65,9 @@ def autenticar_cliente(con):
 
 class OAuthMCP:
     def __init__(self, *, resource_path, issuer_path, oauth_path, scope, nombre, db_path,
-                 generacion, pantalla, consentir, vigente):
+                 generacion, pantalla, consentir, vigente, resource_aliases=()):
         self.resource_path = resource_path
+        self.resource_aliases = tuple(resource_aliases)
         self.issuer_path = issuer_path
         self.oauth_path = oauth_path
         self.scope = scope
@@ -79,6 +80,9 @@ class OAuthMCP:
 
     def recurso(self):
         return origen() + self.resource_path
+
+    def recurso_valido(self, recurso):
+        return recurso in [origen() + p for p in (self.resource_path, *self.resource_aliases)]
 
     def issuer(self):
         return origen() + self.issuer_path
@@ -141,7 +145,7 @@ class OAuthMCP:
         if not fila:
             return None
         p = json.loads(fila['payload'])
-        if (p.get('resource') == self.recurso() and self.scope in p.get('scope', '').split()
+        if (self.recurso_valido(p.get('resource')) and self.scope in p.get('scope', '').split()
                 and self.vigente(p.get('identidad'))):
             return p.get('identidad')
         return None
@@ -159,6 +163,13 @@ class OAuthMCP:
                             lambda: self.metadata_recurso())
         bp.add_url_rule('/.well-known/oauth-protected-resource' + self.resource_path,
                         'oauth_metadata_recurso', self.metadata_recurso)
+        for indice, ruta in enumerate(self.resource_aliases):
+            def metadata_alias(ruta=ruta):
+                return jsonify(resource=origen() + ruta, authorization_servers=[self.issuer()],
+                               scopes_supported=[self.scope], bearer_methods_supported=['header'],
+                               resource_name=self.nombre)
+            bp.add_url_rule('/.well-known/oauth-protected-resource' + ruta,
+                            f'oauth_metadata_alias_{indice}', metadata_alias)
 
         @bp.get('/.well-known/oauth-authorization-server' + self.issuer_path)
         def metadata_autorizacion():
@@ -212,7 +223,7 @@ class OAuthMCP:
                 return redirect(p['redirect_uri'] + ('&' if '?' in p['redirect_uri'] else '?') + q)
 
             scope = p.get('scope', self.scope).split()
-            if (p.get('response_type') != 'code' or p.get('resource') != self.recurso()
+            if (p.get('response_type') != 'code' or not self.recurso_valido(p.get('resource'))
                     or p.get('code_challenge_method') != 'S256'
                     or not re.fullmatch(r'[A-Za-z0-9_-]{43}', p.get('code_challenge', ''))):
                 return volver(error='invalid_request', error_description='Se requiere código, recurso MCP y PKCE S256.')
@@ -235,7 +246,7 @@ class OAuthMCP:
                 identidad, mensaje, estado = self.consentir()
                 if identidad is not None:
                     payload = {'redirect_uri': p['redirect_uri'], 'challenge': p['code_challenge'],
-                               'resource': self.recurso(), 'scope': ' '.join(scope), 'identidad': identidad,
+                               'resource': p['resource'], 'scope': ' '.join(scope), 'identidad': identidad,
                                'autorizacion': secrets.token_urlsafe(24)}
                     with self.base() as con:
                         codigo = self.guardar(con, 'code', meta['client_id'], payload, CODE_SECONDS)

@@ -511,6 +511,7 @@ def _privada(r):
 
 
 @bp.route('/mcp/salidas', methods=['GET', 'POST', 'DELETE'], strict_slashes=False)
+@bp.route('/mcp/gestion', methods=['GET', 'POST', 'DELETE'], strict_slashes=False)
 def endpoint():
     if request.method != 'POST':
         return '', 405, {'Allow': 'POST'}
