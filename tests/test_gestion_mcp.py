@@ -99,6 +99,33 @@ class GestionMCP(SalidasMCP):
         self.assertFalse(respuesta['isError'])
         self.assertEqual(respuesta['structuredContent']['recursos'][0]['fotos'], [])
 
+    def test_solo_recursos_exige_consentimiento_y_explica_como_conectar(self):
+        import accesos
+        with closing(accesos.conectar()) as con, con:
+            con.execute('UPDATE dispositivos SET permisos=? WHERE id=1', ('["inv:1/gestion.leer"]',))
+        respuesta, _ = self.oauth()
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertIn('marcá «Autorizar consulta de recursos»', respuesta.text)
+        self.assertRegex(respuesta.text, r'name="inventarios"[^>]+required')
+        self.assertIn('formnovalidate', respuesta.text)
+        self.conectar_recursos()
+
+    def test_consentimiento_recursos_sin_inventarios_no_concede_salidas(self):
+        respuesta, _ = self.oauth(self.cliente(2), inventarios=True)
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertIn('No hay inventarios accesibles', respuesta.text)
+
+    def test_visitante_sin_sesion_recibe_pasos_de_acceso_sin_nombres_privados(self):
+        respuesta, _ = self.oauth(self.anonimo)
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertIn('Primero necesitás entrar a AppMitre', respuesta.text)
+        self.assertIn('/gestion/entrar?volver=/inventarios', respuesta.text)
+        self.assertIn('enlace de invitación', respuesta.text)
+        self.assertIn('comprobá tu acceso', respuesta.text)
+        self.assertNotIn('name="inventarios"', respuesta.text)
+        self.assertNotIn('value="autorizar">Autorizar', respuesta.text)
+        self.assertNotIn('Taller', respuesta.text)
+
     def test_500_recursos_sin_recorte_y_revision_actualizada(self):
         headers = self.conectar_recursos()
         anterior = self.recurso('consultar_inventario', headers, inventario='taller')['structuredContent']

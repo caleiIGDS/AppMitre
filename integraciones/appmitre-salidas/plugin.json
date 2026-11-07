@@ -10,7 +10,7 @@
   "extensions": {
     "com.openai": {
       "interface": {
-        "displayName": "AppMitre Gestión",
+        "displayName": "Gestión",
         "shortDescription": "Recursos y Salidas Educativas",
         "longDescription": "Consulta recursos, ubicaciones y fotos de inventarios autorizados y gestiona Salidas Educativas.",
         "developerName": "Calei IGDS",

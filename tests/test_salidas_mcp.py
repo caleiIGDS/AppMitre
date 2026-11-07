@@ -74,7 +74,7 @@ class SalidasMCP(unittest.TestCase):
     def tool(self, nombre, **args):
         return self.mcp('tools/call', {'name': nombre, 'arguments': args}).json['result']['structuredContent']
 
-    def oauth(self, cliente=None, inventarios=False, recurso='/mcp/gestion'):
+    def oauth(self, cliente=None, inventarios=False, recurso='/mcp/gestion', origen='http://localhost'):
         raiz = '/salidas/oauth'
         app = self.anonimo
         callback = 'https://cliente.example/callback'
@@ -89,8 +89,10 @@ class SalidasMCP(unittest.TestCase):
                 'resource': 'http://localhost' + recurso, 'scope': 'salidas:editar offline_access',
                 'code_challenge': challenge, 'code_challenge_method': 'S256'}
         consentimiento = navegador.get(raiz + '/authorize', query_string=args)
+        self.assertEqual(consentimiento.headers['Referrer-Policy'], 'same-origin')
         csrf = re.search(r'name="csrf" value="([^"]+)"', consentimiento.text)[1]
         autorizado = navegador.post(raiz + '/authorize', query_string=args,
+                                     headers={'Origin': origen},
                                      data={'csrf': csrf, 'decision': 'autorizar', **({'inventarios': 'autorizar'} if inventarios else {})})
         if autorizado.status_code != 302:
             return autorizado, cliente_id
@@ -99,6 +101,15 @@ class SalidasMCP(unittest.TestCase):
                           'redirect_uri': callback, 'code_verifier': verificador, 'code': codigo,
                           'resource': args['resource']})
         return tokens, cliente_id
+
+    def test_formulario_oauth_conserva_origen_y_rechaza_origen_opaco_o_ajeno(self):
+        tokens, _ = self.oauth()
+        self.assertEqual(tokens.status_code, 200)
+        for origen in ('null', 'https://otro.example'):
+            respuesta, _ = self.oauth(origen=origen)
+            self.assertEqual(respuesta.status_code, 403)
+        respuesta = self.mcp('tools/list')
+        self.assertEqual(respuesta.headers['Referrer-Policy'], 'no-referrer')
 
     def tool_con_token(self, token, nombre, **args):
         return self.mcp('tools/call', {'name': nombre, 'arguments': args},

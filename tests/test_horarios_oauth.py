@@ -45,8 +45,10 @@ class OAuthHorarios(unittest.TestCase):
         url = self.formulario(cliente)
         r = self.client.get(url)
         self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.headers['Referrer-Policy'], 'same-origin')
         csrf = html.unescape(re.search(r'name="csrf" value="([^"]+)"', r.text)[1])
-        r = self.client.post(url, data={'csrf': csrf, 'clave': 'clave-sintética-ñ', 'decision': 'autorizar'})
+        r = self.client.post(url, headers={'Origin': 'http://localhost'},
+                             data={'csrf': csrf, 'clave': 'clave-sintética-ñ', 'decision': 'autorizar'})
         self.assertEqual(r.status_code, 302, r.data)
         q = parse_qs(urlsplit(r.location).query)
         self.assertEqual(q['state'], ['estado-aleatorio'])
@@ -75,6 +77,16 @@ class OAuthHorarios(unittest.TestCase):
         r = self.rpc('tools/call', {'name': 'listar_catalogos', 'arguments': {'consulta': {}}})
         self.assertEqual(r.status_code, 401)
         self.assertIn('resource_metadata=', r.headers['WWW-Authenticate'])
+
+    def test_formulario_rechaza_origen_opaco_o_ajeno(self):
+        c = self.registrar()
+        url = self.formulario(c)
+        r = self.client.get(url)
+        csrf = html.unescape(re.search(r'name="csrf" value="([^"]+)"', r.text)[1])
+        for origen in ('null', 'https://intruso.example'):
+            r = self.client.post(url, headers={'Origin': origen},
+                                 data={'csrf': csrf, 'clave': 'clave-sintética-ñ', 'decision': 'autorizar'})
+            self.assertEqual(r.status_code, 403)
 
     def test_pkce_callback_csrf_y_codigo_de_un_uso(self):
         c = self.registrar()

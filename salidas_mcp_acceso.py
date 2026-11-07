@@ -78,8 +78,9 @@ def _consentir():
         inventarios = gestion_mcp.concesiones()
         if inventarios:
             return ['gestion', {'salidas': identidad, 'inventarios': inventarios}], None, 200
+        return None, 'No hay inventarios accesibles en esta sesión. Abrí tu inventario en Gestión y recargá esta pantalla.', 403
     if identidad is None:
-        return None, 'Necesitás una sesión con permiso de edición de Salidas.', 403
+        return None, 'Para conectar Recursos, abrí tu inventario en Gestión y marcá «Autorizar consulta de recursos». Para conectar Salidas, iniciá sesión con permiso de edición de Salidas.', 403
     return identidad, None, 200
 
 
@@ -100,25 +101,47 @@ def mcp_continuar():
 def _pantalla(cliente, csrf, error):
     import gestion_mcp
     inventarios = gestion_mcp.concesiones()
-    autorizado = _identidad() is not None or bool(inventarios)
+    salidas_autorizadas = _identidad() is not None
+    autorizado = salidas_autorizadas or bool(inventarios)
     volver = url_for('salidas.mcp_continuar', solicitud=_firma_continuar().dumps(
         request.query_string.decode('ascii')))
     return render_template_string('''<!doctype html><html lang="es"><meta charset="utf-8">
         <meta name="viewport" content="width=device-width,initial-scale=1">
         <title>Conectar AppMitre Gestión</title>
         <style>body{font:18px system-ui;max-width:480px;margin:10vh auto;padding:24px;color:#1a365d}
-        button{font:inherit;padding:10px;margin:8px 8px 0 0}</style>
+        button{font:inherit;padding:10px;margin:8px 8px 0 0}
+        .pasos{padding:18px;background:#eef2f7;border-radius:8px}li{margin:12px 0}</style>
         <h1>Conectar AppMitre Gestión</h1>
         <p><strong>{{ cliente }}</strong> podrá usar tus permisos autorizados de Salidas y consultar los inventarios que autorices.
         La conexión conserva cada acceso mientras siga vigente el permiso correspondiente.</p>
         {% if error %}<p role="alert">{{ error }}</p>{% endif %}
-        {% if not autorizado %}<p><a href="{{ login }}">Iniciar sesión en Salidas</a></p>{% endif %}
-        <p>Para Recursos, <a href="/gestion/inventarios" target="_blank" rel="noopener">iniciá sesión en Gestión y abrí tu inventario</a>; después recargá esta pantalla.</p>
+        {% if not autorizado %}
+        <div class="pasos">
+        <h2>Primero necesitás entrar a AppMitre</h2>
+        <p>Compartir este enlace no da acceso a los datos. En este navegador todavía no hay un acceso habilitado para conectar.</p>
+        <ol>
+        <li>Para Recursos, <a href="/gestion/inventarios" target="_blank" rel="noopener">abrí Gestión en otra pestaña</a>
+        y entrá a tu inventario con su clave. Si tenés la clave de administración,
+        <a href="/gestion/entrar?volver=/inventarios" target="_blank" rel="noopener">iniciá sesión como administrador</a>.
+        Si te invitaron, abrí tu enlace de invitación en este mismo navegador.</li>
+        <li>Volvé a esta pestaña y <a href="{{ recargar }}">comprobá tu acceso</a>.</li>
+        <li>Marcá la consulta de recursos y tocá Autorizar.</li>
+        </ol>
+        <p>Si no tenés una clave ni una invitación, pedile acceso al encargado de tu inventario.</p>
+        <p>Para Salidas Educativas, <a href="{{ login }}">iniciá sesión en Salidas</a> con permiso de edición.</p>
+        </div>
+        {% elif not inventarios %}
+        <p>Ya podés conectar Salidas. Para sumar Recursos, <a href="/gestion/inventarios" target="_blank" rel="noopener">abrí Gestión y entrá a tu inventario</a>;
+        después volvé y <a href="{{ recargar }}">comprobá tu acceso</a>.</p>
+        {% endif %}
         <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}">
-        {% if inventarios %}<label><input type="checkbox" name="inventarios" value="autorizar"> Autorizar consulta de recursos y todas sus fotos en: {{ nombres_inventarios }}</label>{% endif %}
+        {% if inventarios %}<label><input type="checkbox" name="inventarios" value="autorizar" {% if not salidas_autorizadas %}required{% endif %} {% if recursos_marcados %}checked{% endif %}> Autorizar consulta de recursos y todas sus fotos en: {{ nombres_inventarios }}</label>{% endif %}
+        {% if inventarios and not salidas_autorizadas %}<p>Marcá la casilla para conectar Recursos. No necesitás permisos de Salidas.</p>{% endif %}
         {% if autorizado %}<button name="decision" value="autorizar">Autorizar</button>{% endif %}
-        <button name="decision" value="cancelar">Cancelar</button></form></html>''',
+        <button name="decision" value="cancelar" formnovalidate>Cancelar</button></form></html>''',
         cliente=cliente, csrf=csrf, error=error, autorizado=autorizado, inventarios=inventarios,
+        salidas_autorizadas=salidas_autorizadas, recursos_marcados=request.form.get('inventarios') == 'autorizar',
+        recargar=request.url,
         nombres_inventarios=', '.join(gestion_mcp.gestion.inventario_por_id(c['id'])['nombre'] for c in inventarios),
         login=url_for('salidas.login', next=volver))
 

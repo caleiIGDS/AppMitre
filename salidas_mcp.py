@@ -506,6 +506,9 @@ def _privada(r):
     r.headers['Cache-Control'] = 'no-store'
     r.headers['Referrer-Policy'] = 'no-referrer'
     if request.path == RUTA_OAUTH + '/authorize':
+        # no-referrer vuelve opaco el Origin del POST nativo del formulario.
+        # Conservarlo dentro del sitio, sin enviar la URL OAuth a otros sitios.
+        r.headers['Referrer-Policy'] = 'same-origin'
         r.headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
     return r
 

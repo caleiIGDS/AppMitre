@@ -112,6 +112,8 @@ def privada(r):
     r.headers['Referrer-Policy'] = 'no-referrer'
     r.headers['X-Robots-Tag'] = 'noindex, nofollow'
     if request.path.startswith('/horarios/oauth/authorize'):
+        # El formulario nativo necesita conservar Origin al enviar el POST.
+        r.headers['Referrer-Policy'] = 'same-origin'
         r.headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
         r.headers['X-Frame-Options'] = 'DENY'
     return r
