@@ -29,7 +29,7 @@ const estado = filtro('estado')
 const baja = filtro('baja')
 const meses = filtro('meses')
 const vista = filtro('vista')
-const galeria = computed(() => vista.value === 'galeria')
+const galeria = computed(() => vista.value !== 'lista')
 
 // La búsqueda filtra en vivo, pero a la URL llega con una pausa: si no, cada tecla sería
 // una entrada nueva para el navegador. Y el filtro corre a lo sumo una vez por cuadro
@@ -215,7 +215,7 @@ function abrir(r, evento) {
         </button>
         <button
           type="button" class="a-vista-btn" :title="galeria ? 'Ver como lista' : 'Ver como galería'"
-          @click="vista = galeria ? '' : 'galeria'"
+          @click="vista = galeria ? 'lista' : ''"
         >
           <svg v-if="galeria" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">
             <path d="M3 4.5h14M3 10h14M3 15.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
