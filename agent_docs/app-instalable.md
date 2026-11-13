@@ -1,16 +1,26 @@
 # Las apps instalables (`/gestion/` y `/horarios/`, carpeta `frontend/`)
 
-Gestión y Horarios son apps de una sola página (Vue 3 + Vite) que se instalan en el celular
-o la compu (PWA), abren desde el dispositivo y le piden al servidor sólo datos. **Ya no hay
-páginas clásicas de esas dos áreas**: la app de Gestión vive en `/gestion/` y la de Horarios
-en `/horarios/` (esta al final: "La app de horarios"). Mismo look que el resto (importan
+Gestión y Horarios son apps que se instalan en el celular o la compu (PWA). Los inventarios
+y Horarios usan Vue 3 + Vite y le piden al servidor sólo datos; Asistente, Salidas y Accesos
+usan páginas Flask dentro de la misma app de Gestión. Gestión vive en `/gestion/` y Horarios
+en `/horarios/` (esta al final: "La app de horarios"). Mismo look (importan
 `static/global.css` y `static/gestion.css`/`horarios.css`), misma cookie de sesión.
 
 La app de Gestión cubre todo el área: lista de inventarios (y, para administración, crear,
 renombrar, clave y eliminar), entrar con la clave del inventario, listado con filtros, ficha,
 alta, EDITAR (unidades +/−, kit, baja), fotos (subir, rotar, borrar), alias, registro de
-bajas y el panel del encargado "quién entra" (`/gestion/<inv>/accesos`). Las otras áreas
-(asistente, salidas, accesos) siguen siendo páginas Jinja, con link desde el ☰.
+bajas y el panel del encargado "quién entra" (`/gestion/<inv>/accesos`). Asistente, Salidas
+y Accesos viven en `/gestion/areas/agente/`, `/gestion/areas/salidas/` y
+`/gestion/areas/accesos/`: sus enlaces y formularios quedan dentro del alcance `/gestion/`
+sin incluir Horarios. Los blueprints conservan nombres, gates y bases. Las direcciones
+anteriores redirigen con 307 (conserva query, método y cuerpo); los links públicos de familias
+siguen en `/salidas/completar/…` y las invitaciones en `/acceso/…`.
+El service worker excluye sólo esas tres áreas y `/gestion/areas/salir` del fallback de Vue
+(un inventario llamado `areas` sigue funcionando). Pide esas páginas a la red, sin guardarlas
+en caché, y si falla muestra `sin-conexion.html`. Esas áreas requieren conexión;
+los inventarios ya descargados siguen consultables sin red. `_app_gestion.html` y
+`static/app-paginas.js` registran la misma PWA, ofrecen actualizar sin recargar por sorpresa
+y abren los documentos de Salidas en un visor sobre el formulario, que conserva lo escrito.
 
 ### Direcciones
 

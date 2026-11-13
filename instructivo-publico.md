@@ -39,6 +39,9 @@ Agregá a la base uno de estos caminos:
 | Cursos disponibles | `/catalogos?token=TU_CLAVE&incluir=cursos` |
 | Todos los nombres, como respaldo de una búsqueda fallida | `/catalogos?token=TU_CLAVE&incluir=nombres` |
 | Aulas por piso y cargos | `/catalogos?token=TU_CLAVE&incluir=aulas&incluir=roles` |
+| Materias técnico-específicas de tercero | `/materias?token=TU_CLAVE&tipos=te&anios=3` |
+| Buscar una materia o docente en la tabla de materias | `/materias?token=TU_CLAVE&texto=matematica` |
+| Especialidades de los cursos y tipos de materia | `/catalogos?token=TU_CLAVE&incluir=especialidades&incluir=tipos_materia` |
 
 Las divisiones, nombres y aulas deben corresponder a los datos reales. Consultá directamente una entidad conocida; buscá por nombre si necesitás resolver una persona, sin descargar todos los catálogos antes de cada pregunta. Para encontrar cargos múltiples usá `multiples_roles=true`, solo o junto con `nombre`/`rol`; no recorras todo el padrón para filtrarlo localmente. Para varias personas o aulas repetí `valores`, hasta 20 entidades por consulta. `valor` es alias de `valores`; no combines ambos. Para varios días repetí `dias`. No separes nombres por comas. Usá un solo selector: `valor`/`valores`, `anio` (cursos) o `piso` (aulas). `desde` y `hasta` van juntos; `ahora=true` no se combina con días/rango. Los filtros se intersectan.
 
@@ -47,11 +50,47 @@ Las divisiones, nombres y aulas deben corresponder a los datos reales. Consultá
 - Horarios: `horarios` contiene entidades con `curso`, `persona` o `aula`, y `dias` con listas de actividades. La semana por defecto es lunes a viernes. Las actividades incluyen horas y los campos pertinentes (materia, profesor, curso, aula, grupo); en personas cada actividad indica su `rol`. Una persona puede tener varios cargos.
 - Personas: `personas` contiene `nombre` y `roles` (lista completa de cargos).
 - Preceptores: `preceptores` contiene `nombre` y `asignaciones` por curso, turno, función principal/contraturno y días. Se pueden pedir todos juntos. `vacantes`, `sin_registro` y `avisos` son cosas distintas.
-- Catálogos: cursos, aulas agrupadas por piso, roles y/o `nombres`, según lo solicitado. `nombres` es una lista compacta de nombres completos, sin horarios ni fichas.
+- Catálogos: cursos, aulas agrupadas por piso, roles, `nombres`, `especialidades` y/o `tipos_materia`, según lo solicitado. `nombres` es una lista compacta de nombres completos, sin horarios ni fichas.
+- Materias: `materias` contiene los cupos y `resumen` los totales de toda la selección, repetidos en cada página; no sumes los resúmenes entre páginas. Cada cupo incluye curso, grupo, materia, tipo, especialidad, docente efectivo y minutos semanales; con suplencia activa agrega `titular_en_licencia`.
 - Si aparece `siguiente`, repetí exactamente la consulta agregando `&cursor=VALOR_CODIFICADO`. Continuá hasta que no aparezca antes de afirmar que un listado está completo. Si solo se piden algunos ejemplos y ya los encontraste, detenete y no presentes esa selección como listado completo. Con `consulta_vencida`, reiniciá; no mezcles páginas de copias distintas.
 - Error: `{"error":{"codigo":"...","mensaje":"..."}}`. Con `persona_ambigua`, revisá los candidatos, sin fusionarlos ni elegir arbitrariamente. Con `consulta_demasiado_amplia`, dividí por entidades/días. Con 401 revisá la clave; con 429 detené los reintentos. No inventes un horario si una consulta falla.
 
 Los esquemas completos están en `/contratos?token=TU_CLAVE` y `/openapi.json?token=TU_CLAVE`, bajo la misma base; son referencias técnicas opcionales, no un paso obligatorio.
+
+## Explorar materias y especialidades
+
+`/materias` es la tabla de la pestaña MATERIAS, con todas sus combinaciones de filtros. Lista lo que figura en los horarios cargados, no todas las materias previstas en los planes de estudio. Sin filtros devuelve todos los cupos, con paginación.
+
+Un curso combina **año y división** (por ejemplo, `3° K`); cada curso tiene una **especialidad** configurada. Primero a tercero pertenecen al **CICLO BÁSICO**; después están las especialidades **ELECTROMECÁNICA**, **MAESTRO MAYOR DE OBRA** y **ENERGÍAS RENOVABLES**. No deduzcas la especialidad por una letra o número de división: `/catalogos?token=TU_CLAVE&incluir=especialidades` devuelve un mapa de curso a especialidad para los cursos cargados. `null` significa sin especialidad configurada.
+
+El **tipo de materia** es otra clasificación, independiente de la especialidad: una carrera tiene materias de varios tipos y una misma materia puede aparecer en distintos cursos. Se obtiene del plan correspondiente al año y especialidad, igual que en la app; no lo deduzcas del nombre ni de quién la dicta.
+
+| Parámetro de `/materias` | Qué selecciona | Ejemplo |
+| --- | --- | --- |
+| `tipos` | `te`: TÉCNICO-ESPECÍFICA; `ct`: CIENTÍFICO-TECNOLÓGICA; `fg`: TEÓRICA | `tipos=te` |
+| `anios` | Años del 1 al 7 | `anios=3` |
+| `divisiones` | División, sin el año | `divisiones=K` |
+| `especialidades` | Nombre completo, sin distinguir tildes, espacios o mayúsculas | `especialidades=energias%20renovables` |
+| `texto` | Parte del nombre de la materia, del titular o del suplente; ignora tildes, espacios y mayúsculas | `texto=matematica` |
+
+Para varias opciones repetí el parámetro: `anios=4&anios=5&divisiones=2&divisiones=3` selecciona 4° 2, 4° 3, 5° 2 y 5° 3, si existen. **Dentro de un filtro las opciones se suman; entre filtros se cruzan.** Un filtro omitido admite todas las opciones; no envíes listas vacías. Para un curso exacto combiná su año y división. `anios` es plural en `/materias`; `anio` sigue siendo singular en `/horarios`, `/preceptores` y `/catalogos`. En POST, `anios` es una lista de cadenas, por ejemplo `["3", "4"]`.
+
+Ejemplos (agregar a la misma base de consultas):
+
+- Técnico-específicas de tercero: `/materias?token=TU_CLAVE&tipos=te&anios=3`.
+- Teóricas y científico-tecnológicas de 4° y 5° de Energías Renovables: `/materias?token=TU_CLAVE&tipos=fg&tipos=ct&anios=4&anios=5&especialidades=energias%20renovables`.
+- Matemática de 3° K: `/materias?token=TU_CLAVE&anios=3&divisiones=K&texto=matematica`.
+
+Cada fila es un **cupo**: materia de un curso y grupo, con su docente y eventual suplencia. No confundas cupos con materias distintas: la misma materia en dos cursos produce dos cupos; los grupos A/B también pueden producir filas distintas. `tipo_materia` devuelve `te`, `ct`, `fg` o `null` si no está clasificada; `profesor` es quien la dicta según la suplencia activa, o `null` si no está informado. `minutos_semanales` suma la duración de sus bloques: dividí por 60 para expresar horas reloj, no horas cátedra. Los bloques sin un intervalo válido no se suman y aparecen contados en `bloques_sin_duracion`; si es mayor que cero, la carga calculada está incompleta. Sumar cupos de grupos paralelos no equivale a la duración del calendario de todo el curso.
+
+`resumen` contiene `materias_distintas` (por nombre), `cupos`, `divisiones`, `minutos_semanales` y `bloques_sin_duracion` de toda la selección. Para revisar o enumerar todas las filas consumí `siguiente`. Un resultado vacío significa que no hay cupos con esa combinación en la copia cargada; no prueba que una materia no exista en el plan. Si la especialidad es desconocida, revisá su nombre en el catálogo.
+
+## Cómo encadenar las consultas
+
+- **Qué materias y quiénes las dictan:** consultá `/materias` con los filtros pedidos. Si también preguntan cuándo o dónde, tomá el `curso` o el `profesor` devuelto y consultá `/horarios`; seleccioná allí los bloques de esa materia y grupo. Si hay varias filas del mismo curso, reutilizá su horario.
+- **Horario de alguien:** usá `/personas` para resolver el nombre cuando haga falta y luego `/horarios?tipo=persona&valor=...`. Para encontrar docentes de un tipo de materia o especialidad, empezá por `/materias`, reuní sus nombres sin duplicarlos y después pedí sus horarios. El horario personal puede incluir otras materias y cargos: conservá el alcance del pedido.
+- **Cruzar docente, curso y lugar:** pedí los horarios de cada entidad y compará los bloques por día. Para una planilla de piso, usá `/horarios?tipo=aula&piso=...&dias=...`. Para saber los preceptores del curso, usá `/preceptores?cursos=...`; sus asignaciones por turno no son horas exactas de presencia.
+- **Descubrir opciones:** usá `/catalogos` para las opciones que desconozcas, por ejemplo `incluir=especialidades&incluir=tipos_materia`. No hace falta pedir catálogos antes de cada consulta ni descargar todos los horarios para buscar una materia.
 
 Si un cargo no coincide, la búsqueda queda vacía o el usuario usa un sinónimo/abreviatura que no reconocés, pedí una vez `/catalogos?token=TU_CLAVE&incluir=roles`. Revisá los cargos reales y repetí la consulta con el rol correspondiente, conservando los demás filtros. `rol=?` busca literalmente ese texto; no lista cargos ni funciona como comodín. Una equivalencia clara permite continuar e indicar cómo interpretaste el pedido; si el término es ambiguo, preguntá. Si el pedido engloba varios cargos, consultá los pertinentes y reuní las personas sin duplicarlas. Una persona puede tener varios roles: no los equipares ni descartes los otros. Si se enviaron nombre y rol juntos, un resultado vacío también puede deberse al cargo; revisá primero este catálogo pequeño antes de descargar todos los nombres. Reutilizá el catálogo en la conversación y no lo pidas antes de cada consulta.
 

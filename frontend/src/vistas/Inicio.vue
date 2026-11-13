@@ -15,12 +15,11 @@ const lista = computed(() => areasVisibles(areas.value, puede))
     <div v-for="a in lista" :key="a.clave" class="g-card">
       <div class="g-card-head">
         <h3>{{ a.nombre.toUpperCase() }}</h3>
-        <span v-if="!a.ruta" class="a-etiqueta" title="Todavía abre la versión de páginas clásicas">CLÁSICA</span>
       </div>
       <p class="g-card-desc">{{ a.descripcion }}</p>
       <div class="g-card-actions">
         <RouterLink v-if="a.ruta" class="g-btn" :to="a.ruta">ENTRAR</RouterLink>
-        <a v-else class="g-btn-outline-dark" :href="a.href">ABRIR</a>
+        <a v-else class="g-btn" :href="a.href">ENTRAR</a>
       </div>
     </div>
   </div>

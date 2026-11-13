@@ -1,4 +1,4 @@
-from flask import (Flask, Response, jsonify, redirect, render_template, request,
+from flask import (Flask, Response, abort, jsonify, redirect, render_template, request,
                    send_from_directory, url_for)
 from werkzeug.security import safe_join
 import os
@@ -132,12 +132,13 @@ app.register_blueprint(gestion.bp_api_registro)
 app.register_blueprint(gestion.bp_api)
 gestion.init_db()
 
-# Asistente conversacional (/agente) — blueprint independiente con su propio gate.
-app.register_blueprint(agente.bp)
+# Las páginas de Gestión comparten el alcance de su app instalada. Los blueprints
+# conservan su nombre y su gate; sólo cambia dónde se montan, no los datos ni permisos.
+app.register_blueprint(agente.bp, url_prefix='/gestion/areas/agente')
 agente.init_db()
 
 # Salidas educativas (/salidas) — módulo independiente con DB propia (salidas.db).
-app.register_blueprint(salidas.bp)
+app.register_blueprint(salidas.bp, url_prefix='/gestion/areas/salidas')
 # Blueprint aparte y SIN gate: el link público /salidas/completar/<token> para que
 # familias y estudiantes completen su Anexo VI/VII solos (ver salidas.py).
 app.register_blueprint(salidas.bp_publico)
@@ -145,9 +146,8 @@ app.register_blueprint(salidas_mcp.bp)
 salidas.init_db()
 
 # Sistema de horarios — sitio aparte: clave propia (HORARIOS_CLAVE), config y datos
-# propios, NO pasa por `accesos`. Las pantallas son la app (/horarios, ver más abajo); `bp`
-# son los PDF (/horarios/export/...) y `bp_app` la API de la app. El paquete monta su gate
-# al importarse; acá sólo se registran los blueprints y se crea el schema.
+# propios, NO pasa por `accesos`. La app imprime localmente; `bp` conserva exports
+# PDF para clientes externos y `bp_app` sirve la API. Ambos tienen gate propio.
 app.register_blueprint(horarios.bp)
 app.register_blueprint(horarios.bp_app)
 app.register_blueprint(horarios.bp_mcp)
@@ -158,14 +158,43 @@ horarios.init_db()
 # está en la lista: tiene su propia contraseña, fuera de este sistema.
 accesos.init_db()
 accesos.registrar_app(app, [m for m in (gestion, agente, salidas)
-                            if getattr(m, 'ACTIVA', True)])
+                            if getattr(m, 'ACTIVA', True)],
+                      url_prefix='/gestion/areas/accesos',
+                      ruta_salida='/gestion/areas/salir')
 
 
-@app.route('/salidas/normativa')
+@app.route('/gestion/areas/salidas/normativa')
 def normativa_visor():
 	"""Visor público de la Resolución RESOC-2024-3871-GDEBA-DGCYE con todas las páginas
 	y resaltado de frases específicas. Query params: ?pagina=N&buscar=frase (ambos opcionales)."""
 	return render_template('salidas/normativa.html')
+
+
+# Los enlaces guardados y los clientes anteriores siguen funcionando. 307 conserva
+# el método y el cuerpo de los POST (chat, formularios, login); no se ejecutan dos veces.
+# Las rutas públicas de familias son más específicas y mantienen su dirección original.
+def _area_anterior(area, ruta=''):
+    destino = f'/gestion/areas/{area}/' + ruta
+    query = request.query_string.decode()
+    return redirect(destino + ('?' + query if query else ''), code=307)
+
+
+for _area in ('agente', 'salidas', 'accesos'):
+    for _ruta in (f'/{_area}/', f'/{_area}/<path:ruta>'):
+        app.add_url_rule(_ruta, endpoint=f'{_area}_anterior',
+                         view_func=_area_anterior, defaults={'area': _area}, strict_slashes=False,
+                         methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
+
+
+@app.route('/gestion/areas/<any(agente,salidas,accesos):area>/<path:ruta>')
+def area_no_encontrada(area, ruta):
+    # Sólo las páginas de estas áreas: un inventario llamado "areas" conserva sus rutas.
+    abort(404)
+
+
+@app.route('/salir')
+def salir_anterior():
+    return redirect(url_for('salir_general'))
 
 
 # ---------------------------------------------------------------------------
@@ -215,8 +244,7 @@ def horarios_raiz():
     return redirect('/horarios/')
 
 
-# Los PDF (/horarios/export/...) son rutas más específicas del blueprint `horarios`: Flask
-# las prefiere a ésta, que se queda con todo lo demás.
+# Los exports PDF del blueprint tienen prioridad sobre las pantallas de la app.
 @app.route('/horarios/', defaults={'ruta': ''})
 @app.route('/horarios/<path:ruta>')
 def horarios_app(ruta):
@@ -229,7 +257,6 @@ def instructivo_horarios():
     respuesta = send_from_directory(app.root_path, 'instructivo-publico.md', mimetype='text/plain')
     respuesta.headers['Cache-Control'] = 'no-cache'
     return respuesta
-
 
 
 @app.route('/')

@@ -22,6 +22,68 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (!messagesDiv || !inputField || !sendBtn) return;
 
+  // Un solo visor para las fotos recién enviadas y las recuperadas del historial.
+  // El dialog modal mantiene el foco adentro y permite cerrar con Escape sin navegar.
+  const visorFotos = document.createElement('dialog');
+  visorFotos.className = 'g-lightbox agente-foto-visor';
+  visorFotos.setAttribute('aria-label', 'Fotos del mensaje');
+  visorFotos.innerHTML = '<div class="g-lightbox-barra">'
+    + '<span class="g-lightbox-contador" aria-live="polite"></span>'
+    + '<button type="button" class="g-lightbox-btn" autofocus>CERRAR ✕</button></div>'
+    + '<button type="button" class="g-lightbox-nav g-lightbox-prev" aria-label="Foto anterior">‹</button>'
+    + '<img class="g-lightbox-img" alt="">'
+    + '<button type="button" class="g-lightbox-nav g-lightbox-next" aria-label="Foto siguiente">›</button>';
+  document.body.appendChild(visorFotos);
+  const fotoAmpliada = visorFotos.querySelector('img');
+  const contadorFotos = visorFotos.querySelector('.g-lightbox-contador');
+  const fotoAnterior = visorFotos.querySelector('.g-lightbox-prev');
+  const fotoSiguiente = visorFotos.querySelector('.g-lightbox-next');
+  let fotosVisor = [];
+  let fotoActual = 0;
+  let scrollBloqueadoAntes = false;
+
+  function mostrarFoto(indice) {
+    fotoActual = (indice + fotosVisor.length) % fotosVisor.length;
+    fotoAmpliada.src = fotosVisor[fotoActual];
+    fotoAmpliada.alt = 'Imagen adjunta ' + (fotoActual + 1);
+    contadorFotos.textContent = (fotoActual + 1) + ' / ' + fotosVisor.length;
+    fotoAnterior.hidden = fotoSiguiente.hidden = fotosVisor.length < 2;
+  }
+
+  function ampliarFoto(urls, indice) {
+    fotosVisor = urls;
+    mostrarFoto(indice);
+    scrollBloqueadoAntes = document.body.classList.contains('g-sin-scroll');
+    document.body.classList.add('g-sin-scroll');
+    visorFotos.showModal();
+  }
+
+  visorFotos.querySelector('.g-lightbox-btn').addEventListener('click', () => visorFotos.close());
+  visorFotos.addEventListener('click', e => { if (e.target === visorFotos) visorFotos.close(); });
+  visorFotos.addEventListener('close', () => {
+    if (!scrollBloqueadoAntes) document.body.classList.remove('g-sin-scroll');
+    fotoAmpliada.removeAttribute('src');
+    fotosVisor = [];
+  });
+  fotoAnterior.addEventListener('click', () => mostrarFoto(fotoActual - 1));
+  fotoSiguiente.addEventListener('click', () => mostrarFoto(fotoActual + 1));
+  visorFotos.addEventListener('keydown', e => {
+    if (e.key === 'Tab') {
+      const botones = Array.from(visorFotos.querySelectorAll('button')).filter(b => !b.hidden);
+      const primero = botones[0];
+      const ultimo = botones[botones.length - 1];
+      if ((e.shiftKey && document.activeElement === primero)
+          || (!e.shiftKey && document.activeElement === ultimo)) {
+        e.preventDefault();
+        (e.shiftKey ? ultimo : primero).focus();
+      }
+      return;
+    }
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    mostrarFoto(fotoActual + (e.key === 'ArrowLeft' ? -1 : 1));
+  });
+
   // Las fotos van de a tandas: se mandan varias y sale una ficha por cada una, que después
   // se revisan de a una antes de guardar nada (ver "Botones de revisión del lote").
   let imagenesSeleccionadas = [];
@@ -126,7 +188,7 @@ document.addEventListener('DOMContentLoaded', function() {
       e.preventDefault();
       if (enviando) return;
 
-      fetch('/agente/reset', { method: 'POST' })
+      fetch('/gestion/areas/agente/reset', { method: 'POST' })
         .catch(() => {})
         .finally(() => {
           pantallaLimpia();
@@ -157,7 +219,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
       const nombre = invSelect.options[invSelect.selectedIndex].textContent;
       invSelect.disabled = true;
-      fetch('/agente/inventario', {
+      fetch('/gestion/areas/agente/inventario', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ inventario: elegido })
@@ -376,7 +438,7 @@ document.addEventListener('DOMContentLoaded', function() {
     enviando = true;
     sendBtn.disabled = true;
 
-    fetch('/agente/chat/stream', {
+    fetch('/gestion/areas/agente/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -514,23 +576,23 @@ document.addEventListener('DOMContentLoaded', function() {
         galeria.className = 'agente-message-fotos';
         if (urls.length > 1) galeria.classList.add('is-multiple');
         urls.forEach(function(url, i) {
-          const link = document.createElement('a');
-          link.href = url;
-          link.target = '_blank';
-          link.rel = 'noopener';
-          link.className = 'agente-message-foto';
+          const boton = document.createElement('button');
+          boton.type = 'button';
+          boton.className = 'agente-message-foto';
+          boton.setAttribute('aria-label', 'Ampliar imagen adjunta ' + (i + 1));
+          boton.addEventListener('click', () => ampliarFoto(urls, i));
           const img = document.createElement('img');
           img.src = url;
           img.className = 'agente-message-image';
           img.alt = 'Imagen adjunta ' + (i + 1);
-          link.appendChild(img);
+          boton.appendChild(img);
           if (urls.length > 1) {
             const num = document.createElement('span');
             num.className = 'agente-message-foto-num';
             num.textContent = i + 1;
-            link.appendChild(num);
+            boton.appendChild(num);
           }
-          galeria.appendChild(link);
+          galeria.appendChild(boton);
         });
         msgDiv.appendChild(galeria);
       }
@@ -610,7 +672,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // Si quedó una edición en vuelo (el usuario tocó un campo y clickeó antes de que
       // volviera la respuesta), esperarla: si no, este fetch sale con el token VIEJO —
       // el server ya lo reemplazó por el de la edición — y da 409 con la ficha viva.
-      colaEdicion.then(() => fetch('/agente/confirmar', {
+      colaEdicion.then(() => fetch('/gestion/areas/agente/confirmar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: conf.token })
@@ -651,7 +713,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // Mismo motivo que en botonConfirmar: esperar una edición en vuelo para no cancelar
       // con un token que el server ya reemplazó.
-      colaEdicion.then(() => fetch('/agente/descartar', {
+      colaEdicion.then(() => fetch('/gestion/areas/agente/descartar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: conf.token })
@@ -690,7 +752,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let colaEdicion = Promise.resolve();
 
   function editarFicha(getToken, campos) {
-    const pedido = colaEdicion.then(() => fetch('/agente/editar_ficha', {
+    const pedido = colaEdicion.then(() => fetch('/gestion/areas/agente/editar_ficha', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: getToken(), campos: campos })
@@ -832,7 +894,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function pedirRevision(cuerpo) {
     // Espera también `colaEdicion`: si un token de `cuerpo` corresponde a una ficha con una
     // edición en vuelo, el server ya la reemplazó y este request saldría con el token viejo.
-    const pedido = Promise.all([colaRevision, colaEdicion]).then(() => fetch('/agente/revisar', {
+    const pedido = Promise.all([colaRevision, colaEdicion]).then(() => fetch('/gestion/areas/agente/revisar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(cuerpo)
@@ -1060,7 +1122,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const hayCorrecciones = (caja._fichas || []).some(f => f.estado === 'observada');
       if (hayCorrecciones) agregarMensaje('', 'loading');
 
-      fetch('/agente/lote', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+      fetch('/gestion/areas/agente/lote', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
         .then(r => r.json().then(data => ({ ok: r.ok, data })))
         .then(({ ok, data }) => {
           const loader = messagesDiv.querySelector('.agente-message-loading');
@@ -1152,7 +1214,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // En el login el widget existe pero no hay sesión: pedir el historial daría 401.
     if (widget && !toggleBtn) return;
 
-    fetch('/agente/historial')
+    fetch('/gestion/areas/agente/historial')
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
         if (!data || !data.mensajes || !data.mensajes.length) return;
@@ -1193,9 +1255,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Links [texto](destino), que el server pone sobre los nombres del calendario
     // (ver agente/enlaces.py). Sólo destinos internos que arrancan con "/": el texto
     // sale de un LLM, así que un href libre sería una inyección (javascript:, phishing).
-    // Abren en otra pestaña para no perder el chat, que en /gestion es un widget.
-    s = s.replace(/\[([^\]\n]+)\]\((\/[^)\s]*)\)/g, (m, txt, href) =>
-      '<a href="' + href.replace(/"/g, '%22') + '" target="_blank" rel="noopener">' + txt + '</a>');
+    // Las pantallas de Gestión quedan dentro de la app. Horarios es una app aparte.
+    s = s.replace(/\[([^\]\n]+)\]\((\/[^)\s]*)\)/g, (m, txt, href) => {
+      if (href.startsWith('//') || href.includes('\\')) return m;
+      href = href.replace(/^\/(agente|salidas|accesos)(?=\/|\?|#|$)/, '/gestion/areas/$1');
+      const destino = href.startsWith('/gestion/') ? '' : ' target="_blank" rel="noopener"';
+      return '<a href="' + href.replace(/"/g, '%22') + '"' + destino + '>' + txt + '</a>';
+    });
     return s;
   }
 

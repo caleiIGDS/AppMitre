@@ -29,7 +29,7 @@ const estado = filtro('estado')
 const baja = filtro('baja')
 const meses = filtro('meses')
 const vista = filtro('vista')
-const galeria = computed(() => vista.value === 'galeria')
+const galeria = computed(() => vista.value !== 'lista')
 
 // La búsqueda filtra en vivo, pero a la URL llega con una pausa: si no, cada tecla sería
 // una entrada nueva para el navegador. Y el filtro corre a lo sumo una vez por cuadro
@@ -161,7 +161,6 @@ const mostradas = computed(() => lista.value.slice(0, limite.value))
 // compacta abajo; las dos salen de la misma tanda, así el centinela sirve igual.
 const tarjetas = computed(() => mostradas.value.filter((f) => !f.item))
 const filasKit = computed(() => mostradas.value.filter((f) => f.item))
-const iniciales = (nombre) => nombre.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase()
 watch([qNorm, lugar, estado, mesesVivo, baja], () => { limite.value = TANDA })
 
 // El centinela cambia de `key` con cada tanda: el elemento nuevo se observa de cero, así que
@@ -213,9 +212,23 @@ function abrir(r, evento) {
           </svg>
           <span class="g-sr-only">Filtros</span>
         </button>
+        <div class="a-vistas-escritorio" role="group" aria-label="Vista del inventario">
+          <button type="button" class="a-vista-opcion" :aria-pressed="!galeria" @click="vista = 'lista'">
+            <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">
+              <path d="M3 4.5h14M3 10h14M3 15.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            LISTA
+          </button>
+          <button type="button" class="a-vista-opcion" :aria-pressed="galeria" @click="vista = ''">
+            <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">
+              <path d="M2.5 2.5h6v6h-6zM11.5 2.5h6v6h-6zM2.5 11.5h6v6h-6zM11.5 11.5h6v6h-6z" fill="currentColor" />
+            </svg>
+            GALERÍA
+          </button>
+        </div>
         <button
-          type="button" class="a-vista-btn" :title="galeria ? 'Ver como lista' : 'Ver como galería'"
-          @click="vista = galeria ? '' : 'galeria'"
+          type="button" class="a-vista-btn a-vista-movil" :title="galeria ? 'Ver como lista' : 'Ver como galería'"
+          @click="vista = galeria ? 'lista' : ''"
         >
           <svg v-if="galeria" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">
             <path d="M3 4.5h14M3 10h14M3 15.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -275,12 +288,12 @@ function abrir(r, evento) {
             @click="abrir(f.r, $event)"
           >
             <span class="a-tarjeta-foto">
-              <img v-if="f.r.fotos.length" :src="portada(inv, f.r).mini || portada(inv, f.r).url" alt="" loading="lazy" decoding="async">
-              <span v-else class="a-tarjeta-sin" aria-hidden="true">{{ iniciales(f.nombre) }}</span>
+              <img v-if="f.r.fotos.length" :src="portada(inv, f.r).url" alt="" loading="lazy" decoding="async">
+              <span v-else class="a-tarjeta-sin">{{ f.nombre }}</span>
               <span v-if="f.r.estado === 'Roto'" class="a-tarjeta-estado">ROTO</span>
               <span class="a-tarjeta-cant">×{{ f.cantidad }}</span>
             </span>
-            <span class="a-tarjeta-nombre">{{ f.nombre }}</span>
+            <span v-if="f.r.fotos.length" class="a-tarjeta-nombre">{{ f.nombre }}</span>
           </a>
         </li>
       </ul>

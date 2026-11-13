@@ -1,7 +1,7 @@
 // Orden a mano: se arrastra la agarradera del elemento a su lugar. El orden es de cada
 // dispositivo (localStorage, una sola clave con
 // todas las listas): no cambia lo que ven los demás. Hoy lo usan la lista de inventarios y
-// las fotos de cada ficha (la primera es la portada de la tarjeta en la vista galería).
+// las listas con orden local; las fotos usan el callback de guardado en servidor.
 import { reactive, ref, computed, nextTick, watch, onUnmounted } from 'vue'
 
 const CLAVE_ALMACEN = 'mitre-orden'
@@ -33,10 +33,11 @@ const IGNORAR = 'input, textarea, select, option, code, [contenteditable]'
 // Arrastrar para ordenar dentro de `contenedor` (un ref al elemento). Cada elemento lleva
 // `data-orden="<id>"`. `lista` es un computed con los items; devuelve `items`, la lista a
 // dibujar (durante el arrastre, el orden provisorio) y `arrastrando` (el id levantado).
-export function useOrdenable(clave, contenedor, lista, idDe) {
+export function useOrdenable(clave, contenedor, lista, idDe, guardar = null) {
+  let guardando = false
   const provisoria = ref(null)
   const arrastrando = ref(null)
-  const enOrden = computed(() => ordenado(clave.value, lista.value, idDe))
+  const enOrden = computed(() => guardar ? lista.value : ordenado(clave.value, lista.value, idDe))
   const items = computed(() => {
     if (!provisoria.value) return enOrden.value
     const porId = new Map(enOrden.value.map((it) => [String(idDe(it)), it]))
@@ -122,7 +123,7 @@ export function useOrdenable(clave, contenedor, lista, idDe) {
   }
 
   function bajar(e) {
-    if (p || e.button !== 0 || !e.isPrimary || e.target.closest(IGNORAR)) return
+    if (guardando || p || e.button !== 0 || !e.isPrimary || e.target.closest(IGNORAR)) return
     const agarre = e.target.closest('.a-orden-agarre')
     if (!agarre) return
     const el = e.target.closest('[data-orden]')
@@ -164,10 +165,16 @@ export function useOrdenable(clave, contenedor, lista, idDe) {
     const tragar = (e) => { e.preventDefault(); e.stopPropagation() }
     window.addEventListener('click', tragar, { capture: true, once: true })
     setTimeout(() => window.removeEventListener('click', tragar, { capture: true }), 0)
-    if (provisoria.value.join() !== g.inicial) guardarOrden(clave.value, provisoria.value)
+    if (provisoria.value.join() !== g.inicial) {
+      if (guardar) {
+        guardando = true
+        Promise.resolve().then(() => guardar([...provisoria.value]))
+          .catch(() => {}).finally(() => { guardando = false; provisoria.value = null })
+      } else guardarOrden(clave.value, provisoria.value)
+    }
     document.body.classList.remove('a-ordenando')
     const el = elDe(g.id)
-    provisoria.value = null
+    if (!guardando) provisoria.value = null
     if (el) {
       el.style.transition = 'transform .15s ease'
       el.style.transform = ''
@@ -199,7 +206,5 @@ export function useOrdenable(clave, contenedor, lista, idDe) {
   return { items, arrastrando }
 }
 
-// Dónde se guarda el orden de las fotos de un recurso. La ficha las muestra en ese orden y
-// la tarjeta de la vista galería usa la primera de portada.
-export const claveFotos = (inv, recursoId) => `fotos:${inv}:${recursoId}`
-export const portada = (inv, r) => ordenado(claveFotos(inv, r.id), r.fotos, (f) => f.id)[0] || null
+// La primera foto guardada en el servidor es la portada compartida.
+export const portada = (inv, r) => r.fotos[0] || null

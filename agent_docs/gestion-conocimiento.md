@@ -239,6 +239,7 @@ capa 0).
   termina de codificarla y **guarda en segundo plano** (botón en `GUARDANDO…`): si el POST
   falla vuelve a la imagen que sigue en la DB. Pide `gestion.rotar` — **solo admin**, a
   diferencia de subir y borrar
+- Orden compartido: `PUT /app/api/gestion/<inv>/recursos/<id>/fotos/orden`, JSON `{ids: [...]}`, requiere `gestion.rotar` (hook `PERMISO_ORDENAR_FOTOS`). Reordena el array completo en la DB; la primera foto es la portada para todos. Devuelve 409 si cambió el conjunto de fotos. La vista general usa la imagen completa para evitar ampliar la miniatura de 320 px.
 - Las miniaturas son `<button>` (no `<img>` suelta) para que el visor se abra también con teclado
 
 Estados (`ESTADOS_RECURSO`): recursos = Funcional / Dañado usable / Roto. `"Dado de baja"`
@@ -424,7 +425,7 @@ general y no abre ningún inventario.
 | `gestion.editar` | escribir | `nuevo`/`editar`/fotos/desglose por ubicación + dar de baja un recurso y revertir la baja (borrar, no: ningún recurso se borra) |
 | `gestion.alias` | admin | `/gestion/<inv>/alias`, editable, y la tool del agente `listar_alias`. Verbo `admin`: no entra en ningún preset de interno, solo lo tiene el comodín `'*'` |
 | `gestion.auditoria` | admin | los chips de auditoría del listado (vencidos de revisión, dados de baja) y `/gestion/<inv>/bajas`, el registro de bajas |
-| `gestion.rotar` | admin | el botón ROTAR del visor de fotos y su ruta. `crud.py` lo lee del hook opcional `PERMISO_ROTAR_FOTO`; un área que no lo declara cae en su permiso de escritura |
+| `gestion.rotar` | admin | rotación del visor y orden compartido de fotos. `crud.py` lo lee del hook opcional `PERMISO_ROTAR_FOTO`; un área que no lo declara cae en su permiso de escritura |
 | `gestion.accesos` | admin | `/gestion/<inv>/accesos`: invitar y quitar gente DE ESE inventario. Lo tiene el encargado por haber entrado con la clave, y lo puede delegar |
 
 `PERMISO_ESCRITURA` lo aplica `crud.registrar_api` a sus escrituras genéricas, y las rutas

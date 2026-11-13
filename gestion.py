@@ -78,7 +78,7 @@ PERMISOS = [
     # Mismo verbo 'admin', mismo motivo: girar una foto reescribe la imagen guardada (se
     # re-codifica), así que es una operación de mantenimiento del inventario y no parte de
     # cargar un recurso. Subir y borrar fotos siguen siendo de `gestion.editar`.
-    ('gestion.rotar', 'Rotar las fotos de un recurso', 'admin'),
+    ('gestion.rotar', 'Rotar y ordenar las fotos de un recurso', 'admin'),
     # Quién reparte los permisos DE ESTE inventario. Lo tiene el encargado por haber
     # entrado con la clave, y lo puede delegar en alguien más desde su propio panel.
     ('gestion.accesos', 'Administrar quién entra a este inventario', 'admin'),
@@ -105,6 +105,7 @@ PERMISO_REGISTRO = 'inventarios.admin'
 # Hook opcional que lee crud.py: quién puede girar una foto ya cargada. Si un área no lo
 # declara, el botón pide el permiso de escritura de siempre.
 PERMISO_ROTAR_FOTO = 'gestion.rotar'
+PERMISO_ORDENAR_FOTOS = 'gestion.rotar'
 
 # Respaldos rotativos: la maquinaria vive en respaldos.py (capa 0). Acá sólo se declara
 # qué tabla mirar para saber si la DB tiene datos de verdad (una DB vacía no se respalda:

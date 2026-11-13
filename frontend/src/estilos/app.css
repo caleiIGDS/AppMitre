@@ -253,6 +253,32 @@ body.g-sin-scroll { overflow: hidden; }
 }
 .a-vista-btn:hover, .a-vista-btn:focus-visible { border-color: var(--g-primary); }
 
+.a-vistas-escritorio { display: flex; flex: 0 0 auto; }
+.a-vista-opcion {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--g-border);
+  background: var(--g-surface);
+  color: var(--g-primary);
+  font-family: var(--g-font);
+  font-size: 12px;
+  cursor: pointer;
+}
+.a-vista-opcion + .a-vista-opcion { border-left: 0; }
+.a-vista-opcion[aria-pressed="true"] {
+  background: var(--g-primary);
+  color: var(--g-surface);
+}
+.a-vista-opcion:focus-visible { outline: 2px solid var(--g-accent); outline-offset: 2px; }
+.a-vista-movil { display: none; }
+@media (max-width: 700px) {
+  .a-vistas-escritorio { display: none; }
+  .a-vista-movil { display: flex; }
+}
+
 .a-galeria-wrap {
   border: 2px solid var(--g-primary);
   border-top: none;
@@ -286,20 +312,25 @@ body.g-sin-scroll { overflow: hidden; }
 .a-tarjeta:focus-visible .a-tarjeta-foto { border-color: var(--g-accent); box-shadow: 0 0 0 1px var(--g-accent); }
 .a-tarjeta-foto img { display: block; width: 100%; height: 100%; object-fit: cover; }
 /* Sin foto: el azul de la escuela con la grilla de plano y las iniciales. */
+.a-tarjeta-foto:has(.a-tarjeta-sin) { aspect-ratio: auto; }
 .a-tarjeta-sin {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 100%;
+  min-height: 150px;
+  padding: 14px 10px 26px;
+  box-sizing: border-box;
+  text-align: center;
+  overflow-wrap: anywhere;
   background-color: var(--g-primary);
   background-image:
     repeating-linear-gradient(0deg, rgba(255, 255, 255, .07) 0 1px, transparent 1px 20px),
     repeating-linear-gradient(90deg, rgba(255, 255, 255, .07) 0 1px, transparent 1px 20px);
   color: rgba(255, 255, 255, .85);
-  font-size: 22px;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: .08em;
+  line-height: 1.5;
 }
 .a-tarjeta-cant {
   position: absolute;
@@ -385,7 +416,7 @@ body.g-sin-scroll { overflow: hidden; }
   .a-galeria-wrap { padding: 10px 10px 14px; }
   .a-galeria { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 8px; }
   .a-tarjeta-nombre { font-size: 11px; }
-  .a-tarjeta-sin { font-size: 18px; }
+  .a-tarjeta-sin { min-height: 90px; font-size: 11px; }
   .a-galeria-sep { margin: 14px -10px 0; padding: 3px 12px; }
   .a-galeria-sep:first-child { margin-top: -10px; }
   .a-galeria-kits { margin: 0 -10px -14px; }

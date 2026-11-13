@@ -1,4 +1,4 @@
-"""Adaptador Flask de las cuatro consultas de lectura. Bearer nunca abre una sesión."""
+"""Adaptador Flask de las consultas de lectura. Bearer nunca abre una sesión."""
 from flask import Blueprint, current_app, jsonify, request
 
 from . import acceso, datos

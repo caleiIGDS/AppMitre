@@ -125,7 +125,7 @@
 <a class="g-btn-outline" href="{{ url_for('salidas.lista') }}">‹ VOLVER</a>
 <button class="g-btn" id="btn-exportar" type="button">{% if id_editar %}GUARDAR CAMBIOS{% else %}GUARDAR SALIDA{% endif %}</button>
 <div class="tabs-pdf v{{ variante }}">
-  <a class="tab-pdf" href="{{ url_for('normativa_visor') }}" target="_blank"><span class="tab-ico">📄</span>RESOLUCIÓN</a>
-  <a class="tab-pdf" href="{{ url_for('salidas.instructivo') }}" target="_blank"><span class="tab-ico">📖</span>INSTRUCTIVO</a>
+  <a class="tab-pdf" href="{{ url_for('normativa_visor') }}" data-documento="pagina"><span class="tab-ico">📄</span>RESOLUCIÓN</a>
+  <a class="tab-pdf" href="{{ url_for('salidas.instructivo') }}" data-documento="pdf"><span class="tab-ico">📖</span>INSTRUCTIVO</a>
 </div>
 {% endblock %}

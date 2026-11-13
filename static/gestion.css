@@ -871,6 +871,24 @@ button.g-link {
 
 .g-ficha-crumb a:hover { color: var(--g-accent); }
 
+.g-ficha-crumb .g-ficha-volver {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 12px;
+    border: 1px solid var(--g-primary);
+    border-left: 3px solid var(--g-accent);
+    background: var(--g-bg);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.g-ficha-crumb .g-ficha-volver:hover,
+.g-ficha-crumb .g-ficha-volver:focus-visible {
+    background: var(--g-primary);
+    color: var(--g-surface);
+}
+
 .g-ficha-title {
     margin: 0;
     font-size: 22px;
@@ -1017,13 +1035,48 @@ button.g-link {
     border: none;
     border-radius: 0;
 }
-/* La "tira" de agregar foto, debajo de las imágenes. */
+.g-ficha-col-media .g-foto-section { position: relative; }
+/* Con fotos, la acción se integra a la esquina de la galería. */
 .g-ficha-col-media .g-foto-toolbar {
     border: none;
     border-bottom: 1px solid var(--g-border);
     border-radius: 0;
     padding: 10px;
 }
+.g-ficha-col-media:has(.g-galeria) .g-foto-toolbar {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+.g-ficha-col-media .g-foto-btn {
+    width: 44px;
+    min-height: 44px;
+    padding: 9px;
+    border: 1px solid var(--g-primary);
+    border-left: 3px solid var(--g-accent);
+    border-radius: 0;
+    background: var(--g-surface);
+    color: var(--g-primary);
+    font-family: var(--g-font);
+}
+.g-ficha-col-media .g-foto-btn svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+}
+.g-ficha-col-media .g-foto-btn:hover { background: var(--g-bg); }
+.g-ficha-col-media .g-foto-btn:focus-visible {
+    outline: 2px solid var(--g-accent);
+    outline-offset: 3px;
+}
+.g-ficha-col-media .g-foto-btn.is-subiendo { width: auto; font-size: 12px; }
 
 /* Sin ninguna foto y sin poder subirlas, la columna izquierda no aporta nada:
    se colapsa y el recuadro pasa a una sola columna. */
@@ -1137,11 +1190,18 @@ button.g-link {
     color: var(--g-primary);
 }
 
+.g-ficha-ubic-head { flex-wrap: wrap; }
 .g-ficha-mover-ayuda {
-    padding: 12px 14px 0;
     margin: 0;
-    font-size: 12px;
-    color: var(--g-muted);
+    font-size: 11px;
+    line-height: 1.5;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: inherit;
+}
+@media (max-width: 800px) {
+    .g-ficha-ubic-head .g-ficha-mover-ayuda { flex-basis: 100%; }
 }
 
 .g-ficha-mover {
@@ -1185,7 +1245,7 @@ button.g-link {
 .g-ficha-specs {
     display: grid;
     grid-template-columns: 120px 1fr;
-    gap: 6px 12px;
+    gap: 0 16px;
     margin: 0;
     border-top: 1px dashed var(--g-border);
     padding-top: 10px;
@@ -1195,14 +1255,16 @@ button.g-link {
 .g-ficha-specs:first-child { border-top: none; padding-top: 0; }
 
 .g-ficha-specs dt {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
-    letter-spacing: 1.5px;
+    letter-spacing: .7px;
     text-transform: uppercase;
     color: var(--g-muted);
 }
 
-.g-ficha-specs dd { margin: 0; }
+.g-ficha-specs dt,
+.g-ficha-specs dd { padding: 8px 0; border-bottom: 1px solid var(--g-border); }
+.g-ficha-specs dd { margin: 0; overflow-wrap: anywhere; }
 .g-ficha-specs dd.g-pre { white-space: pre-wrap; }
 
 /* Celular: la ficha se apila. La foto va full-bleed y arriba de todo (banner del
@@ -1234,20 +1296,6 @@ button.g-link {
     /* Con fotos: la columna es el banner del diseño de celular — full-bleed, borde
        naranja abajo, y el botón de agregar como chip sobre la última imagen. */
     .g-ficha-col-media:has(.g-galeria) { border-bottom: 4px solid var(--g-accent); }
-    .g-ficha-col-media:has(.g-galeria) .g-foto-section { position: relative; }
-    .g-ficha-col-media:has(.g-galeria) .g-foto-toolbar {
-        position: absolute;
-        right: 8px;
-        bottom: 8px;
-        border: none;
-        border-radius: 0;
-        padding: 4px;
-        background: rgba(26, 54, 93, 0.85);
-    }
-    .g-ficha-col-media:has(.g-galeria) .g-foto-btn {
-        border-color: rgba(255, 255, 255, 0.5);
-        color: #fff;
-    }
     /* Una foto sola ocupa el ancho entero; con dos o más, dos por fila. */
     .g-ficha-col-media .g-galeria-grid {
         grid-template-columns: repeat(auto-fit, minmax(48%, 1fr));
@@ -1501,13 +1549,13 @@ button.g-link {
     text-decoration: none;
 }
 
-/* Separa la miniatura del texto sólo cuando el usuario escribió algo junto con la foto. */
-.agente-message-user a:not(:last-child) {
+/* Separa las miniaturas del texto cuando el mensaje tiene ambos. */
+.agente-message-fotos:not(:last-child) {
     margin-bottom: 6px;
 }
 
 /* Chica a propósito: alcanza para reconocer de qué foto se trata, y el que necesite verla
-   entra al link. Una miniatura grande empuja la conversación fuera de pantalla. */
+   abre el visor. Una miniatura grande empuja la conversación fuera de pantalla. */
 .agente-message-image {
     display: block;
     width: 120px;
@@ -2435,6 +2483,30 @@ textarea.agente-ficha-input {
 .agente-message-foto {
     position: relative;
     display: block;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    border-radius: 6px;
+    cursor: zoom-in;
+}
+
+.agente-message-foto:focus-visible {
+    outline: 2px solid var(--g-accent);
+    outline-offset: 2px;
+}
+
+/* El dialog usa el estilo del visor compartido y queda sobre el widget del chat. */
+.agente-foto-visor {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    border: 0;
+}
+
+.agente-foto-visor:not([open]) {
+    display: none;
 }
 
 .agente-message-foto-num {
@@ -3737,3 +3809,22 @@ body.g-sidebar-abierto { overflow: hidden; }
     .g-titles p { display: none; }
     .g-container { padding: 12px 10px; }
 }
+/* Pantallas de Gestión servidas por Flask: actualización y documentos dentro de la app. */
+.g-app-version {
+    position: fixed; bottom: 1rem; left: 1rem; right: 1rem; z-index: 10000;
+    display: flex; align-items: center; flex-wrap: wrap; gap: .75rem;
+    padding: 1rem; background: #fff; color: var(--g-primary); border: 2px solid var(--g-primary);
+}
+.g-app-version span { flex: 1 1 18rem; }
+.g-app-documento {
+    width: 96vw; height: 94dvh; max-width: 1200px; max-height: 94dvh;
+    padding: 0; border: 2px solid var(--g-primary); color: var(--g-primary); background: #f1f5f9;
+}
+.g-app-documento[open] { display: flex; flex-direction: column; }
+.g-app-documento::backdrop { background: rgb(0 0 0 / 65%); }
+.g-app-documento-barra { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; padding: .75rem; background: #fff; }
+.g-app-documento-barra strong { flex: 1; }
+.g-app-documento-barra [hidden] { display: none; }
+.g-app-documento-contenido { flex: 1; min-height: 0; overflow: auto; text-align: center; }
+.g-app-documento-contenido iframe { width: 100%; height: 100%; border: 0; }
+.g-app-documento-contenido canvas { display: block; max-width: calc(100% - 32px); height: auto; margin: 16px auto; background: #fff; }

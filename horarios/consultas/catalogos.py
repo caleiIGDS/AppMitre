@@ -1,4 +1,5 @@
 from .comun import ErrorConsulta
+from ..materias import especialidad, TIPOS_MATERIA
 
 
 def ejecutar(s, p):
@@ -20,6 +21,14 @@ def ejecutar(s, p):
             salida['aulas']['sin_piso'] = otras
     if 'roles' in incluir:
         salida['roles'] = sorted({r for roles in s.padron.values() for r in roles})
+    if 'especialidades' in incluir:
+        # Solo cursos presentes en la copia; no anuncia divisiones sin datos.
+        salida['especialidades'] = {}
+        for c in s.cursos:
+            anio, division = c.split('°', 1)
+            salida['especialidades'][c] = especialidad({'curso': anio, 'division': division.strip()}) or None
+    if 'tipos_materia' in incluir:
+        salida['tipos_materia'] = [{'clave': c, 'nombre': n} for c, n in TIPOS_MATERIA.items()]
     if 'nombres' in incluir:
         salida['nombres'] = sorted(s.padron)
     return salida

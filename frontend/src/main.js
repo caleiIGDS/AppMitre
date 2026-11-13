@@ -26,6 +26,13 @@ window.addEventListener('mitre:sin-acceso', ({ detail }) => {
 // La app abre recién con lo guardado ya en memoria (unos milisegundos): si no, la primera
 // pantalla lo pediría a la red, y sin red se quedaría esperando. Si lo guardado no se pudo
 // leer, abre igual.
+// El cierre de sesión de las páginas Flask también debe olvidar los datos del dispositivo.
+const direccion = new URL(location.href)
+if (direccion.searchParams.get('sesion') === 'cerrada') {
+  try { localStorage.removeItem('mitre-datos') } catch { /* almacenamiento bloqueado */ }
+  direccion.searchParams.delete('sesion')
+  history.replaceState(history.state, '', direccion)
+}
 activarPersistencia().catch(() => {}).then(() => {
   createApp(App)
     .use(router)

@@ -41,6 +41,7 @@ nunca: la ruta de eliminar devuelve 404 y la app no ofrece el botón — lo usa
 `gestion.recursos`, que en vez de borrarse se da de baja).
 """
 
+from contextlib import closing
 import base64
 import json
 import os
@@ -648,6 +649,7 @@ def registrar_api(bp, area):
     `accesos.registrar_acceso_api` (sesión + permiso base, todo en JSON)."""
     escritura = _hook(area, 'PERMISO_ESCRITURA')
     rotar = _hook(area, 'PERMISO_ROTAR_FOTO') or escritura
+    ordenar = _hook(area, 'PERMISO_ORDENAR_FOTOS') or escritura
 
     def _una(cur, slug, id):
         return una_fila_api(area, slug, cur, id, bp.name)
@@ -707,7 +709,8 @@ def registrar_api(bp, area):
                                for r in relaciones_visibles(area, e)],
             }
         meta = {'entidades': entidades, 'puede_escribir': accesos.puede(escritura),
-                'puede_rotar': accesos.puede(rotar)}
+                'puede_rotar': accesos.puede(rotar),
+                'puede_ordenar_fotos': accesos.puede(ordenar)}
         extra = _hook(area, 'api_meta')
         if extra:
             meta.update(extra())
@@ -793,7 +796,6 @@ def registrar_api(bp, area):
             return _duplicado(slug)
         fila = _una(cur, slug, id)
         con.commit()
-        con.close()
         return jsonify(fila)
 
     @bp.delete('/<slug>/<int:id>')
@@ -826,6 +828,28 @@ def registrar_api(bp, area):
         fila = _una(con.cursor(), slug, id)
         con.commit()
         con.close()
+        return jsonify(fila)
+
+    @bp.put('/<slug>/<int:id>/fotos/orden')
+    @accesos.requiere(ordenar, como_json=True)
+    def api_ordenar_fotos(slug, id):
+        ids = _cuerpo().get('ids')
+        if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids) or len(set(ids)) != len(ids):
+            return jsonify({'error': 'Orden de fotos inválido.'}), 400
+        cfg_ent = area.ENTIDADES[slug]
+        with closing(conectar(area)) as con, con:
+            # Serializar con las altas y bajas: nunca perder fotos de otra pestaña.
+            con.execute('BEGIN IMMEDIATE')
+            cur = con.cursor()
+            fotos = _fotos(cur, cfg_ent, id)
+            if fotos is None:
+                return _no_existe()
+            por_id = {f['id']: f for f in fotos}
+            if set(ids) != set(por_id):
+                return jsonify({'error': 'Las fotos cambiaron. Actualizá la ficha y volvé a ordenarlas.'}), 409
+            cur.execute(f"UPDATE {cfg_ent['tabla']} SET fotos = ? WHERE id = ?",
+                        (json.dumps([por_id[i] for i in ids]), id))
+            fila = _una(cur, slug, id)
         return jsonify(fila)
 
     @bp.delete('/<slug>/<int:id>/fotos/<foto_id>')

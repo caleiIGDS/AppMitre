@@ -1133,8 +1133,8 @@ sólo la fila de SQLite, que es el mismo patrón que ya usa la galería de un re
 fotos viejas se van solas.
 
 Del lado del front, `agregarMensaje(texto, tipo, imagenes)` pinta cada miniatura dentro de un
-`<a target="_blank">` (click → foto entera) y el texto debajo. Antes de esto la burbuja decía
-`📷 nombre-del-archivo.jpg` y la foto no se veía nunca. **Con varias van en grilla y
+`<button>` (click → visor modal dentro del chat, sin navegar) y el texto debajo. El visor
+permite cerrar con botón, fondo o Escape y recorrer las fotos con flechas. **Con varias van en grilla y
 numeradas** (`.agente-message-fotos.is-multiple`): el asistente las nombra por número ("la 3
 no se lee"), así que sin el número visible no hay forma de saber a cuál se refiere.
 

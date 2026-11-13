@@ -1,0 +1,6 @@
+{# Las páginas públicas de familias e invitaciones no instalan la app de administración. #}
+{% if request.path.startswith('/gestion/areas/') %}
+<link rel="manifest" href="/gestion/manifest.webmanifest">
+<meta name="theme-color" content="#1A365D">
+<script src="{{ static_v('app-paginas.js') }}" data-autenticado="{{ 'si' if acceso_actual() else 'no' }}" defer></script>
+{% endif %}

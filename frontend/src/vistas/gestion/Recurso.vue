@@ -4,13 +4,12 @@
 // está en el dispositivo: abre al instante. La ficha no edita campos ni da de baja: eso
 // vive en EDITAR.
 import { computed } from 'vue'
-import { useRecurso, useMeta, useSubirFoto, useEliminarFoto, useRotarFoto } from '@/gestion/datos'
+import { useRecurso, useMeta, useSubirFoto, useEliminarFoto, useRotarFoto, useOrdenarFotos } from '@/gestion/datos'
 import { volverA } from '@/navegacion'
 import { norm } from '@/texto'
 import { avisar, avisarError } from '@/avisos'
 import EstadoCarga from '@/componentes/EstadoCarga.vue'
 import Galeria from '@/componentes/Galeria.vue'
-import { claveFotos } from '@/orden'
 import UbicacionFicha from './UbicacionFicha.vue'
 import { segundosMovimientos } from '@/gestion/movimientos'
 
@@ -23,6 +22,7 @@ const meta = useMeta(() => props.inv)
 const subirFoto = useSubirFoto(() => props.inv)
 const borrarFoto = useEliminarFoto(() => props.inv)
 const rotarFoto = useRotarFoto(() => props.inv)
+const ordenarFotos = useOrdenarFotos(() => props.inv)
 
 const m = computed(() => meta.data.value || {})
 const campos = computed(() => m.value.entidades?.recursos?.campos || [])
@@ -69,16 +69,16 @@ function rotar(foto, imagen) {
   <div v-else-if="recurso" class="g-ficha-body">
     <div class="g-ficha-col-media">
       <Galeria
-        :fotos="recurso.fotos" :clave-orden="claveFotos(inv, recurso.id)" :puede-editar="!!m.puede_escribir" :puede-rotar="!!m.puede_rotar"
+        :fotos="recurso.fotos" :puede-ordenar="!!m.puede_ordenar_fotos" :ordenar="(ids) => ordenarFotos.mutateAsync({ id: recurso.id, ids })" :puede-editar="!!m.puede_escribir" :puede-rotar="!!m.puede_rotar"
         :subiendo="subirFoto.isPending.value" :rotar="rotar"
-        @subir="subir" @borrar="borrar" @error="(e) => avisarError(e, 'No se pudo rotar')"
+        @subir="subir" @borrar="borrar" @error="(e) => avisarError(e, 'No se pudo guardar el cambio de las fotos')"
       />
     </div>
 
     <header class="g-ficha-head">
       <div class="g-ficha-id">
         <span class="g-ficha-crumb">
-          <a :href="`/gestion/${inv}/recursos`" @click.prevent="volverA(listado)">INVENTARIO</a>
+          <a class="g-ficha-volver" :href="`/gestion/${inv}/recursos`" @click.prevent="volverA(listado)">← VOLVER A INVENTARIO</a>
           <template v-if="recurso.tipo"> / {{ recurso.tipo }}</template>
         </span>
         <h2 class="g-ficha-title">{{ recurso.nombre }}</h2>

@@ -56,7 +56,10 @@ function sinUbicar() {
 </script>
 
 <template>
-  <div class="g-ficha-bar"><span>UBICACIÓN</span></div>
+  <div class="g-ficha-bar g-ficha-ubic-head">
+    <span>UBICACIÓN</span>
+    <span v-if="puedeEditar" class="g-ficha-mover-ayuda">Elegí una unidad para moverla.</span>
+  </div>
   <div v-if="recurso.unidades.length" class="g-ficha-ubic">
     <div v-for="g in recurso.unidades" :key="g.ubicacion" class="g-ficha-ubic-row">
       <div class="g-ficha-ubic-datos">
@@ -77,7 +80,6 @@ function sinUbicar() {
   <p v-else class="g-ficha-vacio">Todavía no hay unidades cargadas.</p>
 
   <template v-if="puedeEditar">
-    <p class="g-ficha-mover-ayuda">Tocá los números de arriba para elegir qué unidades mover.</p>
     <form v-if="lista.length" class="g-ficha-mover" @submit.prevent="moverAca">
       <span class="g-ficha-mover-count">{{ lista.length === 1 ? '1 unidad elegida' : `${lista.length} unidades elegidas` }}</span>
       <input ref="campoLugar" v-model="lugar" type="text" list="datalist-lugar-desglose" placeholder="Lugar" aria-label="Lugar">

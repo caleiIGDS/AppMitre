@@ -28,6 +28,8 @@ export default defineConfig({
     fs: { allow: ['..'] },
     // En desarrollo, Vite sirve la app y le pasa a Flask (python app.py) todo lo demás.
     proxy: {
+      '^/gestion/areas/(agente|salidas|accesos|salir)(/|$)': 'http://127.0.0.1:5000',
+      '/agente': 'http://127.0.0.1:5000',
       '/app/api': 'http://127.0.0.1:5000',
       '/acceso': 'http://127.0.0.1:5000',
       '/static': 'http://127.0.0.1:5000',
@@ -48,12 +50,12 @@ export default defineConfig({
         id: '/app/',
         name: 'Emilio Mitre — Sistema de Gestión',
         short_name: 'Mitre',
-        description: 'Inventario, historia y salidas educativas de la Escuela Técnica Emilio Mitre.',
+        description: 'Inventarios, asistente, salidas educativas y accesos de la Escuela Técnica Emilio Mitre.',
         lang: 'es-AR',
         start_url: '/gestion/',
         // Sólo /gestion/, nunca '/': ese scope contiene /horarios/, y el celular mezclaba
-        // las dos apps instaladas (el ícono de una abría la otra). Las páginas clásicas
-        // (/salidas, /agente, /accesos) abren con la barra de "fuera de la app".
+        // las dos apps instaladas (el ícono de una abría la otra). Asistente, Salidas y
+        // Accesos viven dentro de /gestion/areas/, en el mismo alcance que el inventario.
         scope: '/gestion/',
         display: 'standalone',
         background_color: '#F1F5F9',
@@ -68,8 +70,15 @@ export default defineConfig({
         // Cualquier pantalla de la app abre desde el dispositivo, con o sin red.
         navigateFallback: '/gestion/index.html',
         navigateFallbackAllowlist: [/^\/gestion(\/|$)/],
+        // Estas pantallas las sirve Flask: nunca contestarles con el index de Vue.
+        navigateFallbackDenylist: [/^\/gestion\/areas\/(?:agente|salidas|accesos|salir)(?:\/|$)/],
         globPatterns: ['**/*.{js,css,html,svg,png,ttf,woff2}'],
         runtimeCaching: [
+          {
+            urlPattern: ({ request, url, sameOrigin }) => sameOrigin && request.mode === 'navigate' && /^\/gestion\/areas\/(?:agente|salidas|accesos|salir)(?:\/|$)/.test(url.pathname),
+            handler: 'NetworkOnly',
+            options: { precacheFallback: { fallbackURL: '/gestion/sin-conexion.html' } },
+          },
           {
             // Las fotos tienen la fecha en la URL: misma URL, misma imagen para siempre.
             // Cada foto son dos entradas (miniatura y entera), y gestion/precarga.js las

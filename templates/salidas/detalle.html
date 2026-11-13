@@ -40,7 +40,7 @@
                 <td data-label="ANEXO">Anexo {{ etiquetas[n] }}</td>
                 <td data-label="TÍTULO">{{ titulos[n] }}</td>
                 <td class="g-td-actions">
-                    <a class="g-link" href="{{ url_for('salidas.ver_pdf', id=fila['id'], anexo=n) }}" target="_blank" rel="noopener">Ver PDF en blanco</a>
+                    <a class="g-link" href="{{ url_for('salidas.ver_pdf', id=fila['id'], anexo=n) }}" data-documento="pdf" rel="noopener">Ver PDF en blanco</a>
                 </td>
             </tr>
             {% endif %}
@@ -60,7 +60,7 @@
                 <td data-label="ANEXO">Anexo {{ etiquetas[n] }}</td>
                 <td data-label="TÍTULO">{{ titulos[n] }}</td>
                 <td class="g-td-actions">
-                    <a class="g-link" href="{{ url_for('salidas.ver_pdf', id=fila['id'], anexo=n) }}" target="_blank" rel="noopener">Ver PDF</a>
+                    <a class="g-link" href="{{ url_for('salidas.ver_pdf', id=fila['id'], anexo=n) }}" data-documento="pdf" rel="noopener">Ver PDF</a>
                 </td>
             </tr>
             {% endif %}

@@ -277,3 +277,6 @@ export const useQuitarDispositivo = (inv) =>
 
 export const useAnularInvitacion = (inv) =>
   useCambioAccesos(inv, (id) => api(`${base(toValue(inv))}/accesos/invitaciones/${id}`, { metodo: 'DELETE' }))
+
+export const useOrdenarFotos = (inv) => mutacionRecurso(inv, (b, { id, ids }) =>
+  api(`${b}/recursos/${id}/fotos/orden`, { metodo: 'PUT', cuerpo: { ids } }))

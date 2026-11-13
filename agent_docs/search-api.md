@@ -15,16 +15,17 @@ El MCP anuncia las herramientas del registro y `obtener_pdf`; reciben `{consulta
 
 Un único prefijo efectivo: `/app-horarios/api/v1/consultas`. Conserva el prefijo API
 existente para montarse en el mismo Flask; no existe un alias `/horarios/api/v1`.
-Las cuatro operaciones aceptan POST con JSON o GET con filtros en la URL; no escriben ni consultan Sheets. GET admite `token` con la misma clave de Horarios, sin abrir sesión; listas como parámetros repetidos, `valor` como alias de `valores`, año entero y `ahora=true/false`. Mismo motor, validación, JSON y paginación. Guía pública: `/instructivo.md` (archivo `instructivo-publico.md`); la copia local `instructivo.md` contiene la clave, se excluye de Git y no se sirve por HTTP.
+Las cinco operaciones aceptan POST con JSON o GET con filtros en la URL; no escriben ni consultan Sheets. GET admite `token` con la misma clave de Horarios, sin abrir sesión; listas como parámetros repetidos, `valor` como alias de `valores`, año entero y `ahora=true/false`. Mismo motor, validación, JSON y paginación. Guía pública: `/instructivo.md` (archivo `instructivo-publico.md`); la copia local `instructivo.md` contiene la clave, se excluye de Git y no se sirve por HTTP.
 
 | Ruta bajo ese prefijo | Contrato | Filtros |
 | --- | --- | --- |
 | `POST /catalogos` | `listar_catalogos` | `incluir`: cursos/aulas/roles/nombres (por defecto cursos); `nombres` devuelve solo nombres canónicos únicos, sin fichas ni horarios, para revisar identificaciones sin coincidencia convincente; `anio` solo con cursos. |
+| `POST /materias` | `consultar_materias` | `tipos` (te/ct/fg), `anios` (cadenas 1–7), `divisiones`, `especialidades`, `texto` (materia/titular/suplente), `cursor`. OR dentro de cada lista, AND entre filtros. Clasificación compartida con `/datos` en `horarios/materias.py`, desde `MATERIAS_PLAN` y `ESPECIALIDAD_CURSOS`. Cupos por curso/grupo/materia/docente, con minutos semanales positivos y contador de bloques sin duración válida; `resumen` global repetido en cada página (no sumarlo). Hasta 50 cupos por página. Catálogos admite también `especialidades` (curso → nombre o null) y `tipos_materia` (clave/nombre). |
 | `POST /personas` | `buscar_personas` | `nombre`, `rol` o `multiples_roles=true` (más de un cargo); los filtros se intersectan antes de paginar y devuelve todos los roles. `multiples_roles=false` no restringe cargos y requiere nombre o rol. |
 | `POST /horarios` | `consultar_horarios` | `tipo`: curso/persona/aula; selector `valores`, `anio` (curso) o `piso` (aula); `dias`, pareja `desde`/`hasta`, `ahora`, `roles` (persona). |
 | `POST /preceptores` | `consultar_preceptores` | Sin filtros: toda la planilla. `cursos` o `anio`, `nombres`, `turno`, `dias`; filtros de distinta clase se intersectan. |
 | `GET /contratos` | Registro y esquemas | Nombres, descripciones, entrada/salida y límites del mismo registro que valida las consultas. |
-| `GET /openapi.json` | OpenAPI 3.1 | Las cuatro consultas, sus esquemas compartidos y la autenticación; listo para configurar una conexión posterior. |
+| `GET /openapi.json` | OpenAPI 3.1 | Las cinco consultas, sus esquemas compartidos y la autenticación; listo para configurar una conexión posterior. |
 
 Todas esas rutas exigen sesión de Horarios, `Authorization: Bearer <HORARIOS_CLAVE>` o, únicamente para GET/HEAD, `?token=<HORARIOS_CLAVE>` codificado como componente de URL.
 La clave se compara en tiempo constante sobre UTF-8; login y Bearer comparten el límite
@@ -70,7 +71,7 @@ La consulta global no genera una matriz de ausencias. Falta de registro no prueb
 
 Cada operación abre una conexión SQLite `mode=ro` con `query_only` y una transacción;
 lee las tres tablas con columnas permitidas. La revisión se calcula sobre ese contenido
-y la configuración/alias, sin depender del mtime fuera de la transacción. No hay caché
+y la configuración/alias (incluidos especialidades y planes de materias), sin depender del mtime fuera de la transacción. No hay caché
 de consultas ni marca inventada de sincronización. Base ausente/vacía/ilegible devuelve
 `datos_no_disponibles`, no un horario vacío; una consulta válida sin actividades sí lo hace.
 

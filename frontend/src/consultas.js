@@ -10,7 +10,7 @@
 //   - Un cambio hecho en una pestaña avisa a las demás del mismo navegador.
 
 import { QueryCache, QueryClient } from '@tanstack/vue-query'
-import { persistQueryClient } from '@tanstack/query-persist-client-core'
+import { persistQueryClient, persistQueryClientSave } from '@tanstack/query-persist-client-core'
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 
 const UNA_SEMANA = 1000 * 60 * 60 * 24 * 7
@@ -60,7 +60,7 @@ export function activarPersistencia() {
   } catch {
     return Promise.resolve() // ventana privada estricta o almacenamiento bloqueado: la app anda igual, sin memoria
   }
-  const [, restaurado] = persistQueryClient({
+  const opciones = {
     queryClient,
     persister: createSyncStoragePersister({ storage: almacen, key: CLAVE_ALMACEN, throttleTime: 1000 }),
     maxAge: UNA_SEMANA,
@@ -72,7 +72,16 @@ export function activarPersistencia() {
       // pedido sin red borraba del dispositivo justo lo que hacía falta para usarla sin red.
       shouldDehydrateQuery: (q) => q.state.data !== undefined && q.meta?.guardar !== false,
     },
-  })
+  }
+  const [, restaurado] = persistQueryClient(opciones)
+  // Pasar a una página de Asistente/Salidas/Accesos descarga este documento. Guardar
+  // sin el segundo de espera del persister: un clic rápido no debe perder lo recién leído.
+  restaurado.then(() => window.addEventListener('pagehide', () => {
+    persistQueryClientSave({
+      ...opciones,
+      persister: { persistClient: (datos) => almacen.setItem(CLAVE_ALMACEN, JSON.stringify(datos)) },
+    }).catch(() => {})
+  }))
   return restaurado
 }
 

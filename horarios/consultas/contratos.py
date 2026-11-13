@@ -16,6 +16,15 @@ HORA = {'type': 'string', 'pattern': r'^(?:[01]\d|2[0-3]):[0-5]\d$|^24:00$'}
 DIA = {'type': 'string', 'enum': list(DIAS)}
 TURNO = {'type': 'string', 'enum': ['mañana', 'tarde', 'vespertino']}
 FUNCION = {'type': ['string', 'null'], 'enum': ['principal', 'contraturno', None]}
+TIPO_MATERIA = {'enum': ['te', 'ct', 'fg', None]}
+CUPO_MATERIA = objeto({
+    'curso': TEXTO, 'grupo': NULO_TEXTO, 'materia': TEXTO,
+    'tipo_materia': TIPO_MATERIA, 'especialidad': NULO_TEXTO, 'profesor': NULO_TEXTO,
+    'titular_en_licencia': NULO_TEXTO,
+    'minutos_semanales': {'type': 'integer', 'minimum': 0},
+    'bloques_sin_duracion': {'type': 'integer', 'minimum': 0}},
+    ('curso', 'grupo', 'materia', 'tipo_materia', 'especialidad', 'profesor',
+     'minutos_semanales', 'bloques_sin_duracion'))
 
 
 def lista(items=TEXTO, maximo=None):
@@ -79,13 +88,17 @@ def resultado(propiedades, requeridos):
 CONTRATOS = {
     'catalogos': {
         'nombre': 'listar_catalogos',
-        'descripcion': 'Lista cursos, aulas por piso, cargos o nombres. nombres devuelve solo los nombres completos para revisar una identificación que no se pudo resolver; no descarga horarios ni fichas. No es requisito previo para consultar una entidad conocida. ' + COMUN,
-        'entrada': objeto({'incluir': {**lista({'enum': ['cursos', 'aulas', 'roles', 'nombres']}, 4),
+        'descripcion': 'Lista cursos, aulas por piso, cargos, nombres, especialidades por curso o tipos_materia (clave y nombre). nombres devuelve solo los nombres completos para revisar una identificación que no se pudo resolver; no descarga horarios ni fichas. Especialidades corresponde a cursos cargados; null significa no configurada. No es requisito previo para consultar una entidad conocida. ' + COMUN,
+        'entrada': objeto({'incluir': {**lista({'enum': ['cursos', 'aulas', 'roles', 'nombres',
+                                                      'especialidades', 'tipos_materia']}, 6),
                                        'minItems': 1, 'uniqueItems': True, 'default': ['cursos']},
                            'anio': ANIO}),
         'salida': resultado({'cursos': {'type': 'object', 'additionalProperties': lista(TEXTO)},
                              'aulas': {'type': 'object', 'additionalProperties': lista(TEXTO)},
-                             'roles': lista(TEXTO), 'nombres': lista(TEXTO)}, ())},
+                             'roles': lista(TEXTO), 'nombres': lista(TEXTO),
+                             'especialidades': {'type': 'object', 'additionalProperties': NULO_TEXTO},
+                             'tipos_materia': lista(objeto({'clave': TEXTO, 'nombre': TEXTO},
+                                                          ('clave', 'nombre')))}, ())},
     'personas': {
         'nombre': 'buscar_personas',
         'descripcion': 'Busca nombre o cargo y devuelve todos los roles de cada persona. multiples_roles=true selecciona personas con más de un cargo, sin recorrer todo el padrón. Los filtros se intersectan. Coincidencias aproximadas son candidatos; nunca fusiona personas por parecido. Sin coincidencias: personas vacía. ' + COMUN,
@@ -107,6 +120,28 @@ CONTRATOS = {
                              horario('aula', ACTIVIDAD_AULA), horario('persona', ACTIVIDAD_PERSONA)]}),
                              'momento': objeto({'fecha': {'type': 'string', 'pattern': r'^\d{4}-\d{2}-\d{2}$'},
                                                 'hora': HORA}, ('fecha', 'hora'))}, ('horarios',))},
+    'materias': {
+        'nombre': 'consultar_materias',
+        'descripcion': 'Explora la pestaña MATERIAS. Sin filtros lista todos los cupos cargados, no el plan completo. '
+                       'Filtra por tipos te (técnico-específica), ct (científico-tecnológica), fg (teórica); '
+                       'anios, divisiones, especialidades y texto (materia, titular o suplente; ignora espacios/tildes). '
+                       'Las opciones de un filtro se suman y los distintos filtros se intersectan. '
+                       'anios son cadenas como "3". especialidades acepta nombres completos del catálogo. '
+                       'Una fila por curso, grupo, materia y docente; profesor es el efectivo según suplencia activa. '
+                       'minutos_semanales suma duraciones positivas de bloques, no horas cátedra ni horas únicas del curso. '
+                       'Si bloques_sin_duracion > 0, la carga está incompleta. tipo_materia null significa sin clasificación. '
+                       'resumen contiene totales globales de toda la selección y se repite en cada página: no sumarlo entre páginas. '
+                       'Para días, horas y aulas, consultar luego horarios del curso o docente. ' + COMUN,
+        'entrada': objeto({
+            'tipos': {**filtro_lista(3), 'items': {'enum': ['te', 'ct', 'fg']}},
+            'anios': {**filtro_lista(7), 'items': {'type': 'string', 'enum': list('1234567')}},
+            'divisiones': filtro_lista(), 'especialidades': filtro_lista(),
+            'texto': TEXTO, 'cursor': CURSOR}),
+        'salida': resultado({'materias': lista(CUPO_MATERIA), 'resumen': objeto({
+            k: {'type': 'integer', 'minimum': 0} for k in
+            ('materias_distintas', 'cupos', 'divisiones', 'minutos_semanales', 'bloques_sin_duracion')},
+            ('materias_distintas', 'cupos', 'divisiones', 'minutos_semanales', 'bloques_sin_duracion'))},
+            ('materias', 'resumen'))},
     'preceptores': {
         'nombre': 'consultar_preceptores',
         'descripcion': 'Sin filtros lista todos con asignaciones por curso, turno y días. Principal según turno nominal; admite dos contraturnos. Vacante explícita y falta de registro son distintas. Sin registro solo para cursos/año pedidos, sin filtro de nombres. Sin horas exactas. ' + COMUN,

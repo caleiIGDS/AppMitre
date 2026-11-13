@@ -172,7 +172,9 @@ class Snapshot:
         for r in self.preceptores:
             agregar(r['preceptor'], 'preceptor')
         contenido = [sorted(self.clases, key=compacto), sorted(self.preceptores, key=compacto),
-                     sorted(self.personal, key=compacto), self.pisos, self.nominales, datos._NOMBRE_MAPEOS]
+                     sorted(self.personal, key=compacto), self.pisos, self.nominales, datos._NOMBRE_MAPEOS,
+                     sorted(map(list, config.ESPECIALIDAD_CURSOS.items())),
+                     sorted(map(list, config.MATERIAS_PLAN.items()))]
         self.revision = hashlib.sha256(compacto(contenido).encode()).hexdigest()
 
     def seleccionar_cursos(self, p, campo='valores'):

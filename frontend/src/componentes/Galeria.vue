@@ -9,7 +9,7 @@
 // Subir: se achica antes de mandarla (window.ImgUtils, el mismo criterio que el chat).
 // Rotar: el giro lo hace un canvas acá y al servidor va la imagen ya girada; se muestra
 // girada apenas se codifica, y se guarda en segundo plano.
-// Ordenar: se arrastra desde ↕ (orden.js, de cada dispositivo).
+// Ordenar: el administrador guarda el orden para todos en el servidor.
 // La primera es la portada de la tarjeta en la vista galería del inventario.
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { useOrdenable } from '@/orden'
@@ -20,7 +20,8 @@ const props = defineProps({
   puedeRotar: { type: Boolean, default: false },
   subiendo: { type: Boolean, default: false },
   rotar: { type: Function, default: null }, // (foto, blob) => Promise
-  claveOrden: { type: String, default: '' }, // dónde guarda el orden (orden.js)
+  ordenar: { type: Function, required: true },
+  puedeOrdenar: { type: Boolean, default: false },
 })
 const emit = defineEmits(['subir', 'borrar', 'error'])
 
@@ -34,7 +35,10 @@ let foco = null
 
 const grilla = ref(null)
 const { items: ordenadas, arrastrando } = useOrdenable(
-  computed(() => props.claveOrden), grilla, computed(() => props.fotos), (f) => f.id)
+  computed(() => ''), grilla, computed(() => props.fotos), (f) => f.id,
+  async (ids) => {
+    try { await props.ordenar(ids) } catch (e) { emit('error', e); throw e }
+  })
 
 const actual = computed(() => ordenadas.value[abierta.value] || null)
 const src = (f) => previas.value[f.id] || f.url
@@ -155,19 +159,24 @@ async function girar() {
             :aria-label="`Ver foto ${i + 1} de ${ordenadas.length}`" @click="abrir(i, $event)">
             <img :src="previas[f.id] || f.mini || f.url" :srcset="srcset(f)" :sizes="sizes" :alt="`Foto ${i + 1}`" class="g-foto" loading="lazy" decoding="async">
           </button>
-          <button v-if="ordenadas.length > 1" type="button" class="a-orden-agarre"
+          <button v-if="puedeOrdenar && ordenadas.length > 1" type="button" class="a-orden-agarre"
             data-sin-arrastre :aria-label="`Cambiar orden de foto ${i + 1}`" title="Arrastrar para ordenar">↕</button>
         </div>
       </div>
-      <p v-if="ordenadas.length > 1" class="a-orden-ayuda">Arrastrá desde ↕ para cambiar el orden de las fotos (en este dispositivo).</p>
     </div>
     <div v-if="puedeEditar" class="g-foto-toolbar">
       <input ref="entrada" type="file" accept="image/*" hidden @change="elegido">
-      <button type="button" class="g-foto-btn" :title="subiendo ? 'Subiendo…' : 'Agregar foto'" :disabled="subiendo" @click="entrada.click()">
-        {{ subiendo ? '⏳' : '📷' }}
+      <button type="button" class="g-foto-btn" :class="{ 'is-subiendo': subiendo }" :title="subiendo ? 'Subiendo…' : 'Agregar foto'" :aria-label="subiendo ? 'Subiendo foto…' : 'Agregar foto'" :aria-busy="subiendo" :disabled="subiendo" @click="entrada.click()">
+        <span v-if="subiendo" role="status">SUBIENDO…</span>
+        <svg v-else viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M3 8h4l2-3h5l2 3h3v12H3Z" />
+          <circle cx="11" cy="14" r="3.5" />
+          <path d="M19 2v6m-3-3h6" />
+        </svg>
       </button>
     </div>
   </div>
+  <p v-if="puedeOrdenar && ordenadas.length > 1" class="a-orden-ayuda">Arrastrá desde ↕ para cambiar el orden de las fotos (para todos).</p>
 
   <Teleport to="body">
     <div v-if="actual" class="g-lightbox" role="dialog" aria-modal="true" aria-label="Foto ampliada" @click.self="cerrar">

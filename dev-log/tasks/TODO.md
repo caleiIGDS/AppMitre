@@ -57,6 +57,18 @@
 
   Además `("3", "")` y `("4", "G")` no están en el mapa y caen silenciosamente a `TURNO_DEFAULT` ("MAÑANA"). **Antes de tocar nada hay que preguntar en la escuela cuál de los dos está bien**: puede ser config viejo, o puede ser que falte cargar gente en el Sheet. No es un bug de código. Salió al arreglar el bug de turnos del agente el 2026-08-11 (ver `dev-log/DECISIONS.md`).
 
+- [ ] #25 — Revisar alternativas para generar los PDF de Salidas — `salidas.py` / `templates/salidas/`  
+  Evaluar plantillas HTML/CSS por anexo como opción, sin decidir todavía una migración. Comparar un prototipo de los anexos VI y V con el generador actual usando los mismos datos: fidelidad al papel, textos largos, tablas extensas, tiempos y compatibilidad con PythonAnywhere. Condición: conservar carga única y autocompletados, guardado/edición/regeneración, salidas existentes, PDF en blanco y firmas, enlace de familias sin persistir sus datos y varios seguros dentro del mismo Anexo IX. El generador actual debe seguir disponible durante la evaluación.
+
+---
+
+## Pendiente
+
+- [ ] #27 — Autocompletar la nómina y entregar PDF desde el MCP de Salidas — `salidas_mcp.py` / `templates/salidas/formulario.html`
+  Permitir que el flujo asistido use el padrón local de alumnos y docentes, como el formulario. Mostrar coincidencias para que la persona elija y completar nombre y DNI de la ficha elegida sin subir ni exponer el padrón completo.
+  Permitir que el agente solicite los PDF de los anexos de un legajo autorizado y entregue los archivos directamente en el chat.
+  Quitar el botón «Regenerar PDF». Verificar que cualquier cambio guardado, aunque sea de un solo campo, regenere los siete anexos tanto desde el formulario como desde el MCP. Actualizar también los PDF de legajos existentes cuando cambie el generador.
+
 ---
 
 ## Bloqueado
@@ -66,6 +78,6 @@
 
 ---
 
-_Último número usado: #26. Próxima tarea nueva: #27_
+_Último número usado: #27. Próxima tarea nueva: #28_
 
 _#4 (parser de preceptores por nombre de columna) descartada el 2026-07-13 — ver `dev-log/DECISIONS.md`: estructura del sheet fija por contrato._

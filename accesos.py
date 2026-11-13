@@ -991,7 +991,7 @@ def _nombres_areas(montados):
             if getattr(m, 'bp', None) is not None or getattr(m, 'bp_api', None) is not None}
 
 
-def registrar_app(app, modulos):
+def registrar_app(app, modulos, *, url_prefix=None, ruta_salida='/salir'):
     """Junta el catálogo de todas las áreas y engancha lo que es de la app entera.
 
     `modulos` son los módulos de área que declaran `PERMISOS` (+ `GRUPO_PERMISOS`). Es la
@@ -1020,7 +1020,7 @@ def registrar_app(app, modulos):
     # compartimento sin que el template tenga que saber cómo se resuelve.
     app.jinja_env.globals['ambito_actual'] = ambito_actual
 
-    app.register_blueprint(bp)
+    app.register_blueprint(bp, url_prefix=url_prefix)
 
     # Sesión de la app instalable (/app): quién soy, entrar con la clave de admin, salir.
     # Sin gate: es la puerta. Los internos no entran por acá sino por el link de invitación
@@ -1075,7 +1075,7 @@ def registrar_app(app, modulos):
         g.pop('acceso_mitre', None)
         return _sesion_json()
 
-    @app.route('/salir')
+    @app.route(ruta_salida)
     def salir_general():
         """Cerrar sesión y volver al inicio de la app de Gestión.
 
@@ -1085,7 +1085,7 @@ def registrar_app(app, modulos):
         un callejón. El inicio de la app le muestra cómo entrar.
         """
         session.clear()
-        return redirect('/gestion/')
+        return redirect('/gestion/?sesion=cerrada')
 
     # El canje va sobre `app` y no sobre un blueprint con gate: es justamente la puerta
     # por la que entra alguien que todavía no tiene ningún acceso. Por eso ningún

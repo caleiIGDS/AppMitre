@@ -24,6 +24,7 @@ import sqlite3
 from flask import Blueprint, jsonify, request, session
 
 from . import acceso, datos
+from .materias import tipo_materia as _tipo_materia
 from .rutas import _planilla_preceptores_con_turnos
 from .config import (DIAS, ESCUELA_NOMBRE, ESCUELA_VERSION, ESPECIALIDAD_CURSOS, MATERIAS_PLAN,
                      FLOOR_MAPPING, GID_HORARIOS_PRECEPTORES, GID_PERSONAL_NO_DOCENTE,
@@ -108,13 +109,6 @@ def _cursos(cur):
         especialidad = ESPECIALIDAD_CURSOS.get((curso, division), "ESPECIALIDAD")
         cursos.append({'valor': valor, 'display': f"{valor} ({especialidad})"})
     return cursos
-
-
-def _tipo_materia(clase):
-    """El tipo de la materia según el plan de su año y especialidad (MATERIAS_PLAN)."""
-    esp = ESPECIALIDAD_CURSOS.get((clase['curso'], clase['division']))
-    _, tipo = MATERIAS_PLAN.get((clase['curso'], esp), {}).get(clase['materia'], ('', ''))
-    return tipo
 
 
 @bp_app.get('/datos')

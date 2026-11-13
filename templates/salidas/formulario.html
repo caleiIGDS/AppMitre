@@ -233,8 +233,8 @@ tbody tr:nth-child(even){background:#fafbfc}
 {% block header_acciones %}
 <a class="g-btn-outline" href="{{ url_for('salidas.lista') }}">‹ VOLVER</a>
 <button class="g-btn" id="btn-exportar" type="button">{% if id_editar %}GUARDAR CAMBIOS{% else %}GUARDAR SALIDA{% endif %}</button>
-<a class="g-btn-outline" href="{{ url_for('normativa_visor') }}" target="_blank">📄 RES.</a>
-<a class="g-btn-outline" href="{{ url_for('salidas.instructivo') }}" target="_blank">📖 INSTR.</a>
+<a class="g-btn-outline" href="{{ url_for('normativa_visor') }}" data-documento="pagina">📄 RES.</a>
+<a class="g-btn-outline" href="{{ url_for('salidas.instructivo') }}" data-documento="pdf">📖 INSTR.</a>
 {% endblock %}
 
 {% block contenido %}
